@@ -25,6 +25,38 @@ from src.evaluation.provider_benchmark_contract import (
 
 FIXTURE_BENCHMARK_VERSION = "provider-fixture-benchmark-v1"
 CASE_CORPUS_VERSION = "provider-fixture-case-corpus-v1"
+SYNTHETIC_ROLE_DOCUMENT_FIELD = "synthetic_role_document"
+SYNTHETIC_ROLE_DOCUMENT_WORKLOADS = frozenset({"skill_extraction"})
+SYNTHETIC_ROLE_DOCUMENT_VERSION = "skill-extraction-synthetic-role-document-v1"
+SYNTHETIC_ROLE_DOCUMENT_PROFILES = (
+    "full_text_required_preferred",
+    "windowed_head_required_boilerplate",
+    "windowed_mid_required_tail_preferred",
+    "windowed_overlap_suppressed_preferred",
+)
+_SYNTHETIC_ROLE_DOCUMENT_FIELDS = {
+    "version",
+    "profile",
+    "required_skills",
+    "preferred_skills",
+}
+_SYNTHETIC_ROLE_DOCUMENT_PROFILES_REQUIRING_PREFERRED = frozenset(
+    {
+        "full_text_required_preferred",
+        "windowed_mid_required_tail_preferred",
+    }
+)
+_SYNTHETIC_ROLE_DOCUMENT_PROFILES_FORBIDDING_PREFERRED = frozenset(
+    {"windowed_head_required_boilerplate"}
+)
+_SYNTHETIC_ROLE_DOCUMENT_SKILL_CHARACTERS = frozenset(
+    "abcdefghijklmnopqrstuvwxyz0123456789 +#./-"
+)
+_SYNTHETIC_ROLE_DOCUMENT_SKILL_MAXIMUM_CHARACTERS = 40
+_SYNTHETIC_ROLE_DOCUMENT_MAXIMUM_SKILLS = 8
+WORKLOAD_CASE_PROJECTION_VERSION = (
+    "provider-fixture-workload-case-projection-v1"
+)
 DEFAULT_CASE_CORPUS_PATH = (
     Path(__file__).resolve().parents[2]
     / "tests"
@@ -338,6 +370,97 @@ def _contains_forbidden_result_key(value: Any) -> bool:
     return False
 
 
+def _validate_synthetic_role_document_skills(
+    value: Any,
+    *,
+    label: str,
+    minimum: int,
+) -> None:
+    _require(
+        isinstance(value, list)
+        and minimum <= len(value) <= _SYNTHETIC_ROLE_DOCUMENT_MAXIMUM_SKILLS,
+        f"synthetic role document {label} list is out of bounds",
+    )
+    for item in value:
+        _require(
+            isinstance(item, str)
+            and 1
+            <= len(item)
+            <= _SYNTHETIC_ROLE_DOCUMENT_SKILL_MAXIMUM_CHARACTERS,
+            f"synthetic role document {label} entry length is invalid",
+        )
+        _require(
+            all(
+                character in _SYNTHETIC_ROLE_DOCUMENT_SKILL_CHARACTERS
+                for character in item
+            ),
+            f"synthetic role document {label} entry has forbidden characters",
+        )
+
+
+def _validate_synthetic_role_document(case: Mapping[str, Any]) -> None:
+    """Validate the optional bounded synthetic role-document recipe.
+
+    The recipe is a fixed-profile description, never free text: no URL,
+    identity, credential, path, prompt, runtime state, or raw job description
+    is representable, so the generic transmission-safety predicates keep
+    applying unchanged.
+    """
+
+    packet = case["normalized_input_packet"]
+    if SYNTHETIC_ROLE_DOCUMENT_FIELD not in packet:
+        return
+
+    _require(
+        case.get("workload_id") in SYNTHETIC_ROLE_DOCUMENT_WORKLOADS,
+        "synthetic role document is only supported for skill extraction",
+    )
+    _require(
+        case.get("sanitized_classification") == "synthetic_sanitized",
+        "synthetic role document requires a synthetic_sanitized case",
+    )
+    _require(
+        case.get("contains_personal_resume_content") is False,
+        "synthetic role document must not accompany personal resume content",
+    )
+
+    recipe = packet[SYNTHETIC_ROLE_DOCUMENT_FIELD]
+    _require(
+        isinstance(recipe, dict)
+        and set(recipe) == _SYNTHETIC_ROLE_DOCUMENT_FIELDS,
+        "synthetic role document fields must match the exact schema",
+    )
+    _require(
+        recipe["version"] == SYNTHETIC_ROLE_DOCUMENT_VERSION,
+        "synthetic role document version mismatch",
+    )
+    profile = recipe["profile"]
+    _require(
+        profile in SYNTHETIC_ROLE_DOCUMENT_PROFILES,
+        "synthetic role document profile is unsupported",
+    )
+    _validate_synthetic_role_document_skills(
+        recipe["required_skills"],
+        label="required_skills",
+        minimum=1,
+    )
+    _validate_synthetic_role_document_skills(
+        recipe["preferred_skills"],
+        label="preferred_skills",
+        minimum=0,
+    )
+    if profile in _SYNTHETIC_ROLE_DOCUMENT_PROFILES_REQUIRING_PREFERRED:
+        _require(
+            bool(recipe["preferred_skills"]),
+            "synthetic role document profile requires preferred skills",
+        )
+    if profile in _SYNTHETIC_ROLE_DOCUMENT_PROFILES_FORBIDDING_PREFERRED:
+        _require(
+            not recipe["preferred_skills"],
+            "synthetic role document profile forbids preferred skills",
+        )
+
+
 def _case_by_id(corpus: Mapping[str, Any]) -> Dict[str, Dict[str, Any]]:
     return {
         str(case["case_id"]): case
@@ -421,6 +544,7 @@ def validate_fixture_case_corpus(corpus: Dict[str, Any]) -> bool:
             isinstance(case.get("normalized_input_packet"), dict),
             "normalized input packet must be an object",
         )
+        _validate_synthetic_role_document(case)
         _require(
             isinstance(case.get("expected_output"), dict),
             "expected output must be an object",
@@ -566,6 +690,47 @@ def fixture_case_corpus_sha256(
 ) -> str:
     return sha256(
         serialize_fixture_case_corpus(corpus).encode("utf-8")
+    ).hexdigest()
+
+
+def serialize_workload_fixture_cases(
+    workload_id: str,
+    corpus: Dict[str, Any] | None = None,
+) -> str:
+    """Canonically serialize only one workload's fixture cases.
+
+    Additive Stage 1 primitive. It never mutates the corpus and never affects
+    ``serialize_fixture_case_corpus`` or ``fixture_case_corpus_sha256``.
+    """
+
+    payload = load_fixture_case_corpus() if corpus is None else deepcopy(corpus)
+    validate_fixture_case_corpus(payload)
+    normalized = _clean_text(workload_id)
+    _require(normalized in WORKLOAD_ORDER, "unknown fixture workload")
+    ordered = {
+        "projection_version": WORKLOAD_CASE_PROJECTION_VERSION,
+        "corpus_version": payload["corpus_version"],
+        "workload_id": normalized,
+        "cases": sorted(
+            (
+                case
+                for case in payload["cases"]
+                if case["workload_id"] == normalized
+            ),
+            key=lambda case: case["case_id"],
+        ),
+    }
+    return _canonical_json(ordered)
+
+
+def workload_fixture_cases_sha256(
+    workload_id: str,
+    corpus: Dict[str, Any] | None = None,
+) -> str:
+    """Return the deterministic digest of one workload's fixture cases."""
+
+    return sha256(
+        serialize_workload_fixture_cases(workload_id, corpus).encode("utf-8")
     ).hexdigest()
 
 

@@ -29,6 +29,7 @@ from src.evaluation.controlled_production_parity_benchmark import (
     validate_and_grade_production_parity_response,
     validate_production_parity_request,
     validate_production_parity_result,
+    workload_qualification_semantics_sha256,
 )
 from src.evaluation.controlled_provider_benchmark_harness import (
     _schedule_from_plan,
@@ -59,6 +60,18 @@ LIVE_QUALIFICATION_GATE_VERSION = "controlled-live-qualification-gate-v1"
 LIVE_AUTHORIZATION_VERSION = "controlled-live-qualification-authorization-v1"
 LIVE_PRICING_VERSION = "controlled-live-qualification-pricing-v1"
 LIVE_EVIDENCE_VERSION = "controlled-live-qualification-evidence-v1"
+RENDERER_BOUND_LIVE_AUTHORIZATION_VERSION = (
+    "controlled-live-qualification-authorization-renderer-bound-v1"
+)
+RENDERER_BOUND_LIVE_EVIDENCE_VERSION = (
+    "controlled-live-qualification-evidence-renderer-bound-v1"
+)
+APPROVED_WORKLOAD_SEMANTICS_FIELD = (
+    "approved_workload_qualification_semantics"
+)
+TESTED_WORKLOAD_SEMANTICS_FIELD = (
+    "tested_workload_qualification_semantics_sha256"
+)
 LIVE_VALIDATION_CONTEXT_VERSION = (
     "controlled-live-qualification-validation-context-v1"
 )
@@ -374,6 +387,14 @@ def _sha256(value: Any) -> str:
     return sha256(_canonical_json(value).encode("utf-8")).hexdigest()
 
 
+def _is_sha256_digest(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
 def _clean(value: Any) -> str:
     return str(value or "").strip()
 
@@ -559,7 +580,7 @@ def _ordered_unique(values: Iterable[Any]) -> list[Any]:
 def build_live_qualification_universe(
     plan: Dict[str, Any] | None = None,
 ) -> list[Dict[str, Any]]:
-    """Derive all 44 historical rows and their current live eligibility."""
+    """Derive the validated staged rows and their current live eligibility."""
 
     controlled_plan = (
         build_controlled_provider_benchmark_plan()
@@ -587,18 +608,40 @@ def build_live_qualification_universe(
                 ),
             }
         )
-    _require(len(rows) == 44, "canonical historical plan size changed")
+    staged_matrix = controlled_plan["staged_matrix"]
     _require(
-        sum(row["live_qualification_eligible"] for row in rows) == 44,
-        "production-qualifiable universe size changed",
+        len(rows) == len(staged_matrix),
+        "live universe row count does not match the validated staged plan",
     )
+    # Eligibility is derived from the canonical rule for every row rather than
+    # pinned to a historical universe size, so adding valid cases to an already
+    # runnable workload is not a failure while a runnable workload losing its
+    # fingerprint, or a blocked workload becoming eligible, still fails closed.
+    expected_eligible = [
+        (
+            row["workload_id"] in PRODUCTION_PARITY_RUNNABLE_WORKLOADS
+            and row["production_task_contract_sha256"] is not None
+        )
+        for row in rows
+    ]
+    _require(
+        [row["live_qualification_eligible"] for row in rows]
+        == expected_eligible,
+        "live qualification eligibility does not match the canonical rule",
+    )
+    _require(
+        sum(row["live_qualification_eligible"] for row in rows)
+        == sum(expected_eligible),
+        "production-qualifiable universe size does not match the canonical rule",
+    )
+    plan_workloads = {row["workload_id"] for row in staged_matrix}
     _require(
         {
             row["workload_id"]
             for row in rows
             if not row["live_qualification_eligible"]
         }
-        == set(PRODUCTION_PARITY_BLOCKED_WORKLOADS),
+        == (set(PRODUCTION_PARITY_BLOCKED_WORKLOADS) & plan_workloads),
         "live-blocked workload set changed",
     )
     return deepcopy(rows)
@@ -917,11 +960,13 @@ def _default_dispatch(
     scheduled: Mapping[str, Any],
     plan: Dict[str, Any],
     monotonic_clock: Callable[[], float],
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     consumer = lambda response: validate_and_grade_production_parity_response(
         parity_request,
         response,
         plan=plan,
+        corpus=corpus,
     )
     try:
         if provider == "groq":
@@ -934,6 +979,7 @@ def _default_dispatch(
                 parity_response_consumer=consumer,
                 monotonic_clock=monotonic_clock,
                 plan=plan,
+                corpus=corpus,
             )
         if provider == "openai":
             from src.evaluation import controlled_openai_canary_transport as transport
@@ -945,6 +991,7 @@ def _default_dispatch(
                 parity_response_consumer=consumer,
                 monotonic_clock=monotonic_clock,
                 plan=plan,
+                corpus=corpus,
             )
     except Exception as exc:
         name = exc.__class__.__name__
@@ -967,7 +1014,11 @@ def _default_dispatch(
                 provider_error=provider_error,
             ) from None
         if name == "UnknownProviderOutcome":
-            raise LiveQualificationUnknownOutcome("unknown_provider_outcome") from None
+            raise LiveQualificationUnknownOutcome(
+                "unknown_provider_outcome",
+                status_code=_safe_transport_status_code(exc),
+                provider_error=_safe_transport_provider_error(exc),
+            ) from None
         raise
     raise LiveQualificationDefinitiveFailure("unsupported_provider")
 
@@ -979,9 +1030,13 @@ def _empty_evidence(
     authorization: Dict[str, Any],
     pricing: Dict[str, Any],
     requested_schedule_keys: list[str],
+    evidence_version: str = LIVE_EVIDENCE_VERSION,
 ) -> Dict[str, Any]:
+    # ``authorization`` is always the V1 core object. The renderer-bound
+    # generation differs only in its evidence version and its per-summary
+    # tested-semantics field, so every binding below stays byte-identical.
     return {
-        "evidence_version": LIVE_EVIDENCE_VERSION,
+        "evidence_version": evidence_version,
         "gate_version": LIVE_QUALIFICATION_GATE_VERSION,
         "execution_mode": "controlled_live_operator_qualification",
         "execution_at_utc": execution_at_utc,
@@ -1340,6 +1395,7 @@ def _validate_transport_result(
     scheduled: Mapping[str, Any],
     parity_request: Dict[str, Any],
     plan: Dict[str, Any],
+    corpus: Dict[str, Any] | None = None,
 ) -> bool:
     _require(isinstance(result, dict), "live transport result is required")
     missing_usage = _TRANSPORT_RESULT_FIELDS - set(result)
@@ -1359,6 +1415,7 @@ def _validate_transport_result(
         result["parity_result"],
         request=parity_request,
         plan=plan,
+        corpus=corpus,
     )
     return True
 
@@ -1377,8 +1434,15 @@ def execute_controlled_live_qualification(
     validation_context_target: str | Path | None = None,
     review_packet_target: str | Path | None = None,
     repository_root: str | Path | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    """Execute an explicitly authorized serial subset; never update registry."""
+    """Execute an explicitly authorized serial subset; never update registry.
+
+    The supplied authorization generation selects the emitted evidence
+    generation: a V1 authorization emits V1 evidence and a renderer-bound
+    authorization natively emits renderer-bound evidence. There is no caller
+    flag that can request one generation while supplying the other.
+    """
 
     _require(callable(execution_time_source), "execution timestamp source is required")
     _require(callable(monotonic_clock), "monotonic clock is required")
@@ -1413,14 +1477,59 @@ def execute_controlled_live_qualification(
         )
     execution_at_utc = execution_time_source()
     controlled_plan = deepcopy(plan)
-    authorization = deepcopy(live_authorization)
+    supplied_authorization = deepcopy(live_authorization)
     pricing_payload = deepcopy(pricing)
-    validate_live_authorization(
-        authorization,
-        plan=controlled_plan,
-        pricing=pricing_payload,
-        execution_at_utc=execution_at_utc,
+    _require(
+        isinstance(supplied_authorization, dict),
+        "live authorization must be a mapping",
     )
+    supplied_generation = supplied_authorization.get("authorization_version")
+    _require(
+        supplied_generation
+        in {
+            LIVE_AUTHORIZATION_VERSION,
+            RENDERER_BOUND_LIVE_AUTHORIZATION_VERSION,
+        },
+        "live authorization generation is unrecognized",
+    )
+    renderer_bound = (
+        supplied_generation == RENDERER_BOUND_LIVE_AUTHORIZATION_VERSION
+    )
+    if renderer_bound:
+        # The renderer-bound object is the authoritative provenance. It is
+        # validated in full, against the explicit corpus, before any transport.
+        validate_renderer_bound_live_authorization(
+            supplied_authorization,
+            plan=controlled_plan,
+            pricing=pricing_payload,
+            execution_at_utc=execution_at_utc,
+            corpus=corpus,
+        )
+        renderer_bound_authorization = supplied_authorization
+        # Internal compatibility projection only, so the shared execution core
+        # keeps reading the exact V1 field set. It is not an alternative
+        # provenance: the renderer-bound evidence validator recomputes the
+        # authorization digest from this same projection.
+        authorization = _v1_projection_of_renderer_bound_authorization(
+            supplied_authorization
+        )
+        # No renderer-bound persistence writer exists yet, so fail closed
+        # rather than emitting a V1 artifact for renderer-bound evidence.
+        _require(
+            evidence_target is None
+            and validation_context_target is None
+            and review_packet_target is None,
+            "renderer-bound live evidence persistence is not supported",
+        )
+    else:
+        renderer_bound_authorization = None
+        authorization = supplied_authorization
+        validate_live_authorization(
+            authorization,
+            plan=controlled_plan,
+            pricing=pricing_payload,
+            execution_at_utc=execution_at_utc,
+        )
     eligible = _eligible_rows_by_key(controlled_plan)
     requested = list(requested_schedule_keys)
     _require(bool(requested) and len(requested) == len(set(requested)), "requested schedule subset is invalid")
@@ -1428,6 +1537,22 @@ def execute_controlled_live_qualification(
     expected_requested_order = [key for key in authorization["approved_schedule_keys"] if key in requested]
     _require(requested == expected_requested_order, "requested schedule subset must remain serial")
     rows = [eligible[key] for key in requested]
+    approved_workload_semantics = None
+    if renderer_bound:
+        approved_workload_semantics = renderer_bound_authorization[
+            APPROVED_WORKLOAD_SEMANTICS_FIELD
+        ]
+        for scheduled in rows:
+            _require(
+                scheduled["workload_id"] in approved_workload_semantics,
+                "scheduled workload has no approved qualification semantics",
+            )
+            _require(
+                _is_sha256_digest(
+                    approved_workload_semantics[scheduled["workload_id"]]
+                ),
+                "approved workload qualification semantics is malformed",
+            )
     review_requirements = canonical_human_review_requirements()
     if review_packet_target is not None:
         _require(
@@ -1442,8 +1567,17 @@ def execute_controlled_live_qualification(
         and all(isinstance(operator_credentials[key], str) and bool(operator_credentials[key].strip()) for key in required_providers),
         "exact explicit operator evaluation credentials are required",
     )
+    # The execution corpus is bound into the default dispatcher rather than
+    # passed at call time, so injected test dispatchers keep their exact
+    # existing signature.
+    def _corpus_bound_default_dispatch(**dispatch_kwargs):
+        return _default_dispatch(**dispatch_kwargs, corpus=corpus)
+
     dispatchers = (
-        {"groq": _default_dispatch, "openai": _default_dispatch}
+        {
+            "groq": _corpus_bound_default_dispatch,
+            "openai": _corpus_bound_default_dispatch,
+        }
         if transport_dispatchers is None
         else dict(transport_dispatchers)
     )
@@ -1454,6 +1588,11 @@ def execute_controlled_live_qualification(
         authorization=authorization,
         pricing=pricing_payload,
         requested_schedule_keys=requested,
+        evidence_version=(
+            RENDERER_BOUND_LIVE_EVIDENCE_VERSION
+            if renderer_bound
+            else LIVE_EVIDENCE_VERSION
+        ),
     )
     prices = _pricing_map(pricing_payload)
     review_parity_result = None
@@ -1469,14 +1608,20 @@ def execute_controlled_live_qualification(
             provider=scheduled["provider"],
             model=scheduled["model"],
             plan=controlled_plan,
+            corpus=corpus,
             live_execution_requested=False,
         )
         parity_request = build_production_parity_request(
             packet,
             plan=controlled_plan,
             expected_task_contract_sha256=fingerprints[scheduled["workload_id"]],
+            corpus=corpus,
         )
-        validate_production_parity_request(parity_request, plan=controlled_plan)
+        validate_production_parity_request(
+            parity_request,
+            plan=controlled_plan,
+            corpus=corpus,
+        )
         _require(
             parity_request["task_parameters"]["max_tokens"]
             <= ceilings["maximum_output_tokens_per_request"],
@@ -1540,6 +1685,21 @@ def execute_controlled_live_qualification(
                 }
             )
             break
+        except LiveQualificationUnknownOutcome as exc:
+            evidence["blocked_schedule_keys"].append(key)
+            evidence["stop_reason"] = "unknown_provider_outcome"
+            evidence["transport_diagnostics"].append(
+                {
+                    "schedule_key": key,
+                    "workload_id": scheduled["workload_id"],
+                    "provider": scheduled["provider"],
+                    "model": scheduled["model"],
+                    "transport_failure_category": "unknown_provider_outcome",
+                    "http_status_code": _safe_transport_status_code(exc),
+                    **_safe_transport_provider_error(exc),
+                }
+            )
+            break
         except Exception:
             evidence["blocked_schedule_keys"].append(key)
             evidence["stop_reason"] = "unknown_provider_outcome"
@@ -1550,6 +1710,7 @@ def execute_controlled_live_qualification(
                 scheduled=scheduled,
                 parity_request=parity_request,
                 plan=controlled_plan,
+                corpus=corpus,
             )
         except ValueError as exc:
             evidence["blocked_schedule_keys"].append(key)
@@ -1573,31 +1734,35 @@ def execute_controlled_live_qualification(
         hard_failure_present = any(hard_failures.values())
         quality_passed = parity_result["benchmark_quality"]["quality_gate_passed"]
         production_valid = parity_result["production_contract_valid"]
-        evidence["grading_summaries"].append(
-            {
-                "schedule_key": key,
-                "case_alias": scheduled["case_alias"],
-                "workload_id": scheduled["workload_id"],
-                "provider": scheduled["provider"],
-                "model": scheduled["model"],
-                "production_task_contract_sha256": scheduled[
-                    "production_task_contract_sha256"
-                ],
-                "production_contract_valid": production_valid,
-                "benchmark_quality_passed": quality_passed,
-                "hard_failure_present": hard_failure_present,
-                "human_review_required": review_requirements[
-                    scheduled["workload_id"]
-                ],
-                "provider_outcome_category": result[
-                    "provider_outcome_category"
-                ],
-                "latency_ms": float(result["latency_ms"]),
-                "input_token_count": input_tokens,
-                "output_token_count": output_tokens,
-                "observed_cost": float(observed_cost),
-            }
-        )
+        grading_summary = {
+            "schedule_key": key,
+            "case_alias": scheduled["case_alias"],
+            "workload_id": scheduled["workload_id"],
+            "provider": scheduled["provider"],
+            "model": scheduled["model"],
+            "production_task_contract_sha256": scheduled[
+                "production_task_contract_sha256"
+            ],
+            "production_contract_valid": production_valid,
+            "benchmark_quality_passed": quality_passed,
+            "hard_failure_present": hard_failure_present,
+            "human_review_required": review_requirements[
+                scheduled["workload_id"]
+            ],
+            "provider_outcome_category": result["provider_outcome_category"],
+            "latency_ms": float(result["latency_ms"]),
+            "input_token_count": input_tokens,
+            "output_token_count": output_tokens,
+            "observed_cost": float(observed_cost),
+        }
+        if renderer_bound:
+            # Copied from the already validated authorization. It is never
+            # derived here, so the summary records what was authorized and
+            # tested rather than whatever current code would compute now.
+            grading_summary[TESTED_WORKLOAD_SEMANTICS_FIELD] = (
+                approved_workload_semantics[scheduled["workload_id"]]
+            )
+        evidence["grading_summaries"].append(grading_summary)
         if (
             input_tokens > ceilings["maximum_input_tokens_per_request"]
             or output_tokens > ceilings["maximum_output_tokens_per_request"]
@@ -1640,12 +1805,21 @@ def execute_controlled_live_qualification(
         and evidence["completed_schedule_keys"] == requested
     ):
         evidence["execution_status"] = "completed"
-    validate_live_qualification_evidence(
-        evidence,
-        plan=controlled_plan,
-        authorization=authorization,
-        pricing=pricing_payload,
-    )
+    if renderer_bound:
+        validate_renderer_bound_live_qualification_evidence(
+            evidence,
+            plan=controlled_plan,
+            authorization=renderer_bound_authorization,
+            pricing=pricing_payload,
+            corpus=corpus,
+        )
+    else:
+        validate_live_qualification_evidence(
+            evidence,
+            plan=controlled_plan,
+            authorization=authorization,
+            pricing=pricing_payload,
+        )
     validation_context = None
     if validation_context_target is not None:
         validation_context = build_live_qualification_validation_context(
@@ -1727,6 +1901,300 @@ def serialize_live_qualification_evidence(
         pricing=pricing,
     )
     return _canonical_json(payload)
+
+
+def build_workload_qualification_semantics_fingerprints(
+    plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
+) -> Dict[str, str]:
+    """Return the current Stage 1 workload semantics digest per workload.
+
+    The calculation itself is owned by the production-parity module; this only
+    binds it into the controlled execution contract.
+    """
+
+    controlled_plan = (
+        build_controlled_provider_benchmark_plan(corpus=corpus)
+        if plan is None
+        else deepcopy(plan)
+    )
+    validate_controlled_provider_benchmark_plan(controlled_plan)
+    return {
+        workload_id: workload_qualification_semantics_sha256(
+            workload_id,
+            plan=controlled_plan,
+            corpus=corpus,
+        )
+        for workload_id in sorted(PRODUCTION_PARITY_RUNNABLE_WORKLOADS)
+    }
+
+
+def build_renderer_bound_live_qualification_universe(
+    plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
+) -> list[Dict[str, Any]]:
+    """Return the live universe with the approved workload semantics bound in.
+
+    The digest is fixed here, before any provider request, exactly as the
+    production task-contract fingerprint already is.
+    """
+
+    controlled_plan = (
+        build_controlled_provider_benchmark_plan(corpus=corpus)
+        if plan is None
+        else deepcopy(plan)
+    )
+    validate_controlled_provider_benchmark_plan(controlled_plan)
+    semantics = build_workload_qualification_semantics_fingerprints(
+        controlled_plan,
+        corpus=corpus,
+    )
+    rows = []
+    for row in build_live_qualification_universe(controlled_plan):
+        workload_id = row["workload_id"]
+        _require(
+            workload_id in semantics,
+            "renderer-bound universe is missing a workload semantics digest",
+        )
+        rows.append(
+            {
+                **deepcopy(row),
+                TESTED_WORKLOAD_SEMANTICS_FIELD: semantics[workload_id],
+            }
+        )
+    return rows
+
+
+def build_renderer_bound_live_authorization(
+    authorization: Dict[str, Any],
+    *,
+    plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Return a renderer-bound authorization from an exact V1 authorization.
+
+    V1 authorizations are never mutated; the operator approves the exact
+    workload semantics that a later renderer-bound execution may test.
+    """
+
+    base = deepcopy(authorization)
+    _require(
+        isinstance(base, dict) and set(base) == _AUTHORIZATION_FIELDS,
+        "renderer-bound authorization requires an exact V1 authorization",
+    )
+    _require(
+        base["authorization_version"] == LIVE_AUTHORIZATION_VERSION,
+        "renderer-bound authorization requires the current V1 version",
+    )
+    semantics = build_workload_qualification_semantics_fingerprints(
+        plan,
+        corpus=corpus,
+    )
+    approved = {
+        workload_id: semantics[workload_id]
+        for workload_id in sorted(base["approved_workload_ids"])
+        if workload_id in semantics
+    }
+    _require(
+        set(approved) == set(base["approved_workload_ids"]),
+        "renderer-bound authorization workload scope is not qualifiable",
+    )
+    base["authorization_version"] = RENDERER_BOUND_LIVE_AUTHORIZATION_VERSION
+    base[APPROVED_WORKLOAD_SEMANTICS_FIELD] = approved
+    return base
+
+
+def _v1_projection_of_renderer_bound_authorization(
+    authorization: Mapping[str, Any],
+) -> Dict[str, Any]:
+    projected = {
+        field: deepcopy(authorization[field])
+        for field in _AUTHORIZATION_FIELDS
+    }
+    projected["authorization_version"] = LIVE_AUTHORIZATION_VERSION
+    return projected
+
+
+def _v1_projection_of_renderer_bound_evidence(
+    evidence: Mapping[str, Any],
+) -> Dict[str, Any]:
+    projected = {
+        field: deepcopy(evidence[field]) for field in _EVIDENCE_FIELDS
+    }
+    projected["evidence_version"] = LIVE_EVIDENCE_VERSION
+    projected["grading_summaries"] = [
+        {field: deepcopy(summary[field]) for field in _SUMMARY_FIELDS}
+        for summary in evidence["grading_summaries"]
+    ]
+    return projected
+
+
+def validate_renderer_bound_live_authorization(
+    authorization: Dict[str, Any],
+    *,
+    plan: Dict[str, Any],
+    pricing: Dict[str, Any],
+    execution_at_utc: str,
+    corpus: Dict[str, Any] | None = None,
+) -> bool:
+    """Validate a renderer-bound authorization beside the untouched V1 rules."""
+
+    _require(
+        isinstance(authorization, dict)
+        and set(authorization)
+        == (_AUTHORIZATION_FIELDS | {APPROVED_WORKLOAD_SEMANTICS_FIELD}),
+        "renderer-bound authorization fields are invalid",
+    )
+    _require(
+        authorization["authorization_version"]
+        == RENDERER_BOUND_LIVE_AUTHORIZATION_VERSION,
+        "renderer-bound authorization version mismatch",
+    )
+    validate_live_authorization(
+        _v1_projection_of_renderer_bound_authorization(authorization),
+        plan=plan,
+        pricing=pricing,
+        execution_at_utc=execution_at_utc,
+    )
+    approved = authorization[APPROVED_WORKLOAD_SEMANTICS_FIELD]
+    _require(
+        isinstance(approved, Mapping) and bool(approved),
+        "approved workload semantics must be a mapping",
+    )
+    _require(
+        set(approved) == set(authorization["approved_workload_ids"]),
+        "approved workload semantics scope mismatch",
+    )
+    current = build_workload_qualification_semantics_fingerprints(
+        plan,
+        corpus=corpus,
+    )
+    for workload_id, digest in approved.items():
+        _require(
+            _is_sha256_digest(digest),
+            "approved workload semantics digest is malformed",
+        )
+        _require(
+            workload_id in current and current[workload_id] == digest,
+            "approved workload semantics digest is not current",
+        )
+    return True
+
+
+def validate_renderer_bound_live_qualification_evidence(
+    evidence: Dict[str, Any],
+    *,
+    plan: Dict[str, Any],
+    authorization: Dict[str, Any],
+    pricing: Dict[str, Any],
+    corpus: Dict[str, Any] | None = None,
+) -> bool:
+    """Validate renderer-bound live evidence.
+
+    Renderer-bound evidence is a strict superset of the V1 shape, so the V1
+    validator is delegated to on an exact in-memory projection and only the
+    added workload-semantics binding is checked here.
+    """
+
+    _require(
+        isinstance(evidence, dict) and set(evidence) == _EVIDENCE_FIELDS,
+        "renderer-bound live evidence fields are invalid",
+    )
+    _require(
+        evidence["evidence_version"] == RENDERER_BOUND_LIVE_EVIDENCE_VERSION,
+        "renderer-bound live evidence version mismatch",
+    )
+    summaries = evidence["grading_summaries"]
+    _require(
+        isinstance(summaries, list),
+        "renderer-bound grading summaries are invalid",
+    )
+    for summary in summaries:
+        _require(
+            isinstance(summary, dict)
+            and set(summary)
+            == (_SUMMARY_FIELDS | {TESTED_WORKLOAD_SEMANTICS_FIELD}),
+            "renderer-bound grading summary fields are invalid",
+        )
+
+    validate_renderer_bound_live_authorization(
+        authorization,
+        plan=plan,
+        pricing=pricing,
+        execution_at_utc=evidence["execution_at_utc"],
+        corpus=corpus,
+    )
+    validate_live_qualification_evidence(
+        _v1_projection_of_renderer_bound_evidence(evidence),
+        plan=plan,
+        authorization=_v1_projection_of_renderer_bound_authorization(
+            authorization
+        ),
+        pricing=pricing,
+    )
+
+    approved = authorization[APPROVED_WORKLOAD_SEMANTICS_FIELD]
+    universe = {
+        row["schedule_key"]: row
+        for row in build_renderer_bound_live_qualification_universe(
+            plan,
+            corpus=corpus,
+        )
+    }
+    for summary in summaries:
+        tested = summary[TESTED_WORKLOAD_SEMANTICS_FIELD]
+        _require(
+            _is_sha256_digest(tested),
+            "renderer-bound tested workload semantics digest is malformed",
+        )
+        scheduled = universe[summary["schedule_key"]]
+        _require(
+            tested == scheduled[TESTED_WORKLOAD_SEMANTICS_FIELD],
+            "renderer-bound tested workload semantics mismatch",
+        )
+        _require(
+            approved.get(summary["workload_id"]) == tested,
+            "renderer-bound tested workload semantics was not authorized",
+        )
+    return True
+
+
+def serialize_renderer_bound_live_qualification_evidence(
+    evidence: Dict[str, Any],
+    *,
+    plan: Dict[str, Any],
+    authorization: Dict[str, Any],
+    pricing: Dict[str, Any],
+    corpus: Dict[str, Any] | None = None,
+) -> str:
+    payload = deepcopy(evidence)
+    validate_renderer_bound_live_qualification_evidence(
+        payload,
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+        corpus=corpus,
+    )
+    return _canonical_json(payload)
+
+
+def renderer_bound_live_qualification_evidence_sha256(
+    evidence: Dict[str, Any],
+    *,
+    plan: Dict[str, Any],
+    authorization: Dict[str, Any],
+    pricing: Dict[str, Any],
+    corpus: Dict[str, Any] | None = None,
+) -> str:
+    return sha256(
+        serialize_renderer_bound_live_qualification_evidence(
+            evidence,
+            plan=plan,
+            authorization=authorization,
+            pricing=pricing,
+            corpus=corpus,
+        ).encode("utf-8")
+    ).hexdigest()
 
 
 def live_qualification_evidence_sha256(

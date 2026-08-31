@@ -1765,3 +1765,564 @@ def test_only_approved_api_consumes_bridge():
         "src/app/api.py",
         "src/app/user_ai_settings_service.py",
     ]
+
+
+# ---------------------------------------------------------------------------
+# Stage 3: registry-dependent workload-local authority tests.
+# This suite has no autouse registry stub, so the real Stage 2A representation
+# is exercised here.
+# ---------------------------------------------------------------------------
+
+
+from src.evaluation import (  # noqa: E402
+    provider_model_recommendation_policy as _stage3_policy,
+)
+
+
+import json as _stage3_json  # noqa: E402
+
+from src.evaluation import (  # noqa: E402
+    controlled_production_parity_benchmark as _stage3_parity,
+)
+from src.evaluation import (  # noqa: E402
+    controlled_provider_qualification_registry as _stage3_registry,
+)
+from src.evaluation.controlled_provider_benchmark_plan import (  # noqa: E402
+    build_controlled_provider_benchmark_plan as _stage3_build_plan,
+    controlled_provider_benchmark_plan_sha256 as _stage3_plan_sha,
+    legacy_case_alias_map as _stage3_alias_map,
+)
+from src.evaluation.provider_fixture_benchmark import (  # noqa: E402
+    fixture_case_corpus_sha256 as _stage3_corpus_sha,
+    load_fixture_case_corpus as _stage3_load_corpus,
+)
+
+STAGE3_CORPUS_SHA256 = (
+    "b4dea8bfccf39da87221755777d88f35427b1f4b772f3730fcd48cbdb5842b5f"
+)
+STAGE3_HISTORICAL_PLAN_SHA256 = (
+    "f2dcf5345442009915819432a9c1fc9342de40561eb6824c1518dcd31e99d3bf"
+)
+STAGE3_PLAN_SHA256 = (
+    "f4958bdcf4387010986258eb690c7c480481d8e91bdb221debdf2315fdd569ed"
+)
+STAGE3_REGISTRY_SHA256 = (
+    "6d7c1e2cae7d03edadcfb4c7268ec6ec74e8c0e10b13e73cc3914baa03ea8f6f"
+)
+STAGE3_SYNTHETIC_SEMANTICS = "9" * 64
+STAGE3_OTHER_SEMANTICS = "8" * 64
+
+
+def _stage3_v1_registry():
+    return _stage3_json.loads(
+        (
+            ROOT
+            / "outputs"
+            / "provider_benchmark"
+            / "provider-qualification-registry.json"
+        ).read_text(encoding="utf-8")
+    )
+
+
+def _stage3_legacy_projection(source=None):
+    payload = _stage3_v1_registry() if source is None else deepcopy(source)
+    corpus = _stage3_load_corpus()
+    plan = _stage3_build_plan(corpus=corpus)
+    semantics = {
+        workload_id: _stage3_parity.workload_qualification_semantics_sha256(
+            workload_id, plan=plan, corpus=corpus
+        )
+        for workload_id in sorted(
+            {cell["workload_id"] for cell in payload["cells"]}
+        )
+    }
+    return _stage3_registry.project_registry_to_renderer_bound_generation(
+        payload,
+        current_workload_qualification_semantics_sha256_by_workload=semantics,
+    )
+
+
+def _stage3_promote(workload_id, winner_index, *, semantics):
+    """Build an in-memory renderer-bound registry with one synthetic winner.
+
+    Test-only. The promoted identity is deliberately not the V1 winner.
+    """
+
+    source = _stage3_v1_registry()
+    legacy = _stage3_legacy_projection(source)
+    cells = [
+        cell
+        for cell in source["cells"]
+        if cell["workload_id"] == workload_id
+    ]
+    promoted = []
+    for index, cell in enumerate(cells):
+        candidate = deepcopy(cell)
+        if index == winner_index:
+            candidate["status"] = "qualified"
+            candidate["status_reasons"] = [
+                "qualification_requirements_satisfied"
+            ]
+        promoted.append(
+            _stage3_registry.build_renderer_bound_qualification_cell(
+                base_cell=candidate,
+                qualification_semantics_generation="renderer_bound_v1",
+                current_workload_qualification_semantics_sha256=semantics,
+                tested_workload_qualification_semantics_sha256=semantics,
+            )
+        )
+    registry = deepcopy(legacy)
+    registry["cells"] = [
+        cell
+        for cell in legacy["cells"]
+        if cell["workload_id"] != workload_id
+    ] + promoted
+    _stage3_registry.validate_renderer_bound_qualification_registry(registry)
+    return registry, promoted
+
+
+def _stage3_pin(promoted, winner_index, *, semantics, basis="synthetic_basis"):
+    winner = promoted[winner_index]
+    return {
+        "pin_version": _stage3_policy.RENDERER_BOUND_RECOMMENDATION_PIN_VERSION,
+        "workload_id": winner["workload_id"],
+        "provider": winner["provider"],
+        "model": winner["model"],
+        "selection_basis": basis,
+        "expected_status": "qualified",
+        "expected_status_reasons": list(winner["status_reasons"]),
+        "expected_qualification_semantics_generation": "renderer_bound_v1",
+        "expected_current_workload_qualification_semantics_sha256": semantics,
+        "expected_tested_workload_qualification_semantics_sha256": semantics,
+        "expected_current_task_contract_sha256": winner[
+            "current_task_contract_sha256"
+        ],
+        "expected_tested_task_contract_sha256": winner[
+            "tested_task_contract_sha256"
+        ],
+        "expected_qualification_binding_sha256": winner[
+            "qualification_binding_sha256"
+        ],
+        "expected_evidence_sha256": winner["evidence_sha256"],
+        "expected_review_sha256": winner["review_sha256"],
+        "expected_candidate_universe": [
+            {
+                "provider": cell["provider"],
+                "model": cell["model"],
+                "status": cell["status"],
+            }
+            for cell in promoted
+        ],
+    }
+
+
+def test_stage3_v1_authority_is_unchanged():
+    source = _stage3_v1_registry()
+    corpus = _stage3_load_corpus()
+
+    assert _stage3_policy.RECOMMENDATION_POLICY_VERSION == (
+        "provider-model-recommendation-policy-v1"
+    )
+    assert _stage3_policy.SOURCE_QUALIFICATION_REGISTRY_SHA256 == (
+        STAGE3_REGISTRY_SHA256
+    )
+    assert len(
+        _stage3_policy.build_provider_model_recommendation_policy(source)["workloads"]
+    ) == 12
+    assert _stage3_corpus_sha(corpus) == STAGE3_CORPUS_SHA256
+    assert _stage3_plan_sha(_stage3_build_plan(corpus=corpus)) == (
+        STAGE3_PLAN_SHA256
+    )
+    assert STAGE3_PLAN_SHA256 != STAGE3_HISTORICAL_PLAN_SHA256
+    assert len(_stage3_alias_map(corpus)) == 15
+    assert _stage3_registry.provider_qualification_registry_sha256(source) == (
+        STAGE3_REGISTRY_SHA256
+    )
+
+
+def test_stage3_legacy_projection_promotes_no_workload():
+    legacy = _stage3_legacy_projection()
+    prospective = (
+        _stage3_policy.build_prospective_renderer_bound_recommendation_policy(legacy)
+    )
+
+    assert prospective["policy_version"] == (
+        _stage3_policy.RENDERER_BOUND_RECOMMENDATION_POLICY_VERSION
+    )
+    assert len(prospective["workloads"]) == 12
+    for entry in prospective["workloads"]:
+        assert entry["recommendation_status"] == "fail_closed_zero_qualified"
+        assert entry["provider"] is None and entry["model"] is None
+        assert entry["evidence_sha256"] is None
+        assert entry["review_sha256"] is None
+
+
+def test_stage3_v1_frozen_recommendations_are_not_valid_pins():
+    legacy = _stage3_legacy_projection()
+
+    for workload_id, frozen in _stage3_policy._FROZEN_RECOMMENDATIONS.items():
+        # A V1 frozen entry is not even shaped like a renderer-bound pin.
+        with pytest.raises(ValueError):
+            _stage3_policy.validate_renderer_bound_recommendation_pin(
+                {"workload_id": workload_id, **frozen}
+            )
+        # And its identity cannot be validated against legacy cells.
+        legacy_cells = [
+            cell
+            for cell in legacy["cells"]
+            if cell["workload_id"] == workload_id
+        ]
+        assert legacy_cells
+        assert all(cell["status"] != "qualified" for cell in legacy_cells)
+        assert all(
+            cell["qualification_semantics_generation"]
+            == "legacy_no_renderer_binding"
+            for cell in legacy_cells
+        )
+
+
+def test_stage3_legacy_cell_cannot_produce_a_renderer_bound_recommendation():
+    legacy = _stage3_legacy_projection()
+    cell = next(
+        row
+        for row in legacy["cells"]
+        if row["workload_id"] == "skill_extraction"
+    )
+    pin = {
+        "pin_version": _stage3_policy.RENDERER_BOUND_RECOMMENDATION_PIN_VERSION,
+        "workload_id": "skill_extraction",
+        "provider": cell["provider"],
+        "model": cell["model"],
+        "selection_basis": "synthetic_basis",
+        "expected_status": "qualified",
+        "expected_status_reasons": ["qualification_requirements_satisfied"],
+        "expected_qualification_semantics_generation": "renderer_bound_v1",
+        "expected_current_workload_qualification_semantics_sha256": (
+            cell["current_workload_qualification_semantics_sha256"]
+        ),
+        "expected_tested_workload_qualification_semantics_sha256": (
+            cell["current_workload_qualification_semantics_sha256"]
+        ),
+        "expected_current_task_contract_sha256": cell[
+            "current_task_contract_sha256"
+        ],
+        "expected_tested_task_contract_sha256": cell[
+            "tested_task_contract_sha256"
+        ],
+        "expected_qualification_binding_sha256": cell[
+            "qualification_binding_sha256"
+        ],
+        "expected_evidence_sha256": cell["evidence_sha256"],
+        "expected_review_sha256": cell["review_sha256"],
+        "expected_candidate_universe": [
+            {
+                "provider": row["provider"],
+                "model": row["model"],
+                "status": row["status"],
+            }
+            for row in legacy["cells"]
+            if row["workload_id"] == "skill_extraction"
+        ],
+    }
+    with pytest.raises(ValueError):
+        _stage3_policy.validate_renderer_bound_workload_recommendation(
+            legacy, pin=pin
+        )
+
+
+def test_stage3_workload_local_validation_and_isolation():
+    registry, promoted = _stage3_promote(
+        "job_fit_evaluation", 1, semantics=STAGE3_SYNTHETIC_SEMANTICS
+    )
+    pin = _stage3_pin(promoted, 1, semantics=STAGE3_SYNTHETIC_SEMANTICS)
+
+    assert _stage3_policy.validate_renderer_bound_workload_recommendation(
+        registry, pin=pin
+    )
+    entry = _stage3_policy.build_renderer_bound_workload_recommendation(
+        registry, pin=pin
+    )
+    assert entry["recommendation_status"] == "recommended"
+    assert entry["provider"] == promoted[1]["provider"]
+    assert entry["model"] == promoted[1]["model"]
+
+    # Mutating an unrelated workload must not affect this workload.
+    unrelated = deepcopy(registry)
+    for cell in unrelated["cells"]:
+        if cell["workload_id"] == "tailoring_judge":
+            cell["status_reasons"] = list(cell["status_reasons"]) + [
+                "renderer_semantics_superseded"
+            ]
+            cell["qualification_binding_sha256"] = (
+                _stage3_registry.renderer_bound_qualification_binding_sha256(
+                    cell
+                )
+            )
+    assert _stage3_policy.validate_renderer_bound_workload_recommendation(
+        unrelated, pin=pin
+    )
+
+
+def test_stage3_candidate_universe_changes_fail_closed():
+    registry, promoted = _stage3_promote(
+        "job_fit_evaluation", 1, semantics=STAGE3_SYNTHETIC_SEMANTICS
+    )
+    pin = _stage3_pin(promoted, 1, semantics=STAGE3_SYNTHETIC_SEMANTICS)
+
+    removed = deepcopy(registry)
+    removed["cells"] = [
+        cell
+        for cell in removed["cells"]
+        if not (
+            cell["workload_id"] == "job_fit_evaluation"
+            and cell["provider"] == "openai"
+            and cell["model"] == "gpt-5.1"
+        )
+    ]
+    with pytest.raises(ValueError):
+        _stage3_policy.validate_renderer_bound_workload_recommendation(
+            removed, pin=pin
+        )
+
+    shrunk_pin = deepcopy(pin)
+    shrunk_pin["expected_candidate_universe"] = shrunk_pin[
+        "expected_candidate_universe"
+    ][:3]
+    with pytest.raises(ValueError):
+        _stage3_policy.validate_renderer_bound_workload_recommendation(
+            registry, pin=shrunk_pin
+        )
+
+    changed_status = deepcopy(pin)
+    for candidate in changed_status["expected_candidate_universe"]:
+        if candidate["status"] == "rejected":
+            candidate["status"] = "stale"
+            break
+    with pytest.raises(ValueError):
+        _stage3_policy.validate_renderer_bound_workload_recommendation(
+            registry, pin=changed_status
+        )
+
+
+def test_stage3_winner_authority_changes_fail_closed():
+    registry, promoted = _stage3_promote(
+        "job_fit_evaluation", 1, semantics=STAGE3_SYNTHETIC_SEMANTICS
+    )
+    pin = _stage3_pin(promoted, 1, semantics=STAGE3_SYNTHETIC_SEMANTICS)
+
+    for field in (
+        "expected_evidence_sha256",
+        "expected_qualification_binding_sha256",
+        "expected_current_workload_qualification_semantics_sha256",
+        "expected_current_task_contract_sha256",
+    ):
+        altered = deepcopy(pin)
+        altered[field] = "7" * 64
+        with pytest.raises(ValueError):
+            _stage3_policy.validate_renderer_bound_workload_recommendation(
+                registry, pin=altered
+            )
+
+    # A stale workload-semantics binding on the winner fails closed.
+    drifted_registry, drifted_promoted = _stage3_promote(
+        "job_fit_evaluation", 1, semantics=STAGE3_SYNTHETIC_SEMANTICS
+    )
+    for cell in drifted_registry["cells"]:
+        if (
+            cell["workload_id"] == "job_fit_evaluation"
+            and cell["provider"] == drifted_promoted[1]["provider"]
+            and cell["model"] == drifted_promoted[1]["model"]
+        ):
+            cell["current_workload_qualification_semantics_sha256"] = (
+                STAGE3_OTHER_SEMANTICS
+            )
+            cell["qualification_binding_sha256"] = (
+                _stage3_registry.renderer_bound_qualification_binding_sha256(
+                    cell
+                )
+            )
+    with pytest.raises(ValueError):
+        _stage3_policy.validate_renderer_bound_workload_recommendation(
+            drifted_registry, pin=pin
+        )
+
+
+def test_stage3_unpinned_workload_never_inherits_a_v1_winner():
+    registry, promoted = _stage3_promote(
+        "job_fit_evaluation", 1, semantics=STAGE3_SYNTHETIC_SEMANTICS
+    )
+    pin = _stage3_pin(promoted, 1, semantics=STAGE3_SYNTHETIC_SEMANTICS)
+
+    prospective = (
+        _stage3_policy.build_prospective_renderer_bound_recommendation_policy(
+            registry,
+            pins_by_workload={"job_fit_evaluation": pin},
+        )
+    )
+    by_workload = {
+        entry["workload_id"]: entry for entry in prospective["workloads"]
+    }
+    assert by_workload["job_fit_evaluation"]["recommendation_status"] == (
+        "recommended"
+    )
+    for workload_id, entry in by_workload.items():
+        if workload_id == "job_fit_evaluation":
+            continue
+        assert entry["recommendation_status"] == "fail_closed_zero_qualified"
+        assert entry["provider"] is None and entry["model"] is None
+
+    # A workload holding renderer-bound qualified cells cannot be left unpinned.
+    with pytest.raises(ValueError):
+        _stage3_policy.build_prospective_renderer_bound_recommendation_policy(registry)
+
+
+# ---------------------------------------------------------------------------
+# Stage 3: renderer-bound Job Fit overlay authority (explicit pin only).
+# ---------------------------------------------------------------------------
+
+
+def test_stage3_v1_job_fit_overlay_route_is_unchanged():
+    source = _stage3_v1_registry()
+    overlay = job_fit_overlay.build_job_fit_provider_model_qualification_overlay(
+        source
+    )
+
+    assert overlay["recommendation_status"] == "recommended"
+    assert overlay["provider"] == "groq"
+    assert overlay["model"] == "openai/gpt-oss-20b"
+    assert overlay["selection_basis"] == (
+        "reviewed_production_aligned_quality_tie_latency_tiebreak"
+    )
+    assert job_fit_overlay._SELECTION_BASIS == overlay["selection_basis"]
+    assert job_fit_overlay._EXPECTED_IDENTITIES[0] == ("groq", "openai/gpt-oss-20b")
+
+
+def test_stage3_renderer_bound_job_fit_requires_an_explicit_pin():
+    registry, promoted = _stage3_promote(
+        "job_fit_evaluation", 1, semantics=STAGE3_SYNTHETIC_SEMANTICS
+    )
+
+    # No pin at all, and no historical default is substituted.
+    with pytest.raises(TypeError):
+        job_fit_overlay.build_renderer_bound_job_fit_overlay(registry)
+
+    # A V1-shaped selection is not a renderer-bound pin.
+    with pytest.raises(ValueError):
+        job_fit_overlay.build_renderer_bound_job_fit_overlay(
+            registry,
+            pin={
+                "workload_id": "job_fit_evaluation",
+                "provider": "groq",
+                "model": "openai/gpt-oss-20b",
+                "selection_basis": job_fit_overlay._SELECTION_BASIS,
+            },
+        )
+
+
+def test_stage3_renderer_bound_job_fit_uses_only_the_pinned_winner():
+    registry, promoted = _stage3_promote(
+        "job_fit_evaluation", 1, semantics=STAGE3_SYNTHETIC_SEMANTICS
+    )
+    pin = _stage3_pin(
+        promoted,
+        1,
+        semantics=STAGE3_SYNTHETIC_SEMANTICS,
+        basis="synthetic_future_basis_pending_review",
+    )
+
+    overlay = job_fit_overlay.build_renderer_bound_job_fit_overlay(
+        registry, pin=pin
+    )
+
+    assert overlay["overlay_version"] == (
+        job_fit_overlay.RENDERER_BOUND_JOB_FIT_OVERLAY_VERSION
+    )
+    assert overlay["recommendation_status"] == "recommended"
+    # The synthetic pin deliberately selects a candidate that is NOT the
+    # historical V1 winner, proving no historical promotion occurs.
+    assert (overlay["provider"], overlay["model"]) == (
+        promoted[1]["provider"],
+        promoted[1]["model"],
+    )
+    assert (overlay["provider"], overlay["model"]) != (
+        job_fit_overlay._EXPECTED_IDENTITIES[0]
+    )
+    assert overlay["selection_basis"] == "synthetic_future_basis_pending_review"
+    assert overlay["selection_basis"] != job_fit_overlay._SELECTION_BASIS
+    assert overlay["qualification_semantics_generation"] == "renderer_bound_v1"
+    assert overlay["qualified_options"] == [
+        {"provider": promoted[1]["provider"], "model": promoted[1]["model"]}
+    ]
+
+
+def test_stage3_renderer_bound_job_fit_fails_closed_on_authority_change():
+    registry, promoted = _stage3_promote(
+        "job_fit_evaluation", 1, semantics=STAGE3_SYNTHETIC_SEMANTICS
+    )
+    pin = _stage3_pin(promoted, 1, semantics=STAGE3_SYNTHETIC_SEMANTICS)
+
+    # Candidate evidence change.
+    evidence_changed = deepcopy(registry)
+    for cell in evidence_changed["cells"]:
+        if (
+            cell["workload_id"] == "job_fit_evaluation"
+            and cell["provider"] == promoted[1]["provider"]
+            and cell["model"] == promoted[1]["model"]
+        ):
+            cell["evidence_sha256"] = "4" * 64
+            cell["qualification_binding_sha256"] = (
+                _stage3_registry.renderer_bound_qualification_binding_sha256(
+                    cell
+                )
+            )
+    with pytest.raises(ValueError):
+        job_fit_overlay.build_renderer_bound_job_fit_overlay(
+            evidence_changed, pin=pin
+        )
+
+    # Explicit winner identity change.
+    other_winner = deepcopy(pin)
+    other_winner["provider"] = promoted[0]["provider"]
+    other_winner["model"] = promoted[0]["model"]
+    with pytest.raises(ValueError):
+        job_fit_overlay.build_renderer_bound_job_fit_overlay(
+            registry, pin=other_winner
+        )
+
+    # Selection basis is pin-supplied, so a differing basis is a different pin.
+    rebased = deepcopy(pin)
+    rebased["selection_basis"] = "another_basis"
+    rebuilt = job_fit_overlay.build_renderer_bound_job_fit_overlay(
+        registry, pin=rebased
+    )
+    assert rebuilt["selection_basis"] == "another_basis"
+
+    # Incomplete candidate set.
+    partial = deepcopy(pin)
+    partial["expected_candidate_universe"] = partial[
+        "expected_candidate_universe"
+    ][:3]
+    with pytest.raises(ValueError):
+        job_fit_overlay.build_renderer_bound_job_fit_overlay(
+            registry, pin=partial
+        )
+
+
+def test_stage3_renderer_bound_job_fit_ignores_unrelated_workloads():
+    registry, promoted = _stage3_promote(
+        "job_fit_evaluation", 1, semantics=STAGE3_SYNTHETIC_SEMANTICS
+    )
+    pin = _stage3_pin(promoted, 1, semantics=STAGE3_SYNTHETIC_SEMANTICS)
+    baseline = job_fit_overlay.build_renderer_bound_job_fit_overlay(
+        registry, pin=pin
+    )
+
+    unrelated = deepcopy(registry)
+    unrelated["cells"] = [
+        cell
+        for cell in unrelated["cells"]
+        if cell["workload_id"] != "grounded_rag_answer"
+    ]
+    assert job_fit_overlay.build_renderer_bound_job_fit_overlay(
+        unrelated, pin=pin
+    ) == baseline

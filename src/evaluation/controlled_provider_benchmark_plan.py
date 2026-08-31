@@ -28,6 +28,7 @@ from src.evaluation.provider_fixture_benchmark import (
     fixture_case_corpus_sha256,
     load_fixture_case_corpus,
     provider_fixture_benchmark_sha256,
+    workload_fixture_cases_sha256,
 )
 
 
@@ -36,6 +37,57 @@ RUN_PLAN_FIXTURE_VERSION = (
     "controlled-provider-benchmark-run-plan-fixture-v1"
 )
 AUTHORIZATION_VERSION = "controlled-provider-benchmark-authorization-v1"
+CASE_ALIAS_SCHEME_VERSION = "controlled-provider-benchmark-case-alias-v2"
+LEGACY_CASE_ALIAS_SCHEME_VERSION = (
+    "controlled-provider-benchmark-case-alias-v1"
+)
+WORKLOAD_PLAN_PROJECTION_VERSION = (
+    "controlled-provider-benchmark-workload-plan-projection-v1"
+)
+# Global execution/safety envelope shared by every workload. Corpus-size
+# derived plan fields are deliberately excluded so one workload's fixture
+# change cannot invalidate unrelated workloads.
+# Token-budget members that are independent safety policy. The aggregate
+# ``maximum_total_observed_*`` members are deliberately excluded: they are
+# derived from the GLOBAL staged request count, so adding cases to one workload
+# would otherwise invalidate every unrelated workload.
+_GLOBAL_TOKEN_POLICY_FIELDS = (
+    "maximum_input_tokens_per_request",
+    "maximum_output_tokens_per_request",
+    "observed_input_tokens_required",
+    "observed_output_tokens_required",
+    "missing_usage_blocks_cost_comparison",
+)
+# ``execution_order`` is a globally assigned schedule position. It stays in the
+# V1 plan, schedule, evidence, and provenance; it is excluded only from the
+# future workload qualification-semantics projection.
+_WORKLOAD_PROJECTION_EXCLUDED_ROW_FIELDS = (
+    "case_alias",
+    "execution_order",
+)
+_GLOBAL_ENVELOPE_PLAN_FIELDS = (
+    "artifact_retention_policy",
+    "authority_invariants",
+    "candidate_definitions",
+    "cost_ceiling_schema",
+    "execution_policy",
+    "fallback_policy",
+    "model_catalog_snapshot_sha256",
+    "model_catalog_snapshot_version",
+    "plan_version",
+    "request_packet_schema",
+    "result_packet_schema",
+    "retry_policy",
+    "run_plan_fixture_version",
+    "step8l_contract_sha256",
+    "step8l_contract_version",
+    "step8o_case_corpus_version",
+    "step8o_contract_version",
+    "stop_conditions",
+    "timeout_policy",
+    "token_budget_schema",
+    "workload_order",
+)
 DEFAULT_RUN_PLAN_FIXTURE_PATH = (
     Path(__file__).resolve().parents[2]
     / "tests"
@@ -274,6 +326,137 @@ def _case_alias(case_id: str, corpus_sha256: str) -> str:
         f"{CONTROLLED_PLAN_VERSION}:{corpus_sha256}:{case_id}"
     ).encode("utf-8")
     return f"case_{sha256(material).hexdigest()[:24]}"
+
+
+def stable_case_alias(workload_id: str, case_id: str) -> str:
+    """Return the versioned corpus-independent case identity.
+
+    Additive Stage 1 primitive. ``_case_alias`` remains the identity used by
+    ``build_controlled_provider_benchmark_plan``; this scheme is not activated
+    until a later stage.
+    """
+
+    workload = str(workload_id or "").strip()
+    case = str(case_id or "").strip()
+    _require(bool(workload) and bool(case), "stable case alias identity is invalid")
+    material = f"{CASE_ALIAS_SCHEME_VERSION}:{workload}:{case}".encode("utf-8")
+    return f"case_{sha256(material).hexdigest()[:24]}"
+
+
+def legacy_case_alias_map(
+    corpus: Dict[str, Any] | None = None,
+) -> Dict[str, str]:
+    """Return every historical ``case_id -> case_alias`` pair still in force."""
+
+    payload = load_fixture_case_corpus() if corpus is None else deepcopy(corpus)
+    corpus_digest = fixture_case_corpus_sha256(payload)
+    return {
+        case["case_id"]: _case_alias(case["case_id"], corpus_digest)
+        for case in sorted(payload["cases"], key=lambda case: case["case_id"])
+    }
+
+
+def build_workload_plan_projection(
+    workload_id: str,
+    *,
+    plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Return one workload's canonical slice of the controlled plan.
+
+    Historical aliases are replaced by stable workload-local identities so the
+    projection does not inherit the global corpus digest.
+    """
+
+    payload = load_fixture_case_corpus() if corpus is None else deepcopy(corpus)
+    controlled_plan = (
+        build_controlled_provider_benchmark_plan(corpus=payload)
+        if plan is None
+        else deepcopy(plan)
+    )
+    validate_controlled_provider_benchmark_plan(controlled_plan)
+    normalized = str(workload_id or "").strip()
+    _require(normalized in WORKLOAD_ORDER, "unknown controlled plan workload")
+
+    case_ids_by_alias = {
+        alias: case_id
+        for case_id, alias in legacy_case_alias_map(payload).items()
+    }
+
+    def _stable_identity(row: Mapping[str, Any]) -> str:
+        case_id = case_ids_by_alias.get(row.get("case_alias"))
+        _require(bool(case_id), "controlled plan row alias is unresolved")
+        return stable_case_alias(normalized, case_id)
+
+    def _restated(row: Mapping[str, Any]) -> Dict[str, Any]:
+        restated = {
+            key: deepcopy(value)
+            for key, value in row.items()
+            if key not in _WORKLOAD_PROJECTION_EXCLUDED_ROW_FIELDS
+        }
+        restated["stable_case_alias"] = _stable_identity(row)
+        return restated
+
+    staged_rows = [
+        _restated(row)
+        for row in controlled_plan["staged_matrix"]
+        if row["workload_id"] == normalized
+    ]
+    transmission_rows = [
+        _restated(row)
+        for row in controlled_plan["transmission_review"]
+        if row.get("workload_id") == normalized
+    ]
+    return {
+        "projection_version": WORKLOAD_PLAN_PROJECTION_VERSION,
+        "alias_scheme_version": CASE_ALIAS_SCHEME_VERSION,
+        "workload_id": normalized,
+        "global_execution_envelope": {
+            field: (
+                {
+                    member: deepcopy(controlled_plan[field][member])
+                    for member in _GLOBAL_TOKEN_POLICY_FIELDS
+                }
+                if field == "token_budget_schema"
+                else deepcopy(controlled_plan[field])
+            )
+            for field in _GLOBAL_ENVELOPE_PLAN_FIELDS
+        },
+        "maximum_requests_per_case": controlled_plan["request_counts"][
+            "maximum_requests_per_case"
+        ],
+        "workload_cases_sha256": workload_fixture_cases_sha256(
+            normalized,
+            payload,
+        ),
+        "staged_rows": sorted(
+            staged_rows,
+            key=lambda row: (row["provider"], row["model"]),
+        ),
+        "transmission_rows": sorted(
+            transmission_rows,
+            key=lambda row: row["stable_case_alias"],
+        ),
+    }
+
+
+def workload_plan_projection_sha256(
+    workload_id: str,
+    *,
+    plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
+) -> str:
+    """Return the deterministic digest of one workload's plan projection."""
+
+    return sha256(
+        _canonical_json(
+            build_workload_plan_projection(
+                workload_id,
+                plan=plan,
+                corpus=corpus,
+            )
+        ).encode("utf-8")
+    ).hexdigest()
 
 
 def validate_run_plan_fixture(fixture: Dict[str, Any]) -> bool:

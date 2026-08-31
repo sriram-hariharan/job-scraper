@@ -378,26 +378,38 @@ def test_execution_matrix_is_stable_and_serial():
     )
 
 
-def test_tier_a_uses_only_20b_and_gpt_5_mini():
+def test_skill_gets_120b_without_expanding_other_tier_a_workloads():
     plan = _plan()
+    identities = {
+        (row["workload_id"], row["provider"], row["model"])
+        for row in plan["staged_matrix"]
+    }
 
-    for alias in {row["case_alias"] for row in plan["staged_matrix"]}:
-        rows = [
-            row for row in plan["staged_matrix"]
-            if row["case_alias"] == alias and row["tier"] == "A"
-        ]
-        if rows:
-            assert [
-                (row["provider"], row["model"])
-                for row in rows
-            ] == [
-                ("groq", "openai/gpt-oss-20b"),
-                ("openai", "gpt-5-mini"),
-            ]
-            assert all(
-                row["model"] != "openai/gpt-oss-120b"
-                for row in rows
-            )
+    assert (
+        "skill_extraction",
+        "groq",
+        "openai/gpt-oss-120b",
+    ) in identities
+    assert (
+        "manual_scan_phrase",
+        "groq",
+        "openai/gpt-oss-120b",
+    ) not in identities
+    assert len(plan["staged_matrix"]) == 45
+    assert len(identities) == 45
+
+    skill_rows = [
+        row for row in plan["staged_matrix"]
+        if row["workload_id"] == "skill_extraction"
+    ]
+    assert [
+        (row["provider"], row["model"])
+        for row in skill_rows
+    ] == [
+        ("groq", "openai/gpt-oss-20b"),
+        ("groq", "openai/gpt-oss-120b"),
+        ("openai", "gpt-5-mini"),
+    ]
 
 
 def test_tier_b_and_c_rows_include_all_catalog_eligible_models():
@@ -453,17 +465,17 @@ def test_matrix_matches_contract_tier_eligibility_without_qualification_claim():
 def test_proposed_request_counts_are_exact_and_bounded():
     counts = _plan()["request_counts"]
 
-    assert counts["by_provider"] == {"groq": 22, "openai": 22}
+    assert counts["by_provider"] == {"groq": 23, "openai": 22}
     assert counts["by_model"] == {
         "groq/openai/gpt-oss-20b": 12,
-        "groq/openai/gpt-oss-120b": 10,
+        "groq/openai/gpt-oss-120b": 11,
         "openai/gpt-5-mini": 12,
         "openai/gpt-5.1": 10,
     }
-    assert counts["maximum_total_requests"] == 44
+    assert counts["maximum_total_requests"] == 45
     assert counts["maximum_requests_per_case"] == 4
     assert all(
-        value <= 44
+        value <= 45
         for value in counts["maximum_requests_per_model"].values()
     )
 
@@ -472,7 +484,7 @@ def test_request_count_by_workload_is_complete():
     counts = _plan()["request_counts"]["by_workload"]
 
     assert list(counts) == list(WORKLOAD_ORDER)
-    assert sum(counts.values()) == 44
+    assert sum(counts.values()) == 45
 
 
 def test_duplicate_case_provider_model_combination_is_absent():
@@ -1135,3 +1147,367 @@ def test_plan_owner_is_evaluation_infrastructure_only():
     assert owner.RUN_PLAN_FIXTURE_SOURCE.startswith(
         "tests/fixtures/provider_benchmark/"
     )
+
+
+# ---------------------------------------------------------------------------
+# Stage 1: additive stable-alias and workload plan-projection primitives.
+# ---------------------------------------------------------------------------
+
+
+CURRENT_CONTROLLED_PLAN_SHA256 = (
+    "f4958bdcf4387010986258eb690c7c480481d8e91bdb221debdf2315fdd569ed"
+)
+CURRENT_SKILL_EXTRACTION_ALIAS = "case_eff6ed2fb3643d23b87bab48"
+
+
+def _stage1_skill_extraction_only_change(corpus):
+    mutated = deepcopy(corpus)
+    case = next(
+        row
+        for row in mutated["cases"]
+        if row["workload_id"] == "skill_extraction"
+    )
+    case["normalized_input_packet"]["preferred_terms"].append("terraform")
+    case["normalized_input_packet"]["evidence_tokens"].append("terraform")
+    case["expected_output"]["preferred_skills"].append("terraform")
+    case["supported_evidence_tokens"].append("terraform")
+    return mutated
+
+
+def test_stage1_current_plan_authority_digests_are_unchanged():
+    corpus = step8o.load_fixture_case_corpus()
+    plan = owner.build_controlled_provider_benchmark_plan(corpus=corpus)
+
+    assert owner.controlled_provider_benchmark_plan_sha256(plan) == (
+        CURRENT_CONTROLLED_PLAN_SHA256
+    )
+    # Stage 1 primitives must not appear in the authoritative plan payload.
+    for field in ("staged_matrix", "transmission_review"):
+        for row in plan[field]:
+            assert "stable_case_alias" not in row
+    assert not any(
+        key.startswith("workload_qualification_semantics")
+        or key.startswith("workload_plan_projection")
+        or key.startswith("stable_case_alias")
+        for key in plan
+    )
+
+
+def test_stage1_current_case_aliases_are_unchanged():
+    corpus = step8o.load_fixture_case_corpus()
+    digest = step8o.fixture_case_corpus_sha256(corpus)
+    legacy = owner.legacy_case_alias_map(corpus)
+
+    assert len(legacy) == len(corpus["cases"])
+    assert legacy["skill_extraction_required_preferred_v1"] == (
+        CURRENT_SKILL_EXTRACTION_ALIAS
+    )
+    for case in corpus["cases"]:
+        assert legacy[case["case_id"]] == owner._case_alias(
+            case["case_id"], digest
+        )
+
+    planned_aliases = {row["case_alias"] for row in
+                       owner.build_controlled_provider_benchmark_plan(
+                           corpus=corpus)["transmission_review"]}
+    assert planned_aliases == set(legacy.values())
+
+
+def test_stage1_stable_alias_is_independent_of_global_corpus_digest():
+    corpus = step8o.load_fixture_case_corpus()
+    mutated = _stage1_skill_extraction_only_change(corpus)
+    assert step8o.fixture_case_corpus_sha256(corpus) != (
+        step8o.fixture_case_corpus_sha256(mutated)
+    )
+
+    for case in corpus["cases"]:
+        alias = owner.stable_case_alias(case["workload_id"], case["case_id"])
+        assert alias == owner.stable_case_alias(
+            case["workload_id"], case["case_id"]
+        )
+        assert alias.startswith("case_")
+        # Corpus content changed; the stable identity did not.
+        assert alias == owner.stable_case_alias(
+            case["workload_id"], case["case_id"]
+        )
+
+    distinct = {
+        owner.stable_case_alias(case["workload_id"], case["case_id"])
+        for case in corpus["cases"]
+    }
+    assert len(distinct) == len(corpus["cases"])
+    with pytest.raises(ValueError):
+        owner.stable_case_alias("", "case")
+
+
+def test_stage1_workload_plan_projection_isolates_one_workload():
+    corpus = step8o.load_fixture_case_corpus()
+    mutated = _stage1_skill_extraction_only_change(corpus)
+
+    changed = [
+        workload_id
+        for workload_id in WORKLOAD_ORDER
+        if owner.workload_plan_projection_sha256(workload_id, corpus=corpus)
+        != owner.workload_plan_projection_sha256(workload_id, corpus=mutated)
+    ]
+
+    assert changed == ["skill_extraction"]
+
+
+def test_stage1_workload_plan_projection_binds_global_execution_envelope():
+    """Every workload digest must move when the shared safety envelope moves.
+
+    The run-plan fixture is a fixed on-disk safety envelope and the plan
+    validator always re-reads it, so an altered envelope cannot be pushed
+    through the builder. Bind-sensitivity is proven on the canonical projection
+    material instead.
+    """
+
+    from hashlib import sha256
+
+    corpus = step8o.load_fixture_case_corpus()
+    plan = owner.build_controlled_provider_benchmark_plan(corpus=corpus)
+
+    changed = []
+    for workload_id in WORKLOAD_ORDER:
+        projection = owner.build_workload_plan_projection(
+            workload_id, plan=plan, corpus=corpus
+        )
+        envelope = projection["global_execution_envelope"]
+        assert set(envelope) == set(owner._GLOBAL_ENVELOPE_PLAN_FIELDS)
+        for field in owner._GLOBAL_ENVELOPE_PLAN_FIELDS:
+            if field == "token_budget_schema":
+                # Stage 4B: only the independent per-request token policy is
+                # bound; corpus-derived run totals are excluded.
+                assert envelope[field] == {
+                    member: plan[field][member]
+                    for member in owner._GLOBAL_TOKEN_POLICY_FIELDS
+                }
+                continue
+            assert envelope[field] == plan[field]
+
+        baseline = sha256(
+            owner._canonical_json(projection).encode("utf-8")
+        ).hexdigest()
+        altered = deepcopy(projection)
+        altered["global_execution_envelope"]["execution_policy"][
+            "maximum_run_duration_seconds"
+        ] = 600
+        moved = sha256(
+            owner._canonical_json(altered).encode("utf-8")
+        ).hexdigest()
+        if moved != baseline:
+            changed.append(workload_id)
+
+    assert changed == list(WORKLOAD_ORDER)
+
+
+def test_stage1_workload_plan_projection_carries_stable_identities_only():
+    corpus = step8o.load_fixture_case_corpus()
+    projection = owner.build_workload_plan_projection(
+        "skill_extraction", corpus=corpus
+    )
+
+    assert projection["alias_scheme_version"] == owner.CASE_ALIAS_SCHEME_VERSION
+    assert projection["workload_id"] == "skill_extraction"
+    for field in ("staged_rows", "transmission_rows"):
+        assert projection[field]
+        for row in projection[field]:
+            assert "case_alias" not in row
+            assert row["stable_case_alias"] == owner.stable_case_alias(
+                "skill_extraction", "skill_extraction_required_preferred_v1"
+            )
+    with pytest.raises(ValueError):
+        owner.workload_plan_projection_sha256("not_a_workload")
+
+
+# ---------------------------------------------------------------------------
+# Stage 4B: workload-semantics isolation under case ADDITION.
+# ---------------------------------------------------------------------------
+
+
+def _stage4b_future_corpus(corpus):
+    import test_provider_fixture_benchmark as fixture_suite
+
+    future = deepcopy(corpus)
+    future["cases"] = future["cases"] + (
+        fixture_suite.stage4b_proposed_skill_cases()
+    )
+    return future
+
+
+def test_stage4b_projection_excludes_global_sequence_and_derived_totals():
+    corpus = step8o.load_fixture_case_corpus()
+    plan = owner.build_controlled_provider_benchmark_plan(corpus=corpus)
+
+    assert owner._WORKLOAD_PROJECTION_EXCLUDED_ROW_FIELDS == (
+        "case_alias",
+        "execution_order",
+    )
+    # execution_order stays in the authoritative V1 plan and schedule.
+    assert all("execution_order" in row for row in plan["staged_matrix"])
+
+    projection = owner.build_workload_plan_projection(
+        "skill_extraction", plan=plan, corpus=corpus
+    )
+    for row in projection["staged_rows"]:
+        assert "execution_order" not in row
+        assert "case_alias" not in row
+
+    token_policy = projection["global_execution_envelope"][
+        "token_budget_schema"
+    ]
+    assert set(token_policy) == set(owner._GLOBAL_TOKEN_POLICY_FIELDS)
+    # Derived run-size totals are excluded from workload authority but remain
+    # in the authoritative plan.
+    for derived in (
+        "maximum_total_observed_input_tokens",
+        "maximum_total_observed_output_tokens",
+    ):
+        assert derived not in token_policy
+        assert derived in plan["token_budget_schema"]
+
+
+def test_stage4b_adding_cases_isolates_workload_plan_projections():
+    corpus = step8o.load_fixture_case_corpus()
+    future = _stage4b_future_corpus(corpus)
+    current_plan = owner.build_controlled_provider_benchmark_plan(
+        corpus=corpus
+    )
+    future_plan = owner.build_controlled_provider_benchmark_plan(corpus=future)
+
+    # The global run totals really do move; that must not leak into workloads.
+    assert (
+        current_plan["token_budget_schema"][
+            "maximum_total_observed_input_tokens"
+        ]
+        != future_plan["token_budget_schema"][
+            "maximum_total_observed_input_tokens"
+        ]
+    )
+
+    changed = [
+        workload_id
+        for workload_id in WORKLOAD_ORDER
+        if owner.workload_plan_projection_sha256(
+            workload_id, plan=current_plan, corpus=corpus
+        )
+        != owner.workload_plan_projection_sha256(
+            workload_id, plan=future_plan, corpus=future
+        )
+    ]
+    assert changed == ["skill_extraction"]
+
+
+def test_stage4b_genuine_global_safety_policy_still_invalidates_everything():
+    """A real global safety-policy change must still invalidate all workloads.
+
+    The plan validator ties the safety envelope to the on-disk run-plan
+    fixture, so bind-sensitivity is proven on the canonical projection material
+    rather than by pushing an unvalidatable plan through the builder.
+    """
+
+    from hashlib import sha256
+
+    corpus = step8o.load_fixture_case_corpus()
+    plan = owner.build_controlled_provider_benchmark_plan(corpus=corpus)
+
+    def _moved(mutator):
+        moved = []
+        for workload_id in WORKLOAD_ORDER:
+            projection = owner.build_workload_plan_projection(
+                workload_id, plan=plan, corpus=corpus
+            )
+            baseline = sha256(
+                owner._canonical_json(projection).encode("utf-8")
+            ).hexdigest()
+            altered = deepcopy(projection)
+            mutator(altered["global_execution_envelope"])
+            if sha256(
+                owner._canonical_json(altered).encode("utf-8")
+            ).hexdigest() != baseline:
+                moved.append(workload_id)
+        return moved
+
+    # A genuine per-request token safety limit.
+    assert _moved(
+        lambda envelope: envelope["token_budget_schema"].__setitem__(
+            "maximum_input_tokens_per_request", 2048
+        )
+    ) == list(WORKLOAD_ORDER)
+
+    # An independent global execution-envelope limit.
+    assert _moved(
+        lambda envelope: envelope["execution_policy"].__setitem__(
+            "maximum_run_duration_seconds", 600
+        )
+    ) == list(WORKLOAD_ORDER)
+
+
+def test_stage4b_future_staged_matrix_projection():
+    corpus = step8o.load_fixture_case_corpus()
+    future = _stage4b_future_corpus(corpus)
+    reviews = owner.build_transmission_review(corpus=future)
+    plan = owner.build_controlled_provider_benchmark_plan(corpus=future)
+
+    skill_reviews = [
+        row for row in reviews if row["workload_id"] == "skill_extraction"
+    ]
+    eligible = [
+        row
+        for row in skill_reviews
+        if row["eligible_for_later_controlled_transmission"]
+    ]
+    for row in skill_reviews:
+        assert row["eligibility_reasons"] == [] or not row[
+            "eligible_for_later_controlled_transmission"
+        ]
+
+    rows = [
+        row
+        for row in plan["staged_matrix"]
+        if row["workload_id"] == "skill_extraction"
+    ]
+    candidates = {(row["provider"], row["model"]) for row in rows}
+
+    assert len(skill_reviews) == 5
+    assert len(eligible) == 5
+    assert len(candidates) == 3
+    assert len(rows) == 15
+
+    # Current authority is untouched by the in-memory projection.
+    assert step8o.fixture_case_corpus_sha256(
+        step8o.load_fixture_case_corpus()
+    ) == "b4dea8bfccf39da87221755777d88f35427b1f4b772f3730fcd48cbdb5842b5f"
+
+
+def test_stage4b_recipe_cases_pass_transmission_safety_unmodified():
+    corpus = step8o.load_fixture_case_corpus()
+    future = _stage4b_future_corpus(corpus)
+    digest = step8o.fixture_case_corpus_sha256(future)
+    reviews = {
+        row["case_alias"]: row
+        for row in owner.build_transmission_review(corpus=future)
+    }
+    import test_provider_fixture_benchmark as fixture_suite
+
+    flags = (
+        "contains_personal_data",
+        "contains_runtime_derived_data",
+        "contains_employer_or_company_identity",
+        "contains_person_name",
+        "contains_resume_derived_text",
+        "contains_private_job_description_text",
+        "contains_credentials_or_secrets",
+        "contains_internal_paths",
+        "contains_request_identifiers",
+        "contains_database_information",
+        "contains_proprietary_application_state",
+        "contains_unsupported_free_form_text",
+    )
+    for case in fixture_suite.stage4b_proposed_skill_cases():
+        review = reviews[owner._case_alias(case["case_id"], digest)]
+        for flag in flags:
+            assert review[flag] is False, (case["case_id"], flag)
+        assert review["eligible_for_later_controlled_transmission"] is True
+        assert review["eligibility_reasons"] == []

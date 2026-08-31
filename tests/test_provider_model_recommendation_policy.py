@@ -475,3 +475,131 @@ def test_only_approved_app_bridge_imports_recommendation_policy():
     assert references == [
         "app/provider_model_routing_service.py"
     ]
+
+
+# ---------------------------------------------------------------------------
+# Stage 3: pin-shape primitives only.
+# This suite stubs the registry validator via an autouse fixture, so the
+# registry-dependent Stage 3 authority tests live in the routing-bridge suite.
+# ---------------------------------------------------------------------------
+
+
+def test_stage3_v1_policy_constants_are_unchanged():
+    assert policy.RECOMMENDATION_POLICY_VERSION == (
+        "provider-model-recommendation-policy-v1"
+    )
+    assert policy.SOURCE_QUALIFICATION_REGISTRY_SHA256 == (
+        "6d7c1e2cae7d03edadcfb4c7268ec6ec74e8c0e10b13e73cc3914baa03ea8f6f"
+    )
+    assert policy.RECOMMENDATION_STATUSES == (
+        "recommended",
+        "fail_closed_zero_qualified",
+        "blocked_non_live",
+    )
+    assert policy.RENDERER_BOUND_RECOMMENDATION_POLICY_VERSION != (
+        policy.RECOMMENDATION_POLICY_VERSION
+    )
+
+
+def test_stage3_v1_frozen_recommendations_are_not_valid_renderer_bound_pins():
+    """A V1 frozen entry can never be accepted as a renderer-bound pin."""
+
+    for workload_id, frozen in policy._FROZEN_RECOMMENDATIONS.items():
+        with pytest.raises(ValueError):
+            policy.validate_renderer_bound_recommendation_pin(
+                {"workload_id": workload_id, **frozen}
+            )
+
+
+def test_stage3_pin_shape_fails_closed():
+    valid = {
+        "pin_version": policy.RENDERER_BOUND_RECOMMENDATION_PIN_VERSION,
+        "workload_id": "job_fit_evaluation",
+        "provider": "groq",
+        "model": "synthetic-model",
+        "selection_basis": "synthetic_basis",
+        "expected_status": "qualified",
+        "expected_status_reasons": ["qualification_requirements_satisfied"],
+        "expected_qualification_semantics_generation": "renderer_bound_v1",
+        "expected_current_workload_qualification_semantics_sha256": "9" * 64,
+        "expected_tested_workload_qualification_semantics_sha256": "9" * 64,
+        "expected_current_task_contract_sha256": "1" * 64,
+        "expected_tested_task_contract_sha256": "1" * 64,
+        "expected_qualification_binding_sha256": "2" * 64,
+        "expected_evidence_sha256": "3" * 64,
+        "expected_review_sha256": None,
+        "expected_candidate_universe": [
+            {"provider": "groq", "model": "synthetic-model", "status": "qualified"},
+            {"provider": "openai", "model": "other-model", "status": "rejected"},
+        ],
+    }
+    assert policy.validate_renderer_bound_recommendation_pin(valid)
+
+    wrong_generation = deepcopy(valid)
+    wrong_generation["expected_qualification_semantics_generation"] = (
+        "legacy_no_renderer_binding"
+    )
+    with pytest.raises(ValueError):
+        policy.validate_renderer_bound_recommendation_pin(wrong_generation)
+
+    not_qualified = deepcopy(valid)
+    not_qualified["expected_status"] = "stale"
+    with pytest.raises(ValueError):
+        policy.validate_renderer_bound_recommendation_pin(not_qualified)
+
+    winner_outside = deepcopy(valid)
+    winner_outside["provider"] = "openai"
+    winner_outside["model"] = "absent-model"
+    with pytest.raises(ValueError):
+        policy.validate_renderer_bound_recommendation_pin(winner_outside)
+
+    missing_field = deepcopy(valid)
+    del missing_field["expected_evidence_sha256"]
+    with pytest.raises(ValueError):
+        policy.validate_renderer_bound_recommendation_pin(missing_field)
+
+
+def test_stage5g_finalized_skill_pin_is_exact_advisory_and_copy_contained():
+    pin = policy.build_finalized_skill_extraction_renderer_bound_pin()
+
+    assert policy.validate_renderer_bound_recommendation_pin(pin)
+    assert (
+        pin["workload_id"],
+        pin["provider"],
+        pin["model"],
+    ) == (
+        "skill_extraction",
+        "groq",
+        "openai/gpt-oss-20b",
+    )
+    assert pin["expected_evidence_sha256"] == (
+        "ca727553032f24749b3ea161188b6c2cd4f7ab4c877b8e7dc7d896a0f186e5ac"
+    )
+    assert pin["expected_qualification_binding_sha256"] == (
+        "dfe7c0c77150f9a7bfb25f00a5b37ae67f121948f4a63140e9de67e2f515c1df"
+    )
+    assert pin["expected_candidate_universe"] == [
+        {
+            "provider": "groq",
+            "model": "openai/gpt-oss-20b",
+            "status": "qualified",
+        },
+        {
+            "provider": "groq",
+            "model": "openai/gpt-oss-120b",
+            "status": "qualified",
+        },
+        {
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "status": "stale",
+        },
+    ]
+    assert all(
+        value is False for value in policy._AUTHORITY_INVARIANTS.values()
+    )
+
+    pin["model"] = "mutated"
+    assert policy.build_finalized_skill_extraction_renderer_bound_pin()[
+        "model"
+    ] == "openai/gpt-oss-20b"

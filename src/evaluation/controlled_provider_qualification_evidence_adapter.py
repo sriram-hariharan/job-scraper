@@ -65,6 +65,13 @@ _OBSERVATION_FIELDS = {
     "human_review_required",
     "authority_safety_valid",
 }
+RENDERER_BOUND_OBSERVATION_VERSION = (
+    "qualification-evidence-observation-renderer-bound-v1"
+)
+_RENDERER_BOUND_OBSERVATION_FIELDS = _OBSERVATION_FIELDS | {
+    "qualification_semantics_generation",
+    "tested_workload_qualification_semantics_sha256",
+}
 _PROHIBITED_OBSERVATION_KEY_PARTS = {
     "api_key",
     "authorization_body",
@@ -450,6 +457,106 @@ def _live_observation(
         "human_review_required": summary["human_review_required"],
         "authority_safety_valid": authority_safety_valid,
     }
+
+
+def build_renderer_bound_qualification_observation(
+    *,
+    evidence: Dict[str, Any],
+    schedule_key: str,
+    plan: Dict[str, Any],
+    authorization: Dict[str, Any],
+    pricing: Dict[str, Any],
+    tested_workload_qualification_semantics_sha256: str | None = None,
+    corpus: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Return one renderer-bound observation from validated live evidence.
+
+    The tested workload-semantics digest is read only from evidence that has
+    already been validated against the approved execution context. It is never
+    recomputed from current code, and a caller may not supply it.
+    """
+
+    _require(
+        tested_workload_qualification_semantics_sha256 is None,
+        "renderer-bound tested workload semantics must come from validated "
+        "live evidence",
+    )
+    _require(authorization is not None, "exact live authorization context is required")
+    _require(pricing is not None, "exact live pricing context is required")
+
+    from src.evaluation import controlled_live_provider_qualification as live
+
+    payload = deepcopy(evidence)
+    _require(
+        isinstance(payload, dict)
+        and payload.get("evidence_version")
+        == live.RENDERER_BOUND_LIVE_EVIDENCE_VERSION,
+        "renderer-bound observation requires renderer-bound live evidence",
+    )
+    live.validate_renderer_bound_live_qualification_evidence(
+        payload,
+        plan=deepcopy(plan),
+        authorization=deepcopy(authorization),
+        pricing=deepcopy(pricing),
+        corpus=corpus,
+    )
+
+    base = _live_observation(
+        evidence=live._v1_projection_of_renderer_bound_evidence(payload),
+        schedule_key=schedule_key,
+        plan=deepcopy(plan),
+        authorization=(
+            live._v1_projection_of_renderer_bound_authorization(authorization)
+        ),
+        pricing=deepcopy(pricing),
+        tested_task_contract_sha256=None,
+    )
+
+    summary = next(
+        (
+            row
+            for row in payload["grading_summaries"]
+            if row["schedule_key"] == schedule_key
+        ),
+        None,
+    )
+    _require(
+        summary is not None,
+        "renderer-bound evidence has no summary for the requested schedule",
+    )
+    tested_semantics = summary[live.TESTED_WORKLOAD_SEMANTICS_FIELD]
+
+    observation = dict(base)
+    observation["observation_version"] = RENDERER_BOUND_OBSERVATION_VERSION
+    observation["evidence_schema_version"] = (
+        live.RENDERER_BOUND_LIVE_EVIDENCE_VERSION
+    )
+    observation["evidence_sha256"] = (
+        live.renderer_bound_live_qualification_evidence_sha256(
+            payload,
+            plan=deepcopy(plan),
+            authorization=deepcopy(authorization),
+            pricing=deepcopy(pricing),
+            corpus=corpus,
+        )
+    )
+    observation["qualification_semantics_generation"] = "renderer_bound_v1"
+    observation["tested_workload_qualification_semantics_sha256"] = (
+        tested_semantics
+    )
+    _require(
+        set(observation) == _RENDERER_BOUND_OBSERVATION_FIELDS,
+        "renderer-bound observation fields are invalid",
+    )
+    _require(
+        not any(
+            prohibited in key
+            for key in _iter_keys(observation)
+            for prohibited in _PROHIBITED_OBSERVATION_KEY_PARTS
+        ),
+        "renderer-bound observation contains prohibited material",
+    )
+    return observation
 
 
 def build_qualification_observation(

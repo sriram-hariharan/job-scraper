@@ -91,6 +91,16 @@ _CONTRACT_FIELDS = {
 class UnknownProviderOutcome(RuntimeError):
     """A bounded unknown provider outcome requiring immediate stop."""
 
+    def __init__(
+        self,
+        *args: Any,
+        status_code: int | None = None,
+        provider_error: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(*args)
+        self.status_code = None if status_code is None else int(status_code)
+        self.provider_error = dict(provider_error) if provider_error else None
+
 
 def _require(condition: bool, message: str) -> None:
     if not condition:
@@ -451,6 +461,7 @@ def build_groq_production_parity_chat_completion_arguments(
     parity_request: Dict[str, Any],
     scheduled: Mapping[str, Any],
     plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Adapt a validated production-parity request without prompt ownership."""
 
@@ -463,7 +474,11 @@ def build_groq_production_parity_chat_completion_arguments(
         if plan is None
         else deepcopy(plan)
     )
-    validate_production_parity_request(parity_request, plan=controlled_plan)
+    validate_production_parity_request(
+        parity_request,
+        plan=controlled_plan,
+        corpus=corpus,
+    )
     _require(
         scheduled.get("provider") == parity_request.get("provider") == "groq"
         and scheduled.get("model") == parity_request.get("model")
@@ -514,6 +529,7 @@ def build_groq_production_parity_chat_completion_arguments(
         parity_request=parity_request,
         scheduled=scheduled,
         plan=controlled_plan,
+        corpus=corpus,
     )
     return deepcopy(arguments)
 
@@ -524,6 +540,7 @@ def validate_groq_production_parity_chat_completion_arguments(
     parity_request: Dict[str, Any],
     scheduled: Mapping[str, Any],
     plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> bool:
     from src.evaluation.controlled_production_parity_benchmark import (
         validate_production_parity_request,
@@ -534,7 +551,11 @@ def validate_groq_production_parity_chat_completion_arguments(
         if plan is None
         else deepcopy(plan)
     )
-    validate_production_parity_request(parity_request, plan=controlled_plan)
+    validate_production_parity_request(
+        parity_request,
+        plan=controlled_plan,
+        corpus=corpus,
+    )
     response_contract = parity_request["response_contract"]
     expected_fields = {
         "model",
@@ -846,7 +867,11 @@ def _raise_bounded_sdk_failure(exc: BaseException) -> None:
         raise DefinitiveTransportFailure(
             category, status_code=status_code, provider_error=provider_error
         ) from None
-    raise UnknownProviderOutcome("unknown_provider_outcome") from None
+    raise UnknownProviderOutcome(
+        "unknown_provider_outcome",
+        status_code=status_code,
+        provider_error=provider_error,
+    ) from None
 
 
 def reduce_groq_sdk_response(
@@ -958,6 +983,7 @@ def execute_groq_production_parity_chat_completion_once(
     monotonic_clock: Callable[[], float],
     sdk_module: Any | None = None,
     plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Execute one explicit Groq parity call and discard its raw envelope."""
 
@@ -972,6 +998,7 @@ def execute_groq_production_parity_chat_completion_once(
         parity_request=parity_request,
         scheduled=scheduled,
         plan=controlled_plan,
+        corpus=corpus,
     )
     client = create_live_groq_client(api_key=api_key, sdk_module=sdk_module)
     try:

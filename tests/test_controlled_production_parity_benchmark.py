@@ -1120,3 +1120,492 @@ def test_groq_parity_validator_rejects_missing_reasoning_configuration(plan):
         validate_groq_production_parity_chat_completion_arguments(
             wrong_bounding, parity_request=request, scheduled=scheduled, plan=plan
         )
+
+
+# ---------------------------------------------------------------------------
+# Stage 1: additive rendered-parity and workload-semantics primitives.
+# ---------------------------------------------------------------------------
+
+
+import json as _stage1_json  # noqa: E402
+
+from src.evaluation import (  # noqa: E402
+    controlled_provider_qualification_registry as _stage1_registry,
+)
+from src.evaluation import (  # noqa: E402
+    provider_model_recommendation_policy as _stage1_policy,
+)
+from src.evaluation.provider_fixture_benchmark import (  # noqa: E402
+    load_fixture_case_corpus as _stage1_load_corpus,
+)
+
+CURRENT_REGISTRY_SHA256 = (
+    "6d7c1e2cae7d03edadcfb4c7268ec6ec74e8c0e10b13e73cc3914baa03ea8f6f"
+)
+
+
+def _stage1_skill_extraction_only_change(corpus):
+    mutated = deepcopy(corpus)
+    case = next(
+        row
+        for row in mutated["cases"]
+        if row["workload_id"] == "skill_extraction"
+    )
+    case["normalized_input_packet"]["preferred_terms"].append("terraform")
+    case["normalized_input_packet"]["evidence_tokens"].append("terraform")
+    case["expected_output"]["preferred_skills"].append("terraform")
+    case["supported_evidence_tokens"].append("terraform")
+    return mutated
+
+
+def test_stage1_rendered_parity_semantics_are_deterministic():
+    corpus = _stage1_load_corpus()
+    for workload_id in WORKLOAD_ORDER:
+        first = parity.workload_rendered_parity_semantics_sha256(
+            workload_id, corpus
+        )
+        second = parity.workload_rendered_parity_semantics_sha256(
+            workload_id, deepcopy(corpus)
+        )
+        assert first == second
+
+    rendered = parity.build_workload_rendered_parity_semantics(
+        "skill_extraction", corpus
+    )
+    assert rendered["workload_id"] == "skill_extraction"
+    assert rendered["rendered_semantics_version"] == (
+        parity.RENDERED_PARITY_SEMANTICS_VERSION
+    )
+    assert rendered["rendered_cases"]
+    for row in rendered["rendered_cases"]:
+        assert set(row) == {
+            "stable_case_alias",
+            "replacements",
+            "local_validation_context",
+        }
+
+
+def test_stage1_rendered_semantics_isolate_one_workload_branch():
+    corpus = _stage1_load_corpus()
+    baseline = {
+        workload_id: parity.workload_rendered_parity_semantics_sha256(
+            workload_id, corpus
+        )
+        for workload_id in WORKLOAD_ORDER
+    }
+
+    real_renderer = parity._synthetic_material
+
+    def drifted_renderer(workload_id, packet):
+        replacements, context = real_renderer(workload_id, packet)
+        if workload_id == "skill_extraction":
+            context = dict(context)
+            context["job_description"] = (
+                context["job_description"] + " EXTENDED SYNTHETIC SECTION."
+            )
+            replacements = dict(replacements)
+            replacements["<job_description>"] = context["job_description"]
+        return replacements, context
+
+    parity._synthetic_material = drifted_renderer
+    try:
+        changed = [
+            workload_id
+            for workload_id in WORKLOAD_ORDER
+            if parity.workload_rendered_parity_semantics_sha256(
+                workload_id, corpus
+            )
+            != baseline[workload_id]
+        ]
+    finally:
+        parity._synthetic_material = real_renderer
+
+    assert changed == ["skill_extraction"]
+
+
+def test_stage1_workload_qualification_semantics_isolate_one_workload():
+    corpus = _stage1_load_corpus()
+    mutated = _stage1_skill_extraction_only_change(corpus)
+
+    changed = [
+        workload_id
+        for workload_id in WORKLOAD_ORDER
+        if parity.workload_qualification_semantics_sha256(
+            workload_id, corpus=corpus
+        )
+        != parity.workload_qualification_semantics_sha256(
+            workload_id, corpus=mutated
+        )
+    ]
+
+    assert changed == ["skill_extraction"]
+
+
+def test_stage1_workload_qualification_semantics_bind_plan_projection():
+    """The composed digest must be a function of the workload plan projection."""
+
+    from src.evaluation.controlled_provider_benchmark_plan import (
+        workload_plan_projection_sha256,
+    )
+
+    corpus = _stage1_load_corpus()
+    plan = build_controlled_provider_benchmark_plan(corpus=corpus)
+    mutated = _stage1_skill_extraction_only_change(corpus)
+
+    for workload_id in WORKLOAD_ORDER:
+        composed = parity.workload_qualification_semantics_sha256(
+            workload_id, plan=plan, corpus=corpus
+        )
+        assert composed == parity.workload_qualification_semantics_sha256(
+            workload_id, plan=plan, corpus=corpus
+        )
+
+    # The plan projection component is what carries the shared safety envelope,
+    # and it moves for exactly the changed workload.
+    projection_changed = [
+        workload_id
+        for workload_id in WORKLOAD_ORDER
+        if workload_plan_projection_sha256(workload_id, corpus=corpus)
+        != workload_plan_projection_sha256(workload_id, corpus=mutated)
+    ]
+    assert projection_changed == ["skill_extraction"]
+
+
+def test_stage1_registry_and_recommendation_authority_are_unchanged():
+    registry = _stage1_json.load(
+        open(
+            Path(__file__).resolve().parents[1]
+            / "outputs"
+            / "provider_benchmark"
+            / "provider-qualification-registry.json",
+            encoding="utf-8",
+        )
+    )
+
+    assert _stage1_registry.provider_qualification_registry_sha256(
+        registry
+    ) == CURRENT_REGISTRY_SHA256
+    built = _stage1_policy.build_provider_model_recommendation_policy(registry)
+    assert len(built["workloads"]) == 12
+
+
+def test_stage1_plan_and_parity_owners_import_independently():
+    import subprocess
+    import sys
+
+    root = str(Path(__file__).resolve().parents[1])
+    for module_name in (
+        "src.evaluation.controlled_provider_benchmark_plan",
+        "src.evaluation.controlled_production_parity_benchmark",
+    ):
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                "-c",
+                f"import sys; sys.path.insert(0, {root!r}); "
+                f"import {module_name} as m; print(m.__name__)",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert module_name in completed.stdout
+
+
+# ---------------------------------------------------------------------------
+# Stage 4B: bounded recipe expansion + add-case workload isolation.
+# cases.json is never written.
+# ---------------------------------------------------------------------------
+
+
+def _stage4b_cases():
+    import test_provider_fixture_benchmark as fixture_suite
+
+    return fixture_suite.stage4b_proposed_skill_cases()
+
+
+def _stage4b_future_corpus():
+    future = deepcopy(_stage1_load_corpus())
+    future["cases"] = future["cases"] + _stage4b_cases()
+    return future
+
+
+def test_stage4b_legacy_skill_rendering_is_byte_identical():
+    corpus = _stage1_load_corpus()
+    case = next(
+        row
+        for row in corpus["cases"]
+        if row["workload_id"] == "skill_extraction"
+    )
+    replacements, context = parity._synthetic_material(
+        "skill_extraction", case["normalized_input_packet"]
+    )
+    expected = (
+        "Required qualifications: python, sql. "
+        + "Synthetic role context. " * 14
+        + "Preferred qualifications: airflow."
+    )
+    assert context["job_description"] == expected
+    assert replacements["<job_description>"] == expected
+    assert len(expected) == 408
+
+
+def test_stage4b_recipe_expansion_matches_production_shape_targets():
+    from src.ai.skill_llm_enricher import (
+        SKILL_EXTRACTION_FULL_TEXT_LIMIT,
+        _build_skill_extraction_text,
+    )
+    from src.evaluation.provider_fixture_benchmark import (
+        SYNTHETIC_ROLE_DOCUMENT_FIELD,
+    )
+
+    expectations = {
+        "full_text_required_preferred": (5000, 5500, "FULL_TEXT"),
+        "windowed_head_required_boilerplate": (8000, 8600, "WINDOWED"),
+        "windowed_mid_required_tail_preferred": (7000, 7500, "WINDOWED"),
+        "windowed_overlap_suppressed_preferred": (9800, 10300, "WINDOWED"),
+    }
+    for case in _stage4b_cases():
+        packet = case["normalized_input_packet"]
+        recipe = packet[SYNTHETIC_ROLE_DOCUMENT_FIELD]
+        description = parity.expand_synthetic_role_document(recipe)
+        replacements, context = parity._synthetic_material(
+            "skill_extraction", packet
+        )
+        assert "Synthetic role context." not in description
+
+        low, high, expected_path = expectations[recipe["profile"]]
+        assert low <= len(description) <= high, recipe["profile"]
+        path = (
+            "FULL_TEXT"
+            if len(description) <= SKILL_EXTRACTION_FULL_TEXT_LIMIT
+            else "WINDOWED"
+        )
+        assert path == expected_path, recipe["profile"]
+
+        extraction_text = _build_skill_extraction_text(description)
+        assert context["job_description"] == extraction_text
+        assert replacements["<job_description>"] == extraction_text
+        extraction_text = extraction_text.lower()
+        for skill in case["expected_output"]["required_skills"]:
+            assert skill in extraction_text, (recipe["profile"], skill)
+        for skill in case["expected_output"]["preferred_skills"]:
+            assert skill in extraction_text, (recipe["profile"], skill)
+
+        if recipe["profile"] == "windowed_overlap_suppressed_preferred":
+            # Present in the expanded document, suppressed by the real
+            # production window-overlap rule before the provider sees it.
+            for skill in recipe["preferred_skills"]:
+                assert skill in description.lower()
+                assert skill not in extraction_text
+            assert case["expected_output"]["preferred_skills"] == []
+
+
+def test_stage4x_case5_final_parity_request_uses_production_windowing():
+    from src.evaluation.controlled_provider_benchmark_plan import (
+        _case_alias,
+        build_controlled_provider_benchmark_plan,
+        build_transmittable_request_packet,
+    )
+    from src.evaluation.provider_fixture_benchmark import (
+        SYNTHETIC_ROLE_DOCUMENT_FIELD,
+        fixture_case_corpus_sha256,
+    )
+
+    corpus = _stage4b_future_corpus()
+    plan = build_controlled_provider_benchmark_plan(corpus=corpus)
+    case = next(
+        row
+        for row in corpus["cases"]
+        if row["case_id"]
+        == "skill_extraction_windowed_overlap_suppressed_preferred_v1"
+    )
+    recipe = case["normalized_input_packet"][SYNTHETIC_ROLE_DOCUMENT_FIELD]
+    source = parity.expand_synthetic_role_document(recipe).lower()
+    alias = _case_alias(case["case_id"], fixture_case_corpus_sha256(corpus))
+    packet = build_transmittable_request_packet(
+        case_alias=alias,
+        provider="groq",
+        model="openai/gpt-oss-20b",
+        plan=plan,
+        corpus=corpus,
+    )
+    request = parity.build_production_parity_request(
+        packet,
+        plan=plan,
+        corpus=corpus,
+    )
+    provider_visible = request["messages"][1]["content"].lower()
+
+    assert all(skill in source for skill in recipe["required_skills"])
+    assert all(skill in source for skill in recipe["preferred_skills"])
+    assert all(skill in provider_visible for skill in recipe["required_skills"])
+    assert all(skill not in provider_visible for skill in recipe["preferred_skills"])
+    assert request["local_validation_context"]["job_description"].lower() in (
+        provider_visible
+    )
+
+
+def test_stage4b_expansion_is_deterministic_and_self_contained():
+    from src.evaluation.provider_fixture_benchmark import (
+        SYNTHETIC_ROLE_DOCUMENT_FIELD,
+    )
+
+    for case in _stage4b_cases():
+        packet = case["normalized_input_packet"]
+        first = parity._synthetic_material("skill_extraction", packet)
+        second = parity._synthetic_material(
+            "skill_extraction", deepcopy(packet)
+        )
+        assert first == second
+
+    source = OWNER_PATH.read_text(encoding="utf-8")
+    expander = source[
+        source.index("def expand_synthetic_role_document") :
+        source.index("RENDERED_PARITY_SEMANTICS_VERSION")
+    ]
+    # Compare executable lines only; prose may legitimately name what is
+    # excluded.
+    code = "\n".join(
+        line
+        for line in expander.splitlines()
+        if not line.lstrip().startswith("#")
+    )
+    code = code.split('"""')[0] + "".join(code.split('"""')[2:])
+    for forbidden in (
+        "random",
+        "datetime",
+        "getenv",
+        "open(",
+        "requests",
+        "urllib",
+        "monotonic",
+    ):
+        assert forbidden not in code
+
+
+def test_stage4b_adding_cases_moves_only_skill_extraction_semantics():
+    from src.evaluation.controlled_provider_benchmark_plan import (
+        build_controlled_provider_benchmark_plan,
+        stable_case_alias,
+    )
+
+    corpus = _stage1_load_corpus()
+    future = _stage4b_future_corpus()
+    current_plan = build_controlled_provider_benchmark_plan(corpus=corpus)
+    future_plan = build_controlled_provider_benchmark_plan(corpus=future)
+
+    before = {
+        workload_id: parity.workload_qualification_semantics_sha256(
+            workload_id, plan=current_plan, corpus=corpus
+        )
+        for workload_id in WORKLOAD_ORDER
+    }
+    after = {
+        workload_id: parity.workload_qualification_semantics_sha256(
+            workload_id, plan=future_plan, corpus=future
+        )
+        for workload_id in WORKLOAD_ORDER
+    }
+    changed = [
+        workload_id
+        for workload_id in WORKLOAD_ORDER
+        if before[workload_id] != after[workload_id]
+    ]
+    assert changed == ["skill_extraction"]
+
+    # Stable V2 aliases are unaffected for existing cases and deterministic
+    # for the new ones.
+    for case in corpus["cases"]:
+        assert stable_case_alias(
+            case["workload_id"], case["case_id"]
+        ) == stable_case_alias(case["workload_id"], case["case_id"])
+    new_aliases = {
+        stable_case_alias(case["workload_id"], case["case_id"])
+        for case in _stage4b_cases()
+    }
+    assert len(new_aliases) == 4
+    existing_aliases = {
+        stable_case_alias(case["workload_id"], case["case_id"])
+        for case in corpus["cases"]
+    }
+    assert new_aliases.isdisjoint(existing_aliases)
+
+
+def test_stage4b_rendered_semantics_bind_the_expanded_document():
+    corpus = _stage4b_future_corpus()
+    baseline = {
+        workload_id: parity.workload_rendered_parity_semantics_sha256(
+            workload_id, corpus
+        )
+        for workload_id in WORKLOAD_ORDER
+    }
+
+    real_expander = parity.expand_synthetic_role_document
+
+    def drifted(recipe):
+        return real_expander(recipe) + " EXTENDED SYNTHETIC SECTION."
+
+    parity.expand_synthetic_role_document = drifted
+    try:
+        moved = [
+            workload_id
+            for workload_id in WORKLOAD_ORDER
+            if parity.workload_rendered_parity_semantics_sha256(
+                workload_id, corpus
+            )
+            != baseline[workload_id]
+        ]
+    finally:
+        parity.expand_synthetic_role_document = real_expander
+
+    # The compact recipes are unchanged; only the expansion moved.
+    assert moved == ["skill_extraction"]
+    assert parity.expand_synthetic_role_document is real_expander
+
+
+def test_stage4b_current_authority_invariants_hold():
+    from src.evaluation import (
+        controlled_provider_qualification_registry as registry,
+    )
+    from src.evaluation import provider_model_recommendation_policy as policy
+    from src.evaluation import (
+        job_fit_provider_model_qualification_overlay as job_fit,
+    )
+    from src.evaluation.controlled_provider_benchmark_plan import (
+        build_controlled_provider_benchmark_plan,
+        controlled_provider_benchmark_plan_sha256,
+        legacy_case_alias_map,
+    )
+    from src.evaluation.provider_fixture_benchmark import (
+        fixture_case_corpus_sha256,
+    )
+
+    corpus = _stage1_load_corpus()
+    source = _stage1_json.load(
+        open(
+            Path(__file__).resolve().parents[1]
+            / "outputs"
+            / "provider_benchmark"
+            / "provider-qualification-registry.json",
+            encoding="utf-8",
+        )
+    )
+
+    assert fixture_case_corpus_sha256(corpus) == (
+        "b4dea8bfccf39da87221755777d88f35427b1f4b772f3730fcd48cbdb5842b5f"
+    )
+    assert controlled_provider_benchmark_plan_sha256(
+        build_controlled_provider_benchmark_plan(corpus=corpus)
+    ) == "f2dcf5345442009915819432a9c1fc9342de40561eb6824c1518dcd31e99d3bf"
+    assert len(legacy_case_alias_map(corpus)) == 15
+    assert registry.provider_qualification_registry_sha256(source) == (
+        "6d7c1e2cae7d03edadcfb4c7268ec6ec74e8c0e10b13e73cc3914baa03ea8f6f"
+    )
+    assert len(
+        policy.build_provider_model_recommendation_policy(source)["workloads"]
+    ) == 12
+    overlay = job_fit.build_job_fit_provider_model_qualification_overlay(source)
+    assert (overlay["recommendation_status"], overlay["provider"],
+            overlay["model"]) == ("recommended", "groq", "openai/gpt-oss-20b")

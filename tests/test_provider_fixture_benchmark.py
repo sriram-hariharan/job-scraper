@@ -1049,3 +1049,263 @@ def test_recovery_006_status_remains_absent():
     )
 
     assert not status_path.exists()
+
+
+# ---------------------------------------------------------------------------
+# Stage 1: additive per-workload fixture-corpus projection primitives.
+# ---------------------------------------------------------------------------
+
+
+CURRENT_FIXTURE_CORPUS_SHA256 = (
+    "b4dea8bfccf39da87221755777d88f35427b1f4b772f3730fcd48cbdb5842b5f"
+)
+
+
+def _skill_extraction_only_change(corpus):
+    mutated = deepcopy(corpus)
+    case = next(
+        row
+        for row in mutated["cases"]
+        if row["workload_id"] == "skill_extraction"
+    )
+    case["normalized_input_packet"]["preferred_terms"].append("terraform")
+    case["normalized_input_packet"]["evidence_tokens"].append("terraform")
+    case["expected_output"]["preferred_skills"].append("terraform")
+    case["supported_evidence_tokens"].append("terraform")
+    return mutated
+
+
+def test_stage1_global_fixture_corpus_digest_is_unchanged():
+    assert engine.fixture_case_corpus_sha256() == CURRENT_FIXTURE_CORPUS_SHA256
+
+
+def test_stage1_workload_case_projection_is_deterministic_and_scoped():
+    corpus = engine.load_fixture_case_corpus()
+    for workload_id in WORKLOAD_ORDER:
+        first = engine.workload_fixture_cases_sha256(workload_id, corpus)
+        second = engine.workload_fixture_cases_sha256(workload_id, deepcopy(corpus))
+        assert first == second
+        projection = json.loads(
+            engine.serialize_workload_fixture_cases(workload_id, corpus)
+        )
+        assert projection["workload_id"] == workload_id
+        assert projection["projection_version"] == (
+            engine.WORKLOAD_CASE_PROJECTION_VERSION
+        )
+        assert all(
+            case["workload_id"] == workload_id for case in projection["cases"]
+        )
+
+
+def test_stage1_workload_case_projection_isolates_one_workload():
+    corpus = engine.load_fixture_case_corpus()
+    mutated = _skill_extraction_only_change(corpus)
+
+    changed = [
+        workload_id
+        for workload_id in WORKLOAD_ORDER
+        if engine.workload_fixture_cases_sha256(workload_id, corpus)
+        != engine.workload_fixture_cases_sha256(workload_id, mutated)
+    ]
+
+    assert changed == ["skill_extraction"]
+    # The additive primitive never mutates the caller's corpus.
+    assert engine.fixture_case_corpus_sha256(corpus) == (
+        CURRENT_FIXTURE_CORPUS_SHA256
+    )
+
+
+def test_stage1_workload_case_projection_rejects_unknown_workload():
+    with pytest.raises(ValueError):
+        engine.workload_fixture_cases_sha256("not_a_workload")
+
+
+# ---------------------------------------------------------------------------
+# Stage 4B: bounded synthetic role-document recipe capability.
+# cases.json is never written; proposed cases exist only in memory.
+# ---------------------------------------------------------------------------
+
+
+STAGE4B_REQUIRED = ["python", "sql", "airflow"]
+STAGE4B_PREFERRED = ["spark", "terraform"]
+
+
+def stage4b_proposed_skill_cases():
+    """Four in-memory representative skill_extraction cases.
+
+    Each supplies only a bounded fixed-profile recipe; the long-form synthetic
+    document is produced deterministically by the parity owner at render time.
+    """
+
+    definitions = (
+        (
+            "skill_extraction_full_text_required_preferred_v1",
+            "full_text_required_preferred",
+            STAGE4B_PREFERRED,
+            STAGE4B_PREFERRED,
+        ),
+        (
+            "skill_extraction_windowed_head_required_boilerplate_v1",
+            "windowed_head_required_boilerplate",
+            [],
+            [],
+        ),
+        (
+            "skill_extraction_windowed_mid_required_tail_preferred_v1",
+            "windowed_mid_required_tail_preferred",
+            STAGE4B_PREFERRED,
+            STAGE4B_PREFERRED,
+        ),
+        # The recipe carries preferred skills so the expanded document contains
+        # them, but production window overlap suppresses that section, so the
+        # golden output records only what the provider actually receives.
+        (
+            "skill_extraction_windowed_overlap_suppressed_preferred_v1",
+            "windowed_overlap_suppressed_preferred",
+            STAGE4B_PREFERRED,
+            [],
+        ),
+    )
+
+    cases = []
+    for case_id, profile, recipe_preferred, golden_preferred in definitions:
+        cases.append(
+            {
+                "case_id": case_id,
+                "workload_id": "skill_extraction",
+                "tier": "A",
+                "provenance": {
+                    "source_path": "tests/test_provider_fixture_benchmark.py",
+                    "source_identifier": "stage4b_proposed_skill_cases",
+                },
+                "sanitized_classification": "synthetic_sanitized",
+                "contains_personal_resume_content": False,
+                "live_transmission_eligible": False,
+                "offline_only": True,
+                "additional_redaction_required": False,
+                "schema_id": "skill_extraction_result_v1",
+                "normalized_input_packet": {
+                    "required_terms": list(STAGE4B_REQUIRED),
+                    "preferred_terms": list(golden_preferred),
+                    "evidence_tokens": list(STAGE4B_REQUIRED)
+                    + list(golden_preferred),
+                    engine.SYNTHETIC_ROLE_DOCUMENT_FIELD: {
+                        "version": engine.SYNTHETIC_ROLE_DOCUMENT_VERSION,
+                        "profile": profile,
+                        "required_skills": list(STAGE4B_REQUIRED),
+                        "preferred_skills": list(recipe_preferred),
+                    },
+                },
+                "expected_output": {
+                    "required_skills": list(STAGE4B_REQUIRED),
+                    "preferred_skills": list(golden_preferred),
+                },
+                "expected_invariant": {},
+                "required_fields": ["required_skills", "preferred_skills"],
+                "supported_evidence_tokens": list(STAGE4B_REQUIRED)
+                + list(golden_preferred),
+                "supported_evidence_ids": [],
+                "prohibited_claims_or_terms": ["kubernetes"],
+                "comparison_type": "exact_golden",
+                "human_review_required": False,
+                "deterministic_authority_required": True,
+            }
+        )
+    return cases
+
+
+def test_stage4b_raw_long_string_capability_is_gone():
+    assert not hasattr(engine, "SYNTHETIC_JOB_DESCRIPTION_FIELD")
+    source = (
+        ROOT / "src/evaluation/provider_fixture_benchmark.py"
+    ).read_text(encoding="utf-8")
+    assert "synthetic_job_description" not in source
+
+
+def test_stage4b_recipe_is_optional_and_corpus_is_unchanged():
+    corpus = engine.load_fixture_case_corpus()
+    assert all(
+        engine.SYNTHETIC_ROLE_DOCUMENT_FIELD
+        not in case["normalized_input_packet"]
+        for case in corpus["cases"]
+    )
+    assert engine.validate_fixture_case_corpus(deepcopy(corpus))
+    assert engine.fixture_case_corpus_sha256(corpus) == (
+        CURRENT_FIXTURE_CORPUS_SHA256
+    )
+
+    proposed = deepcopy(corpus)
+    proposed["cases"] = proposed["cases"] + stage4b_proposed_skill_cases()
+    assert engine.validate_fixture_case_corpus(deepcopy(proposed))
+
+
+def test_stage4b_recipe_schema_fails_closed():
+    corpus = engine.load_fixture_case_corpus()
+    field = engine.SYNTHETIC_ROLE_DOCUMENT_FIELD
+
+    def _with(mutator):
+        payload = deepcopy(corpus)
+        case = deepcopy(stage4b_proposed_skill_cases()[0])
+        mutator(case)
+        payload["cases"] = payload["cases"] + [case]
+        return payload
+
+    def _recipe(case):
+        return case["normalized_input_packet"][field]
+
+    for mutator in (
+        lambda case: _recipe(case).__setitem__("version", "other-version"),
+        lambda case: _recipe(case).__setitem__("profile", "not_a_profile"),
+        lambda case: _recipe(case).__setitem__("unexpected", 1),
+        lambda case: _recipe(case).pop("preferred_skills"),
+        lambda case: _recipe(case).__setitem__("required_skills", []),
+        lambda case: _recipe(case).__setitem__(
+            "required_skills", ["ok"] * 9
+        ),
+        lambda case: _recipe(case).__setitem__("required_skills", ["x" * 41]),
+        lambda case: _recipe(case).__setitem__(
+            "required_skills", ["Python"]
+        ),
+        lambda case: _recipe(case).__setitem__(
+            "required_skills", ["multi\nline"]
+        ),
+        lambda case: _recipe(case).__setitem__(
+            "required_skills", ["see https://example.test"]
+        ),
+        # Profile consistency.
+        lambda case: _recipe(case).__setitem__("preferred_skills", []),
+        lambda case: (
+            _recipe(case).__setitem__(
+                "profile", "windowed_head_required_boilerplate"
+            ),
+        ),
+        # Case-level guards.
+        lambda case: case.__setitem__("workload_id", "jd_intelligence"),
+        lambda case: case.__setitem__(
+            "sanitized_classification", "repository_sanitized"
+        ),
+        lambda case: case.__setitem__("contains_personal_resume_content", True),
+    ):
+        with pytest.raises(ValueError):
+            engine.validate_fixture_case_corpus(_with(mutator))
+
+
+def test_stage4b_recipe_cannot_represent_forbidden_material():
+    field = engine.SYNTHETIC_ROLE_DOCUMENT_FIELD
+    recipe = stage4b_proposed_skill_cases()[0]["normalized_input_packet"][field]
+
+    # The schema is exactly four bounded fields; no free-text slot exists.
+    assert set(recipe) == {
+        "version",
+        "profile",
+        "required_skills",
+        "preferred_skills",
+    }
+    assert engine._SYNTHETIC_ROLE_DOCUMENT_SKILL_CHARACTERS.isdisjoint(
+        set("ABCDEFGHIJKLMNOPQRSTUVWXYZ:@\n_")
+    )
+    for case in stage4b_proposed_skill_cases():
+        for value in case["normalized_input_packet"][field].values():
+            for item in value if isinstance(value, list) else [value]:
+                assert "\n" not in item
+                assert len(item) <= 60

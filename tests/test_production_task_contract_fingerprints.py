@@ -126,6 +126,46 @@ def test_tailoring_schema_fix_changes_the_production_task_fingerprint():
     )
 
 
+def test_skill_context_reassignment_version_changes_fingerprint_not_cache_key(
+    monkeypatch,
+):
+    from src.ai import skill_llm_enricher
+
+    job_text = (
+        "Required Qualifications:\n- Python\n"
+        "Preferred Qualifications:\n- Airflow"
+    )
+    baseline_fingerprint = fingerprints.production_task_contract_sha256(
+        "skill_extraction"
+    )
+    baseline_cache_key = skill_llm_enricher.build_skill_cache_key(job_text)
+    contract = fingerprints.build_production_task_contract(
+        "skill_extraction"
+    )
+
+    assert contract["deterministic_transformation_contract"][
+        "context_reassignment"
+    ] == "section-bounded-context-v2"
+    assert skill_llm_enricher.SKILL_EXTRACTION_PROMPT_VERSION == (
+        "v6_postfilter_cleanup"
+    )
+
+    monkeypatch.setattr(
+        skill_llm_enricher,
+        "SKILL_CONTEXT_REASSIGNMENT_CONTRACT_VERSION",
+        "section-bounded-context-v3-test",
+    )
+
+    assert (
+        fingerprints.production_task_contract_sha256("skill_extraction")
+        != baseline_fingerprint
+    )
+    assert (
+        skill_llm_enricher.build_skill_cache_key(job_text)
+        == baseline_cache_key
+    )
+
+
 def test_tailoring_semantic_contract_versions_and_bounds_are_explicit():
     contract = fingerprints.build_production_task_contract(
         "tailoring_generation"
@@ -396,7 +436,10 @@ def test_provider_model_credentials_runtime_and_operational_state_are_excluded(
 @pytest.mark.parametrize(
     ("workload_id", "expected_parameters"),
     [
-        ("skill_extraction", {"temperature": 0, "max_tokens": 500}),
+        (
+            "skill_extraction",
+            {"temperature": 0, "max_tokens": 500, "thinking_budget": 0},
+        ),
         ("job_fit_evaluation", {"temperature": 0, "max_tokens": 600}),
         (
             "jd_intelligence",

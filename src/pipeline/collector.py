@@ -2068,11 +2068,24 @@ def _job_intelligence_skill_signals(job: Dict[str, Any]) -> Dict[str, Any]:
     all_skills = list(skills_map.get("all") or [])
     if not all_skills:
         all_skills = required + [skill for skill in preferred if skill not in required]
+    extraction = intelligence_map.get("skill_extraction")
+    extraction_map = (
+        dict(extraction or {}) if isinstance(extraction, dict) else {}
+    )
     return {
         "intelligence": deepcopy(intelligence_map),
         "required_skills": required,
         "preferred_skills": preferred,
         "all_skills": all_skills,
+        "skill_extraction_status": str(
+            extraction_map.get("status") or ""
+        ).strip(),
+        "skill_extraction_failure_category": str(
+            extraction_map.get("failure_category") or ""
+        ).strip(),
+        "skill_extraction_failure_stage": str(
+            extraction_map.get("failure_stage") or ""
+        ).strip(),
         "extraction_ready": isinstance(skills, dict),
         "extraction_source": "existing_build_job_intelligence",
     }

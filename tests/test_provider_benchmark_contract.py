@@ -146,7 +146,6 @@ def test_qualification_candidates_and_tiers_derive_from_canonical_catalog():
         == "live_qualification_required"
         and row["eligible_benchmark_tiers"]
     ]
-
     assert [
         (row["provider"], row["model"], row["eligible_tiers"])
         for row in payload["candidate_definitions"]
@@ -154,6 +153,69 @@ def test_qualification_candidates_and_tiers_derive_from_canonical_catalog():
         (row["provider"], row["model_id"], row["eligible_benchmark_tiers"])
         for row in catalog_rows
     ]
+
+
+def test_skill_only_120b_qualification_addition_is_exact_and_catalog_neutral():
+    payload = _contract()
+    matrix = {
+        row["workload_id"]: row["candidate_ids"]
+        for row in payload["candidate_matrix"]
+    }
+
+    assert (
+        contract_owner._WORKLOAD_SPECIFIC_QUALIFICATION_CANDIDATE_ADDITIONS
+        == (("skill_extraction", "groq", "openai/gpt-oss-120b"),)
+    )
+    assert matrix["skill_extraction"] == [
+        "groq_openai_gpt_oss_20b",
+        "groq_openai_gpt_oss_120b",
+        "openai_gpt_5_mini",
+    ]
+    assert matrix["manual_scan_phrase"] == [
+        "groq_openai_gpt_oss_20b",
+        "openai_gpt_5_mini",
+    ]
+    assert provider_model_catalog.get_eligible_benchmark_tiers(
+        "groq", "openai/gpt-oss-120b"
+    ) == ["B", "C"]
+
+
+@pytest.mark.parametrize(
+    ("entries", "message"),
+    [
+        (
+            (("unknown_workload", "groq", "openai/gpt-oss-120b"),),
+            "unknown workload",
+        ),
+        (
+            (("skill_extraction", "groq", "unknown-model"),),
+            "unknown provider/model",
+        ),
+        (
+            (("skill_extraction", "unknown-provider", "openai/gpt-oss-120b"),),
+            "unknown provider/model",
+        ),
+        (
+            (
+                ("skill_extraction", "groq", "openai/gpt-oss-120b"),
+                ("skill_extraction", "groq", "openai/gpt-oss-120b"),
+            ),
+            "duplicate workload-specific",
+        ),
+        (
+            (("skill_extraction", "groq", "openai/gpt-oss-20b"),),
+            "duplicates tier eligibility",
+        ),
+    ],
+)
+def test_invalid_workload_specific_candidate_additions_fail_closed(
+    entries,
+    message,
+):
+    with pytest.raises(ValueError, match=message):
+        contract_owner._validate_workload_specific_qualification_candidate_additions(
+            entries
+        )
 
 
 def test_catalog_snapshot_and_digest_are_deterministic_and_contract_bound():

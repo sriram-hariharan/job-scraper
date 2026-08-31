@@ -16,9 +16,12 @@ from types import SimpleNamespace
 from typing import Any, Dict, Mapping
 
 from src.evaluation.controlled_provider_benchmark_plan import (
+    _case_alias,
     build_controlled_provider_benchmark_plan,
+    stable_case_alias,
     validate_controlled_provider_benchmark_plan,
     validate_transmittable_request_packet,
+    workload_plan_projection_sha256,
 )
 from src.evaluation.production_task_contract_fingerprints import (
     FINGERPRINTED_PRODUCTION_WORKLOADS,
@@ -28,13 +31,133 @@ from src.evaluation.production_task_contract_fingerprints import (
 )
 from src.evaluation.provider_benchmark_contract import WORKLOAD_ORDER
 from src.evaluation.provider_fixture_benchmark import (
+    SYNTHETIC_ROLE_DOCUMENT_FIELD,
+    fixture_case_corpus_sha256,
     grade_normalized_candidate_result,
     load_fixture_case_corpus,
+    validate_fixture_case_corpus,
 )
 
 
 PARITY_ADAPTER_VERSION = "controlled-production-parity-benchmark-v1"
 PARITY_RESULT_VERSION = "controlled-production-parity-result-v1"
+SYNTHETIC_ROLE_DOCUMENT_EXPANSION_VERSION = (
+    "skill-extraction-synthetic-role-document-expansion-v1"
+)
+_SYNTHETIC_ROLE_HEADING = "Role Overview"
+_SYNTHETIC_REQUIRED_HEADING = "Required qualifications:"
+_SYNTHETIC_PREFERRED_HEADING = "Preferred qualifications:"
+_SYNTHETIC_RESPONSIBILITIES_HEADING = "Responsibilities:"
+_SYNTHETIC_RESPONSIBILITY_LINES = (
+    "- Build and operate reliable ingestion workflows.",
+    "- Partner with analytics groups on data quality.",
+)
+_SYNTHETIC_FILLER_SENTENCE = (
+    "The team collaborates across partner groups to deliver measurable "
+    "outcomes and operational reliability. "
+)
+# Deterministic filler-block counts per fixed profile. Layout is a property of
+# the profile, never a caller-supplied parameter.
+_SYNTHETIC_ROLE_DOCUMENT_PROFILE_LAYOUT = {
+    "full_text_required_preferred": (24, 0, 24),
+    "windowed_head_required_boilerplate": (0, 0, 78),
+    "windowed_mid_required_tail_preferred": (31, 26, 11),
+    # The middle block places the preferred heading beyond the reach of the
+    # required window's text while still inside its overlap span, so the
+    # production window for it is rejected and its skills never reach the
+    # provider.
+    "windowed_overlap_suppressed_preferred": (29, 13, 53),
+}
+
+
+def _synthetic_filler(blocks: int) -> str:
+    return _SYNTHETIC_FILLER_SENTENCE * blocks
+
+
+def _synthetic_skill_block(heading: str, skills) -> str:
+    if not skills:
+        return ""
+    lines = "".join(f"- {skill}\n" for skill in skills)
+    return f"{heading}\n{lines}\n"
+
+
+def expand_synthetic_role_document(recipe) -> str:
+    """Deterministically expand one bounded recipe into synthetic long-form text.
+
+    Uses only fixed headings, one fixed filler sentence, the recipe's bounded
+    skill lists, and a profile-specific layout. Nothing outside the recipe
+    participates: no clock, no randomness, no ambient configuration, no
+    provider or network access, no external file, and no production or user
+    text.
+    """
+
+    profile = recipe["profile"]
+    leading, middle, trailing = _SYNTHETIC_ROLE_DOCUMENT_PROFILE_LAYOUT[profile]
+    required_block = _synthetic_skill_block(
+        _SYNTHETIC_REQUIRED_HEADING,
+        recipe["required_skills"],
+    )
+    preferred_block = _synthetic_skill_block(
+        _SYNTHETIC_PREFERRED_HEADING,
+        recipe["preferred_skills"],
+    )
+    header = f"{_SYNTHETIC_ROLE_HEADING}\n\n"
+
+    if profile == "full_text_required_preferred":
+        # Below the production full-text threshold; both sections present.
+        return (
+            header
+            + required_block
+            + _synthetic_filler(leading)
+            + "\n\n"
+            + preferred_block
+            + _synthetic_filler(trailing)
+        )
+    if profile == "windowed_head_required_boilerplate":
+        # Required in the head, no preferred section, dense trailing filler.
+        return (
+            header
+            + required_block
+            + _SYNTHETIC_RESPONSIBILITIES_HEADING
+            + "\n"
+            + "\n".join(_SYNTHETIC_RESPONSIBILITY_LINES)
+            + "\n\n"
+            + _synthetic_filler(trailing)
+        )
+    if profile == "windowed_mid_required_tail_preferred":
+        # Required mid-document and preferred near the tail, far enough apart
+        # that the production keyword windows do not overlap.
+        return (
+            header
+            + _synthetic_filler(leading)
+            + "\n\n"
+            + required_block
+            + _synthetic_filler(middle)
+            + "\n\n"
+            + preferred_block
+            + _synthetic_filler(trailing)
+        )
+    # windowed_overlap_suppressed_preferred: the preferred section sits close
+    # enough to the required section that the production window for it overlaps
+    # an already-claimed window and is suppressed before the provider sees it.
+    return (
+        header
+        + _synthetic_filler(leading)
+        + "\n\n"
+        + required_block
+        + _synthetic_filler(middle)
+        + "\n\n"
+        + preferred_block
+        + _synthetic_filler(trailing)
+    )
+
+
+RENDERED_PARITY_SEMANTICS_VERSION = (
+    "controlled-production-parity-rendered-semantics-v1"
+)
+WORKLOAD_QUALIFICATION_SEMANTICS_VERSION = (
+    "controlled-workload-qualification-semantics-renderer-bound-v1"
+)
 PRODUCTION_PARITY_RUNNABLE_WORKLOADS = FINGERPRINTED_PRODUCTION_WORKLOADS
 PRODUCTION_PARITY_BLOCKED_WORKLOADS = UNRESOLVED_PRODUCTION_WORKLOADS
 
@@ -207,23 +330,166 @@ def build_production_parity_runnability() -> Dict[str, Dict[str, Any]]:
     return deepcopy(mapping)
 
 
+def build_workload_rendered_parity_semantics(
+    workload_id: str,
+    corpus: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Return the canonical rendered parity semantics for one workload.
+
+    Additive Stage 1 primitive. It reuses the existing ``_synthetic_material``
+    renderer without altering it and without touching production requests, so
+    the digest moves when this workload's transmitted material changes and does
+    not move when an unrelated workload's renderer branch changes.
+    """
+
+    payload = load_fixture_case_corpus() if corpus is None else deepcopy(corpus)
+    validate_fixture_case_corpus(payload)
+    normalized = str(workload_id or "").strip()
+    _require(
+        normalized in PRODUCTION_PARITY_RUNNABLE_WORKLOADS
+        or normalized in PRODUCTION_PARITY_BLOCKED_WORKLOADS,
+        "unknown production-parity workload",
+    )
+
+    rendered = []
+    for case in sorted(
+        (
+            case
+            for case in payload["cases"]
+            if case["workload_id"] == normalized
+        ),
+        key=lambda case: case["case_id"],
+    ):
+        replacements, local_context = _synthetic_material(
+            normalized,
+            case["normalized_input_packet"],
+        )
+        rendered.append(
+            {
+                "stable_case_alias": stable_case_alias(
+                    normalized,
+                    case["case_id"],
+                ),
+                "replacements": deepcopy(replacements),
+                "local_validation_context": deepcopy(local_context),
+            }
+        )
+    return {
+        "rendered_semantics_version": RENDERED_PARITY_SEMANTICS_VERSION,
+        "workload_id": normalized,
+        "response_mode": _RESPONSE_MODES.get(normalized),
+        "rendered_cases": rendered,
+    }
+
+
+def workload_rendered_parity_semantics_sha256(
+    workload_id: str,
+    corpus: Dict[str, Any] | None = None,
+) -> str:
+    """Return the deterministic digest of one workload's rendered semantics."""
+
+    return sha256(
+        _canonical_json(
+            build_workload_rendered_parity_semantics(workload_id, corpus)
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def workload_qualification_semantics_sha256(
+    workload_id: str,
+    *,
+    plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
+) -> str:
+    """Return the renderer-bound workload qualification semantics digest.
+
+    Composed downstream of the plan owner so the existing
+    parity -> plan dependency direction is preserved.
+    """
+
+    normalized = str(workload_id or "").strip()
+    material = {
+        "semantics_version": WORKLOAD_QUALIFICATION_SEMANTICS_VERSION,
+        "workload_id": normalized,
+        "workload_plan_projection_sha256": workload_plan_projection_sha256(
+            normalized,
+            plan=plan,
+            corpus=corpus,
+        ),
+        "rendered_parity_semantics_sha256": (
+            workload_rendered_parity_semantics_sha256(normalized, corpus)
+        ),
+    }
+    return sha256(_canonical_json(material).encode("utf-8")).hexdigest()
+
+
+def _execution_corpus(
+    plan: Mapping[str, Any],
+    corpus: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    """Return the exact corpus that produced ``plan``.
+
+    A caller-supplied corpus is used only when its digest matches the plan's
+    recorded corpus digest; a mismatch fails closed and never falls back to the
+    on-disk corpus.
+    """
+
+    payload = load_fixture_case_corpus() if corpus is None else deepcopy(corpus)
+    validate_fixture_case_corpus(payload)
+    _require(
+        fixture_case_corpus_sha256(payload)
+        == plan["step8o_case_corpus_sha256"],
+        "execution corpus digest does not match the controlled plan",
+    )
+    return payload
+
+
 def _case_for_packet(
     packet: Mapping[str, Any],
     plan: Mapping[str, Any],
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    corpus = load_fixture_case_corpus()
-    for case, review in zip(corpus["cases"], plan["transmission_review"]):
-        if review["case_alias"] == packet["case_alias"]:
-            _require(
-                review["eligible_for_later_controlled_transmission"] is True,
-                "parity fixture is not transmission-safe",
-            )
-            _require(
-                case["workload_id"] == packet["workload_id"],
-                "parity fixture workload mismatch",
-            )
-            return deepcopy(case)
-    raise ValueError("parity fixture alias is unknown")
+    """Resolve one fixture case by alias against the plan's own corpus.
+
+    Resolution is alias-keyed rather than positional, so corpus ordering can
+    never associate a packet with the wrong case.
+    """
+
+    payload = _execution_corpus(plan, corpus)
+    corpus_digest = fixture_case_corpus_sha256(payload)
+
+    cases_by_alias: Dict[str, Dict[str, Any]] = {}
+    for case in payload["cases"]:
+        alias = _case_alias(case["case_id"], corpus_digest)
+        _require(
+            alias not in cases_by_alias,
+            "parity fixture alias is ambiguous",
+        )
+        cases_by_alias[alias] = case
+
+    reviews_by_alias: Dict[str, Mapping[str, Any]] = {}
+    for review in plan["transmission_review"]:
+        alias = review["case_alias"]
+        _require(
+            alias not in reviews_by_alias,
+            "parity transmission review alias is ambiguous",
+        )
+        reviews_by_alias[alias] = review
+
+    alias = packet["case_alias"]
+    case = cases_by_alias.get(alias)
+    _require(case is not None, "parity fixture alias is unknown")
+    review = reviews_by_alias.get(alias)
+    _require(review is not None, "parity transmission review is missing")
+    _require(
+        review["eligible_for_later_controlled_transmission"] is True,
+        "parity fixture is not transmission-safe",
+    )
+    _require(
+        case["workload_id"] == packet["workload_id"],
+        "parity fixture workload mismatch",
+    )
+    return deepcopy(case)
 
 
 def _synthetic_material(
@@ -253,13 +519,26 @@ def _synthetic_material(
     core_term = _first(original_claims or evidence, "synthetic_core_term")
 
     if workload_id == "skill_extraction":
-        description = (
-            f"Required qualifications: {', '.join(required)}. "
-            + "Synthetic role context. " * 14
-            + f"Preferred qualifications: {', '.join(preferred)}."
-        )
-        replacements = {"<job_description>": description}
-        context = {"job_description": description}
+        # A fixture may supply a bounded synthetic role-document recipe, which
+        # is expanded deterministically here. When absent, the legacy synthetic
+        # rendering is preserved exactly.
+        recipe = values.get(SYNTHETIC_ROLE_DOCUMENT_FIELD)
+        if isinstance(recipe, Mapping) and recipe:
+            description = expand_synthetic_role_document(recipe)
+        else:
+            description = (
+                f"Required qualifications: {', '.join(required)}. "
+                + "Synthetic role context. " * 14
+                + f"Preferred qualifications: {', '.join(preferred)}."
+            )
+        # Production sends the bounded extraction text, not the complete job
+        # document. Reuse that exact owner and retain the same shaped value for
+        # response filtering/rebucketing so provider and normalization
+        # visibility cannot diverge.
+        owner = import_module("src.ai.skill_llm_enricher")
+        extraction_text = owner._build_skill_extraction_text(description)
+        replacements = {"<job_description>": extraction_text}
+        context = {"job_description": extraction_text}
     elif workload_id == "job_fit_evaluation":
         replacements = {
             "<job_title>": _clean(values.get("role_category")) or "synthetic_workflow_role",
@@ -473,10 +752,15 @@ def build_production_parity_request(
     *,
     plan: Dict[str, Any] | None = None,
     expected_task_contract_sha256: str | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Build one transport-ready request from an approved synthetic packet."""
 
-    controlled_plan = build_controlled_provider_benchmark_plan() if plan is None else deepcopy(plan)
+    controlled_plan = (
+        build_controlled_provider_benchmark_plan(corpus=corpus)
+        if plan is None
+        else deepcopy(plan)
+    )
     validate_controlled_provider_benchmark_plan(controlled_plan)
     validate_transmittable_request_packet(packet, plan=controlled_plan)
     workload_id = packet["workload_id"]
@@ -544,8 +828,12 @@ def build_production_parity_request(
         "live_execution_requested": False,
         "synthetic_data_only": True,
     }
-    validate_production_parity_request(request, plan=controlled_plan)
-    _case_for_packet(packet, controlled_plan)
+    validate_production_parity_request(
+        request,
+        plan=controlled_plan,
+        corpus=corpus,
+    )
+    _case_for_packet(packet, controlled_plan, corpus)
     return deepcopy(request)
 
 
@@ -553,6 +841,7 @@ def validate_production_parity_request(
     request: Dict[str, Any],
     *,
     plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> bool:
     controlled_plan = build_controlled_provider_benchmark_plan() if plan is None else deepcopy(plan)
     validate_controlled_provider_benchmark_plan(controlled_plan)
@@ -584,7 +873,7 @@ def validate_production_parity_request(
         ),
         "production-parity request is outside the 44-cell plan",
     )
-    fixture = _case_for_packet(request, controlled_plan)
+    fixture = _case_for_packet(request, controlled_plan, corpus)
     expected_replacements, expected_context = _synthetic_material(
         workload_id,
         fixture["normalized_input_packet"],
@@ -1210,6 +1499,7 @@ def _grade_projection(
     *,
     production_contract_valid: bool,
     plan: Mapping[str, Any],
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     case = _case_for_packet(
         {
@@ -1217,6 +1507,7 @@ def _grade_projection(
             "workload_id": request["workload_id"],
         },
         plan,
+        corpus,
     )
     required = case["required_fields"]
     schema_valid = production_contract_valid and all(
@@ -1243,7 +1534,7 @@ def _grade_projection(
         "output_token_count": 0,
         "estimated_cost": 0.0,
     }
-    grade = grade_normalized_candidate_result(candidate)
+    grade = grade_normalized_candidate_result(candidate, corpus=corpus)
     return deepcopy(grade)
 
 
@@ -1252,11 +1543,20 @@ def validate_and_grade_production_parity_response(
     raw_response: Any,
     *,
     plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Validate with production semantics, then grade the synthetic projection."""
 
-    controlled_plan = build_controlled_provider_benchmark_plan() if plan is None else deepcopy(plan)
-    validate_production_parity_request(request, plan=controlled_plan)
+    controlled_plan = (
+        build_controlled_provider_benchmark_plan(corpus=corpus)
+        if plan is None
+        else deepcopy(plan)
+    )
+    validate_production_parity_request(
+        request,
+        plan=controlled_plan,
+        corpus=corpus,
+    )
     current_digest = production_task_contract_sha256(request["workload_id"])
     _require(
         request["production_task_contract_sha256"] == current_digest,
@@ -1281,6 +1581,7 @@ def validate_and_grade_production_parity_response(
         benchmark_projection,
         production_contract_valid=production_valid,
         plan=controlled_plan,
+        corpus=corpus,
     )
     result_without_binding = {
         "parity_result_version": PARITY_RESULT_VERSION,
@@ -1316,7 +1617,12 @@ def validate_and_grade_production_parity_response(
             _canonical_json(result_without_binding).encode("utf-8")
         ).hexdigest(),
     }
-    validate_production_parity_result(result, request=request, plan=controlled_plan)
+    validate_production_parity_result(
+        result,
+        request=request,
+        plan=controlled_plan,
+        corpus=corpus,
+    )
     return deepcopy(result)
 
 
@@ -1325,9 +1631,18 @@ def validate_production_parity_result(
     *,
     request: Dict[str, Any],
     plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> bool:
-    controlled_plan = build_controlled_provider_benchmark_plan() if plan is None else deepcopy(plan)
-    validate_production_parity_request(request, plan=controlled_plan)
+    controlled_plan = (
+        build_controlled_provider_benchmark_plan(corpus=corpus)
+        if plan is None
+        else deepcopy(plan)
+    )
+    validate_production_parity_request(
+        request,
+        plan=controlled_plan,
+        corpus=corpus,
+    )
     _require(
         isinstance(result, dict) and set(result) == _PARITY_RESULT_FIELDS,
         "production-parity result fields are invalid",

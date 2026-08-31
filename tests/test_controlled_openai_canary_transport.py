@@ -627,6 +627,88 @@ def test_sdk_errors_are_bounded_and_suppress_raw_exception_text(
     assert len(sdk.clients[0].completions.calls) == 1
 
 
+@pytest.mark.parametrize(
+    ("status_code", "body", "expected_status", "expected_provider_error"),
+    [
+        (
+            500,
+            {
+                "error": {
+                    "type": "invalid_request_error",
+                    "code": "json_validate_failed",
+                    "param": "response_format",
+                    "message": "raw provider message must not survive",
+                    "failed_generation": "raw failed generation must not survive",
+                },
+                "request_id": "raw request id must not survive",
+            },
+            500,
+            {
+                "provider_error_type": "invalid_request_error",
+                "provider_error_code": "json_validate_failed",
+                "provider_error_param": "response_format",
+                "has_failed_generation": True,
+            },
+        ),
+        (
+            None,
+            {
+                "error": {
+                    "type": "unallowlisted_raw_type",
+                    "code": "unallowlisted_raw_code",
+                    "param": "unallowlisted_raw_param",
+                    "message": "raw provider message must not survive",
+                }
+            },
+            None,
+            {
+                "provider_error_type": None,
+                "provider_error_code": None,
+                "provider_error_param": None,
+                "has_failed_generation": False,
+            },
+        ),
+    ],
+)
+def test_unknown_sdk_failure_preserves_only_bounded_diagnostics(
+    status_code,
+    body,
+    expected_status,
+    expected_provider_error,
+):
+    class OpaqueProviderError(Exception):
+        pass
+
+    error = OpaqueProviderError("raw exception message must not survive")
+    error.status_code = status_code
+    error.body = body
+    error.headers = {"authorization": FAKE_KEY}
+    error.request = {"prompt": "raw prompt must not survive"}
+    error.response = {"body": "raw response must not survive"}
+
+    assert transport.classify_sdk_exception(error) == "unknown_provider_outcome"
+    with pytest.raises(transport.UnknownProviderOutcome) as caught:
+        transport._raise_bounded_sdk_failure(error)
+
+    bounded = caught.value
+    assert bounded.args == ("unknown_provider_outcome",)
+    assert bounded.status_code == expected_status
+    assert bounded.provider_error == expected_provider_error
+    serialized = json.dumps(bounded.__dict__, sort_keys=True)
+    for prohibited in (
+        "raw exception",
+        "raw provider",
+        "raw failed generation",
+        "raw request",
+        "raw prompt",
+        "raw response",
+        FAKE_KEY,
+        "headers",
+        "request_id",
+    ):
+        assert prohibited not in serialized
+
+
 def test_client_constructor_error_suppresses_key_and_raw_text():
     class RaisingSDK:
         @staticmethod
@@ -771,3 +853,191 @@ def test_no_production_source_imports_openai_transport_owner():
     assert references == [
         "src/evaluation/controlled_live_provider_qualification.py"
     ]
+
+
+def _stage4p_future_openai_setup():
+    import test_provider_fixture_benchmark as fixture_suite
+
+    from src.evaluation import controlled_live_provider_qualification as live
+    from src.evaluation.controlled_provider_benchmark_plan import (
+        controlled_provider_benchmark_plan_sha256,
+    )
+    from src.evaluation.provider_fixture_benchmark import (
+        fixture_case_corpus_sha256,
+    )
+
+    future = deepcopy(load_fixture_case_corpus())
+    future["cases"] += fixture_suite.stage4b_proposed_skill_cases()
+    plan = build_controlled_provider_benchmark_plan(corpus=future)
+    assert fixture_case_corpus_sha256(future) == (
+        "1f11a262af93ec2b1a6eb7fee337e5802cf9f15719618c072b6691613a37d071"
+    )
+    assert controlled_provider_benchmark_plan_sha256(plan) == (
+        "c2a1b03e834e8707fbd4647bff53a537e00c65e4cf135d71bd15cf660a2d3ec1"
+    )
+    scheduled = next(
+        row
+        for row in live.build_live_qualification_universe(plan)
+        if row["provider"] == "openai"
+        and row["workload_id"] == "skill_extraction"
+    )
+    assert scheduled["schedule_key"] == (
+        "schedule_242ddd80d2636eba3fa53f47e58532a9"
+    )
+    packet = build_transmittable_request_packet(
+        case_alias=scheduled["case_alias"],
+        provider=scheduled["provider"],
+        model=scheduled["model"],
+        plan=plan,
+        corpus=future,
+        live_execution_requested=False,
+    )
+    request = build_production_parity_request(
+        packet,
+        plan=plan,
+        corpus=future,
+    )
+    expected_output = next(
+        deepcopy(case["expected_output"])
+        for review, case in zip(plan["transmission_review"], future["cases"])
+        if review["case_alias"] == scheduled["case_alias"]
+    )
+    return future, plan, scheduled, request, expected_output
+
+
+def test_stage4p_future_openai_arguments_and_fake_sdk_transport_succeed():
+    future, plan, scheduled, request, expected_output = (
+        _stage4p_future_openai_setup()
+    )
+    arguments = (
+        transport.build_openai_production_parity_chat_completion_arguments(
+            parity_request=request,
+            scheduled=scheduled,
+            plan=plan,
+            corpus=future,
+        )
+    )
+
+    assert request["response_contract"]["mode"] == "json_text"
+    assert arguments["model"] == "gpt-5-mini"
+    assert arguments["max_completion_tokens"] == 500
+    assert arguments["reasoning_effort"] == "minimal"
+    assert "response_format" not in arguments
+    assert transport.validate_openai_production_parity_chat_completion_arguments(
+        arguments,
+        parity_request=request,
+        scheduled=scheduled,
+        plan=plan,
+        corpus=future,
+    )
+
+    response = SimpleNamespace(
+        model=scheduled["model"],
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content=json.dumps(expected_output, sort_keys=True)
+                )
+            )
+        ],
+        usage=SimpleNamespace(prompt_tokens=31, completion_tokens=17),
+    )
+    sdk = FakeSDK([response])
+    consumed = []
+
+    def consume(content):
+        consumed.append(content)
+        return validate_and_grade_production_parity_response(
+            request,
+            content,
+            plan=plan,
+            corpus=future,
+        )
+
+    clock_values = iter((200.0, 200.075))
+    result = transport.execute_openai_production_parity_chat_completion_once(
+        api_key=FAKE_KEY,
+        parity_request=request,
+        scheduled=scheduled,
+        parity_response_consumer=consume,
+        monotonic_clock=lambda: next(clock_values),
+        sdk_module=sdk,
+        plan=plan,
+        corpus=future,
+    )
+
+    assert sdk.constructor_calls == [
+        {"api_key": FAKE_KEY, "timeout": 30.0, "max_retries": 0}
+    ]
+    assert sdk.clients[0].completions.calls == [arguments]
+    assert len(consumed) == 1
+    assert result["provider_outcome_category"] == "success"
+    assert result["parity_result"]["production_contract_valid"] is True
+
+
+@pytest.mark.parametrize(
+    "mismatch",
+    ["future_plan_current_corpus", "current_plan_future_corpus"],
+)
+def test_stage4p_openai_wrong_corpus_fails_before_client_construction(mismatch):
+    future, future_plan, future_scheduled, future_request, _output = (
+        _stage4p_future_openai_setup()
+    )
+    current = load_fixture_case_corpus()
+    if mismatch == "future_plan_current_corpus":
+        plan = future_plan
+        scheduled = future_scheduled
+        request = future_request
+        corpus = current
+    else:
+        plan = _plan()
+        scheduled = _scheduled("gpt-5-mini")
+        scheduled["provider_sdk_retry_limit"] = 0
+        request = build_production_parity_request(
+            _packet("gpt-5-mini"),
+            plan=plan,
+        )
+        corpus = future
+    sdk = FakeSDK([])
+
+    with pytest.raises(
+        ValueError,
+        match="execution corpus digest does not match the controlled plan",
+    ):
+        transport.execute_openai_production_parity_chat_completion_once(
+            api_key=FAKE_KEY,
+            parity_request=request,
+            scheduled=scheduled,
+            parity_response_consumer=lambda _content: {},
+            monotonic_clock=_clock(),
+            sdk_module=sdk,
+            plan=plan,
+            corpus=corpus,
+        )
+
+    assert sdk.constructor_calls == []
+    assert sdk.clients == []
+
+
+def test_stage4p_openai_current_plan_preserves_corpus_omitted_behavior():
+    plan = _plan()
+    scheduled = _scheduled("gpt-5-mini")
+    scheduled["provider_sdk_retry_limit"] = 0
+    request = build_production_parity_request(
+        _packet("gpt-5-mini"),
+        plan=plan,
+    )
+    arguments = (
+        transport.build_openai_production_parity_chat_completion_arguments(
+            parity_request=request,
+            scheduled=scheduled,
+            plan=plan,
+        )
+    )
+
+    assert transport.validate_openai_production_parity_chat_completion_arguments(
+        arguments,
+        parity_request=request,
+        scheduled=scheduled,
+        plan=plan,
+    )

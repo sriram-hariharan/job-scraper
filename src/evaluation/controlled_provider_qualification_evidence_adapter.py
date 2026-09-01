@@ -3,8 +3,9 @@
 This evaluation-only owner validates an existing provider-neutral or
 controlled-live evidence object through its native owner and projects one
 schedule result into the minimum shared semantics consumed by qualification
-and human review.  It never calls providers, reads credentials, persists
-artifacts, mutates qualification state, or grants routing authority.
+and human review.  It never calls providers, reads credentials, mutates
+qualification state, or grants routing authority. Explicit persistence is
+limited to the validated bounded renderer-bound observation.
 """
 
 from __future__ import annotations
@@ -12,7 +13,10 @@ from __future__ import annotations
 from copy import deepcopy
 from hashlib import sha256
 import json
+import os
+from pathlib import Path
 import re
+import stat
 from typing import Any, Dict, Mapping
 
 from src.evaluation.controlled_provider_benchmark_evidence_runtime import (
@@ -556,7 +560,8 @@ def build_renderer_bound_qualification_observation(
         ),
         "renderer-bound observation contains prohibited material",
     )
-    return observation
+    validate_renderer_bound_qualification_observation(observation)
+    return deepcopy(observation)
 
 
 def build_qualification_observation(
@@ -703,3 +708,230 @@ def qualification_observation_sha256(observation: Dict[str, Any]) -> str:
     return sha256(
         serialize_qualification_observation(observation).encode("utf-8")
     ).hexdigest()
+
+
+def validate_renderer_bound_qualification_observation(
+    observation: Dict[str, Any],
+) -> bool:
+    """Validate the bounded observation consumed by renderer-bound authority."""
+
+    _require(
+        isinstance(observation, dict)
+        and set(observation) == _RENDERER_BOUND_OBSERVATION_FIELDS,
+        "renderer-bound qualification observation fields are invalid",
+    )
+    base = {
+        field: deepcopy(observation[field])
+        for field in _OBSERVATION_FIELDS
+    }
+    base["observation_version"] = QUALIFICATION_OBSERVATION_VERSION
+    validate_qualification_observation(base)
+    _require(
+        observation["observation_version"]
+        == RENDERER_BOUND_OBSERVATION_VERSION
+        and observation["qualification_semantics_generation"]
+        == "renderer_bound_v1",
+        "renderer-bound qualification observation generation is invalid",
+    )
+    _require(
+        _is_sha256(
+            observation[
+                "tested_workload_qualification_semantics_sha256"
+            ]
+        ),
+        "renderer-bound tested workload semantics digest is invalid",
+    )
+    _require(
+        not any(
+            prohibited in key
+            for key in _iter_keys(observation)
+            for prohibited in _PROHIBITED_OBSERVATION_KEY_PARTS
+        ),
+        "renderer-bound observation contains prohibited material",
+    )
+    return True
+
+
+def serialize_renderer_bound_qualification_observation(
+    observation: Dict[str, Any],
+) -> str:
+    payload = deepcopy(observation)
+    validate_renderer_bound_qualification_observation(payload)
+    return _canonical_json(payload)
+
+
+def renderer_bound_qualification_observation_sha256(
+    observation: Dict[str, Any],
+) -> str:
+    return sha256(
+        serialize_renderer_bound_qualification_observation(
+            observation
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _prepare_renderer_bound_observation_path(
+    artifact_path: str | Path,
+    *,
+    repository_root: str | Path,
+    require_existing: bool = False,
+) -> Path:
+    supplied_root = Path(repository_root)
+    _require(
+        supplied_root.is_dir() and not supplied_root.is_symlink(),
+        "repository root is unsafe",
+    )
+    root = supplied_root.resolve()
+    candidate = Path(artifact_path)
+    from src.evaluation import controlled_live_provider_qualification as live
+
+    approved_directory = live.APPROVED_EVIDENCE_DIRECTORY
+    _require(
+        candidate.is_absolute(),
+        "qualification observation path must be absolute",
+    )
+    _require(
+        ".." not in candidate.parts,
+        "qualification observation path traversal is prohibited",
+    )
+    approved = root / approved_directory
+    _require(
+        candidate.parent == approved
+        and candidate.name.endswith(".qualification-observation.json")
+        and candidate.name != ".qualification-observation.json",
+        "qualification observation path is outside the approved namespace",
+    )
+    current = root
+    for part in approved_directory.parts:
+        current = current / part
+        if current.exists() or current.is_symlink():
+            _require(
+                current.is_dir() and not current.is_symlink(),
+                "qualification observation parent path is unsafe",
+            )
+        else:
+            current.mkdir(mode=0o700)
+        _require(
+            not stat.S_IMODE(current.stat().st_mode)
+            & (stat.S_IWGRP | stat.S_IWOTH),
+            "qualification observation parent permissions are unsafe",
+        )
+    if require_existing:
+        _require(
+            candidate.is_file() and not candidate.is_symlink(),
+            "qualification observation artifact is missing or unsafe",
+        )
+    else:
+        _require(
+            not candidate.exists() and not candidate.is_symlink(),
+            "qualification observation overwrite is prohibited",
+        )
+    return candidate
+
+
+def validate_renderer_bound_qualification_observation_target(
+    artifact_path: str | Path,
+    *,
+    repository_root: str | Path,
+) -> Path:
+    """Fail closed before dispatch if the bounded artifact target is unsafe."""
+
+    return _prepare_renderer_bound_observation_path(
+        artifact_path,
+        repository_root=repository_root,
+    )
+
+
+def write_renderer_bound_qualification_observation_exclusive(
+    artifact_path: str | Path,
+    observation: Dict[str, Any],
+    *,
+    repository_root: str | Path,
+) -> Path:
+    """Persist one bounded renderer-bound observation with mode 0600."""
+
+    payload = deepcopy(observation)
+    encoded = serialize_renderer_bound_qualification_observation(
+        payload
+    ).encode("utf-8")
+    path = _prepare_renderer_bound_observation_path(
+        artifact_path,
+        repository_root=repository_root,
+    )
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(path, flags, 0o600)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "wb", closefd=False) as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except Exception:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+    finally:
+        os.close(descriptor)
+    persisted_stat = path.lstat()
+    _require(
+        stat.S_ISREG(persisted_stat.st_mode)
+        and not path.is_symlink()
+        and stat.S_IMODE(persisted_stat.st_mode) == 0o600,
+        "qualification observation must be a regular 0600 file",
+    )
+    _require(
+        path.read_bytes() == encoded,
+        "persisted qualification observation bytes changed during creation",
+    )
+    try:
+        persisted = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        raise ValueError(
+            "persisted qualification observation is malformed"
+        ) from None
+    validate_renderer_bound_qualification_observation(persisted)
+    _require(
+        persisted == payload,
+        "persisted qualification observation changed during creation",
+    )
+    return path
+
+
+def load_renderer_bound_qualification_observation(
+    artifact_path: str | Path,
+    *,
+    repository_root: str | Path,
+) -> Dict[str, Any]:
+    """Load one canonical bounded renderer-bound observation fail closed."""
+
+    path = _prepare_renderer_bound_observation_path(
+        artifact_path,
+        repository_root=repository_root,
+        require_existing=True,
+    )
+    artifact_stat = path.lstat()
+    _require(
+        stat.S_ISREG(artifact_stat.st_mode)
+        and stat.S_IMODE(artifact_stat.st_mode) == 0o600,
+        "qualification observation must be a regular 0600 file",
+    )
+    try:
+        encoded = path.read_bytes()
+        observation = json.loads(encoded.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        raise ValueError(
+            "persisted qualification observation is malformed"
+        ) from None
+    validate_renderer_bound_qualification_observation(observation)
+    _require(
+        encoded
+        == serialize_renderer_bound_qualification_observation(
+            observation
+        ).encode("utf-8"),
+        "persisted qualification observation is not canonical",
+    )
+    return deepcopy(observation)

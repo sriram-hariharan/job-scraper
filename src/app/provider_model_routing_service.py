@@ -1,7 +1,7 @@
 """App-layer bridge from qualified model recommendations to user runtime.
 
-Skill Extraction consumes its durable renderer-bound authority here. Every
-other workload continues to consume the frozen V1 recommendation authority.
+Skill Extraction and Job Fit consume their durable renderer-bound authority
+here. Every other workload continues to consume frozen V1 authority.
 
 Responsibilities:
 - load the authoritative qualification registry,
@@ -32,15 +32,18 @@ from src.evaluation import (
     controlled_provider_qualification_registry as qualification_registry,
 )
 from src.evaluation.provider_model_recommendation_policy import (
+    build_finalized_job_fit_renderer_bound_pin,
     build_finalized_skill_extraction_renderer_bound_pin,
     build_provider_model_recommendation_policy,
     build_renderer_bound_workload_recommendation,
     read_provider_model_recommendation,
+    validate_finalized_job_fit_renderer_bound_authority,
     validate_finalized_skill_extraction_renderer_bound_authority,
     validate_provider_model_recommendation_policy_source,
 )
 from src.evaluation.job_fit_provider_model_qualification_overlay import (
     build_job_fit_provider_model_qualification_overlay,
+    build_renderer_bound_job_fit_overlay,
 )
 from src.storage.user_ai_settings.store import (
     list_user_ai_task_model_selections_payload,
@@ -49,6 +52,7 @@ from src.storage.user_ai_settings.store import (
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 _RENDERER_BOUND_WORKLOAD_ID = "skill_extraction"
+_RENDERER_BOUND_JOB_FIT_WORKLOAD_ID = "job_fit_evaluation"
 
 _EXECUTION_MODE_BY_RECOMMENDATION_STATUS = {
     "recommended": "qualified_provider_model",
@@ -146,6 +150,40 @@ def _build_blocked_skill_renderer_bound_route() -> Dict[str, Any]:
     }
 
 
+def _load_authoritative_job_fit_renderer_bound_registry() -> Dict[str, Any]:
+    registry_payload = (
+        qualification_registry
+        .load_renderer_bound_job_fit_qualification_registry(
+            _REPOSITORY_ROOT
+            / qualification_registry
+            .RENDERER_BOUND_JOB_FIT_REGISTRY_ARTIFACT_PATH,
+            repository_root=_REPOSITORY_ROOT,
+        )
+    )
+    validate_finalized_job_fit_renderer_bound_authority(registry_payload)
+    return registry_payload
+
+
+def _build_authoritative_job_fit_renderer_bound_route() -> Dict[str, Any]:
+    registry_payload = _load_authoritative_job_fit_renderer_bound_registry()
+    pin = build_finalized_job_fit_renderer_bound_pin()
+    return build_renderer_bound_job_fit_overlay(
+        registry_payload,
+        pin=pin,
+    )
+
+
+def _build_blocked_job_fit_renderer_bound_route() -> Dict[str, Any]:
+    return {
+        "workload_id": _RENDERER_BOUND_JOB_FIT_WORKLOAD_ID,
+        "recommendation_status": "blocked_non_live",
+        "provider": None,
+        "model": None,
+        "selection_basis": None,
+        "qualified_options": [],
+    }
+
+
 def _owner_requested_selections(
     owner_user_id: Optional[str],
 ) -> Dict[str, Dict[str, str]]:
@@ -193,11 +231,6 @@ def list_provider_model_routing_statuses(
     policy = build_provider_model_recommendation_policy(
         registry_payload
     )
-    job_fit_overlay = build_job_fit_provider_model_qualification_overlay(
-        registry_payload
-    )
-    if job_fit_overlay.get("workload_id") != "job_fit_evaluation":
-        raise ValueError("Job Fit qualification overlay workload mismatch")
     try:
         skill_renderer_bound_route = (
             _build_authoritative_skill_renderer_bound_route()
@@ -205,6 +238,14 @@ def list_provider_model_routing_statuses(
     except (ValueError, FileNotFoundError):
         skill_renderer_bound_route = (
             _build_blocked_skill_renderer_bound_route()
+        )
+    try:
+        job_fit_renderer_bound_route = (
+            _build_authoritative_job_fit_renderer_bound_route()
+        )
+    except (ValueError, FileNotFoundError):
+        job_fit_renderer_bound_route = (
+            _build_blocked_job_fit_renderer_bound_route()
         )
     requested_selections = _owner_requested_selections(owner_user_id)
 
@@ -230,14 +271,16 @@ def list_provider_model_routing_statuses(
     workloads = []
 
     for entry in policy["workloads"]:
-        is_job_fit = entry["workload_id"] == "job_fit_evaluation"
+        is_job_fit = (
+            entry["workload_id"] == _RENDERER_BOUND_JOB_FIT_WORKLOAD_ID
+        )
         is_renderer_bound_skill = (
             entry["workload_id"] == _RENDERER_BOUND_WORKLOAD_ID
         )
         effective_entry = (
             skill_renderer_bound_route
             if is_renderer_bound_skill
-            else job_fit_overlay
+            else job_fit_renderer_bound_route
             if is_job_fit
             else entry
         )
@@ -501,6 +544,16 @@ def resolve_recommended_user_provider_route(
         try:
             recommendation = (
                 _build_authoritative_skill_renderer_bound_route()
+            )
+        except (ValueError, FileNotFoundError):
+            raise RecommendedProviderRoutingUnavailableError(
+                workload_id,
+                "blocked_non_live",
+            ) from None
+    elif workload_id == _RENDERER_BOUND_JOB_FIT_WORKLOAD_ID:
+        try:
+            recommendation = (
+                _build_authoritative_job_fit_renderer_bound_route()
             )
         except (ValueError, FileNotFoundError):
             raise RecommendedProviderRoutingUnavailableError(

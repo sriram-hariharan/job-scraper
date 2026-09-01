@@ -1155,9 +1155,9 @@ def test_plan_owner_is_evaluation_infrastructure_only():
 
 
 CURRENT_CONTROLLED_PLAN_SHA256 = (
-    "f4958bdcf4387010986258eb690c7c480481d8e91bdb221debdf2315fdd569ed"
+    "bacc7eaa4524199ba293e2d50232f5a8c6cf61014ad8dc89c3dd30d334654162"
 )
-CURRENT_SKILL_EXTRACTION_ALIAS = "case_eff6ed2fb3643d23b87bab48"
+CURRENT_SKILL_EXTRACTION_ALIAS = "case_ab6a1757752b2853f320aebf"
 
 
 def _stage1_skill_extraction_only_change(corpus):
@@ -1478,7 +1478,7 @@ def test_stage4b_future_staged_matrix_projection():
     # Current authority is untouched by the in-memory projection.
     assert step8o.fixture_case_corpus_sha256(
         step8o.load_fixture_case_corpus()
-    ) == "b4dea8bfccf39da87221755777d88f35427b1f4b772f3730fcd48cbdb5842b5f"
+    ) == "59180e4064dd74759c6ecd8630478225b191f942b68fb1880e172fe07ee80aec"
 
 
 def test_stage4b_recipe_cases_pass_transmission_safety_unmodified():

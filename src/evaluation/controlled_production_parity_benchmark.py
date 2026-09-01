@@ -36,6 +36,7 @@ from src.evaluation.provider_fixture_benchmark import (
     grade_normalized_candidate_result,
     load_fixture_case_corpus,
     validate_fixture_case_corpus,
+    workload_grading_semantics_sha256,
 )
 
 
@@ -232,6 +233,9 @@ _PARITY_RESULT_FIELDS = {
     "authority_invariants",
     "evidence_binding_sha256",
 }
+_JOB_FIT_CANDIDATE_SEMANTICS_FIELD = (
+    "candidate_transport_semantics_sha256"
+)
 
 
 class ProductionParityBlocked(ValueError):
@@ -420,6 +424,13 @@ def workload_qualification_semantics_sha256(
             workload_rendered_parity_semantics_sha256(normalized, corpus)
         ),
     }
+    grading_digest = workload_grading_semantics_sha256(normalized)
+    if grading_digest is not None:
+        # The rules that decide task quality are part of what "qualified"
+        # means, so evidence graded under different rules must not stay
+        # current. Only workloads that declare a grading contract bind one,
+        # which keeps unrelated workload identities stable.
+        material["workload_grading_semantics_sha256"] = grading_digest
     return sha256(_canonical_json(material).encode("utf-8")).hexdigest()
 
 
@@ -828,6 +839,16 @@ def build_production_parity_request(
         "live_execution_requested": False,
         "synthetic_data_only": True,
     }
+    if workload_id == "job_fit_evaluation":
+        from src.evaluation.job_fit_candidate_local_qualification import (
+            job_fit_candidate_transport_semantics_sha256,
+        )
+
+        request[_JOB_FIT_CANDIDATE_SEMANTICS_FIELD] = (
+            job_fit_candidate_transport_semantics_sha256(
+                packet["provider"], packet["model"]
+            )
+        )
     validate_production_parity_request(
         request,
         plan=controlled_plan,
@@ -845,8 +866,11 @@ def validate_production_parity_request(
 ) -> bool:
     controlled_plan = build_controlled_provider_benchmark_plan() if plan is None else deepcopy(plan)
     validate_controlled_provider_benchmark_plan(controlled_plan)
+    expected_request_fields = set(_PARITY_REQUEST_FIELDS)
+    if request.get("workload_id") == "job_fit_evaluation":
+        expected_request_fields.add(_JOB_FIT_CANDIDATE_SEMANTICS_FIELD)
     _require(
-        isinstance(request, dict) and set(request) == _PARITY_REQUEST_FIELDS,
+        isinstance(request, dict) and set(request) == expected_request_fields,
         "production-parity request fields are invalid",
     )
     _require(
@@ -858,6 +882,12 @@ def validate_production_parity_request(
         workload_id in PRODUCTION_PARITY_RUNNABLE_WORKLOADS,
         "production-parity workload is blocked",
     )
+    if workload_id == "job_fit_evaluation":
+        from src.evaluation.job_fit_candidate_local_qualification import (
+            job_fit_candidate_thinking_budget_for_request,
+        )
+
+        job_fit_candidate_thinking_budget_for_request(request)
     current_digest = production_task_contract_sha256(workload_id)
     _require(
         request.get("production_task_contract_sha256") == current_digest,
@@ -1289,9 +1319,18 @@ def _number(value: Any) -> float:
         return 0.0
 
 
+def _separator_normalized_text(text: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "_", text.casefold()).strip("_")
+    return f"_{normalized}_"
+
+
 def _mentioned_tokens(text: str, candidates: list[str]) -> list[str]:
-    normalized = text.casefold()
-    return [item for item in candidates if item.casefold() in normalized]
+    normalized = _separator_normalized_text(text)
+    return [
+        item
+        for item in candidates
+        if _separator_normalized_text(item) in normalized
+    ]
 
 
 def _claim_tokens(text: str) -> list[str]:
@@ -1302,6 +1341,37 @@ def _claim_tokens(text: str) -> list[str]:
             text.casefold(),
         )
     )
+
+
+def _job_fit_reason_tokens(
+    text: str,
+    case: Mapping[str, Any],
+) -> list[str]:
+    """Project only exact, separator-normalized Job Fit evidence claims."""
+
+    known_terms = _strings(case.get("supported_evidence_tokens")) + _strings(
+        case.get("prohibited_claims_or_terms")
+    )
+    hyphenated_synthetic_terms = [
+        match.replace("-", "_")
+        for match in re.findall(
+            r"\bsynthetic(?:-[a-z0-9]+)+\b",
+            text.casefold(),
+        )
+    ]
+    return _unique(
+        _mentioned_tokens(text, known_terms)
+        + _claim_tokens(text)
+        + hyphenated_synthetic_terms
+    )
+
+
+def _normalized_job_fit_score(value: Any) -> Any:
+    """Map valid production numeric material without making invalid data valid."""
+
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return value
+    return float(value) / 10.0
 
 
 def _benchmark_scaffold_claim_tokens(context: Mapping[str, Any]) -> set[str]:
@@ -1346,6 +1416,8 @@ def _evidence_bearing_claim_tokens(
 def _benchmark_projection(
     request: Mapping[str, Any],
     normalized: Mapping[str, Any],
+    *,
+    case: Mapping[str, Any],
 ) -> Dict[str, Any]:
     workload_id = request["workload_id"]
     context = request["local_validation_context"]
@@ -1354,17 +1426,19 @@ def _benchmark_projection(
         return deepcopy(dict(normalized))
     if workload_id == "job_fit_evaluation":
         result = dict((normalized.get("results") or [{}])[0])
-        fit_score = max(0.0, min(1.0, _number(result.get("overall_score")) / 10.0))
-        required_match = max(0.0, min(1.0, _number(result.get("skill_match")) / 10.0))
         reason = _clean(result.get("reason"))
-        evidence = _strings(synthetic.get("evidence_tokens"))
-        missing = _strings(synthetic.get("missing_skills"))
         return {
-            "classification": "strong_fit" if fit_score >= 0.8 else "partial_fit" if fit_score >= 0.5 else "weak_fit",
-            "fit_score": fit_score,
-            "required_match_score": required_match,
-            "reason_tokens": _mentioned_tokens(reason, evidence),
-            "missing_requirements": _mentioned_tokens(reason, missing),
+            "fit_score": _normalized_job_fit_score(
+                result.get("overall_score")
+            ),
+            "required_match_score": _normalized_job_fit_score(
+                result.get("skill_match")
+            ),
+            # Production requires the `reason` field to exist but never
+            # instructs the model to repeat an evidence token, so only its
+            # presence is projected. The text itself is never carried.
+            "reason_present": bool(reason),
+            "reason_tokens": _job_fit_reason_tokens(reason, case),
         }
     if workload_id == "jd_intelligence":
         return {
@@ -1575,7 +1649,19 @@ def validate_and_grade_production_parity_response(
         # from str(exc), repr(exc), exc.args, __cause__ or a traceback.
         errors = ["production_contract_invalid"]
         contract_failures = _safe_contract_failure_projection(exc)
-    benchmark_projection = _benchmark_projection(request, normalized) if production_valid else {}
+    case = _case_for_packet(
+        {
+            "case_alias": request["case_alias"],
+            "workload_id": request["workload_id"],
+        },
+        controlled_plan,
+        corpus,
+    )
+    benchmark_projection = (
+        _benchmark_projection(request, normalized, case=case)
+        if production_valid
+        else {}
+    )
     benchmark_quality = _grade_projection(
         request,
         benchmark_projection,
@@ -1611,6 +1697,10 @@ def validate_and_grade_production_parity_response(
             "user_task_override_created": False,
         },
     }
+    if request["workload_id"] == "job_fit_evaluation":
+        result_without_binding[_JOB_FIT_CANDIDATE_SEMANTICS_FIELD] = request[
+            _JOB_FIT_CANDIDATE_SEMANTICS_FIELD
+        ]
     result = {
         **result_without_binding,
         "evidence_binding_sha256": sha256(
@@ -1643,8 +1733,11 @@ def validate_production_parity_result(
         plan=controlled_plan,
         corpus=corpus,
     )
+    expected_result_fields = set(_PARITY_RESULT_FIELDS)
+    if request.get("workload_id") == "job_fit_evaluation":
+        expected_result_fields.add(_JOB_FIT_CANDIDATE_SEMANTICS_FIELD)
     _require(
-        isinstance(result, dict) and set(result) == _PARITY_RESULT_FIELDS,
+        isinstance(result, dict) and set(result) == expected_result_fields,
         "production-parity result fields are invalid",
     )
     _require(
@@ -1660,6 +1753,12 @@ def validate_production_parity_result(
         "production_task_contract_sha256",
     ):
         _require(result.get(field) == request.get(field), "parity result binding mismatch")
+    if request["workload_id"] == "job_fit_evaluation":
+        _require(
+            result[_JOB_FIT_CANDIDATE_SEMANTICS_FIELD]
+            == request[_JOB_FIT_CANDIDATE_SEMANTICS_FIELD],
+            "parity result candidate semantic binding mismatch",
+        )
     _require(
         result["production_task_contract_sha256"]
         == production_task_contract_sha256(result["workload_id"]),

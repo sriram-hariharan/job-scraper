@@ -30,6 +30,7 @@ JOB_FIT_OPTIONS = [
     {"provider": "openai", "model": "gpt-5-mini"},
     {"provider": "openai", "model": "gpt-5.1"},
 ]
+CURRENT_JOB_FIT_OPTIONS = [JOB_FIT_OPTIONS[0]]
 
 MANUAL_PREVIEW_RECOMMENDED = {
     "provider": "groq",
@@ -159,8 +160,8 @@ def _install_synthetic_routing_sources(monkeypatch):
     )
     monkeypatch.setattr(
         routing,
-        "build_job_fit_provider_model_qualification_overlay",
-        lambda _payload: _job_fit_overlay(),
+        "_build_authoritative_job_fit_renderer_bound_route",
+        _job_fit_overlay,
     )
     monkeypatch.setattr(
         routing,
@@ -279,8 +280,8 @@ def test_aggregate_routing_statuses_are_safe_and_preserve_policy_order(
     )
     monkeypatch.setattr(
         routing,
-        "build_job_fit_provider_model_qualification_overlay",
-        lambda _payload: _job_fit_overlay(),
+        "_build_authoritative_job_fit_renderer_bound_route",
+        _job_fit_overlay,
     )
     monkeypatch.setattr(
         routing,
@@ -538,9 +539,6 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
         ],
         "job_fit_evaluation": [
             ("groq", "openai/gpt-oss-20b"),
-            ("groq", "openai/gpt-oss-120b"),
-            ("openai", "gpt-5-mini"),
-            ("openai", "gpt-5.1"),
         ],
         "jd_intelligence": [("openai", "gpt-5-mini")],
         "grounded_rag_answer": [
@@ -592,7 +590,7 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
             assert row["recommended_option"] is None
             assert row["qualified_options"] == []
 
-    assert actual_total == 20
+    assert actual_total == 17
     assert {
         mode: sum(row["execution_mode"] == mode for row in workloads)
         for mode in (
@@ -610,7 +608,7 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
     assert job_fit["recommendation_status"] == "recommended"
     assert job_fit["execution_mode"] == "qualified_provider_model"
     assert job_fit["recommended_option"] == JOB_FIT_OPTIONS[0]
-    assert job_fit["qualified_options"] == JOB_FIT_OPTIONS
+    assert job_fit["qualified_options"] == CURRENT_JOB_FIT_OPTIONS
     assert job_fit["effective_selection"] == JOB_FIT_OPTIONS[0]
     assert job_fit["effective_selection_source"] == (
         "applylens_recommended"
@@ -678,7 +676,7 @@ def test_real_registry_routing_contract_matches_current_qualified_universe(
         assert prohibited not in rendered
 
 
-@pytest.mark.parametrize("selection", JOB_FIT_OPTIONS)
+@pytest.mark.parametrize("selection", CURRENT_JOB_FIT_OPTIONS)
 def test_job_fit_qualified_owner_overrides_become_effective(
     monkeypatch,
     selection,

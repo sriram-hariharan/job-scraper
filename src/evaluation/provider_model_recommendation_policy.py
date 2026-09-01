@@ -593,6 +593,65 @@ _FINALIZED_SKILL_EXTRACTION_QUALIFIED_CANDIDATE_BINDINGS = {
     ),
 }
 
+_FINALIZED_JOB_FIT_RENDERER_BOUND_PIN = {
+    "pin_version": RENDERER_BOUND_RECOMMENDATION_PIN_VERSION,
+    "workload_id": "job_fit_evaluation",
+    "provider": "groq",
+    "model": "openai/gpt-oss-20b",
+    "selection_basis": "sole_qualified_candidate",
+    "expected_status": "qualified",
+    "expected_status_reasons": ["qualification_requirements_satisfied"],
+    "expected_qualification_semantics_generation": "renderer_bound_v1",
+    "expected_current_workload_qualification_semantics_sha256": (
+        "60e7fa48863d893aae0d29d29f01369324219253dcbcde3a1e9d5ba0925c553d"
+    ),
+    "expected_tested_workload_qualification_semantics_sha256": (
+        "60e7fa48863d893aae0d29d29f01369324219253dcbcde3a1e9d5ba0925c553d"
+    ),
+    "expected_current_task_contract_sha256": (
+        "e9568a48240886579814a557b414461510f86485e3bb7a50efc3e7ab8e319480"
+    ),
+    "expected_tested_task_contract_sha256": (
+        "e9568a48240886579814a557b414461510f86485e3bb7a50efc3e7ab8e319480"
+    ),
+    "expected_qualification_binding_sha256": (
+        "af4214dfd0504e73a24d5f5a96a124f7d4c623e3a085f3d027c0dd6132912efc"
+    ),
+    "expected_evidence_sha256": (
+        "e63db9ce3b95d5bda934b97f7d0ad49dae2b78c33a0aa2f19b1e61d03afd22b3"
+    ),
+    "expected_review_sha256": None,
+    "expected_candidate_universe": [
+        {
+            "provider": "groq",
+            "model": "openai/gpt-oss-20b",
+            "status": "qualified",
+        },
+        {
+            "provider": "groq",
+            "model": "openai/gpt-oss-120b",
+            "status": "rejected",
+        },
+        {
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "status": "rejected",
+        },
+        {
+            "provider": "openai",
+            "model": "gpt-5.1",
+            "status": "rejected",
+        },
+    ],
+}
+
+FINALIZED_JOB_FIT_RENDERER_BOUND_REGISTRY_SHA256 = (
+    "2c75dd95de90553ce05dd2a20d9b9f478c9e65441305997adefd7c9f00787519"
+)
+FINALIZED_JOB_FIT_CANDIDATE_TRANSPORT_SEMANTICS_SHA256 = (
+    "5d7dc8f71de2799d8d2f448e91fd38ac21af87f628cf52f9bac825a1d1155334"
+)
+
 
 def validate_renderer_bound_recommendation_pin(pin: Mapping[str, Any]) -> bool:
     """Validate the shape of one explicit next-generation recommendation pin.
@@ -669,6 +728,60 @@ def build_finalized_skill_extraction_renderer_bound_pin() -> Dict[str, Any]:
     pin = deepcopy(_FINALIZED_SKILL_EXTRACTION_RENDERER_BOUND_PIN)
     validate_renderer_bound_recommendation_pin(pin)
     return pin
+
+
+def build_finalized_job_fit_renderer_bound_pin() -> Dict[str, Any]:
+    """Return the sole-current-candidate Job Fit renderer-bound pin."""
+
+    pin = deepcopy(_FINALIZED_JOB_FIT_RENDERER_BOUND_PIN)
+    validate_renderer_bound_recommendation_pin(pin)
+    return pin
+
+
+def validate_finalized_job_fit_renderer_bound_authority(
+    renderer_bound_registry: Dict[str, Any],
+) -> bool:
+    """Validate the exact durable Job Fit authority selected for routing."""
+
+    payload = deepcopy(renderer_bound_registry)
+    qualification_registry.validate_renderer_bound_qualification_registry(
+        payload
+    )
+    _require(
+        qualification_registry.renderer_bound_qualification_registry_sha256(
+            payload
+        )
+        == FINALIZED_JOB_FIT_RENDERER_BOUND_REGISTRY_SHA256,
+        "finalized Job Fit renderer-bound registry digest changed",
+    )
+    pin = build_finalized_job_fit_renderer_bound_pin()
+    _require(
+        production_task_contract_sha256(pin["workload_id"])
+        == pin["expected_current_task_contract_sha256"],
+        "finalized Job Fit production task contract changed",
+    )
+    validate_renderer_bound_workload_recommendation(payload, pin=pin)
+    cells = _renderer_bound_workload_cells(payload, pin["workload_id"])
+    qualified = [cell for cell in cells if cell["status"] == "qualified"]
+    _require(
+        len(cells) == 4
+        and len(qualified) == 1
+        and (qualified[0]["provider"], qualified[0]["model"])
+        == (pin["provider"], pin["model"]),
+        "finalized Job Fit candidate authority changed",
+    )
+    from src.evaluation.job_fit_candidate_local_qualification import (
+        job_fit_candidate_transport_semantics_sha256,
+    )
+
+    _require(
+        job_fit_candidate_transport_semantics_sha256(
+            pin["provider"], pin["model"]
+        )
+        == FINALIZED_JOB_FIT_CANDIDATE_TRANSPORT_SEMANTICS_SHA256,
+        "finalized Job Fit candidate transport semantics changed",
+    )
+    return True
 
 
 def validate_finalized_skill_extraction_renderer_bound_authority(

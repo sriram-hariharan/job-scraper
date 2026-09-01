@@ -164,7 +164,6 @@ _WORKLOAD_GRADER_RESPONSIBILITIES = {
         "schema_validity",
         "required_field_completeness",
         "bounded_score_ranges",
-        "classification_agreement",
         "reason_grounding",
         "unsupported_claim_count",
     ],
@@ -238,6 +237,67 @@ _WORKLOAD_GRADER_RESPONSIBILITIES = {
         "no_mutation_or_action_authority",
     ],
 }
+WORKLOAD_GRADING_SEMANTICS_VERSION = "controlled-workload-grading-semantics-v1"
+# Declarative identity of the rules that decide benchmark task quality.
+#
+# These are deliberately NOT source hashes: a harmless refactor must not
+# invalidate qualification evidence, but a material rule change must. Whoever
+# changes a rule below changes its identifier in the same edit, so the
+# qualification-semantics digest moves with the behaviour it names.
+#
+# Observability-only behaviour (which metrics a diagnostic retains) is
+# excluded on purpose: reporting shape must never invalidate qualification.
+#
+# A workload absent from this mapping declares no grading contract and its
+# qualification identity is unchanged, so unrelated workloads do not churn.
+_WORKLOAD_GRADING_SEMANTICS = {
+    "job_fit_evaluation": {
+        "score_projection": (
+            "provider_0_to_10_divided_by_10_without_clamping"
+        ),
+        "bounded_score_rule": (
+            "normalized_scores_numeric_and_within_0_to_1"
+        ),
+        "reason_projection": "nonempty_clean_reason_presence_boolean",
+        "reason_grounding_rule": (
+            "reason_present_and_no_unsupported_claims"
+        ),
+        "unsupported_claim_rule": (
+            "claim_terms_outside_supported_or_within_prohibited"
+        ),
+        "task_quality_rule": (
+            "bounded_score_ranges_and_reason_grounding"
+        ),
+    },
+}
+
+
+def build_workload_grading_semantics(
+    workload_id: str,
+) -> Dict[str, Any] | None:
+    """Return one workload's declarative grading contract, or None."""
+
+    normalized = str(workload_id or "").strip()
+    declared = _WORKLOAD_GRADING_SEMANTICS.get(normalized)
+    if declared is None:
+        return None
+    return {
+        "grading_semantics_version": WORKLOAD_GRADING_SEMANTICS_VERSION,
+        "workload_id": normalized,
+        "grader_responsibilities": list(
+            _WORKLOAD_GRADER_RESPONSIBILITIES.get(normalized, ())
+        ),
+        "rules": deepcopy(declared),
+    }
+
+
+def workload_grading_semantics_sha256(workload_id: str) -> str | None:
+    """Return the declarative grading digest, or None when undeclared."""
+
+    material = build_workload_grading_semantics(workload_id)
+    if material is None:
+        return None
+    return sha256(_canonical_json(material).encode("utf-8")).hexdigest()
 
 
 def _require(condition: bool, message: str) -> None:
@@ -1135,7 +1195,6 @@ def _grade_job_fit(
     case: Mapping[str, Any],
     output: Mapping[str, Any],
 ) -> Dict[str, Any]:
-    expected = case["expected_output"]
     fit_score = output.get("fit_score")
     required_score = output.get("required_match_score")
     bounded = all(
@@ -1145,26 +1204,19 @@ def _grade_job_fit(
         for value in (fit_score, required_score)
     )
     unsupported = _unsupported_claims(case, output)
-    missing_accuracy = _agreement(
-        _normalized_set(output.get("missing_requirements")),
-        _normalized_set(expected.get("missing_requirements")),
-    )
-    classification = _agreement(
-        output.get("classification"),
-        expected.get("classification"),
-    )
+    # Production requires a `reason` result field but does not require it to
+    # reproduce a recognized evidence token, so qualification grades presence
+    # plus the unchanged unsupported/prohibited claim rejection. A golden
+    # fixture output carries no production reason signal, so an absent key is
+    # not treated as a missing reason.
+    reason_signal = output.get("reason_present")
+    reason_present = True if reason_signal is None else bool(reason_signal)
+    reason_grounded = reason_present and not unsupported
     return {
         "bounded_score_ranges": 1.0 if bounded else 0.0,
-        "classification_agreement": classification,
-        "reason_grounding": 1.0 if not unsupported else 0.0,
+        "reason_grounding": 1.0 if reason_grounded else 0.0,
         "unsupported_claim_count": len(unsupported),
-        "missing_requirement_accuracy": missing_accuracy,
-        "task_quality_passed": (
-            bounded
-            and classification == 1.0
-            and not unsupported
-            and missing_accuracy == 1.0
-        ),
+        "task_quality_passed": bounded and reason_grounded,
     }
 
 

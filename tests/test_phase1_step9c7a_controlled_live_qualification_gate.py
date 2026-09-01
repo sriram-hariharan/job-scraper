@@ -2857,3 +2857,160 @@ def test_stage4i_native_evidence_reaches_renderer_bound_registry_cell():
     assert cell["current_task_contract_sha256"] == SKILL_TASK_CONTRACT_SHA256
     # Status comes from the real gates on a genuinely successful execution.
     assert cell["status"] == "qualified"
+
+
+# ---------------------------------------------------------------------------
+# Stage 6V: bounded live diagnostics retain the scalar Job Fit quality
+# submetrics so a failed qualification is self-diagnosing. Read-only.
+# ---------------------------------------------------------------------------
+
+
+def test_stage6v_bounded_metric_allowlist_drops_text_and_unknown_names():
+    metrics = live._safe_bounded_workload_metrics(
+        {
+            "bounded_score_ranges": 1.0,
+            "reason_grounding": 0.0,
+            "unsupported_claim_count": 2,
+            "task_quality_passed": False,
+            # None of the following may survive.
+            "reason": "a provider sentence",
+            "reason_tokens": ["synthetic_skill_alpha"],
+            "classification": "strong_fit",
+            "skill_extraction_precision": 1.0,
+            "nan_metric": float("nan"),
+            "inf_metric": float("inf"),
+        }
+    )
+
+    assert metrics == {
+        "bounded_score_ranges": 1.0,
+        "reason_grounding": 0.0,
+        "unsupported_claim_count": 2,
+        "task_quality_passed": False,
+    }
+    assert all(
+        isinstance(value, (bool, int, float)) for value in metrics.values()
+    )
+    for value in metrics.values():
+        assert not isinstance(value, str)
+    assert live._safe_bounded_workload_metrics(None) == {}
+    assert live._safe_bounded_workload_metrics("not-a-mapping") == {}
+
+
+class _Stage6VEmptyReasonDispatcher:
+    """Returns a production-valid Job Fit result whose reason is blank."""
+
+    def __init__(self):
+        self.calls = []
+
+    def __call__(
+        self, *, provider, api_key, parity_request, scheduled, plan,
+        monotonic_clock,
+    ):
+        self.calls.append(scheduled["schedule_key"])
+        size = parity_request["local_validation_context"]["expected_batch_size"]
+        raw = {
+            "results": [
+                {
+                    "id": index,
+                    "ai_relevance": 7,
+                    "skill_match": 8,
+                    "seniority_match": 7,
+                    "learning_opportunity": 7,
+                    "overall_score": 7,
+                    "visa_sponsorship_signal": "unknown",
+                    "reason": "   ",
+                }
+                for index in range(size)
+            ]
+        }
+        return {
+            "parity_result": validate_and_grade_production_parity_response(
+                parity_request, json.dumps(raw), plan=plan
+            ),
+            "provider": provider,
+            "model": scheduled["model"],
+            "latency_ms": 25.0,
+            "input_token_count": 40,
+            "output_token_count": 20,
+            "provider_outcome_category": "success",
+        }
+
+
+def test_stage6v_failure_diagnostic_retains_job_fit_quality_metrics(
+    plan, universe
+):
+    row = _eligible(universe, provider="groq", workload="job_fit_evaluation")
+    authorization, pricing = _valid_inputs(plan, [row])
+    dispatcher = _Stage6VEmptyReasonDispatcher()
+
+    evidence = live.execute_controlled_live_qualification(
+        plan=plan,
+        live_authorization=authorization,
+        pricing=pricing,
+        requested_schedule_keys=[row["schedule_key"]],
+        operator_credentials={"groq": OPERATOR_SECRET},
+        execution_time_source=lambda: EXECUTION_TIME,
+        transport_dispatchers=_dispatchers(dispatcher),
+        monotonic_clock=lambda: 1.0,
+    )
+
+    assert dispatcher.calls == [row["schedule_key"]]
+    # Existing stop semantics are untouched by the added observability.
+    assert evidence["stop_reason"] == "hard_safety_failure"
+    assert evidence["execution_status"] == "stopped"
+    assert evidence["completed_schedule_keys"] == []
+    assert evidence["blocked_schedule_keys"] == [row["schedule_key"]]
+
+    diagnostics = evidence["failure_diagnostics"]
+    assert len(diagnostics) == 1
+    diagnostic = diagnostics[0]
+    assert set(diagnostic) == live._FAILURE_DIAGNOSTIC_FIELDS
+
+    metrics = diagnostic["workload_quality_metrics"]
+    # The exact submetric that failed is now recoverable from evidence alone.
+    assert metrics["task_quality_passed"] is False
+    assert metrics["reason_grounding"] == 0.0
+    assert metrics["bounded_score_ranges"] == 1.0
+    assert metrics["unsupported_claim_count"] == 0
+    assert set(metrics) <= set(live._BOUNDED_WORKLOAD_METRIC_FIELDS)
+
+    # Nothing provider-derived leaks: every retained value is a scalar, and
+    # the key set is confined to the allowlist asserted above.
+    for value in metrics.values():
+        assert isinstance(value, (bool, int, float))
+        assert not isinstance(value, str)
+    assert "reason_tokens" not in metrics
+    assert "reason" not in metrics
+    assert live.validate_live_qualification_evidence(
+        evidence, plan=plan, authorization=authorization, pricing=pricing
+    )
+
+
+def test_stage6v_observability_does_not_change_qualification_authority(
+    plan, universe
+):
+    """Diagnostics are read-only: they never rescue or fail a candidate."""
+
+    row = _eligible(universe, provider="groq", workload="job_fit_evaluation")
+    authorization, pricing = _valid_inputs(plan, [row])
+    evidence = live.execute_controlled_live_qualification(
+        plan=plan,
+        live_authorization=authorization,
+        pricing=pricing,
+        requested_schedule_keys=[row["schedule_key"]],
+        operator_credentials={"groq": OPERATOR_SECRET},
+        execution_time_source=lambda: EXECUTION_TIME,
+        transport_dispatchers=_dispatchers(_Stage6VEmptyReasonDispatcher()),
+        monotonic_clock=lambda: 1.0,
+    )
+
+    # A truthful summary is still recorded; it simply does not pass.
+    summary = evidence["grading_summaries"][0]
+    assert summary["benchmark_quality_passed"] is False
+    assert summary["production_contract_valid"] is True
+    assert summary["provider_outcome_category"] == "success"
+    assert evidence["authority_invariants"]["qualification_promotion_count"] == 0
+    assert evidence["authority_invariants"]["routing_change_count"] == 0
+    assert evidence["authority_invariants"]["recommendation_count"] == 0
+    assert evidence["failure_diagnostics"][0]["hard_failure_present"] is False

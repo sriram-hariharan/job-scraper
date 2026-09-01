@@ -51,6 +51,14 @@ def _packet(workload_id):
     )
 
 
+def _packet_for_case(case_id):
+    return next(
+        packet
+        for packet in _packets()
+        if packet["case_id"] == case_id
+    )
+
+
 def _result():
     return engine.evaluate_offline_fixture_benchmark(_packets())
 
@@ -226,8 +234,8 @@ def test_machine_readable_corpus_has_exact_workload_coverage():
 
     assert coverage["workload_count"] == 12
     assert coverage["total_case_count"] == 15
-    assert coverage["exact_golden_count"] == 15
-    assert coverage["invariant_only_count"] == 0
+    assert coverage["exact_golden_count"] == 14
+    assert coverage["invariant_only_count"] == 1
     assert coverage["schema_only_count"] == 0
     assert coverage["coverage_gap_count"] == 0
     assert coverage["additional_redaction_required_count"] == 0
@@ -252,14 +260,46 @@ def test_machine_readable_corpus_has_exact_workload_coverage():
         row["workload_id"]: row["machine_readable_case_count"]
         for row in coverage["workloads"]
     } == expected_case_counts
-    assert {
+    exact_golden_counts = {
         row["workload_id"]: row["exact_golden_count"]
         for row in coverage["workloads"]
-    } == expected_case_counts
+    }
+    assert exact_golden_counts == {
+        **expected_case_counts,
+        "job_fit_evaluation": 1,
+    }
+    assert next(
+        row for row in coverage["workloads"]
+        if row["workload_id"] == "job_fit_evaluation"
+    )["invariant_only_count"] == 1
     assert all(
         row["live_transmission_eligible_count"] == 0
         for row in coverage["workloads"]
     )
+
+
+def test_job_fit_qualification_case_uses_only_production_aligned_invariants():
+    case = next(
+        row
+        for row in _corpus()["cases"]
+        if row["case_id"] == "job_fit_synthetic_transmission_safe_v1"
+    )
+    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    entry = next(
+        row
+        for row in manifest["fixtures"]
+        if row["workload_id"] == "job_fit_evaluation"
+    )
+
+    assert case["comparison_type"] == "invariant_only"
+    assert case["required_fields"] == [
+        "fit_score",
+        "required_match_score",
+        "reason_tokens",
+    ]
+    assert "classification" not in case["expected_output"]
+    assert "missing_requirements" not in case["expected_output"]
+    assert entry["golden_output_available"] is False
 
 
 def test_corpus_contains_no_personal_runtime_or_live_authorization():
@@ -385,24 +425,58 @@ def test_skill_precision_recall_bucket_and_unsupported_detection_are_exact():
     assert unsafe_grade["hard_failures"]["unsupported_claim"] == 1
 
 
-def test_job_fit_metrics_and_score_bounds_are_exact():
+def test_job_fit_quality_uses_production_aligned_invariants_only():
     grade = engine.grade_normalized_candidate_result(
-        _packet("job_fit_evaluation")
+        _packet_for_case("job_fit_synthetic_transmission_safe_v1")
     )
 
     assert grade["required_field_completeness"] == 1.0
     assert grade["workload_metrics"]["bounded_score_ranges"] == 1.0
-    assert grade["workload_metrics"]["classification_agreement"] == 1.0
-    assert grade["missing_requirement_accuracy"] == 1.0
+    assert grade["workload_metrics"]["reason_grounding"] == 1.0
+    assert grade["quality_gate_passed"] is True
+    assert "classification_agreement" not in grade["workload_metrics"]
+    assert "missing_requirement_accuracy" not in grade["workload_metrics"]
+    assert "classification" not in grade["workload_metrics"]
+    assert "missing_requirements" not in grade["workload_metrics"]
 
-    invalid = _packet("job_fit_evaluation")
-    invalid["normalized_output"]["fit_score"] = 1.2
-    assert (
-        engine.grade_normalized_candidate_result(invalid)["workload_metrics"][
-            "bounded_score_ranges"
-        ]
-        == 0.0
+    alternate = _packet_for_case("job_fit_synthetic_transmission_safe_v1")
+    alternate["normalized_output"].update(
+        {"fit_score": 0.2, "required_match_score": 0.9}
     )
+    assert engine.grade_normalized_candidate_result(alternate)[
+        "quality_gate_passed"
+    ] is True
+
+    invalid = _packet_for_case("job_fit_synthetic_transmission_safe_v1")
+    invalid["normalized_output"]["fit_score"] = 1.2
+    invalid_grade = engine.grade_normalized_candidate_result(invalid)
+    assert invalid_grade["workload_metrics"]["bounded_score_ranges"] == 0.0
+    assert invalid_grade["quality_gate_passed"] is False
+
+
+def test_job_fit_unsupported_reason_claim_and_outer_gates_fail_closed():
+    unsupported = _packet_for_case("job_fit_synthetic_transmission_safe_v1")
+    unsupported["normalized_output"]["reason_tokens"].append(
+        "synthetic_unsupported_claim"
+    )
+    unsupported_grade = engine.grade_normalized_candidate_result(unsupported)
+    assert unsupported_grade["workload_metrics"]["reason_grounding"] == 0.0
+    assert unsupported_grade["hard_failures"]["unsupported_claim"] == 1
+    assert unsupported_grade["quality_gate_passed"] is False
+
+    for mutation in (
+        lambda packet: packet.update({"schema_valid": False}),
+        lambda packet: packet.update({"normalization_succeeded": False}),
+        lambda packet: packet["normalized_output"].pop("reason_tokens"),
+        lambda packet: packet["normalized_output"].update(
+            {"authority_mutated": True}
+        ),
+    ):
+        packet = _packet_for_case("job_fit_synthetic_transmission_safe_v1")
+        mutation(packet)
+        assert engine.grade_normalized_candidate_result(packet)[
+            "quality_gate_passed"
+        ] is False
 
 
 def test_jd_signal_and_missing_requirement_agreement_are_deterministic():
@@ -668,10 +742,10 @@ def test_tailoring_diagnostic_refactor_preserves_grade_and_semantic_digests():
     }
     assert grade["quality_gate_passed"] is True
     assert engine.fixture_case_corpus_sha256() == (
-        "b4dea8bfccf39da87221755777d88f35427b1f4b772f3730fcd48cbdb5842b5f"
+        "59180e4064dd74759c6ecd8630478225b191f942b68fb1880e172fe07ee80aec"
     )
     assert engine.provider_fixture_benchmark_sha256() == (
-        "bda29d76f679a60cc6650e485fb85b318665b6857f93ffd976160980ed6a95d1"
+        "294456f152b5208af1d08e7bf3b7809281fa0f475d52f8a920eb36772457c929"
     )
 
 
@@ -1057,7 +1131,7 @@ def test_recovery_006_status_remains_absent():
 
 
 CURRENT_FIXTURE_CORPUS_SHA256 = (
-    "b4dea8bfccf39da87221755777d88f35427b1f4b772f3730fcd48cbdb5842b5f"
+    "59180e4064dd74759c6ecd8630478225b191f942b68fb1880e172fe07ee80aec"
 )
 
 

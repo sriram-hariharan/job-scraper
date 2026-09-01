@@ -60,6 +60,9 @@ EXPECTED_MODES = {
     "manual_scan_phrase": "structured_json",
     "manual_provider_preview": "json_object",
 }
+PRIOR_JOB_FIT_QUALIFICATION_SEMANTICS_SHA256 = (
+    "a239797e0e007b30c29bf2c473cc2321a3f82816aa83db05a8c1dc7ce07683af"
+)
 
 
 @pytest.fixture(scope="module")
@@ -629,6 +632,126 @@ def test_job_fit_complete_controlled_batch_passes_without_rescoring(plan):
     ] == 6.65625
 
 
+def test_job_fit_projection_preserves_scores_without_invented_semantics(plan):
+    response = _valid_response("job_fit_evaluation")
+    response["results"][0].update(
+        {
+            "skill_match": 9.25,
+            "overall_score": 2.75,
+            "reason": "Evidence includes synthetic skill beta.",
+        }
+    )
+    result = parity.validate_and_grade_production_parity_response(
+        _request(plan, "job_fit_evaluation"),
+        response,
+        plan=plan,
+    )
+
+    assert result["production_contract_valid"] is True
+    assert result["benchmark_projection"] == {
+        "fit_score": 0.275,
+        "required_match_score": 0.925,
+        "reason_present": True,
+        "reason_tokens": ["synthetic_skill_beta"],
+    }
+    assert result["benchmark_quality"]["quality_gate_passed"] is True
+    assert "classification" not in result["benchmark_projection"]
+    assert "missing_requirements" not in result["benchmark_projection"]
+    assert "classification_agreement" not in result["benchmark_quality"][
+        "workload_metrics"
+    ]
+    assert "missing_requirement_accuracy" not in result[
+        "benchmark_quality"
+    ]["workload_metrics"]
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "Evidence includes synthetic_skill_beta.",
+        "Evidence includes synthetic skill beta.",
+        "Evidence includes synthetic-skill-beta.",
+    ],
+)
+def test_job_fit_reason_grounding_canonicalizes_separator_variants(
+    plan,
+    reason,
+):
+    response = _valid_response("job_fit_evaluation")
+    response["results"][0]["reason"] = reason
+
+    result = parity.validate_and_grade_production_parity_response(
+        _request(plan, "job_fit_evaluation"),
+        response,
+        plan=plan,
+    )
+
+    assert result["benchmark_projection"]["reason_tokens"] == [
+        "synthetic_skill_beta"
+    ]
+    assert result["benchmark_quality"]["workload_metrics"][
+        "reason_grounding"
+    ] == 1.0
+    assert result["benchmark_quality"]["quality_gate_passed"] is True
+
+
+def test_job_fit_unsupported_reason_claim_remains_a_hard_failure(plan):
+    response = _valid_response("job_fit_evaluation")
+    response["results"][0]["reason"] = (
+        "synthetic_skill_alpha plus synthetic_unsupported_claim"
+    )
+
+    result = parity.validate_and_grade_production_parity_response(
+        _request(plan, "job_fit_evaluation"),
+        response,
+        plan=plan,
+    )
+
+    assert result["production_contract_valid"] is True
+    assert "synthetic_unsupported_claim" in result["benchmark_projection"][
+        "reason_tokens"
+    ]
+    assert result["benchmark_quality"]["hard_failures"][
+        "unsupported_claim"
+    ] == 1
+    assert result["benchmark_quality"]["hard_failures"]["hallucination"] == 1
+    assert result["benchmark_quality"]["quality_gate_passed"] is False
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "projected"),
+    [
+        ("overall_score", 12, 1.2),
+        ("skill_match", -1, -0.1),
+        ("overall_score", "7", "7"),
+        ("skill_match", True, True),
+    ],
+)
+def test_job_fit_invalid_score_material_is_never_clamped_into_range(
+    plan,
+    field,
+    value,
+    projected,
+):
+    response = _valid_response("job_fit_evaluation")
+    response["results"][0][field] = value
+
+    result = parity.validate_and_grade_production_parity_response(
+        _request(plan, "job_fit_evaluation"),
+        response,
+        plan=plan,
+    )
+
+    projection_field = (
+        "fit_score" if field == "overall_score" else "required_match_score"
+    )
+    assert result["benchmark_projection"][projection_field] == projected
+    assert result["benchmark_quality"]["workload_metrics"][
+        "bounded_score_ranges"
+    ] == 0.0
+    assert result["benchmark_quality"]["quality_gate_passed"] is False
+
+
 @pytest.mark.parametrize(
     ("results", "expected_batch_size", "error"),
     [
@@ -951,7 +1074,7 @@ def test_groq_gpt_oss_120b_tailoring_prompt_operationalizes_bare_tool_safety(
     request = parity.build_production_parity_request(packet, plan=plan)
     prompt = "\n".join(message["content"] for message in request["messages"])
 
-    assert row["case_alias"] == "case_3dddc5f43be918e0932d3bb2"
+    assert row["case_alias"] == "case_8c3fe2c6f36357f0aa1713ef"
     assert "emphasize Python as supported source evidence" in prompt
     assert "surface SQL prominently as supported evidence" in prompt
     assert "retain Airflow visibly as supporting evidence" in prompt
@@ -1017,12 +1140,12 @@ def test_adapter_imports_no_sdk_environment_or_credential_owner():
         assert prohibited not in source
 
 
-def test_44_cell_plan_counts_default_off_and_human_review_are_unchanged(plan):
+def test_45_cell_plan_counts_default_off_and_human_review_are_unchanged(plan):
     counts = plan["request_counts"]["maximum_requests_per_model"]
-    assert len(plan["staged_matrix"]) == 44
+    assert len(plan["staged_matrix"]) == 45
     assert counts == {
         "groq/openai/gpt-oss-20b": 12,
-        "groq/openai/gpt-oss-120b": 10,
+        "groq/openai/gpt-oss-120b": 11,
         "openai/gpt-5-mini": 12,
         "openai/gpt-5.1": 10,
     }
@@ -1269,6 +1392,48 @@ def test_stage1_workload_qualification_semantics_bind_plan_projection():
         != workload_plan_projection_sha256(workload_id, corpus=mutated)
     ]
     assert projection_changed == ["skill_extraction"]
+
+
+def test_corrected_job_fit_semantics_make_prior_qualification_stale():
+    corpus = _stage1_load_corpus()
+    plan = build_controlled_provider_benchmark_plan(corpus=corpus)
+    current = parity.workload_qualification_semantics_sha256(
+        "job_fit_evaluation",
+        plan=plan,
+        corpus=corpus,
+    )
+    assert current != PRIOR_JOB_FIT_QUALIFICATION_SEMANTICS_SHA256
+
+    source = _stage1_json.load(
+        open(
+            ROOT
+            / "outputs/provider_benchmark/provider-qualification-registry.json",
+            encoding="utf-8",
+        )
+    )
+    prior = deepcopy(
+        next(
+            cell
+            for cell in source["cells"]
+            if cell["workload_id"] == "job_fit_evaluation"
+        )
+    )
+    prior["status"] = "qualified"
+    prior["status_reasons"] = ["qualification_requirements_satisfied"]
+    stale = _stage1_registry.build_renderer_bound_qualification_cell(
+        base_cell=prior,
+        qualification_semantics_generation="renderer_bound_v1",
+        current_workload_qualification_semantics_sha256=current,
+        tested_workload_qualification_semantics_sha256=(
+            PRIOR_JOB_FIT_QUALIFICATION_SEMANTICS_SHA256
+        ),
+    )
+
+    assert stale["status"] == "stale"
+    assert stale["status_reasons"] == ["workload_semantics_binding_stale"]
+    assert stale["tested_workload_qualification_semantics_sha256"] != (
+        stale["current_workload_qualification_semantics_sha256"]
+    )
 
 
 def test_stage1_registry_and_recommendation_authority_are_unchanged():
@@ -1594,11 +1759,11 @@ def test_stage4b_current_authority_invariants_hold():
     )
 
     assert fixture_case_corpus_sha256(corpus) == (
-        "b4dea8bfccf39da87221755777d88f35427b1f4b772f3730fcd48cbdb5842b5f"
+        "59180e4064dd74759c6ecd8630478225b191f942b68fb1880e172fe07ee80aec"
     )
     assert controlled_provider_benchmark_plan_sha256(
         build_controlled_provider_benchmark_plan(corpus=corpus)
-    ) == "f2dcf5345442009915819432a9c1fc9342de40561eb6824c1518dcd31e99d3bf"
+    ) == "bacc7eaa4524199ba293e2d50232f5a8c6cf61014ad8dc89c3dd30d334654162"
     assert len(legacy_case_alias_map(corpus)) == 15
     assert registry.provider_qualification_registry_sha256(source) == (
         "6d7c1e2cae7d03edadcfb4c7268ec6ec74e8c0e10b13e73cc3914baa03ea8f6f"
@@ -1609,3 +1774,337 @@ def test_stage4b_current_authority_invariants_hold():
     overlay = job_fit.build_job_fit_provider_model_qualification_overlay(source)
     assert (overlay["recommendation_status"], overlay["provider"],
             overlay["model"]) == ("recommended", "groq", "openai/gpt-oss-20b")
+
+
+# ---------------------------------------------------------------------------
+# Stage 6V: Job Fit reason qualification is aligned with the production
+# contract, which requires a `reason` field but never instructs the model to
+# reproduce a recognized evidence token.
+# ---------------------------------------------------------------------------
+
+
+def _stage6v_grade(plan, reason, *, overall=7, skill=8):
+    response = _valid_response("job_fit_evaluation")
+    response["results"][0].update(
+        {"overall_score": overall, "skill_match": skill, "reason": reason}
+    )
+    return parity.validate_and_grade_production_parity_response(
+        _request(plan, "job_fit_evaluation"), response, plan=plan
+    )
+
+
+@pytest.mark.parametrize(
+    "reason",
+    (
+        "Strong overlap with synthetic_skill_beta.",
+        "Strong overlap with synthetic skill beta.",
+        "Strong overlap with synthetic-skill-beta.",
+    ),
+)
+def test_stage6v_exact_and_separator_variant_reasons_qualify(plan, reason):
+    result = _stage6v_grade(plan, reason)
+    metrics = result["benchmark_quality"]["workload_metrics"]
+
+    assert result["production_contract_valid"] is True
+    assert result["benchmark_projection"]["reason_present"] is True
+    assert metrics["reason_grounding"] == 1.0
+    assert metrics["unsupported_claim_count"] == 0
+    assert metrics["bounded_score_ranges"] == 1.0
+    assert metrics["task_quality_passed"] is True
+    assert result["benchmark_quality"]["quality_gate_passed"] is True
+
+
+@pytest.mark.parametrize(
+    "reason",
+    (
+        "Solid alignment with the listed responsibilities.",
+        # The production task contract's OWN canonical example reason.
+        "Strong ML role with modern stack",
+        # The production deterministic normalization default.
+        "No explanation",
+    ),
+)
+def test_stage6v_production_valid_reason_without_evidence_token_qualifies(
+    plan, reason
+):
+    """A production-valid reason must not fail merely for using no token."""
+
+    result = _stage6v_grade(plan, reason)
+    metrics = result["benchmark_quality"]["workload_metrics"]
+
+    assert result["production_contract_valid"] is True
+    assert result["benchmark_projection"]["reason_present"] is True
+    assert result["benchmark_projection"]["reason_tokens"] == []
+    assert metrics["reason_grounding"] == 1.0
+    assert metrics["unsupported_claim_count"] == 0
+    assert metrics["task_quality_passed"] is True
+    assert result["benchmark_quality"]["quality_gate_passed"] is True
+
+
+def test_stage6v_empty_reason_still_fails(plan):
+    """Stage 6R's real improvement is preserved: no reason still fails."""
+
+    result = _stage6v_grade(plan, "   ")
+    metrics = result["benchmark_quality"]["workload_metrics"]
+
+    assert result["production_contract_valid"] is True
+    assert result["benchmark_projection"]["reason_present"] is False
+    assert metrics["reason_grounding"] == 0.0
+    assert metrics["task_quality_passed"] is False
+    assert result["benchmark_quality"]["quality_gate_passed"] is False
+
+
+def test_stage6v_prohibited_reason_claim_still_fails(plan):
+    result = _stage6v_grade(
+        plan, "Matches synthetic_unsupported_claim requirements."
+    )
+    metrics = result["benchmark_quality"]["workload_metrics"]
+
+    assert result["production_contract_valid"] is True
+    assert result["benchmark_projection"]["reason_present"] is True
+    assert metrics["unsupported_claim_count"] >= 1
+    assert metrics["reason_grounding"] == 0.0
+    assert metrics["task_quality_passed"] is False
+    assert result["benchmark_quality"]["quality_gate_passed"] is False
+
+
+@pytest.mark.parametrize("overall", (12, -3, "7", True, None))
+def test_stage6v_invalid_score_material_still_fails_bounds(plan, overall):
+    result = _stage6v_grade(plan, "Good fit overall.", overall=overall)
+    metrics = result["benchmark_quality"]["workload_metrics"]
+
+    assert result["benchmark_quality"]["quality_gate_passed"] is False
+    if result["production_contract_valid"]:
+        assert metrics["bounded_score_ranges"] == 0.0
+        assert metrics["task_quality_passed"] is False
+
+
+def test_stage6v_reason_text_never_reaches_the_projection(plan):
+    secret_reason = "Candidate mentioned an unmistakable phrase marker."
+    result = _stage6v_grade(plan, secret_reason)
+    serialized = _stage1_json.dumps(
+        result["benchmark_projection"], sort_keys=True
+    )
+
+    assert "unmistakable phrase marker" not in serialized
+    assert result["benchmark_projection"]["reason_present"] is True
+
+
+# ---------------------------------------------------------------------------
+# Stage 6W: the rules that decide Job Fit task quality are part of the
+# qualification identity, so evidence graded under different rules goes stale.
+# ---------------------------------------------------------------------------
+
+
+STAGE6W_JOB_FIT_QUALIFICATION_SEMANTICS_SHA256 = (
+    "60e7fa48863d893aae0d29d29f01369324219253dcbcde3a1e9d5ba0925c553d"
+)
+
+
+def _stage6w_job_fit_semantics():
+    from src.evaluation.provider_fixture_benchmark import (
+        load_fixture_case_corpus,
+    )
+
+    corpus = load_fixture_case_corpus()
+    controlled_plan = build_controlled_provider_benchmark_plan(corpus=corpus)
+    return parity.workload_qualification_semantics_sha256(
+        "job_fit_evaluation", plan=controlled_plan, corpus=corpus
+    )
+
+
+def test_stage6w_job_fit_semantics_bind_the_declarative_grading_contract():
+    from src.evaluation import provider_fixture_benchmark as fixture_owner
+
+    current = _stage6w_job_fit_semantics()
+
+    assert current == STAGE6W_JOB_FIT_QUALIFICATION_SEMANTICS_SHA256
+    assert current != PRIOR_JOB_FIT_QUALIFICATION_SEMANTICS_SHA256
+    # The Stage 6R/6T binding no longer describes the current grading rules.
+    assert current != (
+        "998f9ad1b93650ccdaca81dedd746ddcf0a041e6b6b17b7c80545da5e64c8672"
+    )
+
+    material = fixture_owner.build_workload_grading_semantics(
+        "job_fit_evaluation"
+    )
+    assert material["grading_semantics_version"] == (
+        fixture_owner.WORKLOAD_GRADING_SEMANTICS_VERSION
+    )
+    assert material["rules"]["reason_grounding_rule"] == (
+        "reason_present_and_no_unsupported_claims"
+    )
+    assert material["rules"]["score_projection"] == (
+        "provider_0_to_10_divided_by_10_without_clamping"
+    )
+    assert "classification_agreement" not in material[
+        "grader_responsibilities"
+    ]
+
+
+@pytest.mark.parametrize(
+    "rule_name",
+    (
+        "reason_grounding_rule",
+        "score_projection",
+        "bounded_score_rule",
+        "reason_projection",
+        "unsupported_claim_rule",
+        "task_quality_rule",
+    ),
+)
+def test_stage6w_changing_any_grading_rule_moves_the_semantics(
+    monkeypatch, rule_name
+):
+    from src.evaluation import provider_fixture_benchmark as fixture_owner
+
+    baseline = _stage6w_job_fit_semantics()
+    altered = deepcopy(fixture_owner._WORKLOAD_GRADING_SEMANTICS)
+    altered["job_fit_evaluation"][rule_name] = "materially_different_rule"
+    monkeypatch.setattr(
+        fixture_owner, "_WORKLOAD_GRADING_SEMANTICS", altered
+    )
+
+    assert _stage6w_job_fit_semantics() != baseline
+
+
+def test_stage6w_changing_grader_responsibilities_moves_the_semantics(
+    monkeypatch,
+):
+    from src.evaluation import provider_fixture_benchmark as fixture_owner
+
+    baseline = _stage6w_job_fit_semantics()
+    altered = deepcopy(fixture_owner._WORKLOAD_GRADER_RESPONSIBILITIES)
+    altered["job_fit_evaluation"] = altered["job_fit_evaluation"] + [
+        "classification_agreement"
+    ]
+    monkeypatch.setattr(
+        fixture_owner, "_WORKLOAD_GRADER_RESPONSIBILITIES", altered
+    )
+
+    assert _stage6w_job_fit_semantics() != baseline
+
+
+def test_stage6w_observability_changes_do_not_move_the_semantics(monkeypatch):
+    """Reporting shape must never invalidate qualification evidence."""
+
+    from src.evaluation import controlled_live_provider_qualification as live
+
+    baseline = _stage6w_job_fit_semantics()
+    monkeypatch.setattr(
+        live,
+        "_BOUNDED_WORKLOAD_METRIC_FIELDS",
+        ("task_quality_passed",),
+    )
+
+    assert _stage6w_job_fit_semantics() == baseline
+
+
+def test_stage6w_other_workload_semantics_do_not_churn():
+    """Only workloads declaring a grading contract change identity."""
+
+    from src.evaluation.provider_fixture_benchmark import (
+        load_fixture_case_corpus,
+        workload_grading_semantics_sha256,
+    )
+    from src.evaluation.controlled_provider_benchmark_plan import (
+        workload_plan_projection_sha256,
+    )
+
+    corpus = load_fixture_case_corpus()
+    controlled_plan = build_controlled_provider_benchmark_plan(corpus=corpus)
+
+    for workload_id in RUNNABLE:
+        legacy_material = {
+            "semantics_version": (
+                parity.WORKLOAD_QUALIFICATION_SEMANTICS_VERSION
+            ),
+            "workload_id": workload_id,
+            "workload_plan_projection_sha256": (
+                workload_plan_projection_sha256(
+                    workload_id, plan=controlled_plan, corpus=corpus
+                )
+            ),
+            "rendered_parity_semantics_sha256": (
+                parity.workload_rendered_parity_semantics_sha256(
+                    workload_id, corpus
+                )
+            ),
+        }
+        legacy = _stage6w_sha256(parity._canonical_json(legacy_material))
+        current = parity.workload_qualification_semantics_sha256(
+            workload_id, plan=controlled_plan, corpus=corpus
+        )
+        declares = (
+            workload_grading_semantics_sha256(workload_id) is not None
+        )
+        if workload_id == "job_fit_evaluation":
+            assert declares is True
+            assert current != legacy
+        else:
+            assert declares is False
+            assert current == legacy
+
+
+def _stage6w_sha256(text):
+    from hashlib import sha256
+
+    return sha256(text.encode("utf-8")).hexdigest()
+
+
+def test_stage6w_production_and_candidate_identities_are_unchanged():
+    from src.evaluation import job_fit_candidate_local_qualification as cq
+    from src.evaluation.production_task_contract_fingerprints import (
+        production_task_contract_sha256,
+    )
+
+    assert production_task_contract_sha256("job_fit_evaluation") == (
+        "e9568a48240886579814a557b414461510f86485e3bb7a50efc3e7ab8e319480"
+    )
+    assert cq.job_fit_candidate_transport_semantics_sha256(
+        "groq", "openai/gpt-oss-20b"
+    ) == (
+        "5d7dc8f71de2799d8d2f448e91fd38ac21af87f628cf52f9bac825a1d1155334"
+    )
+
+
+def test_stage6w_evidence_bound_to_the_old_semantics_cannot_authorize():
+    """Evidence graded under the superseded rules fails closed as stale."""
+
+    from src.evaluation import (
+        controlled_provider_qualification_registry as registry_owner,
+    )
+
+    current = _stage6w_job_fit_semantics()
+    source = _stage1_json.load(
+        open(
+            ROOT
+            / "outputs/provider_benchmark/provider-qualification-registry.json",
+            encoding="utf-8",
+        )
+    )
+    prior = deepcopy(
+        next(
+            cell
+            for cell in source["cells"]
+            if cell["workload_id"] == "job_fit_evaluation"
+        )
+    )
+    # Strongest form: pretend the old evidence had actually passed.
+    prior["status"] = "qualified"
+    prior["status_reasons"] = ["qualification_requirements_satisfied"]
+
+    cell = registry_owner.build_renderer_bound_qualification_cell(
+        base_cell=prior,
+        qualification_semantics_generation="renderer_bound_v1",
+        current_workload_qualification_semantics_sha256=current,
+        tested_workload_qualification_semantics_sha256=(
+            "998f9ad1b93650ccdaca81dedd746ddcf0a041e6b6b17b7c80545da5e64c8672"
+        ),
+    )
+
+    assert cell["status"] == "stale"
+    assert cell["status_reasons"] == ["workload_semantics_binding_stale"]
+    assert cell["tested_workload_qualification_semantics_sha256"] != (
+        cell["current_workload_qualification_semantics_sha256"]
+    )

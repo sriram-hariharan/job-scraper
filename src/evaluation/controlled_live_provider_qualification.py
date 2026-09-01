@@ -221,7 +221,17 @@ _FAILURE_DIAGNOSTIC_FIELDS = {
     "hard_failure_present",
     "hard_failures",
     "quality_gate_components",
+    "workload_quality_metrics",
 }
+# Strict allowlist of scalar quality metrics that may be retained in bounded
+# failure diagnostics. Names outside this tuple are never copied, so a future
+# workload cannot silently widen the retained-data surface.
+_BOUNDED_WORKLOAD_METRIC_FIELDS = (
+    "bounded_score_ranges",
+    "reason_grounding",
+    "unsupported_claim_count",
+    "task_quality_passed",
+)
 _QUALITY_GATE_COMPONENT_FIELDS = {
     "schema_valid",
     "normalization_succeeded",
@@ -462,6 +472,28 @@ def _safe_unsupported_claim_tokens(value: Any) -> list[str]:
     return sorted(accepted)[:MAXIMUM_UNSUPPORTED_CLAIM_TOKENS]
 
 
+def _safe_bounded_workload_metrics(value: Any) -> Dict[str, Any]:
+    """Return only allowlisted scalar quality metrics.
+
+    Text can never enter: each retained value must already be a bool, an int
+    or a finite float, and anything else is dropped rather than serialized.
+    """
+
+    source = value if isinstance(value, dict) else {}
+    metrics: Dict[str, Any] = {}
+    for name in _BOUNDED_WORKLOAD_METRIC_FIELDS:
+        if name not in source:
+            continue
+        item = source[name]
+        if isinstance(item, bool):
+            metrics[name] = item
+        elif isinstance(item, int):
+            metrics[name] = int(item)
+        elif isinstance(item, float) and math.isfinite(item):
+            metrics[name] = float(item)
+    return metrics
+
+
 def _bounded_failure_diagnostic(
     *,
     schedule_key: str,
@@ -546,6 +578,11 @@ def _bounded_failure_diagnostic(
                 value == 0 for value in hard_failures.values()
             ),
         },
+        # Read-only observability. These scalars explain WHICH task-quality
+        # component failed; they never influence any qualification decision.
+        "workload_quality_metrics": _safe_bounded_workload_metrics(
+            workload_metrics
+        ),
     }
 
 

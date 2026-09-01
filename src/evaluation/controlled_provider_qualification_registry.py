@@ -52,6 +52,9 @@ REGISTRY_ARTIFACT_PATH = Path(
 RENDERER_BOUND_SKILL_REGISTRY_ARTIFACT_PATH = Path(
     "src/evaluation/renderer_bound_skill_qualification_registry.json"
 )
+RENDERER_BOUND_JOB_FIT_REGISTRY_ARTIFACT_PATH = Path(
+    "src/evaluation/renderer_bound_job_fit_qualification_registry.json"
+)
 QUALIFICATION_STATUSES = ("pending", "qualified", "rejected", "stale")
 
 _HEX_DIGEST_LENGTH = 64
@@ -2017,6 +2020,33 @@ def load_renderer_bound_skill_qualification_registry(
     return deepcopy(registry)
 
 
+def load_renderer_bound_job_fit_qualification_registry(
+    artifact_path: str | Path,
+    *,
+    repository_root: str | Path,
+) -> Dict[str, Any]:
+    """Load the versioned Job Fit-only renderer-bound authority artifact."""
+
+    path = _prepare_registry_path(
+        artifact_path,
+        repository_root=repository_root,
+        require_existing=True,
+        approved_relative_path=RENDERER_BOUND_JOB_FIT_REGISTRY_ARTIFACT_PATH,
+    )
+    _require(
+        not stat.S_IMODE(path.stat().st_mode) & (stat.S_IWGRP | stat.S_IWOTH),
+        "renderer-bound Job Fit registry permissions are unsafe",
+    )
+    try:
+        registry = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        raise ValueError(
+            "persisted renderer-bound Job Fit registry is malformed"
+        ) from None
+    validate_renderer_bound_qualification_registry(registry)
+    return deepcopy(registry)
+
+
 def write_initial_renderer_bound_skill_qualification_registry(
     artifact_path: str | Path,
     registry: Dict[str, Any],
@@ -2042,6 +2072,35 @@ def write_initial_renderer_bound_skill_qualification_registry(
     _require(
         loaded == registry,
         "persisted renderer-bound Skill registry changed during creation",
+    )
+    return path
+
+
+def write_initial_renderer_bound_job_fit_qualification_registry(
+    artifact_path: str | Path,
+    registry: Dict[str, Any],
+    *,
+    repository_root: str | Path,
+) -> Path:
+    """Persist one new validated Job Fit-only renderer-bound authority."""
+
+    encoded = serialize_renderer_bound_qualification_registry(
+        registry
+    ).encode("utf-8")
+    path = _prepare_registry_path(
+        artifact_path,
+        repository_root=repository_root,
+        require_existing=False,
+        approved_relative_path=RENDERER_BOUND_JOB_FIT_REGISTRY_ARTIFACT_PATH,
+    )
+    _write_exclusive(path, encoded)
+    loaded = load_renderer_bound_job_fit_qualification_registry(
+        path,
+        repository_root=repository_root,
+    )
+    _require(
+        loaded == registry,
+        "persisted renderer-bound Job Fit registry changed during creation",
     )
     return path
 

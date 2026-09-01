@@ -522,7 +522,18 @@ def build_groq_production_parity_chat_completion_arguments(
         # lowest sustained reasoning effort. Qualification must exercise the
         # same generation configuration.
         arguments["include_reasoning"] = False
-        if parity_request["task_parameters"].get("thinking_budget") == 0:
+        thinking_budget = parity_request["task_parameters"].get(
+            "thinking_budget"
+        )
+        if parity_request["workload_id"] == "job_fit_evaluation":
+            from src.evaluation.job_fit_candidate_local_qualification import (
+                job_fit_candidate_thinking_budget_for_request,
+            )
+
+            thinking_budget = job_fit_candidate_thinking_budget_for_request(
+                parity_request
+            )
+        if thinking_budget == 0:
             arguments["reasoning_effort"] = "low"
     validate_groq_production_parity_chat_completion_arguments(
         arguments,
@@ -572,7 +583,18 @@ def validate_groq_production_parity_chat_completion_arguments(
     )
     if gpt_oss_non_schema:
         expected_fields.add("include_reasoning")
-        if parity_request["task_parameters"].get("thinking_budget") == 0:
+        thinking_budget = parity_request["task_parameters"].get(
+            "thinking_budget"
+        )
+        if parity_request["workload_id"] == "job_fit_evaluation":
+            from src.evaluation.job_fit_candidate_local_qualification import (
+                job_fit_candidate_thinking_budget_for_request,
+            )
+
+            thinking_budget = job_fit_candidate_thinking_budget_for_request(
+                parity_request
+            )
+        if thinking_budget == 0:
             expected_fields.add("reasoning_effort")
     _require(
         isinstance(arguments, dict) and set(arguments) == expected_fields,
@@ -598,7 +620,7 @@ def validate_groq_production_parity_chat_completion_arguments(
             arguments.get("include_reasoning") is False,
             "production-parity Groq reasoning bounding mismatch",
         )
-        if parity_request["task_parameters"].get("thinking_budget") == 0:
+        if thinking_budget == 0:
             _require(
                 arguments.get("reasoning_effort") == "low",
                 "production-parity Groq reasoning effort mismatch",

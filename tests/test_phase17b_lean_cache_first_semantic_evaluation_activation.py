@@ -523,16 +523,19 @@ def test_owner_cache_only_miss_does_not_resolve_or_execute(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("provider", "model"),
+    ("provider", "model", "expected_thinking_budget"),
     (
-        ("groq", "openai/gpt-oss-20b"),
-        ("openai", "gpt-5-mini"),
+        ("groq", "openai/gpt-oss-20b", 0),
+        ("groq", "openai/gpt-oss-120b", None),
+        ("openai", "gpt-5-mini", None),
+        ("openai", "gpt-5.1", None),
     ),
 )
 def test_owner_cache_miss_executes_exact_effective_route(
     monkeypatch,
     provider,
     model,
+    expected_thinking_budget,
 ):
     evaluator = _evaluator(monkeypatch)
     _install_cache_miss(evaluator, monkeypatch)
@@ -571,6 +574,17 @@ def test_owner_cache_miss_executes_exact_effective_route(
     }
     assert runtime_calls[0]["temperature"] == evaluator.JOB_FIT_TEMPERATURE
     assert runtime_calls[0]["max_tokens"] == evaluator.JOB_FIT_MAX_TOKENS
+    assert runtime_calls[0]["thinking_budget"] == expected_thinking_budget
+    assert evaluator.JOB_FIT_THINKING_BUDGET == 0
+    assert runtime_calls[0]["messages"] == [
+        {"role": "system", "content": evaluator.SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": evaluator.build_batch_prompt(_jobs(1)),
+        },
+    ]
+    assert "fallback_enabled" not in runtime_calls[0]
+    assert evaluator.BATCH_SIZE == 5
     assert result[0]["ai_fit_score"] == 8
 
 

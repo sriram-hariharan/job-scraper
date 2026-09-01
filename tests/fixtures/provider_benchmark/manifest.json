@@ -23,7 +23,7 @@
       "contains_personal_resume_content": false,
       "additional_redaction_required": false,
       "deterministic_invariant_available": true,
-      "golden_output_available": true,
+      "golden_output_available": false,
       "schema_expected": true,
       "offline_only": true
     },

@@ -198,7 +198,14 @@ def test_job_fit_case_reuses_exact_schema_and_bounded_score_contract():
     synthetic = _case(NEW_CASES["job_fit_evaluation"])
 
     assert synthetic["schema_id"] == original["schema_id"]
-    assert synthetic["required_fields"] == original["required_fields"]
+    assert synthetic["required_fields"] == [
+        "fit_score",
+        "required_match_score",
+        "reason_tokens",
+    ]
+    assert synthetic["comparison_type"] == "invariant_only"
+    assert "classification" not in synthetic["expected_output"]
+    assert "missing_requirements" not in synthetic["expected_output"]
     assert synthetic["expected_invariant"]["score_min"] == 0.0
     assert synthetic["expected_invariant"]["score_max"] == 1.0
     assert synthetic["expected_invariant"][
@@ -235,12 +242,12 @@ def test_critic_case_reuses_schema_and_advisory_authority_contract():
     assert invariant["ats_authorized"] is False
 
 
-def test_complete_corpus_has_fifteen_exact_goldens_and_no_gap():
+def test_complete_corpus_has_one_job_fit_invariant_and_no_gap():
     coverage = fixture_owner.fixture_case_coverage_summary()
 
     assert coverage["total_case_count"] == 15
-    assert coverage["exact_golden_count"] == 15
-    assert coverage["invariant_only_count"] == 0
+    assert coverage["exact_golden_count"] == 14
+    assert coverage["invariant_only_count"] == 1
     assert coverage["coverage_gap_count"] == 0
     assert coverage["additional_redaction_required_count"] == 0
     assert coverage["live_transmission_eligible_count"] == 0
@@ -316,20 +323,20 @@ def test_complete_offline_fixture_benchmark_remains_green():
 def test_rebuilt_matrix_counts_are_exact_and_bounded():
     counts = _plan()["request_counts"]
 
-    assert counts["by_provider"] == {"groq": 22, "openai": 22}
+    assert counts["by_provider"] == {"groq": 23, "openai": 22}
     assert counts["by_model"] == {
         "groq/openai/gpt-oss-20b": 12,
-        "groq/openai/gpt-oss-120b": 10,
+        "groq/openai/gpt-oss-120b": 11,
         "openai/gpt-5-mini": 12,
         "openai/gpt-5.1": 10,
     }
-    assert counts["maximum_total_requests"] == 44
+    assert counts["maximum_total_requests"] == 45
     assert counts["maximum_requests_per_case"] == 4
 
 
 def test_rebuilt_matrix_workload_counts_are_exact():
     assert _plan()["request_counts"]["by_workload"] == {
-        "skill_extraction": 2,
+        "skill_extraction": 3,
         "job_fit_evaluation": 4,
         "jd_intelligence": 4,
         "grounded_rag_answer": 4,
@@ -348,7 +355,7 @@ def test_rebuilt_matrix_preserves_serial_no_fallback_no_retry_policy():
     plan = _plan()
 
     assert [row["execution_order"] for row in plan["staged_matrix"]] == list(
-        range(1, 45)
+        range(1, 46)
     )
     assert all(row["fallback"] is False for row in plan["staged_matrix"])
     assert all(
@@ -375,8 +382,8 @@ def test_aggregate_token_budgets_recalculate_from_request_count():
 
     assert budget["maximum_input_tokens_per_request"] == 4096
     assert budget["maximum_output_tokens_per_request"] == 1024
-    assert budget["maximum_total_observed_input_tokens"] == 44 * 4096
-    assert budget["maximum_total_observed_output_tokens"] == 44 * 1024
+    assert budget["maximum_total_observed_input_tokens"] == 45 * 4096
+    assert budget["maximum_total_observed_output_tokens"] == 45 * 1024
     assert budget["missing_usage_blocks_cost_comparison"] is True
 
 

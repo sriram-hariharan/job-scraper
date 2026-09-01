@@ -26,6 +26,7 @@ BATCH_SIZE = 5
 JOB_FIT_TASK_CONTRACT_VERSION = "v1"
 JOB_FIT_TEMPERATURE = 0
 JOB_FIT_MAX_TOKENS = 600
+JOB_FIT_THINKING_BUDGET = 0
 MIN_REQUEST_INTERVAL = 2.0
 GROQ_CONCURRENCY_LIMIT = 1
 
@@ -486,6 +487,12 @@ def evaluate_batch(
                     {"role": "user", "content": prompt},
                 ]
                 if owner_user_id:
+                    job_fit_thinking_budget = (
+                        JOB_FIT_THINKING_BUDGET
+                        if routed_provider == "groq"
+                        and routed_model == "openai/gpt-oss-20b"
+                        else None
+                    )
                     result = run_user_chat_completion_with_metadata(
                         owner_user_id=owner_user_id,
                         provider=routed_provider,
@@ -493,6 +500,7 @@ def evaluate_batch(
                         temperature=JOB_FIT_TEMPERATURE,
                         max_tokens=JOB_FIT_MAX_TOKENS,
                         messages=messages,
+                        thinking_budget=job_fit_thinking_budget,
                     )
                     response = result["content"]
                 else:

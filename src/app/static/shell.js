@@ -5,6 +5,12 @@ const APPLYLENS_NEW_USER_EMPTY_KEY = "applylens_new_user_empty_state";
 const APPLYLENS_OPEN_PIPELINE_KEY = "applylens_open_live_pipeline";
 const APPLYLENS_DEFAULT_IDLE_TIMEOUT_SECONDS = 1800;
 const APPLYLENS_DEFAULT_IDLE_WARNING_SECONDS = 60;
+const BULK_GENERATION_STATE_EVENT = "applylens:bulk-generation-state";
+const BULK_GENERATION_BLOCK_MESSAGE = "Bulk Generate must finish or be stopped before this action is available.";
+const BULK_GENERATION_ACTIVE_STATUSES = new Set(["queued", "running", "stop_requested"]);
+const BULK_GENERATION_TERMINAL_STATUSES = new Set(["completed", "stopped", "failed"]);
+let bulkGenerationPollTimer = null;
+let bulkGenerationCanonicalState = { verified: false, active: true, status: "unknown", items: [] };
 
 // Desktop sidebar collapse-control icons (Lucide PanelLeftClose / PanelLeftOpen),
 // mirroring the inline geometry rendered server-side in src/app/ui_shell.py so the
@@ -23,6 +29,178 @@ const APP_SHELL_EXPAND_SVG =
 function qs(id) {
   return document.getElementById(id);
 }
+
+function bulkGenerationControlIsSafe(control) {
+  if (!(control instanceof Element)) return true;
+  if (control.closest("[data-bulk-safe='true']")) return true;
+  if (control.matches(".app-shell-nav-link, .app-shell-brand, .profile-dropdown-nav-btn")) return true;
+  const safeIds = new Set([
+    "appShellMenuBtn", "appShellCollapseBtn", "appShellCloseBtn", "themeToggleBtn",
+    "profileMenuButton", "profileLogoutBtn", "notificationButton", "notificationRefreshBtn",
+  ]);
+  if (safeIds.has(control.id)) return true;
+  const id = String(control.id || "").toLowerCase();
+  if (/(close|cancel|minimize|dismiss)/.test(id)) return true;
+  const label = String(control.getAttribute("aria-label") || "").toLowerCase();
+  if (/(expand|collapse|previous page|next page|sort|filter|pagination)/.test(label)) return true;
+  if (control.closest(
+    ".shared-filter-select, .shared-table-pagination, .planning-react-filter-grid, " +
+    ".planning-react-filter-actions, .executive-queue-filter-card, .operational-filter-card, " +
+    ".applications-tabs, .scheduler-runs-filters, .notification-toolbar"
+  )) return true;
+  if (control.matches("input[type='search']")) return true;
+  if (control.matches("a[href]")) {
+    const rawHref = control.getAttribute("href") || "";
+    if (!rawHref.startsWith("/") || rawHref.startsWith("/#") || rawHref === window.location.pathname) return true;
+    const safePaths = [
+      "/", "/planning", "/decisions-ui", "/applications", "/pipeline", "/scheduler",
+      "/agentic-operations", "/profile", "/profile/preferences", "/profile/ai-settings",
+      "/profile/saved-scans", "/onboarding", "/logout",
+    ];
+    return safePaths.includes(rawHref.split("?", 1)[0]) || rawHref.startsWith("/profile/pipeline-runs/");
+  }
+  return false;
+}
+
+function showBulkGenerationGuardTooltip(control) {
+  const tooltip = qs("bulkGenerationGuardTooltip");
+  if (!tooltip || !(control instanceof Element)) return;
+  const rect = control.getBoundingClientRect();
+  tooltip.textContent = BULK_GENERATION_BLOCK_MESSAGE;
+  tooltip.style.left = `${Math.max(12, Math.min(window.innerWidth - 332, rect.left))}px`;
+  tooltip.style.top = `${Math.min(window.innerHeight - 60, rect.bottom + 8)}px`;
+  tooltip.classList.remove("hidden");
+}
+
+function hideBulkGenerationGuardTooltip() {
+  qs("bulkGenerationGuardTooltip")?.classList.add("hidden");
+}
+
+function setBulkGenerationControlGuard(control, blocked) {
+  if (!(control instanceof HTMLElement)) return;
+  if (blocked) {
+    if (control.dataset.bulkGuarded === "true") return;
+    control.dataset.bulkGuarded = "true";
+    control.dataset.bulkPriorAriaDisabled = control.getAttribute("aria-disabled") || "";
+    control.dataset.bulkPriorTabindex = control.getAttribute("tabindex") || "";
+    control.dataset.bulkPriorDescribedby = control.getAttribute("aria-describedby") || "";
+    control.setAttribute("aria-disabled", "true");
+    control.setAttribute("aria-describedby", "bulkGenerationGuardDescription");
+    if (!control.hasAttribute("tabindex")) control.setAttribute("tabindex", "0");
+    return;
+  }
+  if (control.dataset.bulkGuarded !== "true") return;
+  const priorAria = control.dataset.bulkPriorAriaDisabled || "";
+  const priorTabindex = control.dataset.bulkPriorTabindex || "";
+  if (priorAria) control.setAttribute("aria-disabled", priorAria);
+  else control.removeAttribute("aria-disabled");
+  const priorDescribedby = control.dataset.bulkPriorDescribedby || "";
+  if (priorDescribedby) control.setAttribute("aria-describedby", priorDescribedby);
+  else control.removeAttribute("aria-describedby");
+  if (priorTabindex) control.setAttribute("tabindex", priorTabindex);
+  else control.removeAttribute("tabindex");
+  delete control.dataset.bulkGuarded;
+  delete control.dataset.bulkPriorAriaDisabled;
+  delete control.dataset.bulkPriorTabindex;
+  delete control.dataset.bulkPriorDescribedby;
+}
+
+function applyBulkGenerationControlGuards() {
+  const shouldBlock = !bulkGenerationCanonicalState.verified || bulkGenerationCanonicalState.active;
+  document.querySelectorAll("button, a[href], input, select, textarea, [role='button']").forEach((control) => {
+    setBulkGenerationControlGuard(control, shouldBlock && !bulkGenerationControlIsSafe(control));
+  });
+  document.body.classList.toggle("bulk-generation-guard-active", shouldBlock);
+}
+
+function renderBulkGenerationShell(state) {
+  const shell = qs("bulkGenerationShell");
+  if (!shell) return;
+  const hasRun = Boolean(state.run_id) || !state.verified;
+  // Planning owns the Bulk affordance through its own transformed control and
+  // anchored popover, so the shared pill is never rendered there. Every other
+  // page keeps the existing cross-page progress affordance unchanged.
+  const planningOwnsBulkSurface = (window.location.pathname || "") === "/planning";
+  shell.classList.toggle("hidden", !hasRun || planningOwnsBulkSurface);
+  if (!hasRun || planningOwnsBulkSurface) return;
+  const total = Number(state.total || 0);
+  const completed = Number(state.completed || 0);
+  const status = String(state.status || "unknown");
+  qs("bulkGenerationProgressLabel").textContent = state.verified ? `${completed} / ${total}` : "Status unavailable";
+  qs("bulkGenerationStatusLabel").textContent = status.replace(/_/g, " ");
+  qs("bulkGenerationCounts").textContent =
+    `${Number(state.succeeded || 0)} completed · ${Number(state.needs_attention || 0)} need attention · ${Number(state.remaining || 0)} remaining`;
+  const current = qs("bulkGenerationCurrent");
+  if (current) {
+    const currentLabel = state.current_job_label || state.current_job_identity || "";
+    current.textContent = currentLabel ? `Current: ${currentLabel}` : "";
+  }
+  const results = qs("bulkGenerationResults");
+  if (results) {
+    results.replaceChildren(...(Array.isArray(state.items) ? state.items.slice(-8) : []).map((item) => {
+      const row = document.createElement("div");
+      row.className = "bulk-generation-result";
+      row.textContent = `${item.job_label || item.job_identity} · ${String(item.outcome || item.status || "pending").replace(/_/g, " ")}`;
+      return row;
+    }));
+  }
+  const stop = qs("bulkGenerationStopBtn");
+  if (stop) {
+    stop.classList.toggle("hidden", !state.active);
+    stop.disabled = Boolean(state.stop_requested);
+    stop.textContent = state.stop_requested ? "Stop requested" : "Stop after current";
+  }
+}
+
+function publishBulkGenerationState(payload, { verified = true } = {}) {
+  const status = String(payload?.status || "none");
+  bulkGenerationCanonicalState = {
+    ...(payload || {}),
+    verified,
+    active: verified ? BULK_GENERATION_ACTIVE_STATUSES.has(status) : true,
+    terminal: verified && BULK_GENERATION_TERMINAL_STATUSES.has(status),
+  };
+  renderBulkGenerationShell(bulkGenerationCanonicalState);
+  applyBulkGenerationControlGuards();
+  window.dispatchEvent(new CustomEvent(BULK_GENERATION_STATE_EVENT, {
+    detail: { ...bulkGenerationCanonicalState },
+  }));
+}
+
+async function refreshBulkGenerationState() {
+  try {
+    const response = await fetch("/planning/bulk-generation/status", { headers: { Accept: "application/json" } });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.ok !== true) throw new Error("Bulk Generate status unavailable");
+    publishBulkGenerationState(payload);
+  } catch (_) {
+    publishBulkGenerationState({ ...bulkGenerationCanonicalState, status: "unknown" }, { verified: false });
+  }
+  window.clearTimeout(bulkGenerationPollTimer);
+  if (!bulkGenerationCanonicalState.terminal) {
+    const delay = document.hidden ? 15000 : 3000;
+    bulkGenerationPollTimer = window.setTimeout(refreshBulkGenerationState, delay);
+  }
+  return { ...bulkGenerationCanonicalState };
+}
+
+async function requestBulkGenerationStop() {
+  const runId = String(bulkGenerationCanonicalState.run_id || "");
+  if (!runId || !bulkGenerationCanonicalState.active) return;
+  const response = await fetch(`/planning/bulk-generation/runs/${encodeURIComponent(runId)}/stop`, {
+    method: "POST", headers: { Accept: "application/json" },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.message || "Could not request Bulk Generate stop.");
+  publishBulkGenerationState(payload);
+}
+
+window.ApplyLensBulkGeneration = {
+  getState: () => ({ ...bulkGenerationCanonicalState }),
+  refresh: refreshBulkGenerationState,
+  stop: requestBulkGenerationStop,
+  isActive: () => !bulkGenerationCanonicalState.verified || bulkGenerationCanonicalState.active,
+};
 
 function normalizeJobstackTheme(value) {
   return value === "light" ? "light" : "dark";
@@ -464,6 +642,63 @@ window.addEventListener("DOMContentLoaded", () => {
   const themeToggleBtn = qs("themeToggleBtn");
 
   applyJobstackTheme(getStoredJobstackTheme(), { persist: false });
+  applyBulkGenerationControlGuards();
+
+  const guardedControl = (target) => target instanceof Element
+    ? target.closest("[data-bulk-guarded='true']")
+    : null;
+  document.addEventListener("click", (event) => {
+    const control = guardedControl(event.target);
+    if (!control) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    showBulkGenerationGuardTooltip(control);
+  }, true);
+  document.addEventListener("keydown", (event) => {
+    if (!["Enter", " "].includes(event.key)) return;
+    const control = guardedControl(event.target);
+    if (!control) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    showBulkGenerationGuardTooltip(control);
+  }, true);
+  document.addEventListener("mouseover", (event) => {
+    const control = guardedControl(event.target);
+    if (control) showBulkGenerationGuardTooltip(control);
+  });
+  document.addEventListener("mouseout", (event) => {
+    if (guardedControl(event.target)) hideBulkGenerationGuardTooltip();
+  });
+  document.addEventListener("focusin", (event) => {
+    const control = guardedControl(event.target);
+    if (control) showBulkGenerationGuardTooltip(control);
+  });
+  document.addEventListener("focusout", (event) => {
+    if (guardedControl(event.target)) hideBulkGenerationGuardTooltip();
+  });
+
+  new MutationObserver(() => applyBulkGenerationControlGuards()).observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+
+  qs("bulkGenerationProgressBtn")?.addEventListener("click", () => {
+    qs("bulkGenerationPanel")?.classList.remove("hidden");
+    qs("bulkGenerationProgressBtn")?.setAttribute("aria-expanded", "true");
+  });
+  qs("bulkGenerationMinimizeBtn")?.addEventListener("click", () => {
+    qs("bulkGenerationPanel")?.classList.add("hidden");
+    qs("bulkGenerationProgressBtn")?.setAttribute("aria-expanded", "false");
+  });
+  qs("bulkGenerationStopBtn")?.addEventListener("click", () => {
+    requestBulkGenerationStop().catch((error) => {
+      window.alert(error instanceof Error ? error.message : "Could not request Bulk Generate stop.");
+    });
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && !bulkGenerationCanonicalState.terminal) void refreshBulkGenerationState();
+  });
+  void refreshBulkGenerationState();
 
   const saved = window.localStorage.getItem(APP_SHELL_COLLAPSED_KEY);
   const defaultCollapsed = saved === null ? window.innerWidth < 1220 : saved === "true";

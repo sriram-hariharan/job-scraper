@@ -46,6 +46,9 @@ let bulkGenerateSuggestionsState = {
   currentIndex: -1,
   isRunning: false,
   stopRequested: false,
+  remaining: 0,
+  currentLabel: "",
+  verified: true,
   results: [],
   returnFocus: null,
   requestedCount: 0,
@@ -1755,6 +1758,21 @@ function buildPlanningWorklistBridgeState() {
       eligibleCount: bulkSummary.eligibleCount,
       available: bulkSummary.eligibleCount > 0 && !bulkGenerateSuggestionsState.isRunning,
       isRunning: bulkGenerateSuggestionsState.isRunning,
+      // Presentation-only mirror of the canonical server progress already held
+      // by the shared shell; Planning renders it beside its own Bulk control.
+      total: Number(bulkGenerateSuggestionsState.total || 0),
+      completed: Number(bulkGenerateSuggestionsState.completed || 0),
+      needsAttention: Number(bulkGenerateSuggestionsState.needsAttention || 0),
+      remaining: Number(bulkGenerateSuggestionsState.remaining || 0),
+      currentLabel: String(bulkGenerateSuggestionsState.currentLabel || ""),
+      stopRequested: Boolean(bulkGenerateSuggestionsState.stopRequested),
+      verified: bulkGenerateSuggestionsState.verified !== false,
+      // Bounded per-item statuses already returned by the Bulk status response.
+      items: (bulkGenerateSuggestionsState.results || []).map((item) => ({
+        label: String(item.label || ""),
+        status: String(item.status || "pending"),
+        outcome: String(item.outcome || ""),
+      })),
     },
   };
 }
@@ -13387,47 +13405,68 @@ async function executeBulkGenerateSuggestions() {
   bulkGenerateSuggestionsState.isRunning = true;
   bulkGenerateSuggestionsState.stopRequested = false;
   publishPlanningWorklistState();
-
-  for (let index = 0; index < bulkGenerateSuggestionsState.candidateRows.length; index += 1) {
-    if (bulkGenerateSuggestionsState.stopRequested) break;
-    const row = bulkGenerateSuggestionsState.candidateRows[index];
-    bulkGenerateSuggestionsState.currentIndex = index;
-    renderBulkGenerateSuggestionsOverlay("running");
-
-    let result;
-    try {
-      const response = await postJson(
-        buildGenerateSuggestionsEndpoint(row),
-        buildBulkGenerateSuggestionsPayload(row)
-      );
-      result = classifyBulkGenerateSuggestionsResponse(row, response);
-    } catch (err) {
-      result = {
-        status: "needs_attention",
-        label: bulkGenerateSuggestionsJobLabel(row),
-        error: extractGenerateSuggestionsError(err),
-      };
+  const rows = bulkGenerateSuggestionsState.candidateRows;
+  const runIds = Array.from(new Set(rows.map((row) => String(row.pipeline_run_id || row.run_id || "").trim())));
+  try {
+    if (runIds.length !== 1 || !runIds[0]) {
+      throw new Error("Bulk Generate requires one owner-scoped pipeline run.");
     }
-
-    bulkGenerateSuggestionsState.results.push(result);
-    bulkGenerateSuggestionsState.completed += 1;
-    if (result.status === "success") bulkGenerateSuggestionsState.succeeded += 1;
-    else bulkGenerateSuggestionsState.needsAttention += 1;
-    renderBulkGenerateSuggestionsOverlay("running");
+    await postJson("/planning/bulk-generation/start", {
+      pipeline_run_id: runIds[0],
+      requested_count: rows.length,
+      candidates: rows.map((row) => {
+        const payload = buildBulkGenerateSuggestionsPayload(row);
+        return {
+          job_identity: String(row.job_doc_id || row.job_url || row.queue_rank || "").trim(),
+          job_doc_id: payload.job_doc_id,
+          queue_rank: payload.queue_rank,
+          selected_resume: payload.selected_resume,
+        };
+      }),
+      review_filter: bulkGenerateSuggestionsState.reviewAction,
+      match_filter: bulkGenerateSuggestionsState.winnerBucket,
+      preference_filter: bulkGenerateSuggestionsState.preferenceId,
+    });
+    closeBulkGenerateSuggestionsOverlay();
+    await window.ApplyLensBulkGeneration?.refresh?.();
+  } catch (err) {
+    bulkGenerateSuggestionsState.isRunning = false;
+    publishPlanningWorklistState();
+    renderBulkGenerateSuggestionsOverlay("confirm", getPlanningBulkSuggestionSelection());
+    showAppError("Bulk Generate could not start", err);
   }
-
-  bulkGenerateSuggestionsState.isRunning = false;
-  bulkGenerateSuggestionsState.currentIndex = -1;
-  publishPlanningWorklistState();
-  const stopped = bulkGenerateSuggestionsState.stopRequested
-    && bulkGenerateSuggestionsState.completed < bulkGenerateSuggestionsState.total;
-  renderBulkGenerateSuggestionsOverlay(stopped ? "stopped" : "complete");
 }
 
-function stopBulkGenerateSuggestionsAfterCurrent() {
+async function stopBulkGenerateSuggestionsAfterCurrent() {
   if (!bulkGenerateSuggestionsState.isRunning) return;
   bulkGenerateSuggestionsState.stopRequested = true;
-  renderBulkGenerateSuggestionsOverlay("running");
+  await window.ApplyLensBulkGeneration?.stop?.();
+}
+
+function applyServerBulkGenerationState(eventOrState) {
+  const state = eventOrState?.detail || eventOrState || {};
+  const wasRunning = bulkGenerateSuggestionsState.isRunning;
+  bulkGenerateSuggestionsState.isRunning = !state.verified || Boolean(state.active);
+  bulkGenerateSuggestionsState.stopRequested = Boolean(state.stop_requested);
+  bulkGenerateSuggestionsState.total = Number(state.total || bulkGenerateSuggestionsState.total || 0);
+  bulkGenerateSuggestionsState.completed = Number(state.completed || 0);
+  bulkGenerateSuggestionsState.succeeded = Number(state.succeeded || 0);
+  bulkGenerateSuggestionsState.needsAttention = Number(state.needs_attention || 0);
+  bulkGenerateSuggestionsState.remaining = Number(state.remaining || 0);
+  bulkGenerateSuggestionsState.currentLabel = String(state.current_job_label || state.current_job_identity || "");
+  bulkGenerateSuggestionsState.verified = state.verified !== false;
+  bulkGenerateSuggestionsState.results = Array.isArray(state.items) ? state.items.map((item) => ({
+    status: item.status === "succeeded" ? "success" : item.status,
+    outcome: item.outcome,
+    label: item.job_label || item.job_identity,
+    error: item.error_message || "",
+  })) : [];
+  publishPlanningWorklistState();
+  if (wasRunning && state.terminal) {
+    loadPlanningTable({ forceNetwork: true }).catch((err) => {
+      showAppError("Failed to refresh Planning after Bulk Generate", err);
+    });
+  }
 }
 
 async function acknowledgeBulkGenerateSuggestionsCompletion() {
@@ -14157,6 +14196,10 @@ function attachPlanningHandlers() {
         openBulkGenerateSuggestionsConfirmation();
         return;
       }
+      if (action.type === "bulk_stop_after_current") {
+        await stopBulkGenerateSuggestionsAfterCurrent();
+        return;
+      }
       if (action.type !== "next_step" || !action.row) return;
 
       const actionState = resolvePlanningWorklistAction(action.row);
@@ -14208,7 +14251,7 @@ function attachPlanningHandlers() {
       closeBulkGenerateSuggestionsOverlay();
       return;
     }
-    if (state === "running") stopBulkGenerateSuggestionsAfterCurrent();
+    if (state === "running") void stopBulkGenerateSuggestionsAfterCurrent();
   });
   qs("bulkGenerateSuggestionsNumber").addEventListener("input", updateBulkGenerateSuggestionsConfiguration);
   [
@@ -14221,10 +14264,11 @@ function attachPlanningHandlers() {
     handleBulkGenerateSuggestionsDialogKeydown
   );
 
-  window.addEventListener("pagehide", () => {
-    if (bulkGenerateSuggestionsState.isRunning) {
-      bulkGenerateSuggestionsState.stopRequested = true;
-    }
+  window.addEventListener("applylens:bulk-generation-state", applyServerBulkGenerationState);
+  applyServerBulkGenerationState(window.ApplyLensBulkGeneration?.getState?.() || {
+    verified: false,
+    active: true,
+    status: "unknown",
   });
 
   qs("resumeChoiceList").addEventListener("click", (event) => {

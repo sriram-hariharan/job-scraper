@@ -29819,7 +29819,271 @@ var gB = "applylens:planning-worklist-state", _B = "applylens:planning-worklist-
 		available: !1,
 		isRunning: !1
 	}
-}, bB = [
+}, bB = "Bulk Generate running. Click to view.";
+function xB(e) {
+	let t = String(e || "").trim();
+	return t.length <= 80 ? t : `${t.slice(0, 79)}…`;
+}
+var SB = {
+	success: {
+		icon: "✓",
+		label: "Completed",
+		tone: "done"
+	},
+	succeeded: {
+		icon: "✓",
+		label: "Completed",
+		tone: "done"
+	},
+	needs_attention: {
+		icon: "!",
+		label: "Needs attention",
+		tone: "attention"
+	},
+	running: {
+		icon: "◌",
+		label: "Running",
+		tone: "running"
+	},
+	pending: {
+		icon: "○",
+		label: "Pending",
+		tone: "pending"
+	}
+};
+function CB(e) {
+	return SB[e] || SB.pending;
+}
+function wB({ bulk: e, onStart: t, onStop: n }) {
+	let [r, i] = (0, C.useState)(!1), [a, o] = (0, C.useState)(!1), [s, c] = (0, C.useState)(!1), l = (0, C.useRef)(null), u = (0, C.useRef)(null), d = (0, C.useId)(), f = (0, C.useId)(), p = !!e.isRunning;
+	(0, C.useEffect)(() => {
+		!p && r && i(!1);
+	}, [p, r]), (0, C.useEffect)(() => {
+		if (!r) return;
+		let e = (e) => {
+			var t;
+			(t = l.current) != null && t.contains(e.target) || i(!1);
+		}, t = (e) => {
+			var t;
+			e.key === "Escape" && (i(!1), (t = u.current) == null || t.focus());
+		};
+		return document.addEventListener("mousedown", e), document.addEventListener("keydown", t), () => {
+			document.removeEventListener("mousedown", e), document.removeEventListener("keydown", t);
+		};
+	}, [r]);
+	let m = Number(e.total || 0), h = Number(e.completed || 0), g = Number(e.needsAttention || 0), _ = Number(e.remaining || 0), v = !!e.stopRequested, y = Array.isArray(e.items) ? e.items : [], b = m > 0 ? Math.min(100, Math.max(0, Math.round(h / m * 100))) : 0, x = e.verified === !1 ? "Status unavailable" : v ? "Stopping after current" : "Running", S = xB(e.currentLabel || ""), w = e.verified === !1 ? "pending" : v ? "attention" : "running", T = y.filter((e) => e.status === "needs_attention").length, E = s ? y.filter((e) => e.status === "needs_attention") : y, D = e.eligibleCount > 0 ? `Generate suggestions for ${e.eligibleCount} eligible Planning job${e.eligibleCount === 1 ? "" : "s"}.` : "No Planning jobs currently need suggestions.";
+	return /* @__PURE__ */ (0, Y.jsxs)("span", {
+		className: "planning-react-bulk-actions",
+		ref: l,
+		"data-bulk-safe": p ? "true" : void 0,
+		children: [
+			/* @__PURE__ */ (0, Y.jsxs)("button", {
+				ref: u,
+				type: "button",
+				className: `planning-react-bulk-generate${p ? " is-running" : ""}`,
+				disabled: !p && e.eligibleCount <= 0,
+				title: p ? void 0 : D,
+				"aria-describedby": p ? f : void 0,
+				"aria-expanded": p ? r : void 0,
+				"aria-controls": p && r ? d : void 0,
+				onMouseEnter: p ? () => o(!0) : void 0,
+				onMouseLeave: p ? () => o(!1) : void 0,
+				onFocus: p ? () => o(!0) : void 0,
+				onBlur: p ? () => o(!1) : void 0,
+				onClick: () => {
+					p ? i((e) => !e) : t();
+				},
+				children: [
+					/* @__PURE__ */ (0, Y.jsx)("span", {
+						className: "planning-react-bulk-generate__icon",
+						"aria-hidden": "true",
+						children: p ? /* @__PURE__ */ (0, Y.jsx)("span", { className: "planning-bulk-spinner" }) : /* @__PURE__ */ (0, Y.jsx)(ke, {
+							size: 15,
+							strokeWidth: 2
+						})
+					}),
+					/* @__PURE__ */ (0, Y.jsx)("span", {
+						className: "planning-react-bulk-generate__label",
+						children: p ? "Bulk suggestions generating…" : "Bulk generate suggestions"
+					}),
+					/* @__PURE__ */ (0, Y.jsx)("small", { children: p ? `${h} / ${m}` : `${e.eligibleCount} eligible` }),
+					p ? /* @__PURE__ */ (0, Y.jsx)("span", {
+						className: "planning-bulk-progress",
+						role: "progressbar",
+						"aria-label": "Bulk Generate progress",
+						"aria-valuenow": h,
+						"aria-valuemin": 0,
+						"aria-valuemax": m,
+						children: /* @__PURE__ */ (0, Y.jsx)("span", {
+							className: "planning-bulk-progress__fill",
+							style: { width: `${b}%` }
+						})
+					}) : null
+				]
+			}),
+			p ? /* @__PURE__ */ (0, Y.jsx)("span", {
+				id: f,
+				role: "tooltip",
+				className: `planning-bulk-run__hint${a ? "" : " hidden"}`,
+				children: bB
+			}) : null,
+			p && r ? /* @__PURE__ */ (0, Y.jsxs)("div", {
+				id: d,
+				role: "dialog",
+				"aria-label": "Bulk Generate progress",
+				className: "planning-bulk-run__panel",
+				children: [
+					/* @__PURE__ */ (0, Y.jsxs)("header", {
+						className: "planning-bulk-run__panel-head",
+						children: [/* @__PURE__ */ (0, Y.jsxs)("div", {
+							className: "planning-bulk-run__panel-title",
+							children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: "Bulk Generate" }), /* @__PURE__ */ (0, Y.jsxs)("span", {
+								className: `planning-bulk-chip is-${w}`,
+								children: [w === "running" ? /* @__PURE__ */ (0, Y.jsx)("span", {
+									className: "planning-bulk-spinner planning-bulk-spinner--chip",
+									"aria-hidden": "true"
+								}) : /* @__PURE__ */ (0, Y.jsx)("span", {
+									className: "planning-bulk-chip__icon",
+									"aria-hidden": "true",
+									children: "•"
+								}), x]
+							})]
+						}), /* @__PURE__ */ (0, Y.jsxs)("div", {
+							className: "planning-bulk-run__panel-meta",
+							children: [/* @__PURE__ */ (0, Y.jsx)("span", {
+								className: "planning-bulk-run__progress-count",
+								children: `${h} / ${m}`
+							}), /* @__PURE__ */ (0, Y.jsx)("button", {
+								type: "button",
+								className: "planning-bulk-run__close",
+								"aria-label": "Close Bulk Generate progress",
+								onClick: () => {
+									var e;
+									i(!1), (e = u.current) == null || e.focus();
+								},
+								children: /* @__PURE__ */ (0, Y.jsx)(Fe, {
+									size: 14,
+									strokeWidth: 2,
+									"aria-hidden": "true"
+								})
+							})]
+						})]
+					}),
+					/* @__PURE__ */ (0, Y.jsxs)("div", {
+						className: "planning-bulk-run__metrics",
+						children: [
+							/* @__PURE__ */ (0, Y.jsxs)("span", {
+								className: "planning-bulk-chip is-done",
+								children: [/* @__PURE__ */ (0, Y.jsx)("span", {
+									className: "planning-bulk-chip__icon",
+									"aria-hidden": "true",
+									children: "✓"
+								}), `${h} Completed`]
+							}),
+							/* @__PURE__ */ (0, Y.jsxs)("span", {
+								className: "planning-bulk-chip is-attention",
+								children: [/* @__PURE__ */ (0, Y.jsx)("span", {
+									className: "planning-bulk-chip__icon",
+									"aria-hidden": "true",
+									children: "!"
+								}), `${g} Attention`]
+							}),
+							/* @__PURE__ */ (0, Y.jsxs)("span", {
+								className: "planning-bulk-chip is-pending",
+								children: [/* @__PURE__ */ (0, Y.jsx)("span", {
+									className: "planning-bulk-chip__icon",
+									"aria-hidden": "true",
+									children: "○"
+								}), `${_} Remaining`]
+							})
+						]
+					}),
+					S ? /* @__PURE__ */ (0, Y.jsxs)("section", {
+						className: "planning-bulk-run__current",
+						children: [/* @__PURE__ */ (0, Y.jsx)("span", {
+							className: "planning-bulk-run__section-title",
+							children: "Current"
+						}), /* @__PURE__ */ (0, Y.jsxs)("div", {
+							className: "planning-bulk-run__current-card",
+							children: [/* @__PURE__ */ (0, Y.jsx)("span", {
+								className: "planning-bulk-spinner planning-bulk-spinner--chip",
+								"aria-hidden": "true"
+							}), /* @__PURE__ */ (0, Y.jsx)("span", {
+								className: "planning-bulk-run__current-job",
+								title: S,
+								children: S
+							})]
+						})]
+					}) : null,
+					y.length ? /* @__PURE__ */ (0, Y.jsxs)("section", {
+						className: "planning-bulk-run__jobs",
+						children: [/* @__PURE__ */ (0, Y.jsxs)("div", {
+							className: "planning-bulk-run__jobs-head",
+							children: [/* @__PURE__ */ (0, Y.jsx)("span", {
+								className: "planning-bulk-run__section-title",
+								children: "Jobs"
+							}), /* @__PURE__ */ (0, Y.jsxs)("span", {
+								className: "planning-bulk-run__jobs-filters",
+								children: [/* @__PURE__ */ (0, Y.jsx)("button", {
+									type: "button",
+									className: `planning-bulk-run__filter${s ? "" : " is-active"}`,
+									"aria-pressed": !s,
+									onClick: () => c(!1),
+									children: `All ${y.length}`
+								}), /* @__PURE__ */ (0, Y.jsx)("button", {
+									type: "button",
+									className: `planning-bulk-run__filter${s ? " is-active" : ""}`,
+									"aria-pressed": s,
+									onClick: () => c(!0),
+									children: `Attention ${T}`
+								})]
+							})]
+						}), /* @__PURE__ */ (0, Y.jsxs)("ul", {
+							className: "planning-bulk-run__job-list",
+							tabIndex: 0,
+							children: [E.map((e, t) => {
+								let n = CB(e.status), r = xB(e.label);
+								return /* @__PURE__ */ (0, Y.jsxs)("li", {
+									className: `planning-bulk-run__job is-${n.tone}`,
+									children: [
+										/* @__PURE__ */ (0, Y.jsx)("span", {
+											className: "planning-bulk-run__job-icon",
+											"aria-hidden": "true",
+											children: n.tone === "running" ? /* @__PURE__ */ (0, Y.jsx)("span", { className: "planning-bulk-spinner planning-bulk-spinner--row" }) : n.icon
+										}),
+										/* @__PURE__ */ (0, Y.jsx)("span", {
+											className: "planning-bulk-run__job-label",
+											title: r,
+											children: r
+										}),
+										/* @__PURE__ */ (0, Y.jsx)("span", {
+											className: `planning-bulk-chip is-${n.tone}`,
+											children: n.label
+										})
+									]
+								}, `${e.label}-${t}`);
+							}), E.length === 0 ? /* @__PURE__ */ (0, Y.jsx)("li", {
+								className: "planning-bulk-run__job-empty",
+								children: "No jobs need attention."
+							}) : null]
+						})]
+					}) : null,
+					/* @__PURE__ */ (0, Y.jsx)("footer", {
+						className: "planning-bulk-run__footer",
+						children: /* @__PURE__ */ (0, Y.jsx)("button", {
+							type: "button",
+							className: "planning-bulk-run__stop",
+							disabled: v,
+							onClick: n,
+							children: v ? "Stop requested" : "Stop after current"
+						})
+					})
+				]
+			}) : null
+		]
+	});
+}
+var TB = [
 	{
 		value: "APPLY",
 		label: "Ready for review",
@@ -29840,7 +30104,7 @@ var gB = "applylens:planning-worklist-state", _B = "applylens:planning-worklist-
 		label: "Review later",
 		tone: "later"
 	}
-], xB = [
+], EB = [
 	{
 		value: "strong",
 		label: "Excellent match",
@@ -29866,7 +30130,7 @@ var gB = "applylens:planning-worklist-state", _B = "applylens:planning-worklist-
 		label: "No credible match",
 		tone: "unavailable"
 	}
-], SB = [
+], DB = [
 	{
 		value: "ready",
 		label: "Ready",
@@ -29887,7 +30151,7 @@ var gB = "applylens:planning-worklist-state", _B = "applylens:planning-worklist-
 		label: "Unavailable",
 		tone: "unavailable"
 	}
-], CB = {
+], OB = {
 	queue_rank: {
 		min: 72,
 		max: 110
@@ -29917,25 +30181,25 @@ var gB = "applylens:planning-worklist-state", _B = "applylens:planning-worklist-
 		max: 280
 	}
 };
-function wB(e) {
+function kB(e) {
 	window.dispatchEvent(new CustomEvent(_B, { detail: e }));
 }
-function TB(e) {
+function AB(e) {
 	return String(e == null ? "" : e).trim();
 }
-function EB(e) {
-	let t = TB(e).replace(/_/g, " ");
+function jB(e) {
+	let t = AB(e).replace(/_/g, " ");
 	return t ? t.charAt(0).toUpperCase() + t.slice(1) : "Unavailable";
 }
-function DB(e) {
-	let t = TB(e);
+function MB(e) {
+	let t = AB(e);
 	return t ? t.replace(/\.pdf$/i, "").replace(/_/g, " ") : "Not selected";
 }
-function OB(e) {
-	return TB(e.operator_selected_resume || e.selected_resume || e.winner_resume);
+function NB(e) {
+	return AB(e.operator_selected_resume || e.selected_resume || e.winner_resume);
 }
-function kB(e) {
-	let t = TB(e);
+function PB(e) {
+	let t = AB(e);
 	if (!t) return "Unavailable";
 	let n = new Date(t);
 	return Number.isNaN(n.getTime()) ? t : new Intl.DateTimeFormat(void 0, {
@@ -29944,7 +30208,7 @@ function kB(e) {
 		year: "numeric"
 	}).format(n);
 }
-function AB(e) {
+function FB(e) {
 	return {
 		APPLY: {
 			label: "Ready for review",
@@ -29962,13 +30226,13 @@ function AB(e) {
 			label: "Review later",
 			tone: "later"
 		}
-	}[TB(e.action).toUpperCase()] || {
-		label: TB(e.action) || "Unavailable",
+	}[AB(e.action).toUpperCase()] || {
+		label: AB(e.action) || "Unavailable",
 		tone: "unavailable"
 	};
 }
-function jB(e) {
-	let t = TB(e).toLowerCase();
+function IB(e) {
+	let t = AB(e).toLowerCase();
 	return [
 		"true",
 		"1",
@@ -29983,31 +30247,31 @@ function jB(e) {
 		"off"
 	].includes(t) ? "No packet" : "Packet unavailable";
 }
-function MB() {
+function LB() {
 	try {
 		let e = JSON.parse(localStorage.getItem("applylens.planning.columnWidths.v1") || "{}");
 		if (!e || typeof e != "object" || Array.isArray(e)) return {};
 		let t = "version" in e && e.version === 1 ? e.widths : e;
 		return !t || typeof t != "object" || Array.isArray(t) ? {} : Object.fromEntries(Object.entries(t).flatMap(([e, t]) => {
-			let n = CB[e], r = Number(t);
+			let n = OB[e], r = Number(t);
 			return !n || !Number.isFinite(r) ? [] : [[e, Math.min(n.max, Math.max(n.min, r))]];
 		}));
 	} catch (e) {
 		return {};
 	}
 }
-function NB(e) {
+function RB(e) {
 	localStorage.setItem(vB, JSON.stringify({
 		version: 1,
 		widths: e
 	}));
 }
-function PB(e, t) {
-	return TB(e.job_doc_id || e.job_url || e.queue_rank) || `planning-row-${t}`;
+function zB(e, t) {
+	return AB(e.job_doc_id || e.job_url || e.queue_rank) || `planning-row-${t}`;
 }
-function FB(e) {
+function BB(e) {
 	if (e && typeof e == "object" && !Array.isArray(e)) return e;
-	let t = TB(e);
+	let t = AB(e);
 	if (!t) return null;
 	try {
 		let e = JSON.parse(t);
@@ -30016,14 +30280,14 @@ function FB(e) {
 		return null;
 	}
 }
-function IB({ row: e }) {
-	let t = FB(e.llm_adjudicator_readback), n = TB((t == null ? void 0 : t.status) || e.llm_adjudicator_readback_status || "Unavailable"), r = Array.isArray(t == null ? void 0 : t.candidate_resume_names) ? t.candidate_resume_names.map(TB).filter(Boolean).join(", ") : "", i = [
-		["Status", EB(n)],
-		["Provider", TB((t == null ? void 0 : t.provider_used) || (t == null ? void 0 : t.provider_requested))],
-		["Model", TB((t == null ? void 0 : t.model_used) || (t == null ? void 0 : t.model_requested))],
+function VB({ row: e }) {
+	let t = BB(e.llm_adjudicator_readback), n = AB((t == null ? void 0 : t.status) || e.llm_adjudicator_readback_status || "Unavailable"), r = Array.isArray(t == null ? void 0 : t.candidate_resume_names) ? t.candidate_resume_names.map(AB).filter(Boolean).join(", ") : "", i = [
+		["Status", jB(n)],
+		["Provider", AB((t == null ? void 0 : t.provider_used) || (t == null ? void 0 : t.provider_requested))],
+		["Model", AB((t == null ? void 0 : t.model_used) || (t == null ? void 0 : t.model_requested))],
 		["Candidates", r],
-		["Recommendation", TB(t == null ? void 0 : t.adjudicator_recommendation_label)],
-		["Summary", TB(t == null ? void 0 : t.adjudicator_summary)]
+		["Recommendation", AB(t == null ? void 0 : t.adjudicator_recommendation_label)],
+		["Summary", AB(t == null ? void 0 : t.adjudicator_summary)]
 	].filter((e) => e[1]);
 	return /* @__PURE__ */ (0, Y.jsxs)("details", {
 		className: "planning-react-ai-review",
@@ -30034,29 +30298,29 @@ function IB({ row: e }) {
 		]
 	});
 }
-function LB({ row: e }) {
+function HB({ row: e }) {
 	let t = [
 		"true",
 		"1",
 		"yes",
 		"on"
-	].includes(TB(e.llm_adjudicator_readback_enabled).toLowerCase());
+	].includes(AB(e.llm_adjudicator_readback_enabled).toLowerCase());
 	return /* @__PURE__ */ (0, Y.jsxs)(iL, { children: [/* @__PURE__ */ (0, Y.jsxs)("div", {
 		className: "planning-react-details-grid",
 		children: [
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Full location" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: TB(e.job_location) || "Unavailable" })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Prefilter relevance" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: EB(e.selection_signal) })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "AI evaluation" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: EB(e.llm_adjudicator_readback_status) })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Runner-up resume" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: DB(e.runner_up_resume || e.runnerup_resume) })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Runner-up score" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: TB(e.runner_up_score) || "Unavailable" })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Score gap" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: TB(e.score_gap) || "Unavailable" })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Operator decision" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: EB(e.operator_decision || "Not decided") })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Priority reason" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: TB(e.queue_priority_reason) || "Unavailable" })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Missing requirements" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: TB(e.missing_requirement_count) || "0" })] })
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Full location" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: AB(e.job_location) || "Unavailable" })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Prefilter relevance" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: jB(e.selection_signal) })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "AI evaluation" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: jB(e.llm_adjudicator_readback_status) })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Runner-up resume" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: MB(e.runner_up_resume || e.runnerup_resume) })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Runner-up score" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: AB(e.runner_up_score) || "Unavailable" })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Score gap" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: AB(e.score_gap) || "Unavailable" })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Operator decision" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: jB(e.operator_decision || "Not decided") })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Priority reason" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: AB(e.queue_priority_reason) || "Unavailable" })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Missing requirements" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: AB(e.missing_requirement_count) || "0" })] })
 		]
-	}), t ? /* @__PURE__ */ (0, Y.jsx)(IB, { row: e }) : null] });
+	}), t ? /* @__PURE__ */ (0, Y.jsx)(VB, { row: e }) : null] });
 }
-function RB() {
+function UB() {
 	return [
 		{
 			id: "expand",
@@ -30068,7 +30332,7 @@ function RB() {
 			enableResizing: !1,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)(eL, {
 				expanded: e.getIsExpanded(),
-				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} planning details for ${TB(e.original.job_title) || "job"}`,
+				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} planning details for ${AB(e.original.job_title) || "job"}`,
 				controls: `planning-react-detail-${e.id}`,
 				onClick: e.getToggleExpandedHandler()
 			})
@@ -30086,9 +30350,9 @@ function RB() {
 			size: 270,
 			minSize: 210,
 			maxSize: 420,
-			accessorFn: (e) => TB(e.job_title),
+			accessorFn: (e) => AB(e.job_title),
 			cell: ({ row: e }) => {
-				let t = TB(e.original.job_title) || "Untitled job", n = TB(e.original.job_company) || "Company unavailable", r = TB(e.original.job_location) || "Location unavailable", i = TB(e.original.job_url || e.original.job_doc_id);
+				let t = AB(e.original.job_title) || "Untitled job", n = AB(e.original.job_company) || "Company unavailable", r = AB(e.original.job_location) || "Location unavailable", i = AB(e.original.job_url || e.original.job_doc_id);
 				return /* @__PURE__ */ (0, Y.jsx)(rL, {
 					title: t,
 					location: r,
@@ -30117,8 +30381,8 @@ function RB() {
 			accessorFn: (e) => e.posted_at ? new Date(e.posted_at).getTime() : null,
 			sortUndefined: "last",
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("time", {
-				dateTime: TB(e.original.posted_at),
-				children: kB(e.original.posted_at)
+				dateTime: AB(e.original.posted_at),
+				children: PB(e.original.posted_at)
 			})
 		},
 		{
@@ -30127,14 +30391,14 @@ function RB() {
 			size: 184,
 			minSize: 150,
 			maxSize: 260,
-			accessorFn: (e) => AB(e).label,
+			accessorFn: (e) => FB(e).label,
 			cell: ({ row: e }) => {
-				let t = AB(e.original), n = [
+				let t = FB(e.original), n = [
 					"true",
 					"1",
 					"yes",
 					"on"
-				].includes(TB(e.original.llm_adjudicator_readback_enabled).toLowerCase());
+				].includes(AB(e.original.llm_adjudicator_readback_enabled).toLowerCase());
 				return /* @__PURE__ */ (0, Y.jsxs)("span", {
 					className: "planning-react-readiness",
 					children: [/* @__PURE__ */ (0, Y.jsx)("span", {
@@ -30157,7 +30421,7 @@ function RB() {
 			sortUndefined: "last",
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)(tL, {
 				value: e.original.winner_score,
-				strength: EB(e.original.winner_bucket)
+				strength: jB(e.original.winner_bucket)
 			})
 		},
 		{
@@ -30166,11 +30430,11 @@ function RB() {
 			size: 230,
 			minSize: 200,
 			maxSize: 360,
-			accessorFn: OB,
+			accessorFn: NB,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", {
 				className: "planning-react-resume",
-				title: OB(e.original),
-				children: DB(OB(e.original))
+				title: NB(e.original),
+				children: MB(NB(e.original))
 			})
 		},
 		{
@@ -30185,13 +30449,13 @@ function RB() {
 			size: 188,
 			minSize: 160,
 			maxSize: 280,
-			accessorFn: (e) => jB(e.packet_generation_allowed),
+			accessorFn: (e) => IB(e.packet_generation_allowed),
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsxs)("span", {
 				className: "planning-react-status-stack",
 				children: [/* @__PURE__ */ (0, Y.jsx)("span", {
-					className: `planning-react-badge ${jB(e.original.packet_generation_allowed) === "Packet ready" ? "is-ready" : ""}`,
-					children: jB(e.original.packet_generation_allowed)
-				}), /* @__PURE__ */ (0, Y.jsx)("span", { children: EB(e.original.tailoring_workspace_state || "Workspace unavailable") })]
+					className: `planning-react-badge ${IB(e.original.packet_generation_allowed) === "Packet ready" ? "is-ready" : ""}`,
+					children: IB(e.original.packet_generation_allowed)
+				}), /* @__PURE__ */ (0, Y.jsx)("span", { children: jB(e.original.tailoring_workspace_state || "Workspace unavailable") })]
 			})
 		},
 		{
@@ -30214,7 +30478,7 @@ function RB() {
 					className: `planning-react-next-step ${t.kind === "generate_suggestions" ? "is-primary" : ""}`,
 					disabled: t.disabled,
 					title: t.title,
-					onClick: () => wB({
+					onClick: () => kB({
 						type: "next_step",
 						row: e.original
 					}),
@@ -30224,11 +30488,11 @@ function RB() {
 		}
 	];
 }
-function zB({ state: e }) {
+function WB({ state: e }) {
 	let [t, n] = (0, C.useState)(e.filters);
 	(0, C.useEffect)(() => n(e.filters), [e.filters]);
 	let r = (e) => {
-		n(e), wB({
+		n(e), kB({
 			type: "filters_change",
 			filters: e
 		});
@@ -30243,7 +30507,7 @@ function zB({ state: e }) {
 			/* @__PURE__ */ (0, Y.jsx)(QI, {
 				id: "planningActionFilter",
 				label: "Action",
-				options: bB,
+				options: TB,
 				values: t.actions,
 				onChange: (e) => r({
 					...t,
@@ -30269,7 +30533,7 @@ function zB({ state: e }) {
 			/* @__PURE__ */ (0, Y.jsx)(QI, {
 				id: "planningWinnerBucket",
 				label: "Match Strength",
-				options: xB,
+				options: EB,
 				values: t.winnerBuckets,
 				onChange: (e) => r({
 					...t,
@@ -30281,7 +30545,7 @@ function zB({ state: e }) {
 			/* @__PURE__ */ (0, Y.jsx)(QI, {
 				id: "planningTailoringFilter",
 				label: "Tailoring",
-				options: SB,
+				options: DB,
 				values: t.tailoringStates,
 				onChange: (e) => r({
 					...t,
@@ -30337,7 +30601,7 @@ function zB({ state: e }) {
 					type: "button",
 					className: "planning-filter-apply",
 					id: "planningApplyFiltersBtn",
-					onClick: () => wB({
+					onClick: () => kB({
 						type: "apply_filters",
 						filters: t
 					}),
@@ -30346,15 +30610,15 @@ function zB({ state: e }) {
 					type: "button",
 					className: "planning-filter-clear",
 					id: "planningClearFiltersBtn",
-					onClick: () => wB({ type: "clear_filters" }),
+					onClick: () => kB({ type: "clear_filters" }),
 					children: "Clear"
 				})]
 			})
 		]
 	});
 }
-function BB({ state: e }) {
-	let [t, n] = (0, C.useState)(MB), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(RB, []), o = (0, C.useMemo)(() => e.rows.slice(), [e.rows]), s = (0, C.useMemo)(() => e.sort.key ? [{
+function GB({ state: e }) {
+	let [t, n] = (0, C.useState)(LB), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(UB, []), o = (0, C.useMemo)(() => e.rows.slice(), [e.rows]), s = (0, C.useMemo)(() => e.sort.key ? [{
 		id: e.sort.key,
 		desc: e.sort.direction === "desc"
 	}] : [], [e.sort]);
@@ -30372,10 +30636,10 @@ function BB({ state: e }) {
 			columnSizing: t,
 			expanded: r ? { [r]: !0 } : {}
 		},
-		getRowId: PB,
+		getRowId: zB,
 		onSortingChange: (e) => {
 			let t = (typeof e == "function" ? e(s) : e)[0];
-			t && (i(""), wB({
+			t && (i(""), kB({
 				type: "sort_change",
 				key: t.id,
 				direction: t.desc ? "desc" : "asc"
@@ -30384,7 +30648,7 @@ function BB({ state: e }) {
 		onColumnSizingChange: (e) => {
 			n((t) => {
 				let n = typeof e == "function" ? e(t) : e;
-				return NB(n), n;
+				return RB(n), n;
 			});
 		},
 		onExpandedChange: (e) => {
@@ -30403,27 +30667,10 @@ function BB({ state: e }) {
 		title: "Planning worklist",
 		subtitle: `Planning view · ${e.pagination.totalCount} total job${e.pagination.totalCount === 1 ? "" : "s"}`,
 		count: e.pagination.totalCount,
-		headingActions: /* @__PURE__ */ (0, Y.jsxs)("button", {
-			type: "button",
-			className: "planning-react-bulk-generate",
-			disabled: !e.bulkSuggestions.available || e.bulkSuggestions.isRunning,
-			title: e.bulkSuggestions.eligibleCount > 0 ? `Generate suggestions for ${e.bulkSuggestions.eligibleCount} eligible Planning job${e.bulkSuggestions.eligibleCount === 1 ? "" : "s"}.` : "No Planning jobs currently need suggestions.",
-			onClick: () => wB({ type: "bulk_generate_suggestions" }),
-			children: [
-				/* @__PURE__ */ (0, Y.jsx)("span", {
-					className: "planning-react-bulk-generate__icon",
-					"aria-hidden": "true",
-					children: /* @__PURE__ */ (0, Y.jsx)(ke, {
-						size: 15,
-						strokeWidth: 2
-					})
-				}),
-				/* @__PURE__ */ (0, Y.jsx)("span", {
-					className: "planning-react-bulk-generate__label",
-					children: "Bulk generate suggestions"
-				}),
-				/* @__PURE__ */ (0, Y.jsxs)("small", { children: [e.bulkSuggestions.eligibleCount, " eligible"] })
-			]
+		headingActions: /* @__PURE__ */ (0, Y.jsx)(wB, {
+			bulk: e.bulkSuggestions,
+			onStart: () => kB({ type: "bulk_generate_suggestions" }),
+			onStop: () => kB({ type: "bulk_stop_after_current" })
 		}),
 		table: c,
 		columns: a,
@@ -30434,7 +30681,7 @@ function BB({ state: e }) {
 		stickyColumnId: "next_step",
 		rowClassName: (e, t) => `planning-react-row ${t % 2 ? "is-alternate" : ""} ${e.getIsExpanded() ? "is-expanded" : ""}`.trim(),
 		detailId: (e) => `planning-react-detail-${e.id}`,
-		renderDetails: (e) => /* @__PURE__ */ (0, Y.jsx)(LB, { row: e.original }),
+		renderDetails: (e) => /* @__PURE__ */ (0, Y.jsx)(HB, { row: e.original }),
 		empty: /* @__PURE__ */ (0, Y.jsxs)("div", {
 			className: "planning-react-empty",
 			children: [
@@ -30443,19 +30690,19 @@ function BB({ state: e }) {
 				/* @__PURE__ */ (0, Y.jsx)("button", {
 					type: "button",
 					className: $I,
-					onClick: () => wB({ type: "clear_filters" }),
+					onClick: () => kB({ type: "clear_filters" }),
 					children: "Clear filters"
 				})
 			]
 		}),
-		onPageChange: (e) => wB({
+		onPageChange: (e) => kB({
 			type: "page_change",
 			page: e
 		}),
-		onRetry: () => wB({ type: "retry" })
+		onRetry: () => kB({ type: "retry" })
 	});
 }
-var VB = [
+var KB = [
 	{
 		key: "total",
 		label: "Total results",
@@ -30485,11 +30732,11 @@ var VB = [
 		icon: je
 	}
 ];
-function HB({ state: e }) {
+function qB({ state: e }) {
 	return /* @__PURE__ */ (0, Y.jsx)("section", {
 		className: "planning-react-summary-grid",
 		"aria-label": "Planning summary",
-		children: VB.map((t) => {
+		children: KB.map((t) => {
 			let n = t.icon;
 			return /* @__PURE__ */ (0, Y.jsxs)("article", {
 				className: `planning-react-summary-card planning-react-summary-card--${t.key}`,
@@ -30516,7 +30763,7 @@ function HB({ state: e }) {
 }
 //#endregion
 //#region src/OperationalDashboards.tsx
-var UB = "applylens:decisions-dashboard-state", WB = "applylens:decisions-dashboard-action", GB = "applylens:decisions-dashboard-ready", KB = "applylens:applications-dashboard-state", qB = "applylens:applications-dashboard-action", JB = "applylens:applications-dashboard-ready", YB = "applylens.decisions.columnWidths.v1", XB = "applylens.applications.columnWidths.v1", ZB = {
+var JB = "applylens:decisions-dashboard-state", YB = "applylens:decisions-dashboard-action", XB = "applylens:decisions-dashboard-ready", ZB = "applylens:applications-dashboard-state", QB = "applylens:applications-dashboard-action", $B = "applylens:applications-dashboard-ready", eV = "applylens.decisions.columnWidths.v1", tV = "applylens.applications.columnWidths.v1", nV = {
 	status: "loading",
 	rows: [],
 	metaLabel: "Loading...",
@@ -30538,7 +30785,7 @@ var UB = "applylens:decisions-dashboard-state", WB = "applylens:decisions-dashbo
 		companyContains: "",
 		limit: 15
 	}
-}, QB = {
+}, rV = {
 	status: "loading",
 	rows: [],
 	metaLabel: "Loading...",
@@ -30561,7 +30808,7 @@ var UB = "applylens:decisions-dashboard-state", WB = "applylens:decisions-dashbo
 		titleContains: "",
 		limit: 15
 	}
-}, $B = [
+}, iV = [
 	"APPLY",
 	"TAILOR",
 	"SKIP",
@@ -30569,8 +30816,8 @@ var UB = "applylens:decisions-dashboard-state", WB = "applylens:decisions-dashbo
 ].map((e) => ({
 	value: e,
 	label: e
-})), eV = (e) => String(e == null ? "" : e).trim(), tV = (e, t = "Unavailable") => eV(e) || t, nV = (e) => {
-	let t = eV(e);
+})), aV = (e) => String(e == null ? "" : e).trim(), oV = (e, t = "Unavailable") => aV(e) || t, sV = (e) => {
+	let t = aV(e);
 	if (!t) return "Unavailable";
 	let n = new Date(t);
 	return Number.isNaN(n.getTime()) ? t : new Intl.DateTimeFormat(void 0, {
@@ -30580,19 +30827,19 @@ var UB = "applylens:decisions-dashboard-state", WB = "applylens:decisions-dashbo
 		hour: "numeric",
 		minute: "2-digit"
 	}).format(n);
-}, rV = (e, t) => eV(e.action_key) || [
-	eV(e.decision_timestamp || e.action_timestamp),
-	eV(e.job_doc_id || e.job_url),
-	eV(e.decision || e.application_status),
+}, cV = (e, t) => aV(e.action_key) || [
+	aV(e.decision_timestamp || e.action_timestamp),
+	aV(e.job_doc_id || e.job_url),
+	aV(e.decision || e.application_status),
 	t
-].join("|"), iV = (e) => e.key ? [{
+].join("|"), lV = (e) => e.key ? [{
 	id: e.key,
 	desc: e.direction === "desc"
 }] : [];
-function aV(e, t) {
+function uV(e, t) {
 	window.dispatchEvent(new CustomEvent(e, { detail: t }));
 }
-function oV(e) {
+function dV(e) {
 	try {
 		let t = JSON.parse(localStorage.getItem(e) || "{}"), n = (t == null ? void 0 : t.version) === 1 ? t.widths : t;
 		return n && typeof n == "object" && !Array.isArray(n) ? n : {};
@@ -30600,20 +30847,20 @@ function oV(e) {
 		return {};
 	}
 }
-function sV(e, t) {
+function fV(e, t) {
 	localStorage.setItem(e, JSON.stringify({
 		version: 1,
 		widths: t
 	}));
 }
-function cV(e, t) {
-	let n = tV(e);
+function pV(e, t) {
+	let n = oV(e);
 	return /* @__PURE__ */ (0, Y.jsx)("span", {
-		className: `${t}-badge ${t}-badge--${eV(e).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "unknown"}`,
+		className: `${t}-badge ${t}-badge--${aV(e).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "unknown"}`,
 		children: n
 	});
 }
-function lV({ cards: e, label: t, loading: n = !1 }) {
+function mV({ cards: e, label: t, loading: n = !1 }) {
 	return /* @__PURE__ */ (0, Y.jsx)("section", {
 		className: "operational-summary-grid",
 		"aria-label": t,
@@ -30633,7 +30880,7 @@ function lV({ cards: e, label: t, loading: n = !1 }) {
 		}, e))
 	});
 }
-function uV({ state: e }) {
+function hV({ state: e }) {
 	let [t, n] = (0, C.useState)(e.filters);
 	return (0, C.useEffect)(() => n(e.filters), [e.filters]), /* @__PURE__ */ (0, Y.jsx)("section", {
 		className: "operational-filter-card",
@@ -30644,7 +30891,7 @@ function uV({ state: e }) {
 				/* @__PURE__ */ (0, Y.jsx)(QI, {
 					id: "decisionFilter",
 					label: "Decision",
-					options: $B,
+					options: iV,
 					values: t.decisions,
 					onChange: (e) => n({
 						...t,
@@ -30679,7 +30926,7 @@ function uV({ state: e }) {
 					children: [/* @__PURE__ */ (0, Y.jsx)("button", {
 						id: "decisionApplyFiltersBtn",
 						className: "operational-primary-action",
-						onClick: () => aV(WB, {
+						onClick: () => uV(YB, {
 							type: "apply_filters",
 							filters: t
 						}),
@@ -30687,7 +30934,7 @@ function uV({ state: e }) {
 					}), /* @__PURE__ */ (0, Y.jsx)("button", {
 						id: "decisionClearFiltersBtn",
 						className: `${$I} operational-secondary-action`,
-						onClick: () => aV(WB, { type: "clear_filters" }),
+						onClick: () => uV(YB, { type: "clear_filters" }),
 						children: "Clear"
 					})]
 				})
@@ -30695,29 +30942,29 @@ function uV({ state: e }) {
 		})
 	});
 }
-function dV({ row: e }) {
+function gV({ row: e }) {
 	return /* @__PURE__ */ (0, Y.jsx)(iL, { children: /* @__PURE__ */ (0, Y.jsxs)("div", {
 		className: "operational-detail-grid",
 		children: [
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Queue rank" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: tV(e.queue_rank) })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Posted at" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: nV(e.posted_at) })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Queue rank" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: oV(e.queue_rank) })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Posted at" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: sV(e.posted_at) })] }),
 			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Winner resume" }), /* @__PURE__ */ (0, Y.jsx)("strong", {
-				title: eV(e.winner_resume),
-				children: tV(e.winner_resume)
+				title: aV(e.winner_resume),
+				children: oV(e.winner_resume)
 			})] }),
 			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Runner-up resume" }), /* @__PURE__ */ (0, Y.jsx)("strong", {
-				title: eV(e.runner_up_resume),
-				children: tV(e.runner_up_resume)
+				title: aV(e.runner_up_resume),
+				children: oV(e.runner_up_resume)
 			})] }),
 			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Selected resume" }), /* @__PURE__ */ (0, Y.jsx)("strong", {
-				title: eV(e.selected_resume),
-				children: tV(e.selected_resume)
+				title: aV(e.selected_resume),
+				children: oV(e.selected_resume)
 			})] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Note" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: tV(e.note, "No note recorded") })] })
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Note" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: oV(e.note, "No note recorded") })] })
 		]
 	}) });
 }
-function fV() {
+function _V() {
 	return [
 		{
 			id: "expand",
@@ -30729,7 +30976,7 @@ function fV() {
 			enableResizing: !1,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)(eL, {
 				expanded: e.getIsExpanded(),
-				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} decision details for ${tV(e.original.job_title, "job")}`,
+				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} decision details for ${oV(e.original.job_title, "job")}`,
 				controls: `decision-detail-${e.id}`,
 				onClick: e.getToggleExpandedHandler()
 			})
@@ -30737,46 +30984,46 @@ function fV() {
 		{
 			id: "decision_timestamp",
 			header: "Date / time",
-			accessorFn: (e) => eV(e.decision_timestamp),
+			accessorFn: (e) => aV(e.decision_timestamp),
 			size: 156,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("time", {
-				dateTime: eV(e.original.decision_timestamp),
-				children: nV(e.original.decision_timestamp)
+				dateTime: aV(e.original.decision_timestamp),
+				children: sV(e.original.decision_timestamp)
 			})
 		},
 		{
 			id: "decision",
 			header: "Decision",
-			accessorFn: (e) => eV(e.decision),
+			accessorFn: (e) => aV(e.decision),
 			size: 118,
-			cell: ({ row: e }) => cV(e.original.decision, "operational")
+			cell: ({ row: e }) => pV(e.original.decision, "operational")
 		},
 		{
 			id: "job",
 			header: "Job",
-			accessorFn: (e) => eV(e.job_title),
+			accessorFn: (e) => aV(e.job_title),
 			size: 270,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsxs)("span", {
 				className: "operational-job-cell",
-				children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: tV(e.original.job_title, "Untitled job") }), /* @__PURE__ */ (0, Y.jsx)("span", { children: tV(e.original.job_company, "Company unavailable") })]
+				children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: oV(e.original.job_title, "Untitled job") }), /* @__PURE__ */ (0, Y.jsx)("span", { children: oV(e.original.job_company, "Company unavailable") })]
 			})
 		},
 		{
 			id: "planning_action",
 			header: "Planning action",
-			accessorFn: (e) => eV(e.planning_action),
+			accessorFn: (e) => aV(e.planning_action),
 			size: 150,
-			cell: ({ row: e }) => tV(e.original.planning_action)
+			cell: ({ row: e }) => oV(e.original.planning_action)
 		},
 		{
 			id: "selected_resume",
 			header: "Selected resume",
-			accessorFn: (e) => eV(e.selected_resume),
+			accessorFn: (e) => aV(e.selected_resume),
 			size: 220,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", {
 				className: "operational-truncate",
-				title: eV(e.original.selected_resume),
-				children: tV(e.original.selected_resume)
+				title: aV(e.original.selected_resume),
+				children: oV(e.original.selected_resume)
 			})
 		},
 		{
@@ -30793,7 +31040,7 @@ function fV() {
 				children: "Applied"
 			}) : /* @__PURE__ */ (0, Y.jsx)("button", {
 				className: "operational-row-action",
-				onClick: () => aV(WB, {
+				onClick: () => uV(YB, {
 					type: "open_application",
 					row: e.original
 				}),
@@ -30802,8 +31049,8 @@ function fV() {
 		}
 	];
 }
-function pV({ state: e }) {
-	let [t, n] = (0, C.useState)(() => oV(YB)), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(fV, []), o = (0, C.useMemo)(() => iV(e.sort), [e.sort]);
+function vV({ state: e }) {
+	let [t, n] = (0, C.useState)(() => dV(eV)), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(_V, []), o = (0, C.useMemo)(() => lV(e.sort), [e.sort]);
 	(0, C.useEffect)(() => i(""), [
 		e.resultKey,
 		e.pagination.page,
@@ -30817,7 +31064,7 @@ function pV({ state: e }) {
 			columnSizing: t,
 			expanded: r ? { [r]: !0 } : {}
 		},
-		getRowId: rV,
+		getRowId: cV,
 		getCoreRowModel: UI(),
 		getSortedRowModel: WI(),
 		getRowCanExpand: () => !0,
@@ -30825,7 +31072,7 @@ function pV({ state: e }) {
 		columnResizeMode: "onChange",
 		onSortingChange: (e) => {
 			let t = (typeof e == "function" ? e(o) : e)[0];
-			t && aV(WB, {
+			t && uV(YB, {
 				type: "sort_change",
 				key: t.id,
 				direction: t.desc ? "desc" : "asc"
@@ -30833,7 +31080,7 @@ function pV({ state: e }) {
 		},
 		onColumnSizingChange: (e) => n((t) => {
 			let n = typeof e == "function" ? e(t) : e;
-			return sV(YB, n), n;
+			return fV(eV, n), n;
 		}),
 		onExpandedChange: (e) => {
 			let t = r ? { [r]: !0 } : {}, n = typeof e == "function" ? e(t) : e, a = n === !0 ? t : n;
@@ -30856,30 +31103,30 @@ function pV({ state: e }) {
 		stickyColumnId: "application_action",
 		rowClassName: (e, t) => `operational-row ${t % 2 ? "is-alternate" : ""}`,
 		detailId: (e) => `decision-detail-${e.id}`,
-		renderDetails: (e) => /* @__PURE__ */ (0, Y.jsx)(dV, { row: e.original }),
+		renderDetails: (e) => /* @__PURE__ */ (0, Y.jsx)(gV, { row: e.original }),
 		empty: /* @__PURE__ */ (0, Y.jsxs)("div", {
 			className: "operational-empty",
 			children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: "No operator decisions match the current filters." }), /* @__PURE__ */ (0, Y.jsx)("button", {
 				className: $I,
-				onClick: () => aV(WB, { type: "clear_filters" }),
+				onClick: () => uV(YB, { type: "clear_filters" }),
 				children: "Clear filters"
 			})]
 		}),
-		onPageChange: (e) => aV(WB, {
+		onPageChange: (e) => uV(YB, {
 			type: "page_change",
 			page: e
 		}),
-		onRetry: () => aV(WB, { type: "retry" }),
+		onRetry: () => uV(YB, { type: "retry" }),
 		fillAvailableWidth: !0,
 		deferPaginationWhileLoading: !0
 	});
 }
-function mV({ state: e }) {
-	let t = e.rows, n = new Set(t.map((e) => eV(e.job_doc_id || e.job_url || `${e.job_company}|${e.job_title}`)).filter(Boolean));
+function yV({ state: e }) {
+	let t = e.rows, n = new Set(t.map((e) => aV(e.job_doc_id || e.job_url || `${e.job_company}|${e.job_title}`)).filter(Boolean));
 	return /* @__PURE__ */ (0, Y.jsxs)("div", {
 		className: "operational-dashboard",
 		children: [
-			/* @__PURE__ */ (0, Y.jsx)(lV, {
+			/* @__PURE__ */ (0, Y.jsx)(mV, {
 				cards: [
 					{
 						label: "Total decisions",
@@ -30897,14 +31144,14 @@ function mV({ state: e }) {
 					},
 					{
 						label: "Apply decisions",
-						value: t.filter((e) => eV(e.decision).toUpperCase() === "APPLY").length,
+						value: t.filter((e) => aV(e.decision).toUpperCase() === "APPLY").length,
 						caption: "On this page",
 						help: "Current-page decisions recorded as APPLY.",
 						icon: te
 					},
 					{
 						label: "Tailor decisions",
-						value: t.filter((e) => eV(e.decision).toUpperCase() === "TAILOR").length,
+						value: t.filter((e) => aV(e.decision).toUpperCase() === "TAILOR").length,
 						caption: "On this page",
 						help: "Current-page decisions recorded as TAILOR.",
 						icon: fe
@@ -30913,16 +31160,16 @@ function mV({ state: e }) {
 				label: "Decision summary",
 				loading: e.status === "loading"
 			}),
-			/* @__PURE__ */ (0, Y.jsx)(uV, { state: e }),
-			/* @__PURE__ */ (0, Y.jsx)(pV, { state: e })
+			/* @__PURE__ */ (0, Y.jsx)(hV, { state: e }),
+			/* @__PURE__ */ (0, Y.jsx)(vV, { state: e })
 		]
 	});
 }
-function hV({ state: e }) {
+function bV({ state: e }) {
 	let [t, n] = (0, C.useState)(e.filters);
 	(0, C.useEffect)(() => n(e.filters), [e.filters]);
 	let r = (t) => {
-		t !== e.activeTab && aV(qB, {
+		t !== e.activeTab && uV(QB, {
 			type: "tab_change",
 			tab: t
 		});
@@ -30987,7 +31234,7 @@ function hV({ state: e }) {
 					children: [/* @__PURE__ */ (0, Y.jsx)("button", {
 						id: "applicationApplyFiltersBtn",
 						className: "operational-primary-action",
-						onClick: () => aV(qB, {
+						onClick: () => uV(QB, {
 							type: "apply_filters",
 							filters: t
 						}),
@@ -30995,7 +31242,7 @@ function hV({ state: e }) {
 					}), /* @__PURE__ */ (0, Y.jsx)("button", {
 						id: "applicationClearFiltersBtn",
 						className: `${$I} operational-secondary-action`,
-						onClick: () => aV(qB, { type: "clear_filters" }),
+						onClick: () => uV(QB, { type: "clear_filters" }),
 						children: "Clear"
 					})]
 				})
@@ -31003,20 +31250,20 @@ function hV({ state: e }) {
 		})]
 	});
 }
-function gV({ row: e }) {
+function xV({ row: e }) {
 	return /* @__PURE__ */ (0, Y.jsx)(iL, { children: /* @__PURE__ */ (0, Y.jsxs)("div", {
 		className: "operational-detail-grid",
 		children: [
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Complete timestamp" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: nV(e.action_timestamp) })] }),
-			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Source view" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: tV(e.source_view) })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Complete timestamp" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: sV(e.action_timestamp) })] }),
+			/* @__PURE__ */ (0, Y.jsxs)("div", { children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Source view" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: oV(e.source_view) })] }),
 			/* @__PURE__ */ (0, Y.jsxs)("div", {
 				className: "is-wide",
-				children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Note" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: tV(e.note, "No note recorded") })]
+				children: [/* @__PURE__ */ (0, Y.jsx)("span", { children: "Note" }), /* @__PURE__ */ (0, Y.jsx)("strong", { children: oV(e.note, "No note recorded") })]
 			})
 		]
 	}) });
 }
-function _V() {
+function SV() {
 	return [
 		{
 			id: "expand",
@@ -31028,7 +31275,7 @@ function _V() {
 			enableResizing: !1,
 			cell: ({ row: e }) => e.getCanExpand() ? /* @__PURE__ */ (0, Y.jsx)(eL, {
 				expanded: e.getIsExpanded(),
-				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} application details for ${tV(e.original.job_title, "job")}`,
+				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} application details for ${oV(e.original.job_title, "job")}`,
 				controls: `application-detail-${e.id}`,
 				onClick: e.getToggleExpandedHandler()
 			}) : null
@@ -31036,43 +31283,43 @@ function _V() {
 		{
 			id: "action_timestamp",
 			header: "Date / time",
-			accessorFn: (e) => eV(e.action_timestamp),
+			accessorFn: (e) => aV(e.action_timestamp),
 			size: 156,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("time", { children: nV(e.original.action_timestamp) })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("time", { children: sV(e.original.action_timestamp) })
 		},
 		{
 			id: "job",
 			header: "Job",
-			accessorFn: (e) => eV(e.job_title),
+			accessorFn: (e) => aV(e.job_title),
 			size: 300,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsxs)("span", {
 				className: "operational-job-cell",
-				children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: tV(e.original.job_title, "Untitled job") }), /* @__PURE__ */ (0, Y.jsx)("span", { children: tV(e.original.job_company, "Company unavailable") })]
+				children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: oV(e.original.job_title, "Untitled job") }), /* @__PURE__ */ (0, Y.jsx)("span", { children: oV(e.original.job_company, "Company unavailable") })]
 			})
 		},
 		{
 			id: "application_status",
 			header: "Status",
-			accessorFn: (e) => eV(e.application_status),
+			accessorFn: (e) => aV(e.application_status),
 			size: 130,
-			cell: ({ row: e }) => cV(e.original.application_status, "application")
+			cell: ({ row: e }) => pV(e.original.application_status, "application")
 		},
 		{
 			id: "source_view",
 			header: "Source view",
-			accessorFn: (e) => eV(e.source_view),
+			accessorFn: (e) => aV(e.source_view),
 			size: 140,
-			cell: ({ row: e }) => tV(e.original.source_view)
+			cell: ({ row: e }) => oV(e.original.source_view)
 		},
 		{
 			id: "note",
 			header: "Note",
-			accessorFn: (e) => eV(e.note),
+			accessorFn: (e) => aV(e.note),
 			size: 230,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, Y.jsx)("span", {
 				className: "operational-truncate",
-				title: eV(e.original.note),
-				children: tV(e.original.note, "No note")
+				title: aV(e.original.note),
+				children: oV(e.original.note, "No note")
 			})
 		},
 		{
@@ -31084,7 +31331,7 @@ function _V() {
 			enableSorting: !1,
 			enableResizing: !1,
 			cell: ({ row: e }) => {
-				let t = eV(e.original.job_url || e.original.job_doc_id);
+				let t = aV(e.original.job_url || e.original.job_doc_id);
 				return t ? /* @__PURE__ */ (0, Y.jsx)("a", {
 					className: "operational-row-action",
 					href: t,
@@ -31100,8 +31347,8 @@ function _V() {
 		}
 	];
 }
-function vV({ state: e }) {
-	let [t, n] = (0, C.useState)(() => oV(XB)), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(_V, []), o = (0, C.useMemo)(() => iV(e.sort), [e.sort]);
+function CV({ state: e }) {
+	let [t, n] = (0, C.useState)(() => dV(tV)), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(SV, []), o = (0, C.useMemo)(() => lV(e.sort), [e.sort]);
 	(0, C.useEffect)(() => i(""), [
 		e.resultKey,
 		e.activeTab,
@@ -31116,15 +31363,15 @@ function vV({ state: e }) {
 			columnSizing: t,
 			expanded: r ? { [r]: !0 } : {}
 		},
-		getRowId: rV,
+		getRowId: cV,
 		getCoreRowModel: UI(),
 		getSortedRowModel: WI(),
-		getRowCanExpand: (e) => !!eV(e.original.note),
+		getRowCanExpand: (e) => !!aV(e.original.note),
 		enableSortingRemoval: !1,
 		columnResizeMode: "onChange",
 		onSortingChange: (e) => {
 			let t = (typeof e == "function" ? e(o) : e)[0];
-			t && aV(qB, {
+			t && uV(QB, {
 				type: "sort_change",
 				key: t.id,
 				direction: t.desc ? "desc" : "asc"
@@ -31132,7 +31379,7 @@ function vV({ state: e }) {
 		},
 		onColumnSizingChange: (e) => n((t) => {
 			let n = typeof e == "function" ? e(t) : e;
-			return sV(XB, n), n;
+			return fV(tV, n), n;
 		}),
 		onExpandedChange: (e) => {
 			let t = r ? { [r]: !0 } : {}, n = typeof e == "function" ? e(t) : e, a = n === !0 ? t : n;
@@ -31154,25 +31401,25 @@ function vV({ state: e }) {
 		stickyColumnId: "open",
 		rowClassName: (e, t) => `operational-row ${t % 2 ? "is-alternate" : ""}`,
 		detailId: (e) => `application-detail-${e.id}`,
-		renderDetails: (e) => /* @__PURE__ */ (0, Y.jsx)(gV, { row: e.original }),
+		renderDetails: (e) => /* @__PURE__ */ (0, Y.jsx)(xV, { row: e.original }),
 		empty: /* @__PURE__ */ (0, Y.jsxs)("div", {
 			className: "operational-empty",
 			children: [/* @__PURE__ */ (0, Y.jsx)("strong", { children: l }), /* @__PURE__ */ (0, Y.jsx)("span", { children: e.activeTab === "APPLIED" ? "Applied jobs will appear after an explicit manual status update." : "Jobs explicitly saved for later will appear here." })]
 		}),
-		onPageChange: (e) => aV(qB, {
+		onPageChange: (e) => uV(QB, {
 			type: "page_change",
 			page: e
 		}),
-		onRetry: () => aV(qB, { type: "retry" }),
+		onRetry: () => uV(QB, { type: "retry" }),
 		fillAvailableWidth: !0,
 		deferPaginationWhileLoading: !0
 	});
 }
-function yV({ state: e }) {
+function wV({ state: e }) {
 	return /* @__PURE__ */ (0, Y.jsxs)("div", {
 		className: "operational-dashboard",
 		children: [
-			/* @__PURE__ */ (0, Y.jsx)(lV, {
+			/* @__PURE__ */ (0, Y.jsx)(mV, {
 				cards: [
 					{
 						label: "Current view",
@@ -31190,14 +31437,14 @@ function yV({ state: e }) {
 					},
 					{
 						label: "With notes",
-						value: e.rows.filter((e) => eV(e.note)).length,
+						value: e.rows.filter((e) => aV(e.note)).length,
 						caption: "On this page",
 						help: "Current-page jobs with a recorded operator note.",
 						icon: fe
 					},
 					{
 						label: "Companies",
-						value: new Set(e.rows.map((e) => eV(e.job_company)).filter(Boolean)).size,
+						value: new Set(e.rows.map((e) => aV(e.job_company)).filter(Boolean)).size,
 						caption: "On this page",
 						help: "Distinct companies represented on the current page.",
 						icon: Me
@@ -31206,15 +31453,15 @@ function yV({ state: e }) {
 				label: "Application summary",
 				loading: e.status === "loading"
 			}),
-			/* @__PURE__ */ (0, Y.jsx)(hV, { state: e }),
-			/* @__PURE__ */ (0, Y.jsx)(vV, { state: e })
+			/* @__PURE__ */ (0, Y.jsx)(bV, { state: e }),
+			/* @__PURE__ */ (0, Y.jsx)(CV, { state: e })
 		]
 	});
 }
 //#endregion
 //#region src/main.tsx
-var bV = "applylens:executive-kpi-state", xV = { status: "loading" };
-function SV() {
+var TV = "applylens:executive-kpi-state", EV = { status: "loading" };
+function DV() {
 	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_SOURCE_YIELD_STATE__ || _F);
 	return (0, C.useEffect)(() => {
 		let e = (e) => {
@@ -31224,17 +31471,17 @@ function SV() {
 		return window.addEventListener(gF, e), () => window.removeEventListener(gF, e);
 	}, []), /* @__PURE__ */ (0, Y.jsx)(OF, { state: e });
 }
-function CV() {
-	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_EXECUTIVE_KPI_STATE__ || xV);
+function OV() {
+	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_EXECUTIVE_KPI_STATE__ || EV);
 	return (0, C.useEffect)(() => {
 		let e = (e) => {
 			let n = e.detail;
 			n != null && n.status && t(n);
 		};
-		return window.addEventListener(bV, e), () => window.removeEventListener(bV, e);
+		return window.addEventListener(TV, e), () => window.removeEventListener(TV, e);
 	}, []), /* @__PURE__ */ (0, Y.jsx)(hF, { state: e });
 }
-function wV() {
+function kV() {
 	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_EXECUTIVE_QUEUE_STATE__ || pL);
 	return (0, C.useEffect)(() => {
 		let e = (e) => {
@@ -31244,7 +31491,7 @@ function wV() {
 		return window.addEventListener(lL, e), () => window.removeEventListener(lL, e);
 	}, []), /* @__PURE__ */ (0, Y.jsx)(ML, { state: e });
 }
-function TV({ view: e }) {
+function AV({ view: e }) {
 	let [t, n] = (0, C.useState)(() => window.__APPLYLENS_PLANNING_WORKLIST_STATE__ || yB);
 	return (0, C.useEffect)(() => {
 		let e = (e) => {
@@ -31252,44 +31499,44 @@ function TV({ view: e }) {
 			t != null && t.status && n(t);
 		};
 		return window.addEventListener(gB, e), () => window.removeEventListener(gB, e);
-	}, []), e === "filters" ? /* @__PURE__ */ (0, Y.jsx)(zB, { state: t }) : e === "summary" ? /* @__PURE__ */ (0, Y.jsx)(HB, { state: t }) : /* @__PURE__ */ (0, Y.jsx)(BB, { state: t });
+	}, []), e === "filters" ? /* @__PURE__ */ (0, Y.jsx)(WB, { state: t }) : e === "summary" ? /* @__PURE__ */ (0, Y.jsx)(qB, { state: t }) : /* @__PURE__ */ (0, Y.jsx)(GB, { state: t });
 }
-function EV() {
-	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_DECISIONS_STATE__ || ZB);
+function jV() {
+	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_DECISIONS_STATE__ || nV);
 	return (0, C.useEffect)(() => {
 		let e = (e) => t(e.detail);
-		return window.addEventListener(UB, e), window.__APPLYLENS_DECISIONS_REACT_READY__ = !0, window.__APPLYLENS_DECISIONS_STATE__ && t(window.__APPLYLENS_DECISIONS_STATE__), window.dispatchEvent(new CustomEvent(GB)), () => window.removeEventListener(UB, e);
-	}, []), /* @__PURE__ */ (0, Y.jsx)(mV, { state: e });
-}
-function DV() {
-	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_APPLICATIONS_STATE__ || QB);
-	return (0, C.useEffect)(() => {
-		let e = (e) => t(e.detail);
-		return window.addEventListener(KB, e), window.__APPLYLENS_APPLICATIONS_REACT_READY__ = !0, window.__APPLYLENS_APPLICATIONS_STATE__ && t(window.__APPLYLENS_APPLICATIONS_STATE__), window.dispatchEvent(new CustomEvent(JB)), () => window.removeEventListener(KB, e);
+		return window.addEventListener(JB, e), window.__APPLYLENS_DECISIONS_REACT_READY__ = !0, window.__APPLYLENS_DECISIONS_STATE__ && t(window.__APPLYLENS_DECISIONS_STATE__), window.dispatchEvent(new CustomEvent(XB)), () => window.removeEventListener(JB, e);
 	}, []), /* @__PURE__ */ (0, Y.jsx)(yV, { state: e });
 }
-var OV = document.getElementById("executiveKpiRoot");
-OV && (0, sF.createRoot)(OV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(CV, {}) }));
-var kV = document.getElementById("executiveQueueRoot");
-kV && (0, sF.createRoot)(kV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(wV, {}) }));
-var AV = document.getElementById("sourceYieldRoot");
-AV && (0, sF.createRoot)(AV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(SV, {}) }));
-var jV = document.getElementById("pipelineDashboardRoot");
-jV && (0, sF.createRoot)(jV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(fR, {}) }));
-var MV = document.getElementById("planningSummaryRoot");
-MV && (0, sF.createRoot)(MV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(TV, { view: "summary" }) }));
-var NV = document.getElementById("planningFiltersRoot");
-NV && (0, sF.createRoot)(NV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(TV, { view: "filters" }) }));
-var PV = document.getElementById("planningWorklistRoot");
-PV && (0, sF.createRoot)(PV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(TV, { view: "worklist" }) }));
-var FV = document.getElementById("decisionsDashboardRoot");
-FV && (0, sF.createRoot)(FV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(EV, {}) }));
-var IV = document.getElementById("applicationsDashboardRoot");
-IV && (0, sF.createRoot)(IV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(DV, {}) }));
-var LV = document.getElementById("schedulerHealthDashboardRoot");
-LV && (0, sF.createRoot)(LV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(ez, {}) }));
-var RV = document.getElementById("agenticOperationsRoot");
-RV && (0, sF.createRoot)(RV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(hB, {}) }));
-var zV = document.getElementById("advancedDiagnosticsRoot");
-zV && (0, sF.createRoot)(zV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(Hz, { state: window.__APPLYLENS_ADVANCED_DIAGNOSTICS_STATE__ || tz }) }));
+function MV() {
+	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_APPLICATIONS_STATE__ || rV);
+	return (0, C.useEffect)(() => {
+		let e = (e) => t(e.detail);
+		return window.addEventListener(ZB, e), window.__APPLYLENS_APPLICATIONS_REACT_READY__ = !0, window.__APPLYLENS_APPLICATIONS_STATE__ && t(window.__APPLYLENS_APPLICATIONS_STATE__), window.dispatchEvent(new CustomEvent($B)), () => window.removeEventListener(ZB, e);
+	}, []), /* @__PURE__ */ (0, Y.jsx)(wV, { state: e });
+}
+var NV = document.getElementById("executiveKpiRoot");
+NV && (0, sF.createRoot)(NV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(OV, {}) }));
+var PV = document.getElementById("executiveQueueRoot");
+PV && (0, sF.createRoot)(PV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(kV, {}) }));
+var FV = document.getElementById("sourceYieldRoot");
+FV && (0, sF.createRoot)(FV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(DV, {}) }));
+var IV = document.getElementById("pipelineDashboardRoot");
+IV && (0, sF.createRoot)(IV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(fR, {}) }));
+var LV = document.getElementById("planningSummaryRoot");
+LV && (0, sF.createRoot)(LV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(AV, { view: "summary" }) }));
+var RV = document.getElementById("planningFiltersRoot");
+RV && (0, sF.createRoot)(RV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(AV, { view: "filters" }) }));
+var zV = document.getElementById("planningWorklistRoot");
+zV && (0, sF.createRoot)(zV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(AV, { view: "worklist" }) }));
+var BV = document.getElementById("decisionsDashboardRoot");
+BV && (0, sF.createRoot)(BV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(jV, {}) }));
+var VV = document.getElementById("applicationsDashboardRoot");
+VV && (0, sF.createRoot)(VV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(MV, {}) }));
+var HV = document.getElementById("schedulerHealthDashboardRoot");
+HV && (0, sF.createRoot)(HV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(ez, {}) }));
+var UV = document.getElementById("agenticOperationsRoot");
+UV && (0, sF.createRoot)(UV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(hB, {}) }));
+var WV = document.getElementById("advancedDiagnosticsRoot");
+WV && (0, sF.createRoot)(WV).render(/* @__PURE__ */ (0, Y.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, Y.jsx)(Hz, { state: window.__APPLYLENS_ADVANCED_DIAGNOSTICS_STATE__ || tz }) }));
 //#endregion

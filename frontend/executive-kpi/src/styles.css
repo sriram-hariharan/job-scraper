@@ -4464,3 +4464,456 @@ html[data-theme="dark"] #advancedDiagnosticsRoot .advanced-diagnostics-dialog-pr
   .advanced-diagnostics-technical-drawer { animation: none; }
   .advanced-diagnostics-wizard-header .advanced-diagnostics-stepper li button { transition: none; }
 }
+
+/* Planning Bulk Generate: the idle control morphs into a progress button. */
+#planningWorklistRoot .planning-react-bulk-actions {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+#planningWorklistRoot .planning-react-bulk-generate.is-running {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  /* Active background work, not a disabled control: stronger border, readable
+     ink and a firmer tint than the idle treatment. Dimensions are unchanged so
+     the toolbar never shifts when the control morphs. */
+  border-color: #4f9a86;
+  background: #cfe7df;
+  color: #103029;
+  opacity: 1;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.12);
+}
+
+#planningWorklistRoot .planning-react-bulk-generate.is-running:hover {
+  border-color: #34796a;
+  background: #bfdfd4;
+  box-shadow: 0 3px 8px rgba(43, 35, 48, 0.16);
+}
+
+#planningWorklistRoot .planning-react-bulk-generate.is-running:focus-visible {
+  outline: 3px solid rgba(53, 111, 99, 0.55);
+  outline-offset: 2px;
+}
+
+#planningWorklistRoot .planning-react-bulk-generate.is-running small {
+  color: #103029;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+#planningWorklistRoot .planning-bulk-spinner {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  border: 2.5px solid rgba(16, 48, 41, 0.28);
+  border-top-color: #1c6353;
+  border-radius: 50%;
+  animation: planning-bulk-spin 850ms linear infinite;
+}
+
+@keyframes planning-bulk-spin { to { transform: rotate(360deg); } }
+
+/* Progress strip: a visible neutral track plus a fill whose width is only ever
+   the canonical completed/total. At 0% the track still animates so the user can
+   see the run has started, without implying completed work. */
+#planningWorklistRoot .planning-bulk-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: rgba(16, 48, 41, 0.22);
+  overflow: hidden;
+}
+
+#planningWorklistRoot .planning-bulk-progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.75) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: planning-bulk-shimmer 1500ms ease-in-out infinite;
+}
+
+#planningWorklistRoot .planning-bulk-progress__fill {
+  display: block;
+  height: 100%;
+  background: #1c6353;
+  transition: width 240ms ease;
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes planning-bulk-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate.is-running {
+  border-color: #5fae98;
+  background: rgba(47, 125, 103, 0.28);
+  color: #eaf6f2;
+}
+
+html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate.is-running small { color: #eaf6f2; }
+
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-spinner {
+  border-color: rgba(234, 246, 242, 0.3);
+  border-top-color: #7fd3ba;
+}
+
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-progress { background: rgba(234, 246, 242, 0.24); }
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-progress__fill { background: #7fd3ba; }
+
+#planningWorklistRoot .planning-bulk-run__hint {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  max-width: 240px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: #1f2a37;
+  color: #f8fafc;
+  font-size: 0.74rem;
+  line-height: 1.3;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 22%);
+}
+
+#planningWorklistRoot .planning-bulk-run__hint.hidden { display: none; }
+
+/* Anchored progress panel: fixed regions, only the Jobs list scrolls, so the
+   panel is the same size for 3 jobs or the 500-item server maximum. */
+#planningWorklistRoot .planning-bulk-run__panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(560px, calc(100vh - 120px));
+  padding: 14px;
+  border: 1px solid #9fc7bb;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #103029;
+  box-shadow: 0 18px 44px rgba(16, 24, 40, 0.2);
+}
+
+#planningWorklistRoot .planning-bulk-run__panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e6efec;
+}
+
+#planningWorklistRoot .planning-bulk-run__panel-title {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+#planningWorklistRoot .planning-bulk-run__panel-title strong { font-size: 0.92rem; font-weight: 650; }
+
+#planningWorklistRoot .planning-bulk-run__panel-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+#planningWorklistRoot .planning-bulk-run__progress-count {
+  font-size: 0.95rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: #103029;
+}
+
+#planningWorklistRoot .planning-bulk-run__close {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+#planningWorklistRoot .planning-bulk-run__close:hover { background: #eef4f2; border-color: #cfe0da; }
+
+#planningWorklistRoot .planning-bulk-run__close:focus-visible {
+  outline: 3px solid rgba(53, 111, 99, 0.5);
+  outline-offset: 1px;
+}
+
+/* Status + metric chips: icon plus text, never colour alone. */
+#planningWorklistRoot .planning-bulk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+#planningWorklistRoot .planning-bulk-chip__icon { font-weight: 700; }
+
+#planningWorklistRoot .planning-bulk-chip.is-running {
+  border-color: #7cbfab;
+  background: #dbeee7;
+  color: #10493c;
+}
+
+#planningWorklistRoot .planning-bulk-chip.is-done {
+  border-color: #8ec8a8;
+  background: #e2f2e8;
+  color: #17512f;
+}
+
+#planningWorklistRoot .planning-bulk-chip.is-attention {
+  border-color: #e0b072;
+  background: #fbf0dd;
+  color: #7a4708;
+}
+
+#planningWorklistRoot .planning-bulk-chip.is-pending {
+  border-color: #cfd8d5;
+  background: #f2f5f4;
+  color: #485753;
+}
+
+#planningWorklistRoot .planning-bulk-run__metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+#planningWorklistRoot .planning-bulk-run__section-title {
+  font-size: 0.68rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7f79;
+}
+
+#planningWorklistRoot .planning-bulk-run__current {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+#planningWorklistRoot .planning-bulk-run__current-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #a9d3c5;
+  border-left: 3px solid #2f7d67;
+  border-radius: 10px;
+  background: #eef7f3;
+  min-width: 0;
+}
+
+#planningWorklistRoot .planning-bulk-run__current-job {
+  font-size: 0.8rem;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+#planningWorklistRoot .planning-bulk-run__jobs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+#planningWorklistRoot .planning-bulk-run__jobs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#planningWorklistRoot .planning-bulk-run__jobs-filters { display: inline-flex; gap: 4px; }
+
+#planningWorklistRoot .planning-bulk-run__filter {
+  padding: 2px 8px;
+  border: 1px solid #cfe0da;
+  border-radius: 999px;
+  background: #f7faf9;
+  color: #40564f;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#planningWorklistRoot .planning-bulk-run__filter.is-active {
+  border-color: #4f9a86;
+  background: #dbeee7;
+  color: #10493c;
+}
+
+#planningWorklistRoot .planning-bulk-run__filter:focus-visible {
+  outline: 3px solid rgba(53, 111, 99, 0.5);
+  outline-offset: 1px;
+}
+
+/* The only scrolling region in the panel. */
+#planningWorklistRoot .planning-bulk-run__job-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 1px solid #e0e9e6;
+  border-radius: 10px;
+  background: #fbfdfc;
+  overscroll-behavior: contain;
+}
+
+#planningWorklistRoot .planning-bulk-run__job-list:focus-visible {
+  outline: 3px solid rgba(53, 111, 99, 0.5);
+  outline-offset: 1px;
+}
+
+#planningWorklistRoot .planning-bulk-run__job {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 7px;
+  border-left: 3px solid transparent;
+  font-size: 0.76rem;
+}
+
+#planningWorklistRoot .planning-bulk-run__job.is-running {
+  background: #eef7f3;
+  border-left-color: #2f7d67;
+}
+
+#planningWorklistRoot .planning-bulk-run__job.is-attention {
+  background: #fdf7ec;
+  border-left-color: #d29338;
+}
+
+#planningWorklistRoot .planning-bulk-run__job-icon {
+  display: inline-grid;
+  place-items: center;
+  font-weight: 700;
+}
+
+#planningWorklistRoot .planning-bulk-run__job.is-done .planning-bulk-run__job-icon { color: #17512f; }
+#planningWorklistRoot .planning-bulk-run__job.is-attention .planning-bulk-run__job-icon { color: #7a4708; }
+#planningWorklistRoot .planning-bulk-run__job.is-pending .planning-bulk-run__job-icon { color: #8a9a95; }
+
+#planningWorklistRoot .planning-bulk-run__job-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+#planningWorklistRoot .planning-bulk-run__job-empty {
+  padding: 10px 6px;
+  color: #6b7f79;
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+/* Pinned: never inside the scrolling list. */
+#planningWorklistRoot .planning-bulk-run__footer {
+  flex: 0 0 auto;
+  padding-top: 10px;
+  border-top: 1px solid #e6efec;
+}
+
+#planningWorklistRoot .planning-bulk-run__stop {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #4f9a86;
+  border-radius: 9px;
+  background: #dbeee7;
+  color: #10493c;
+  font: inherit;
+  font-size: 0.79rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#planningWorklistRoot .planning-bulk-run__stop:hover:not(:disabled) { background: #c9e4da; }
+
+#planningWorklistRoot .planning-bulk-run__stop:focus-visible {
+  outline: 3px solid rgba(53, 111, 99, 0.5);
+  outline-offset: 2px;
+}
+
+#planningWorklistRoot .planning-bulk-run__stop:disabled { opacity: 0.6; cursor: not-allowed; }
+
+#planningWorklistRoot .planning-bulk-spinner--chip { width: 11px; height: 11px; border-width: 2px; }
+#planningWorklistRoot .planning-bulk-spinner--row { width: 11px; height: 11px; border-width: 2px; }
+
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-run__panel {
+  border-color: rgba(127, 211, 186, 0.34);
+  background: #10201c;
+  color: #eaf6f2;
+  box-shadow: 0 18px 44px rgba(2, 6, 23, 0.5);
+}
+
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-run__panel-head,
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-run__footer { border-color: rgba(234, 246, 242, 0.14); }
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-run__progress-count { color: #eaf6f2; }
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-run__section-title { color: #9dbab2; }
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-run__close:hover { background: rgba(234, 246, 242, 0.1); border-color: rgba(234, 246, 242, 0.2); }
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-run__job-list { border-color: rgba(234, 246, 242, 0.14); background: rgba(234, 246, 242, 0.04); }
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-run__current-card { border-color: rgba(127, 211, 186, 0.4); border-left-color: #7fd3ba; background: rgba(47, 125, 103, 0.24); }
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-run__job.is-running { background: rgba(47, 125, 103, 0.22); border-left-color: #7fd3ba; }
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-run__job.is-attention { background: rgba(210, 147, 56, 0.18); border-left-color: #e0b072; }
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-chip.is-running { border-color: rgba(127, 211, 186, 0.5); background: rgba(47, 125, 103, 0.3); color: #d6f2e8; }
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-chip.is-done { border-color: rgba(142, 200, 168, 0.5); background: rgba(23, 81, 47, 0.4); color: #d8f0e0; }
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-chip.is-attention { border-color: rgba(224, 176, 114, 0.55); background: rgba(122, 71, 8, 0.38); color: #f6dfbc; }
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-chip.is-pending { border-color: rgba(234, 246, 242, 0.2); background: rgba(234, 246, 242, 0.08); color: #c3d3ce; }
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-run__filter { border-color: rgba(234, 246, 242, 0.2); background: rgba(234, 246, 242, 0.06); color: #c3d3ce; }
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-run__filter.is-active { border-color: #7fd3ba; background: rgba(47, 125, 103, 0.32); color: #d6f2e8; }
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-run__stop { border-color: #7fd3ba; background: rgba(47, 125, 103, 0.3); color: #d6f2e8; }
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-run__stop:hover:not(:disabled) { background: rgba(47, 125, 103, 0.42); }
+html[data-theme="dark"] #planningWorklistRoot .planning-bulk-run__job-empty { color: #9dbab2; }
+
+@media (prefers-reduced-motion: reduce) {
+  #planningWorklistRoot .planning-bulk-spinner { animation: none; }
+  #planningWorklistRoot .planning-bulk-progress__fill { transition: none; }
+  #planningWorklistRoot .planning-bulk-progress::after { animation: none; content: none; }
+}

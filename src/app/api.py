@@ -8,6 +8,7 @@ from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from src.app import (
+    bulk_generation_service,
     provider_model_routing_service,
     services,
     user_ai_settings_service,
@@ -156,6 +157,15 @@ class PlanningExtractResumeUploadRequest(BaseModel):
     filename: str
     content_type: str = ""
     upload_base64: str
+
+
+class PlanningBulkGenerationStartRequest(BaseModel):
+    pipeline_run_id: str
+    requested_count: int = Field(ge=1, le=500)
+    candidates: list[dict[str, Any]] = Field(min_length=1, max_length=500)
+    review_filter: str = ""
+    match_filter: str = ""
+    preference_filter: str = ""
 
 
 
@@ -952,11 +962,105 @@ async def sanitize_user_ai_settings_validation_error(
     return await request_validation_exception_handler(request, exc)
 
 
+_BULK_SAFE_GET_PATHS = frozenset({
+    "/", "/planning", "/decisions-ui", "/applications", "/pipeline",
+    "/scheduler", "/agentic-operations", "/profile", "/profile/preferences",
+    "/profile/ai-settings", "/profile/saved-scans", "/onboarding",
+    "/health", "/user/workspace-state", "/status", "/pipeline/status",
+    "/scheduler/jobs", "/scheduler/command", "/scheduler/launchd-config",
+    "/scheduler/launchd-agent-status", "/scheduler/history",
+    "/scheduler/storage-contract", "/scheduler/postgres-status", "/scheduler/summary",
+    "/notifications", "/notifications/summary", "/notifications/unread-count",
+    "/browse", "/review", "/workflow", "/planner", "/decisions",
+    "/applied-jobs", "/saved-jobs", "/profile/resumes",
+    "/profile/resume-role-mappings", "/ai/settings", "/ai/settings/catalog",
+    "/ai/settings/recommended-routes", "/onboarding/preferences",
+    "/onboarding/location-search", "/onboarding/status", "/profile/admin/users",
+    "/profile/admin/agentic-operations/overview", "/profile/pipeline-runs",
+    "/profile/saved-scans/data", "/auth/session-config", "/auth/me", "/logout",
+    "/planning/bulk-generation/status",
+    "/api/agent-feedback", "/api/agent-feedback/summary", "/api/agent-feedback/export",
+})
+
+
+def _bulk_generation_request_is_proven_safe(request: Request) -> bool:
+    method = str(request.method or "").upper()
+    path = str(request.url.path or "")
+    if method in {"OPTIONS", "HEAD"} or path.startswith("/static/"):
+        return True
+    if method == "POST" and (path == "/auth/logout" or (
+        path.startswith("/planning/bulk-generation/runs/") and path.endswith("/stop")
+    )):
+        return True
+    if method != "GET":
+        return False
+    if path in _BULK_SAFE_GET_PATHS:
+        return True
+    safe_read_prefixes = (
+        "/scheduler/runs/",
+        "/profile/pipeline-runs/",
+        "/planning/bulk-generation/runs/",
+        "/ai/settings/recommended-route/",
+        "/api/agentic-approvals/",
+    )
+    return any(path.startswith(prefix) for prefix in safe_read_prefixes)
+
+
+def _bulk_generation_conflict_response(owner_user_id: str) -> JSONResponse:
+    try:
+        active = bulk_generation_service.active_bulk_generation_guard_state(
+            owner_user_id=owner_user_id
+        )
+    except bulk_generation_service.BulkGenerationError:
+        active = {}
+    return JSONResponse(
+        status_code=409,
+        content={
+            "ok": False,
+            "error_category": "bulk_generation_in_progress",
+            "message": bulk_generation_service.BULK_BLOCK_MESSAGE,
+            "bulk_run_id": str(active.get("run_id", "") or ""),
+            "bulk_status": str(active.get("status", "") or "running"),
+        },
+    )
+
+
 @app.middleware("http")
 async def require_dashboard_auth(request: Request, call_next):
     guard_response = auth_guard_response(request)
     if guard_response is not None:
         return guard_response
+
+    owner_user_id = str(
+        dict(getattr(request.state, "auth_user", {}) or {}).get("user_id", "") or ""
+    ).strip()
+    if owner_user_id and not _bulk_generation_request_is_proven_safe(request):
+        try:
+            active_bulk = bulk_generation_service.active_bulk_generation_guard_state(
+                owner_user_id=owner_user_id
+            )
+        except bulk_generation_service.BulkGenerationError:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "ok": False,
+                    "error_category": "bulk_generation_state_unavailable",
+                    "message": "Bulk Generate state could not be verified. Try again shortly.",
+                    "bulk_run_id": "",
+                    "bulk_status": "unknown",
+                },
+            )
+        if active_bulk:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "ok": False,
+                    "error_category": "bulk_generation_in_progress",
+                    "message": bulk_generation_service.BULK_BLOCK_MESSAGE,
+                    "bulk_run_id": str(active_bulk.get("run_id", "") or ""),
+                    "bulk_status": str(active_bulk.get("status", "") or "running"),
+                },
+            )
 
     return await call_next(request)
 
@@ -3318,6 +3422,8 @@ def run_live_pipeline(http_request: Request, payload: dict = Body(...)):
         delete_seen_data=str(payload.get("delete_seen_data", "no") or "no"),
     )
     except ValueError as exc:
+        if str(exc) == "bulk_generation_in_progress":
+            return _bulk_generation_conflict_response(_auth_owner_user_id(http_request))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     
 @app.get("/browse")
@@ -3782,6 +3888,70 @@ def planning_regenerate_selected_resume(
         ) from None
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _bulk_generation_error_response(
+    exc: bulk_generation_service.BulkGenerationError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "ok": False,
+            "error_category": exc.category,
+            "message": exc.message,
+            "bulk_run_id": str(exc.run.get("run_id", "") or ""),
+            "bulk_status": str(exc.run.get("status", "") or ""),
+        },
+    )
+
+
+@app.post("/planning/bulk-generation/start", status_code=202)
+def planning_bulk_generation_start(
+    request: PlanningBulkGenerationStartRequest,
+    http_request: Request,
+):
+    try:
+        return bulk_generation_service.start_bulk_generation(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            pipeline_run_id=request.pipeline_run_id,
+            candidates=request.candidates,
+            requested_count=request.requested_count,
+            review_filter=request.review_filter,
+            match_filter=request.match_filter,
+            preference_filter=request.preference_filter,
+        )
+    except bulk_generation_service.BulkGenerationError as exc:
+        return _bulk_generation_error_response(exc)
+
+
+@app.get("/planning/bulk-generation/status")
+def planning_bulk_generation_status(http_request: Request):
+    try:
+        return bulk_generation_service.get_bulk_generation_status(
+            owner_user_id=_require_auth_owner_user_id(http_request)
+        )
+    except bulk_generation_service.BulkGenerationError as exc:
+        return _bulk_generation_error_response(exc)
+
+
+@app.get("/planning/bulk-generation/runs/{run_id}")
+def planning_bulk_generation_run_status(run_id: str, http_request: Request):
+    try:
+        return bulk_generation_service.get_bulk_generation_status(
+            owner_user_id=_require_auth_owner_user_id(http_request), run_id=run_id
+        )
+    except bulk_generation_service.BulkGenerationError as exc:
+        return _bulk_generation_error_response(exc)
+
+
+@app.post("/planning/bulk-generation/runs/{run_id}/stop")
+def planning_bulk_generation_stop(run_id: str, http_request: Request):
+    try:
+        return bulk_generation_service.request_bulk_generation_stop(
+            owner_user_id=_require_auth_owner_user_id(http_request), run_id=run_id
+        )
+    except bulk_generation_service.BulkGenerationError as exc:
+        return _bulk_generation_error_response(exc)
 
 @app.post("/planning/preview-selected-patches")
 def planning_preview_selected_patches(
@@ -6170,6 +6340,8 @@ def profile_pipeline_run_rerun(run_id: str, http_request: Request):
             run_id=run_id,
         )
     except (SystemExit, ValueError) as exc:
+        if str(exc) == "bulk_generation_in_progress":
+            return _bulk_generation_conflict_response(_auth_owner_user_id(http_request))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 @app.get("/profile/saved-scans/data")

@@ -201,6 +201,45 @@ def render_top_shell(active_href: str) -> str:
 </aside>
 
 <div class="{toolbar_classes}" role="group" aria-label="Workspace controls">
+  <div class="bulk-generation-shell hidden" id="bulkGenerationShell" data-bulk-safe="true">
+    <button
+      type="button"
+      class="bulk-generation-progress-btn"
+      id="bulkGenerationProgressBtn"
+      aria-controls="bulkGenerationPanel"
+      aria-expanded="false"
+      data-bulk-safe="true"
+    >
+      <span class="bulk-generation-progress-dot" aria-hidden="true"></span>
+      <span id="bulkGenerationProgressLabel">0 / 0</span>
+    </button>
+    <section
+      class="bulk-generation-panel hidden"
+      id="bulkGenerationPanel"
+      aria-label="Bulk Generate progress"
+      data-bulk-safe="true"
+    >
+      <div class="bulk-generation-panel__header">
+        <div>
+          <strong>Bulk Generate</strong>
+          <span id="bulkGenerationStatusLabel">Checking status…</span>
+        </div>
+        <button type="button" class="ghost-btn" id="bulkGenerationMinimizeBtn" data-bulk-safe="true">Minimize</button>
+      </div>
+      <div class="bulk-generation-panel__counts" id="bulkGenerationCounts"></div>
+      <div class="bulk-generation-panel__current" id="bulkGenerationCurrent"></div>
+      <div class="bulk-generation-panel__results" id="bulkGenerationResults"></div>
+      <button type="button" class="ghost-btn" id="bulkGenerationStopBtn" data-bulk-safe="true">
+        Stop after current
+      </button>
+    </section>
+  </div>
+
+  <span class="bulk-generation-guard-description" id="bulkGenerationGuardDescription">
+    Bulk Generate must finish or be stopped before this action is available.
+  </span>
+  <div class="bulk-generation-guard-tooltip hidden" id="bulkGenerationGuardTooltip" role="tooltip"></div>
+
   <div class="notification-shell" id="notificationShell">
     <button
       type="button"

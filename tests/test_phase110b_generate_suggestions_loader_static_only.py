@@ -676,37 +676,18 @@ def test_bulk_generation_reuses_exact_action_resolution_and_single_row_payload()
     assert 'action.kind === "open_workspace"' in summary_source
 
 
-def test_bulk_generation_is_sequential_continues_after_failure_stops_and_refreshes_once():
-    cases = _evaluate_bulk_generate_suggestions_execution()
-
-    assert cases["completed"] == {
-        "order": ["start-A", "end-A", "start-B", "end-B", "start-C", "end-C"],
-        "maxActive": 1,
-        "completed": 3,
-        "succeeded": 2,
-        "needsAttention": 1,
-        "statuses": ["success", "needs_attention", "success"],
-        "publishCalls": 2,
-        "retryLimits": [0, 0, 0],
-        "refreshCalls": 1,
-    }
-    assert cases["stopped"] == {
-        "order": ["start-A", "end-A"],
-        "completed": 1,
-        "succeeded": 1,
-        "needsAttention": 0,
-        "remaining": 2,
-        "finalRender": "stopped",
-    }
-
+def test_bulk_generation_start_is_one_prompt_server_owned_request():
     source = _source()
     execute_source = _async_function_source(source, "executeBulkGenerateSuggestions")
     assert "Promise.all" not in execute_source
     assert "buildBulkGenerateSuggestionsPayload(row)" in execute_source
-    assert (
-        "const BULK_GENERATE_SUGGESTIONS_PARSE_RETRY_LIMIT = 0;" in _source()
-    )
-    assert "await postJson(" in execute_source
+    assert "const BULK_GENERATE_SUGGESTIONS_PARSE_RETRY_LIMIT = 0;" in source
+    assert 'await postJson("/planning/bulk-generation/start"' in execute_source
+    assert "/planning/regenerate-selected-resume" not in execute_source
+    assert "for (let index" not in execute_source
+    assert "requested_count: rows.length" in execute_source
+    assert "closeBulkGenerateSuggestionsOverlay()" in execute_source
+    assert "ApplyLensBulkGeneration?.refresh" in execute_source
     assert "loadPlanningTable" not in execute_source
     assert "retry" not in execute_source.lower()
 
@@ -1077,8 +1058,10 @@ def test_bulk_configuration_progress_and_safety_contract_is_explicit_and_bounded
     assert "abort" not in stop_source.lower()
     assert 'overlay.setAttribute("aria-busy", state === "running" ? "true" : "false")' in overlay_source
     assert execute_source.index("bulkGenerateSuggestionsState.isRunning = true") < execute_source.index(
-        'renderBulkGenerateSuggestionsOverlay("running")'
+        'postJson("/planning/bulk-generation/start"'
     )
+    assert "for (let index" not in execute_source
+    assert "ApplyLensBulkGeneration?.stop" in stop_source
     assert '.workflow-overlay--tailoring[data-workflow-state="running"] .workflow-dialog-status-icon::after {' in styles
     assert '.workflow-overlay--tailoring:not(.is-success):not(.is-error) .workflow-dialog-status-icon::after {' not in styles
     assert '.bulk-generate-suggestions-fullpage[data-workflow-state="confirm"] .workflow-dialog-status-icon::after {' in styles

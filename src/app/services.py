@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
+from functools import wraps
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -21,6 +22,8 @@ import sys
 import tempfile
 import shutil
 import signal
+
+from src.utils.file_lock import exclusive_file_lock
 
 from src.ai.user_provider_runtime import (
     UserProviderRuntimeConfigurationError,
@@ -10762,6 +10765,9 @@ def run_live_pipeline_payload(
             if reason == "owner_already_running":
                 raise ValueError("A live pipeline run is already in progress for this user.")
 
+            if reason == "bulk_generation_in_progress":
+                raise ValueError("bulk_generation_in_progress")
+
             if reason == "capacity_full":
                 raise ValueError(
                     f"Live Pipeline capacity is currently full ({active_count}/{max_count}). Try again after a run finishes."
@@ -15044,6 +15050,18 @@ def _normalize_tailoring_parse_retry_limit(value: Any) -> int:
     return value
 
 
+def _serialized_targeted_regeneration(function):
+    """Serialize shared manifest/training-log writes for one Planning run."""
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        output_dir = kwargs.get("output_dir", args[0] if args else DEFAULT_OUTPUT_DIR)
+        lock_path = Path(output_dir) / ".selected-resume-regeneration.lock"
+        with exclusive_file_lock(lock_path, timeout_seconds=1800.0):
+            return function(*args, **kwargs)
+    return wrapped
+
+
+@_serialized_targeted_regeneration
 def regenerate_selected_resume_tailoring_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     job_corpus: Path = DEFAULT_CORPUS_PATH,

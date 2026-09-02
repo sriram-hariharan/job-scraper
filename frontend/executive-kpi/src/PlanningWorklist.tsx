@@ -6,8 +6,8 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { CheckCircle2, ClipboardList, FileText, Sparkles, UserRoundCheck } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { CheckCircle2, ClipboardList, FileText, Sparkles, UserRoundCheck, X } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { SharedFilterSelect, type SharedFilterOption } from "./filter/FilterSelect";
 import {
   SHARED_NEUTRAL_CONTROL_CLASS,
@@ -103,6 +103,15 @@ export type PlanningWorklistState = {
     eligibleCount: number;
     available: boolean;
     isRunning: boolean;
+    /** Presentation mirror of the canonical server progress. */
+    total?: number;
+    completed?: number;
+    needsAttention?: number;
+    remaining?: number;
+    currentLabel?: string;
+    stopRequested?: boolean;
+    verified?: boolean;
+    items?: { label: string; status: string; outcome?: string }[];
   };
 };
 
@@ -114,6 +123,7 @@ export type PlanningWorklistAction =
   | { type: "apply_filters"; filters: PlanningFilters }
   | { type: "clear_filters" }
   | { type: "bulk_generate_suggestions" }
+  | { type: "bulk_stop_after_current" }
   | { type: "next_step"; row: PlanningRow };
 
 export const DEFAULT_PLANNING_STATE: PlanningWorklistState = {
@@ -142,6 +152,276 @@ export const DEFAULT_PLANNING_STATE: PlanningWorklistState = {
   preferenceOptions: [],
   bulkSuggestions: { eligibleCount: 0, available: false, isRunning: false },
 };
+
+export const PLANNING_BULK_RUN_TOOLTIP = "Bulk Generate running. Click to view.";
+
+function boundedBulkJobLabel(label: string): string {
+  const clean = String(label || "").trim();
+  if (clean.length <= 80) return clean;
+  return `${clean.slice(0, 79)}…`;
+}
+
+const BULK_ITEM_PRESENTATION: Record<string, { icon: string; label: string; tone: string }> = {
+  success: { icon: "✓", label: "Completed", tone: "done" },
+  succeeded: { icon: "✓", label: "Completed", tone: "done" },
+  needs_attention: { icon: "!", label: "Needs attention", tone: "attention" },
+  running: { icon: "◌", label: "Running", tone: "running" },
+  pending: { icon: "○", label: "Pending", tone: "pending" },
+};
+
+function bulkItemPresentation(status: string) {
+  return BULK_ITEM_PRESENTATION[status] || BULK_ITEM_PRESENTATION.pending;
+}
+
+/**
+ * One Planning Bulk control. Idle it starts a batch; while a run is active the
+ * same control morphs into a progress button that opens the anchored details
+ * popover. Every value is the canonical server progress published by the shared
+ * shell — nothing is derived or timed locally.
+ */
+function PlanningBulkGenerateControl({
+  bulk,
+  onStart,
+  onStop,
+}: {
+  bulk: PlanningWorklistState["bulkSuggestions"];
+  onStart: () => void;
+  onStop: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [hintVisible, setHintVisible] = useState(false);
+  const [attentionOnly, setAttentionOnly] = useState(false);
+  const rootRef = useRef<HTMLSpanElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
+  const hintId = useId();
+  const running = Boolean(bulk.isRunning);
+
+  useEffect(() => {
+    if (!running && open) setOpen(false);
+  }, [running, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener("mousedown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  const total = Number(bulk.total || 0);
+  const completed = Number(bulk.completed || 0);
+  const needsAttention = Number(bulk.needsAttention || 0);
+  const remaining = Number(bulk.remaining || 0);
+  const stopRequested = Boolean(bulk.stopRequested);
+  const items = Array.isArray(bulk.items) ? bulk.items : [];
+  const percent = total > 0 ? Math.min(100, Math.max(0, Math.round((completed / total) * 100))) : 0;
+  const statusLabel = bulk.verified === false
+    ? "Status unavailable"
+    : stopRequested
+    ? "Stopping after current"
+    : "Running";
+  const currentLabel = boundedBulkJobLabel(bulk.currentLabel || "");
+  const statusTone = bulk.verified === false ? "pending" : stopRequested ? "attention" : "running";
+  const attentionCount = items.filter((item) => item.status === "needs_attention").length;
+  const visibleItems = attentionOnly
+    ? items.filter((item) => item.status === "needs_attention")
+    : items;
+
+  const idleTitle = bulk.eligibleCount > 0
+    ? `Generate suggestions for ${bulk.eligibleCount} eligible Planning job${bulk.eligibleCount === 1 ? "" : "s"}.`
+    : "No Planning jobs currently need suggestions.";
+
+  return (
+    <span
+      className="planning-react-bulk-actions"
+      ref={rootRef}
+      // While a run is active this span holds only Bulk's own progress
+      // controls, which the shared-shell guard must never block.
+      data-bulk-safe={running ? "true" : undefined}
+    >
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`planning-react-bulk-generate${running ? " is-running" : ""}`}
+        disabled={!running && bulk.eligibleCount <= 0}
+        title={running ? undefined : idleTitle}
+        aria-describedby={running ? hintId : undefined}
+        aria-expanded={running ? open : undefined}
+        aria-controls={running && open ? panelId : undefined}
+        onMouseEnter={running ? () => setHintVisible(true) : undefined}
+        onMouseLeave={running ? () => setHintVisible(false) : undefined}
+        onFocus={running ? () => setHintVisible(true) : undefined}
+        onBlur={running ? () => setHintVisible(false) : undefined}
+        onClick={() => {
+          if (running) setOpen((value) => !value);
+          else onStart();
+        }}
+      >
+        <span className="planning-react-bulk-generate__icon" aria-hidden="true">
+          {running ? <span className="planning-bulk-spinner" /> : <Sparkles size={15} strokeWidth={2} />}
+        </span>
+        <span className="planning-react-bulk-generate__label">
+          {running ? "Bulk suggestions generating…" : "Bulk generate suggestions"}
+        </span>
+        <small>{running ? `${completed} / ${total}` : `${bulk.eligibleCount} eligible`}</small>
+        {running ? (
+          <span
+            className="planning-bulk-progress"
+            role="progressbar"
+            aria-label="Bulk Generate progress"
+            aria-valuenow={completed}
+            aria-valuemin={0}
+            aria-valuemax={total}
+          >
+            <span className="planning-bulk-progress__fill" style={{ width: `${percent}%` }} />
+          </span>
+        ) : null}
+      </button>
+      {running ? (
+        <span
+          id={hintId}
+          role="tooltip"
+          className={`planning-bulk-run__hint${hintVisible ? "" : " hidden"}`}
+        >
+          {PLANNING_BULK_RUN_TOOLTIP}
+        </span>
+      ) : null}
+      {running && open ? (
+        <div
+          id={panelId}
+          role="dialog"
+          aria-label="Bulk Generate progress"
+          className="planning-bulk-run__panel"
+        >
+          <header className="planning-bulk-run__panel-head">
+            <div className="planning-bulk-run__panel-title">
+              <strong>Bulk Generate</strong>
+              <span className={`planning-bulk-chip is-${statusTone}`}>
+                {statusTone === "running"
+                  ? <span className="planning-bulk-spinner planning-bulk-spinner--chip" aria-hidden="true" />
+                  : <span className="planning-bulk-chip__icon" aria-hidden="true">•</span>}
+                {statusLabel}
+              </span>
+            </div>
+            <div className="planning-bulk-run__panel-meta">
+              <span className="planning-bulk-run__progress-count">{`${completed} / ${total}`}</span>
+              <button
+                type="button"
+                className="planning-bulk-run__close"
+                aria-label="Close Bulk Generate progress"
+                onClick={() => {
+                  setOpen(false);
+                  triggerRef.current?.focus();
+                }}
+              >
+                <X size={14} strokeWidth={2} aria-hidden="true" />
+              </button>
+            </div>
+          </header>
+
+          <div className="planning-bulk-run__metrics">
+            <span className="planning-bulk-chip is-done">
+              <span className="planning-bulk-chip__icon" aria-hidden="true">✓</span>
+              {`${completed} Completed`}
+            </span>
+            <span className="planning-bulk-chip is-attention">
+              <span className="planning-bulk-chip__icon" aria-hidden="true">!</span>
+              {`${needsAttention} Attention`}
+            </span>
+            <span className="planning-bulk-chip is-pending">
+              <span className="planning-bulk-chip__icon" aria-hidden="true">○</span>
+              {`${remaining} Remaining`}
+            </span>
+          </div>
+
+          {currentLabel ? (
+            <section className="planning-bulk-run__current">
+              <span className="planning-bulk-run__section-title">Current</span>
+              <div className="planning-bulk-run__current-card">
+                <span className="planning-bulk-spinner planning-bulk-spinner--chip" aria-hidden="true" />
+                <span className="planning-bulk-run__current-job" title={currentLabel}>{currentLabel}</span>
+              </div>
+            </section>
+          ) : null}
+
+          {items.length ? (
+            <section className="planning-bulk-run__jobs">
+              <div className="planning-bulk-run__jobs-head">
+                <span className="planning-bulk-run__section-title">Jobs</span>
+                <span className="planning-bulk-run__jobs-filters">
+                  <button
+                    type="button"
+                    className={`planning-bulk-run__filter${attentionOnly ? "" : " is-active"}`}
+                    aria-pressed={!attentionOnly}
+                    onClick={() => setAttentionOnly(false)}
+                  >
+                    {`All ${items.length}`}
+                  </button>
+                  <button
+                    type="button"
+                    className={`planning-bulk-run__filter${attentionOnly ? " is-active" : ""}`}
+                    aria-pressed={attentionOnly}
+                    onClick={() => setAttentionOnly(true)}
+                  >
+                    {`Attention ${attentionCount}`}
+                  </button>
+                </span>
+              </div>
+              {/* Only this region scrolls. The list is never auto-scrolled, so a
+                  new current job cannot yank the view away from a row the user
+                  is inspecting. */}
+              <ul className="planning-bulk-run__job-list" tabIndex={0}>
+                {visibleItems.map((item, index) => {
+                  const presentation = bulkItemPresentation(item.status);
+                  const label = boundedBulkJobLabel(item.label);
+                  return (
+                    <li
+                      key={`${item.label}-${index}`}
+                      className={`planning-bulk-run__job is-${presentation.tone}`}
+                    >
+                      <span className="planning-bulk-run__job-icon" aria-hidden="true">
+                        {presentation.tone === "running"
+                          ? <span className="planning-bulk-spinner planning-bulk-spinner--row" />
+                          : presentation.icon}
+                      </span>
+                      <span className="planning-bulk-run__job-label" title={label}>{label}</span>
+                      <span className={`planning-bulk-chip is-${presentation.tone}`}>{presentation.label}</span>
+                    </li>
+                  );
+                })}
+                {visibleItems.length === 0 ? (
+                  <li className="planning-bulk-run__job-empty">No jobs need attention.</li>
+                ) : null}
+              </ul>
+            </section>
+          ) : null}
+
+          <footer className="planning-bulk-run__footer">
+            <button
+              type="button"
+              className="planning-bulk-run__stop"
+              disabled={stopRequested}
+              onClick={onStop}
+            >
+              {stopRequested ? "Stop requested" : "Stop after current"}
+            </button>
+          </footer>
+        </div>
+      ) : null}
+    </span>
+  );
+}
 
 const PLANNING_ACTION_OPTIONS: SharedFilterOption[] = [
   { value: "APPLY", label: "Ready for review", tone: "ready" },
@@ -599,21 +879,11 @@ export function PlanningWorklist({ state }: { state: PlanningWorklistState }) {
       subtitle={`Planning view · ${state.pagination.totalCount} total job${state.pagination.totalCount === 1 ? "" : "s"}`}
       count={state.pagination.totalCount}
       headingActions={(
-        <button
-          type="button"
-          className="planning-react-bulk-generate"
-          disabled={!state.bulkSuggestions.available || state.bulkSuggestions.isRunning}
-          title={state.bulkSuggestions.eligibleCount > 0
-            ? `Generate suggestions for ${state.bulkSuggestions.eligibleCount} eligible Planning job${state.bulkSuggestions.eligibleCount === 1 ? "" : "s"}.`
-            : "No Planning jobs currently need suggestions."}
-          onClick={() => publishPlanningAction({ type: "bulk_generate_suggestions" })}
-        >
-          <span className="planning-react-bulk-generate__icon" aria-hidden="true">
-            <Sparkles size={15} strokeWidth={2} />
-          </span>
-          <span className="planning-react-bulk-generate__label">Bulk generate suggestions</span>
-          <small>{state.bulkSuggestions.eligibleCount} eligible</small>
-        </button>
+        <PlanningBulkGenerateControl
+          bulk={state.bulkSuggestions}
+          onStart={() => publishPlanningAction({ type: "bulk_generate_suggestions" })}
+          onStop={() => publishPlanningAction({ type: "bulk_stop_after_current" })}
+        />
       )}
       table={table}
       columns={columns}

@@ -7,6 +7,7 @@ from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
+from starlette.concurrency import run_in_threadpool
 from src.app import (
     bulk_generation_service,
     provider_model_routing_service,
@@ -1027,7 +1028,7 @@ def _bulk_generation_conflict_response(owner_user_id: str) -> JSONResponse:
 
 @app.middleware("http")
 async def require_dashboard_auth(request: Request, call_next):
-    guard_response = auth_guard_response(request)
+    guard_response = await run_in_threadpool(auth_guard_response, request)
     if guard_response is not None:
         return guard_response
 
@@ -1036,7 +1037,8 @@ async def require_dashboard_auth(request: Request, call_next):
     ).strip()
     if owner_user_id and not _bulk_generation_request_is_proven_safe(request):
         try:
-            active_bulk = bulk_generation_service.active_bulk_generation_guard_state(
+            active_bulk = await run_in_threadpool(
+                bulk_generation_service.active_bulk_generation_guard_state,
                 owner_user_id=owner_user_id
             )
         except bulk_generation_service.BulkGenerationError:
@@ -3346,6 +3348,7 @@ def notifications(
             is_read=is_read,
             limit=limit,
             scheduler_notifications_visible=_auth_user_is_admin(http_request),
+            owner_user_id=_require_auth_owner_user_id(http_request),
         )
     except services.NotificationStorageUnavailableError:
         raise HTTPException(
@@ -3362,6 +3365,7 @@ def notifications_summary(
         return services.notifications_summary_payload(
             limit=limit,
             scheduler_notifications_visible=_auth_user_is_admin(http_request),
+            owner_user_id=_require_auth_owner_user_id(http_request),
         )
     except services.NotificationStorageUnavailableError:
         raise HTTPException(
@@ -3376,6 +3380,7 @@ def notifications_unread_count(
     try:
         return services.notifications_unread_count_payload(
             scheduler_notifications_visible=_auth_user_is_admin(http_request),
+            owner_user_id=_require_auth_owner_user_id(http_request),
         )
     except services.NotificationStorageUnavailableError:
         raise HTTPException(
@@ -3394,6 +3399,43 @@ def notifications_read_state(
             notification_id=str(payload.get("notification_id", "") or ""),
             is_read=payload.get("is_read", True),
             scheduler_notifications_visible=_auth_user_is_admin(http_request),
+            owner_user_id=_require_auth_owner_user_id(http_request),
+        )
+    except services.NotificationStorageUnavailableError:
+        raise HTTPException(
+            status_code=503,
+            detail={"ok": False, "error_category": "notification_storage_unavailable"},
+        ) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/notifications/delete")
+def notifications_delete(
+    http_request: Request,
+    payload: dict = Body(...),
+):
+    try:
+        return services.delete_notification_payload(
+            notification_id=str(payload.get("notification_id", "") or ""),
+            scheduler_notifications_visible=_auth_user_is_admin(http_request),
+            owner_user_id=_require_auth_owner_user_id(http_request),
+        )
+    except services.NotificationStorageUnavailableError:
+        raise HTTPException(
+            status_code=503,
+            detail={"ok": False, "error_category": "notification_storage_unavailable"},
+        ) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/notifications/delete-all")
+def notifications_delete_all(http_request: Request):
+    try:
+        return services.delete_all_notifications_payload(
+            scheduler_notifications_visible=_auth_user_is_admin(http_request),
+            owner_user_id=_require_auth_owner_user_id(http_request),
         )
     except services.NotificationStorageUnavailableError:
         raise HTTPException(

@@ -6,7 +6,7 @@ import shlex
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, List
 from urllib.parse import urlsplit, urlunsplit
 
 
@@ -102,23 +102,56 @@ def _redact_database_url(value: str) -> str:
     )
 
 
-def _build_notification_state_status_sql(limit: int) -> str:
+def _sql_quote_text(value: Any) -> str:
+    return "'" + str(value or "").replace("'", "''") + "'"
+
+
+def _build_notification_state_status_sql(
+    limit: int,
+    *,
+    owner_user_id: str = "",
+) -> str:
+    owner = str(owner_user_id or "").strip()
+    if owner:
+        state_scope = (
+            "WHERE owner_user_id IN ("
+            f"{_sql_quote_text(owner)}, ''"
+            ")"
+        )
+        distinct_columns = "notification_id"
+        latest_order = (
+            "notification_id, "
+            f"CASE WHEN owner_user_id = {_sql_quote_text(owner)} THEN 0 ELSE 1 END, "
+            "state_timestamp DESC, state_id DESC"
+        )
+        recent_scope = f"WHERE owner_user_id = {_sql_quote_text(owner)}"
+    else:
+        state_scope = ""
+        distinct_columns = "owner_user_id, notification_id"
+        latest_order = "owner_user_id, notification_id, state_timestamp DESC, state_id DESC"
+        recent_scope = ""
+
     return f"""
 WITH latest_rows AS (
-    SELECT DISTINCT ON (notification_id)
+    SELECT DISTINCT ON ({distinct_columns})
         state_id,
         state_timestamp,
+        owner_user_id,
         notification_id,
-        is_read
+        is_read,
+        is_deleted
     FROM notification_state_events
-    ORDER BY notification_id, state_timestamp DESC, state_id DESC
+    {state_scope}
+    ORDER BY {latest_order}
 ),
 latest_rows_limited AS (
     SELECT
         state_id,
         state_timestamp,
+        owner_user_id,
         notification_id,
-        is_read
+        is_read,
+        is_deleted
     FROM latest_rows
     ORDER BY state_timestamp DESC, state_id DESC
     LIMIT {limit}
@@ -127,9 +160,12 @@ recent_rows AS (
     SELECT
         state_id,
         state_timestamp,
+        owner_user_id,
         notification_id,
-        is_read
+        is_read,
+        is_deleted
     FROM notification_state_events
+    {recent_scope}
     ORDER BY state_timestamp DESC, state_id DESC
     LIMIT {limit}
 )
@@ -146,6 +182,73 @@ SELECT json_build_object(
             (SELECT json_agg(row_to_json(latest_rows_limited) ORDER BY latest_rows_limited.state_timestamp DESC, latest_rows_limited.state_id DESC) FROM latest_rows_limited),
             '[]'::json
         )
+);
+""".strip()
+
+
+MAX_NOTIFICATION_STATE_LOOKUP_IDS = 501
+
+
+def _build_latest_notification_states_sql(
+    notification_ids: Iterable[str],
+    *,
+    owner_user_id: str,
+) -> str:
+    owner = str(owner_user_id or "").strip()
+    if not owner:
+        raise ValueError("owner_user_id is required.")
+
+    normalized_ids = list(
+        dict.fromkeys(
+            str(notification_id or "").strip()
+            for notification_id in notification_ids
+            if str(notification_id or "").strip()
+        )
+    )
+    if not normalized_ids:
+        raise ValueError("notification_ids must contain at least one identifier.")
+    if len(normalized_ids) > MAX_NOTIFICATION_STATE_LOOKUP_IDS:
+        raise ValueError(
+            f"notification_ids cannot exceed {MAX_NOTIFICATION_STATE_LOOKUP_IDS} identifiers."
+        )
+
+    requested_values = ",\n        ".join(
+        f"({_sql_quote_text(notification_id)})"
+        for notification_id in normalized_ids
+    )
+    return f"""
+WITH requested(notification_id) AS (
+    VALUES
+        {requested_values}
+),
+latest_rows AS (
+    SELECT DISTINCT ON (events.notification_id)
+        events.state_id,
+        events.state_timestamp,
+        events.owner_user_id,
+        events.notification_id,
+        events.is_read,
+        events.is_deleted
+    FROM notification_state_events AS events
+    INNER JOIN requested USING (notification_id)
+    WHERE events.owner_user_id IN ({_sql_quote_text(owner)}, '')
+    ORDER BY
+        events.notification_id,
+        CASE WHEN events.owner_user_id = {_sql_quote_text(owner)} THEN 0 ELSE 1 END,
+        events.state_timestamp DESC,
+        events.state_id DESC
+)
+SELECT json_build_object(
+    'latest_rows', COALESCE(
+        (
+            SELECT json_agg(
+                row_to_json(latest_rows)
+                ORDER BY latest_rows.state_timestamp DESC, latest_rows.state_id DESC
+            )
+            FROM latest_rows
+        ),
+        '[]'::json
+    )
 );
 """.strip()
 
@@ -226,9 +329,13 @@ def get_notification_state_postgres_status_payload(
     database_url_env: str = "DATABASE_URL",
     psql_bin: str = "psql",
     print_only: bool = False,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     normalized_limit = _normalize_positive_int(limit, "limit")
-    sql = _build_notification_state_status_sql(normalized_limit)
+    sql = _build_notification_state_status_sql(
+        normalized_limit,
+        owner_user_id=owner_user_id,
+    )
 
     query_payload = _run_psql_json_query(
         sql=sql,
@@ -241,6 +348,43 @@ def get_notification_state_postgres_status_payload(
     return {
         "ok": True,
         "query_limit": normalized_limit,
+        "command": query_payload["command"],
+        "command_text": query_payload["command_text"],
+        "postgres": query_payload["data"],
+    }
+
+
+def get_latest_notification_states_postgres_payload(
+    *,
+    notification_ids: Iterable[str],
+    owner_user_id: str,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+) -> Dict[str, Any]:
+    normalized_ids = list(
+        dict.fromkeys(
+            str(notification_id or "").strip()
+            for notification_id in notification_ids
+            if str(notification_id or "").strip()
+        )
+    )
+    sql = _build_latest_notification_states_sql(
+        normalized_ids,
+        owner_user_id=owner_user_id,
+    )
+    query_payload = _run_psql_json_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+    return {
+        "ok": True,
+        "notification_ids": normalized_ids,
+        "query_count": len(normalized_ids),
         "command": query_payload["command"],
         "command_text": query_payload["command_text"],
         "postgres": query_payload["data"],

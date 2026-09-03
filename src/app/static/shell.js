@@ -46,7 +46,8 @@ function bulkGenerationControlIsSafe(control) {
   if (control.closest(
     ".shared-filter-select, .shared-table-pagination, .planning-react-filter-grid, " +
     ".planning-react-filter-actions, .executive-queue-filter-card, .operational-filter-card, " +
-    ".applications-tabs, .scheduler-runs-filters, .notification-toolbar"
+    ".applications-tabs, .scheduler-runs-filters, .notification-center__filters, " +
+    ".notification-center__foot"
   )) return true;
   if (control.matches("input[type='search']")) return true;
   if (control.matches("a[href]")) {
@@ -113,45 +114,6 @@ function applyBulkGenerationControlGuards() {
   document.body.classList.toggle("bulk-generation-guard-active", shouldBlock);
 }
 
-function renderBulkGenerationShell(state) {
-  const shell = qs("bulkGenerationShell");
-  if (!shell) return;
-  const hasRun = Boolean(state.run_id) || !state.verified;
-  // Planning owns the Bulk affordance through its own transformed control and
-  // anchored popover, so the shared pill is never rendered there. Every other
-  // page keeps the existing cross-page progress affordance unchanged.
-  const planningOwnsBulkSurface = (window.location.pathname || "") === "/planning";
-  shell.classList.toggle("hidden", !hasRun || planningOwnsBulkSurface);
-  if (!hasRun || planningOwnsBulkSurface) return;
-  const total = Number(state.total || 0);
-  const completed = Number(state.completed || 0);
-  const status = String(state.status || "unknown");
-  qs("bulkGenerationProgressLabel").textContent = state.verified ? `${completed} / ${total}` : "Status unavailable";
-  qs("bulkGenerationStatusLabel").textContent = status.replace(/_/g, " ");
-  qs("bulkGenerationCounts").textContent =
-    `${Number(state.succeeded || 0)} completed · ${Number(state.needs_attention || 0)} need attention · ${Number(state.remaining || 0)} remaining`;
-  const current = qs("bulkGenerationCurrent");
-  if (current) {
-    const currentLabel = state.current_job_label || state.current_job_identity || "";
-    current.textContent = currentLabel ? `Current: ${currentLabel}` : "";
-  }
-  const results = qs("bulkGenerationResults");
-  if (results) {
-    results.replaceChildren(...(Array.isArray(state.items) ? state.items.slice(-8) : []).map((item) => {
-      const row = document.createElement("div");
-      row.className = "bulk-generation-result";
-      row.textContent = `${item.job_label || item.job_identity} · ${String(item.outcome || item.status || "pending").replace(/_/g, " ")}`;
-      return row;
-    }));
-  }
-  const stop = qs("bulkGenerationStopBtn");
-  if (stop) {
-    stop.classList.toggle("hidden", !state.active);
-    stop.disabled = Boolean(state.stop_requested);
-    stop.textContent = state.stop_requested ? "Stop requested" : "Stop after current";
-  }
-}
-
 function publishBulkGenerationState(payload, { verified = true } = {}) {
   const status = String(payload?.status || "none");
   bulkGenerationCanonicalState = {
@@ -160,7 +122,6 @@ function publishBulkGenerationState(payload, { verified = true } = {}) {
     active: verified ? BULK_GENERATION_ACTIVE_STATUSES.has(status) : true,
     terminal: verified && BULK_GENERATION_TERMINAL_STATUSES.has(status),
   };
-  renderBulkGenerationShell(bulkGenerationCanonicalState);
   applyBulkGenerationControlGuards();
   window.dispatchEvent(new CustomEvent(BULK_GENERATION_STATE_EVENT, {
     detail: { ...bulkGenerationCanonicalState },
@@ -271,47 +232,126 @@ function setShellCollapsed(isCollapsed, { persist = true } = {}) {
   }
 }
 
-function normalizeNotificationTitle(row) {
-  const raw = String(row?.title || row?.subject || "").trim();
-  if (!raw) return "Scheduler update";
+// Bounded notification-center history window. The API stays bounded too:
+// its server-side read limit is unchanged.
+const NOTIFICATION_HISTORY_LIMIT = 50;
+const NOTIFICATION_RECONCILIATION_TIMEOUT_MS = 12000;
+let notificationActiveFilter = "all";
+let notificationRowsCache = [];
 
-  const finalJobsMatch = raw.match(/^Scheduled job\s+([A-Z_]+)\s+\|\s+([^|]+?)\s+\|\s+final_jobs=(\d+)$/i);
-  if (finalJobsMatch) {
-    const jobName = finalJobsMatch[2].trim().replace(/_/g, " ");
-    const count = finalJobsMatch[3];
-    return `${jobName} · jobs=${count}`;
+function notificationTypeMeta(row) {
+  const jobName = String(row?.job_name || "").trim().toLowerCase();
+  if (jobName === "agent_discovery") {
+    return {
+      key: "discovery",
+      label: "Discovery",
+      icon: '<circle cx="12" cy="12" r="9" /><polygon points="15.5 8.5 10.5 10.5 8.5 15.5 13.5 13.5" />',
+    };
   }
-
-  const genericMatch = raw.match(/^Scheduled job\s+([A-Z_]+)\s+\|\s+(.+)$/i);
-  if (genericMatch) {
-    const rest = genericMatch[2].trim().replace(/_/g, " ");
-    return rest;
+  if (jobName === "live_pipeline") {
+    return {
+      key: "pipeline",
+      label: "Pipeline",
+      icon: '<path d="M3 12h4l3 8 4-16 3 8h4" />',
+    };
   }
-
-  return raw.replace(/_/g, " ");
+  return {
+    key: "other",
+    label: jobName ? jobName.replace(/_/g, " ") : "Activity",
+    icon: '<circle cx="12" cy="12" r="9" /><path d="M12 8v4" /><path d="M12 16h.01" />',
+  };
 }
 
-function normalizeNotificationMessage(row) {
-  const deliveryStatus = String(row?.delivery_status || "").trim().toLowerCase();
-  const jobName = String(row?.job_name || "").trim().replace(/_/g, " ");
+function notificationMatchesFilter(row, filter) {
+  if (filter === "unread") return !row?.is_read;
+  if (filter === "pipeline") return notificationTypeMeta(row).key === "pipeline";
+  if (filter === "discovery") return notificationTypeMeta(row).key === "discovery";
+  return true;
+}
 
-  if (deliveryStatus === "sent_smtp") {
-    return `Email summary sent for ${jobName}.`;
+function escapeNotificationAttr(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Scheduler subjects are produced by src/pipeline/post_run_email.py with the
+// fixed grammar "Scheduled job {TOKEN} | {job_name} | {detail}". Parsing is
+// deterministic against that grammar only; anything else falls back to a
+// compact truncated title with the full value in the tooltip.
+const NOTIFICATION_SUBJECT_PATTERN =
+  /^Scheduled job\s+([A-Za-z_]+)\s*\|\s*([A-Za-z0-9_]+)\s*(?:\|\s*(.*))?$/;
+
+const NOTIFICATION_TITLE_MAX = 60;
+
+function notificationStatusWord(token) {
+  const normalized = String(token || "").trim().toUpperCase();
+  if (normalized === "SUCCEEDED") return "completed";
+  if (normalized === "FAILED") return "failed";
+  if (!normalized) return "updated";
+  return normalized.toLowerCase().replace(/_/g, " ");
+}
+
+function notificationJobLabel(jobName) {
+  const normalized = String(jobName || "").trim().toLowerCase();
+  if (normalized === "live_pipeline") return "Live Pipeline";
+  if (normalized === "agent_discovery") return "Agent Discovery";
+  if (!normalized) return "Scheduler";
+  return normalized
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function notificationCountLabel(rawValue, noun) {
+  const numeric = Number(String(rawValue).trim());
+  if (!Number.isFinite(numeric)) return "";
+  return `${numeric.toLocaleString("en-US")} ${noun}`;
+}
+
+function notificationDetailMetric(detail) {
+  const raw = String(detail || "").trim();
+  if (!raw) return "";
+
+  const displayJobs = raw.match(/^display_jobs=(-?\d+)$/);
+  if (displayJobs) return notificationCountLabel(displayJobs[1], "jobs");
+
+  const discovered = raw.match(/^discovered=(-?\d+)$/);
+  if (discovered) return notificationCountLabel(discovered[1], "discovered");
+
+  const stage = raw.match(/^stage=(.+)$/);
+  if (stage) return `stage ${stage[1].trim().replace(/_/g, " ")}`;
+
+  return raw.replace(/_/g, " ").replace(/\s*,\s*/g, ", ");
+}
+
+function truncateNotificationTitle(value) {
+  const raw = String(value || "").trim();
+  if (raw.length <= NOTIFICATION_TITLE_MAX) return raw;
+  return `${raw.slice(0, NOTIFICATION_TITLE_MAX - 1).trimEnd()}\u2026`;
+}
+
+// Returns { headline, metric, full }. `full` is always the complete original
+// subject so the tooltip can surface it on hover and keyboard focus.
+function notificationTitleParts(row) {
+  const raw = String(row?.title || row?.subject || "").trim();
+  if (!raw) {
+    return { headline: "Scheduler update", metric: "", full: "Scheduler update" };
   }
 
-  if (deliveryStatus === "recorded_outbox_only") {
-    return `Email summary prepared for ${jobName}, but not sent.`;
+  const match = raw.match(NOTIFICATION_SUBJECT_PATTERN);
+  if (!match) {
+    return { headline: truncateNotificationTitle(raw), metric: "", full: raw };
   }
 
-  if (deliveryStatus === "dry_run_only") {
-    return `Email summary rendered in dry-run mode for ${jobName}.`;
-  }
+  const headline = `${notificationJobLabel(match[2])} ${notificationStatusWord(match[1])}`;
+  return { headline, metric: notificationDetailMetric(match[3]), full: raw };
+}
 
-  if (deliveryStatus === "failed_smtp") {
-    return `Email delivery failed for ${jobName}.`;
-  }
-
-  return String(row?.message || "").trim();
+function normalizeNotificationTitle(row) {
+  return notificationTitleParts(row).headline;
 }
 
 function notificationDestination(row) {
@@ -352,14 +392,14 @@ function notificationBadgeMeta(row) {
   if (runStatus === "success" || runStatus === "succeeded") {
     return {
       label: "SUCCESS",
-      className: "notification-item-badge notification-item-badge--success",
+      className: "notification-pill is-success",
     };
   }
 
   if (runStatus === "failed" || runStatus === "error") {
     return {
       label: "FAILED",
-      className: "notification-item-badge notification-item-badge--error",
+      className: "notification-pill is-error",
     };
   }
 
@@ -367,73 +407,112 @@ function notificationBadgeMeta(row) {
   if (level === "success") {
     return {
       label: "SUCCESS",
-      className: "notification-item-badge notification-item-badge--success",
+      className: "notification-pill is-success",
     };
   }
   if (level === "error") {
     return {
       label: "FAILED",
-      className: "notification-item-badge notification-item-badge--error",
+      className: "notification-pill is-error",
     };
   }
 
   return {
     label: "INFO",
-    className: "notification-item-badge notification-item-badge--info",
+    className: "notification-pill is-info",
   };
 }
 
 function setNotificationLoading(listEl, message) {
   if (!listEl) return;
-  listEl.innerHTML = `<div class="notification-empty">${message}</div>`;
+  listEl.innerHTML = `<div class="notification-center__empty">${message}</div>`;
 }
 
 function renderNotificationRows(listEl, rows, unreadOnly) {
   if (!listEl) return;
 
   if (!Array.isArray(rows) || rows.length === 0) {
+    const caughtUp = unreadOnly;
     listEl.innerHTML = `
-      <div class="notification-empty">
-        ${unreadOnly ? "No unread notifications." : "No notifications yet."}
+      <div class="notification-center__empty">
+        <span class="notification-center__empty-icon" aria-hidden="true">${caughtUp ? "\u2713" : "\u2022"}</span>
+        <strong>${caughtUp ? "You're all caught up" : "No notifications yet"}</strong>
+        <span>${caughtUp ? "No unread notifications." : "Scheduler activity will appear here."}</span>
       </div>
     `;
     return;
   }
 
   listEl.innerHTML = rows.map((row) => {
-    const notificationId = String(row.notification_id || "");
-    const title = normalizeNotificationTitle(row);
-    const message = normalizeNotificationMessage(row);
+    const notificationId = escapeNotificationAttr(String(row.notification_id || ""));
+    const titleParts = notificationTitleParts(row);
     const createdAt = formatNotificationTime(row.created_at || "");
     const isRead = Boolean(row.is_read);
     const badgeMeta = notificationBadgeMeta(row);
-    const toggleLabel = isRead ? "Mark unread" : "Mark read";
+    const typeMeta = notificationTypeMeta(row);
     const destination = notificationDestination(row);
-    
+    const toggleLabel = isRead ? "Mark unread" : "Mark read";
 
     return `
       <article
-        class="notification-item ${isRead ? "is-read" : "is-unread"} ${destination ? "is-clickable" : ""}"
+        class="notification-row ${isRead ? "is-read" : "is-unread"} ${destination ? "is-clickable" : ""}"
         data-notification-id="${notificationId}"
         data-notification-destination="${destination}"
       >
-        <div class="notification-item-topline">
-          <span class="${badgeMeta.className}">${badgeMeta.label}</span>
-          <span class="notification-item-time">${createdAt}</span>
+        <span class="notification-row__dot" aria-hidden="true"></span>
+        <span class="notification-row__tile is-${typeMeta.key}" aria-hidden="true">
+          <svg class="app-shell-icon" viewBox="0 0 24 24" width="15" height="15" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round" focusable="false">${typeMeta.icon}</svg>
+        </span>
+        <div class="notification-row__body">
+          <div
+            class="notification-row__title"
+            tabindex="0"
+            data-tooltip="${escapeNotificationAttr(titleParts.full)}"
+            aria-label="${escapeNotificationAttr(titleParts.full)}"
+          >${titleParts.headline}</div>
+          <div class="notification-row__pills">
+            <span class="notification-pill is-${typeMeta.key}">${typeMeta.label}</span>
+            ${titleParts.metric
+              ? `<span class="notification-pill is-metric">${titleParts.metric}</span>`
+              : ""}
+            <span class="${badgeMeta.className}">${badgeMeta.label}</span>
+            ${isRead ? "" : '<span class="notification-row__sr">Unread</span>'}
+          </div>
         </div>
-
-        <div class="notification-item-title">${title}</div>
-        <div class="notification-item-message">${message}</div>
-
-        <div class="notification-item-actions">
-          <button
-            type="button"
-            class="ghost-btn notification-toggle-btn"
-            data-notification-toggle="${notificationId}"
-            data-next-read="${isRead ? "false" : "true"}"
-          >
-            ${toggleLabel}
-          </button>
+        <div class="notification-row__meta">
+          <span class="notification-row__time">${createdAt}</span>
+          <span class="notification-row__actions">
+            <button
+              type="button"
+              class="notification-row__action"
+              data-notification-toggle="${notificationId}"
+              data-notification-action="toggle"
+              data-next-read="${isRead ? "false" : "true"}"
+              aria-label="${toggleLabel}"
+              title="${toggleLabel}"
+            ><svg class="app-shell-icon" viewBox="0 0 24 24" width="14" height="14" fill="none"
+                 stroke="currentColor" stroke-width="2.25" stroke-linecap="round"
+                 stroke-linejoin="round" aria-hidden="true" focusable="false">${
+              isRead
+                ? '<rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 7-10 5L2 7" />'
+                : '<path d="M20 6 9 17l-5-5" />'
+            }</svg></button>
+            <button
+              type="button"
+              class="notification-row__action notification-row__delete"
+              data-notification-delete="${notificationId}"
+              data-notification-action="delete"
+              aria-label="Delete notification"
+              title="Delete notification"
+            ><svg class="app-shell-icon" viewBox="0 0 24 24" width="14" height="14" fill="none"
+                 stroke="currentColor" stroke-width="2.1" stroke-linecap="round"
+                 stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <path d="M3 6h18" /><path d="M8 6V4h8v2" />
+              <path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5" /><path d="M14 11v5" />
+            </svg></button>
+          </span>
         </div>
       </article>
     `;
@@ -445,9 +524,14 @@ async function fetchJson(url, options = {}) {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    const structuredDetail = payload && typeof payload.detail === "object"
+      ? payload.detail
+      : null;
     const detail = payload && typeof payload.detail === "string"
       ? payload.detail
-      : `Request failed: ${response.status}`;
+      : structuredDetail?.error_category === "bulk_generation_in_progress"
+        ? structuredDetail.message || BULK_GENERATION_BLOCK_MESSAGE
+        : structuredDetail?.message || payload?.message || `Request failed: ${response.status}`;
     throw new Error(detail);
   }
 
@@ -677,24 +761,15 @@ window.addEventListener("DOMContentLoaded", () => {
     if (guardedControl(event.target)) hideBulkGenerationGuardTooltip();
   });
 
-  new MutationObserver(() => applyBulkGenerationControlGuards()).observe(document.body, {
+  new MutationObserver(() => {
+    if (typeof document !== "undefined" && document.body) {
+      applyBulkGenerationControlGuards();
+    }
+  }).observe(document.body, {
     childList: true,
     subtree: true,
   });
 
-  qs("bulkGenerationProgressBtn")?.addEventListener("click", () => {
-    qs("bulkGenerationPanel")?.classList.remove("hidden");
-    qs("bulkGenerationProgressBtn")?.setAttribute("aria-expanded", "true");
-  });
-  qs("bulkGenerationMinimizeBtn")?.addEventListener("click", () => {
-    qs("bulkGenerationPanel")?.classList.add("hidden");
-    qs("bulkGenerationProgressBtn")?.setAttribute("aria-expanded", "false");
-  });
-  qs("bulkGenerationStopBtn")?.addEventListener("click", () => {
-    requestBulkGenerationStop().catch((error) => {
-      window.alert(error instanceof Error ? error.message : "Could not request Bulk Generate stop.");
-    });
-  });
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && !bulkGenerationCanonicalState.terminal) void refreshBulkGenerationState();
   });
@@ -844,10 +919,24 @@ window.addEventListener("DOMContentLoaded", () => {
   const notificationDropdown = qs("notificationDropdown");
   const notificationBadge = qs("notificationBadge");
   const notificationList = qs("notificationList");
-  const notificationShowAll = qs("notificationShowAll");
-  const notificationUnreadOnly = qs("notificationUnreadOnly");
   const notificationRefreshBtn = qs("notificationRefreshBtn");
   const notificationMarkAllReadBtn = qs("notificationMarkAllReadBtn");
+  const notificationDeleteAllBtn = qs("notificationDeleteAllBtn");
+  const notificationDeleteConfirmModal = qs("notificationDeleteConfirmModal");
+  const notificationDeleteConfirmTitle = qs("notificationDeleteConfirmTitle");
+  const notificationDeleteConfirmBody = qs("notificationDeleteConfirmBody");
+  const notificationDeleteCancelBtn = qs("notificationDeleteCancelBtn");
+  const notificationDeleteConfirmBtn = qs("notificationDeleteConfirmBtn");
+
+  // The desktop toolbar has accumulated historical positioning and backdrop
+  // filtering layers. Keep the one shared confirmation surface outside that
+  // coordinate system so fixed/inset always resolve against the viewport.
+  if (
+    notificationDeleteConfirmModal
+    && notificationDeleteConfirmModal.parentElement !== document.body
+  ) {
+    document.body.appendChild(notificationDeleteConfirmModal);
+  }
 
   const menuShell = qs("profileMenuShell");
   const menuButton = qs("profileMenuButton");
@@ -1195,49 +1284,164 @@ window.addEventListener("DOMContentLoaded", () => {
     notificationDropdown.style.setProperty("max-height", `${maxHeight}px`, "important");
   }
 
-  function openNotifications() {
+  async function openNotifications() {
     if (!notificationDropdown || !notificationButton) return;
     positionNotificationDropdown();
     notificationDropdown.classList.remove("hidden");
     notificationButton.setAttribute("aria-expanded", "true");
+    // Every closed -> open transition owns a fresh, bounded server read. The
+    // request tokens inside both loaders keep older responses from winning.
+    await Promise.all([
+      loadNotifications(),
+      loadUnreadCount(),
+    ]);
   }
 
-  async function loadUnreadCount() {
+  let notificationUnreadCountCache = null;
+
+  function setNotificationUnreadCount(unreadCount) {
+    const normalized = Math.max(0, Number(unreadCount || 0));
+    notificationUnreadCountCache = normalized;
+    if (!notificationBadge) return;
+    if (normalized > 0) {
+      notificationBadge.textContent = normalized > 99 ? "99+" : String(normalized);
+      notificationBadge.classList.remove("hidden");
+    } else {
+      notificationBadge.textContent = "0";
+      notificationBadge.classList.add("hidden");
+    }
+  }
+
+  function adjustNotificationUnreadCount(delta) {
+    if (!Number.isFinite(notificationUnreadCountCache)) return;
+    setNotificationUnreadCount(notificationUnreadCountCache + delta);
+  }
+
+  async function loadUnreadCount(options = {}) {
     if (!notificationBadge) return;
 
-    try {
-      const payload = await fetchJson("/notifications/unread-count");
-      const unreadCount = Number(payload.unread_count || 0);
+    const silent = Boolean(options.silent);
+    const signal = options.signal;
 
-      if (unreadCount > 0) {
-        notificationBadge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
-        notificationBadge.classList.remove("hidden");
-      } else {
-        notificationBadge.textContent = "0";
-        notificationBadge.classList.add("hidden");
-      }
-    } catch (_) {
+    notificationUnreadFetchToken += 1;
+    const token = notificationUnreadFetchToken;
+
+    try {
+      const payload = await fetchJson("/notifications/unread-count", { cache: "no-store", signal });
+      if (token !== notificationUnreadFetchToken) return;
+      setNotificationUnreadCount(payload.unread_count);
+    } catch (error) {
+      if (token !== notificationUnreadFetchToken) return;
+      if (silent) throw error;
       notificationBadge.textContent = "!";
       notificationBadge.classList.remove("hidden");
     }
   }
 
-  async function loadNotifications() {
+  // Notifications with a mutation in flight. Held here rather than on the
+  // button element because every refresh re-renders the feed and destroys the
+  // node the click started on, which is why the old per-node `disabled` guard
+  // allowed conflicting second mutations for the same notification.
+  const notificationPendingIds = new Set();
+  const notificationPendingActions = new Map();
+  const notificationConfirmedReadStates = new Map();
+  const notificationConfirmedDeletedIds = new Set();
+  let notificationDeleteAllCutoff = "";
+  let notificationGlobalMutationPending = false;
+  let notificationDeleteIntent = null;
+  let notificationDeleteReturnFocus = null;
+
+  // Monotonic token so a slow earlier fetch can never overwrite the cache with
+  // pre-mutation rows after a newer fetch has already landed.
+  let notificationFetchToken = 0;
+  let notificationUnreadFetchToken = 0;
+
+  function syncNotificationPendingButtons() {
+    if (!notificationList) return;
+    notificationList.querySelectorAll("[data-notification-toggle], [data-notification-delete]").forEach((button) => {
+      const id = String(
+        button.getAttribute("data-notification-toggle")
+        || button.getAttribute("data-notification-delete")
+        || ""
+      ).trim();
+      const pending = id && notificationPendingIds.has(id);
+      if (notificationGlobalMutationPending || pending) {
+        button.setAttribute("disabled", "disabled");
+      } else {
+        button.removeAttribute("disabled");
+      }
+      if (pending && notificationPendingActions.get(id) === button.dataset.notificationAction) {
+        button.setAttribute("aria-busy", "true");
+      } else {
+        button.removeAttribute("aria-busy");
+      }
+    });
+    [notificationDeleteAllBtn, notificationMarkAllReadBtn]
+      .filter(Boolean)
+      .forEach((button) => {
+        button.disabled = notificationGlobalMutationPending || notificationPendingIds.size > 0;
+      });
+  }
+
+  function releaseNotificationMutation(notificationId) {
+    notificationPendingIds.delete(notificationId);
+    notificationPendingActions.delete(notificationId);
+    syncNotificationPendingButtons();
+  }
+
+  function releaseNotificationGlobalMutation() {
+    notificationGlobalMutationPending = false;
+    syncNotificationPendingButtons();
+  }
+
+  async function loadNotifications(options = {}) {
     if (!notificationList) return;
 
-    const unreadOnly = Boolean(notificationUnreadOnly && notificationUnreadOnly.checked);
+    const silent = Boolean(options.silent);
+    const signal = options.signal;
     const params = new URLSearchParams();
-    params.set("limit", "12");
-    if (unreadOnly) {
-      params.set("is_read", "false");
+    params.set("limit", String(NOTIFICATION_HISTORY_LIMIT));
+
+    // A refresh triggered by a row mutation must not blank the feed; only an
+    // explicit open/refresh shows the loading placeholder.
+    if (!silent) {
+      setNotificationLoading(notificationList, "Loading notifications...");
     }
 
-    setNotificationLoading(notificationList, "Loading notifications...");
+    notificationFetchToken += 1;
+    const token = notificationFetchToken;
 
     try {
-      const payload = await fetchJson(`/notifications?${params.toString()}`);
-      renderNotificationRows(notificationList, payload.rows || [], unreadOnly);
+      const payload = await fetchJson(`/notifications?${params.toString()}`, { cache: "no-store", signal });
+      if (token !== notificationFetchToken) return;
+      const incomingRows = Array.isArray(payload.rows) ? payload.rows : [];
+      notificationRowsCache = incomingRows
+        .filter((row) => {
+          const notificationId = String(row?.notification_id || "").trim();
+          if (notificationConfirmedDeletedIds.has(notificationId)) return false;
+          if (!notificationDeleteAllCutoff) return true;
+          const createdAt = String(row?.created_at || "").trim();
+          const createdAtMs = Date.parse(createdAt);
+          const cutoffMs = Date.parse(notificationDeleteAllCutoff);
+          if (Number.isFinite(createdAtMs) && Number.isFinite(cutoffMs)) {
+            return createdAtMs > cutoffMs;
+          }
+          return createdAt && createdAt > notificationDeleteAllCutoff;
+        })
+        .map((row) => {
+          const notificationId = String(row?.notification_id || "").trim();
+          if (!notificationConfirmedReadStates.has(notificationId)) return row;
+          const confirmedRead = notificationConfirmedReadStates.get(notificationId);
+          if (Boolean(row?.is_read) === confirmedRead) {
+            notificationConfirmedReadStates.delete(notificationId);
+            return row;
+          }
+          return { ...row, is_read: confirmedRead };
+        });
+      renderFilteredNotifications();
     } catch (error) {
+      if (token !== notificationFetchToken) return;
+      if (silent) throw error;
       setNotificationLoading(
         notificationList,
         `Could not load notifications. ${error instanceof Error ? error.message : ""}`.trim()
@@ -1245,8 +1449,64 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function renderFilteredNotifications() {
+    if (!notificationList) return;
+    const visible = notificationRowsCache.filter(
+      (row) => notificationMatchesFilter(row, notificationActiveFilter)
+    );
+    renderNotificationRows(notificationList, visible, notificationActiveFilter === "unread");
+    syncNotificationPendingButtons();
+    // The list is replaced with innerHTML, so apply the existing accessible
+    // fail-closed Bulk guard to the new mutation controls synchronously.
+    applyBulkGenerationControlGuards();
+    const unread = notificationRowsCache.filter((row) => !row?.is_read).length;
+    const pill = qs("notificationUnreadPill");
+    if (pill) {
+      pill.textContent = `${unread} new`;
+      pill.classList.toggle("hidden", unread <= 0);
+    }
+  }
+
+  async function reconcileNotificationsInBackground() {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(
+      () => controller.abort(),
+      NOTIFICATION_RECONCILIATION_TIMEOUT_MS
+    );
+
+    try {
+      await Promise.all([
+        loadNotifications({ silent: true, signal: controller.signal }),
+        loadUnreadCount({ silent: true, signal: controller.signal }),
+      ]);
+    } catch (_) {
+      // The authoritative mutation already succeeded. A later open or manual
+      // refresh owns a new reconciliation, so a transient/obsolete background
+      // failure must not roll back state or masquerade as mutation failure.
+      controller.abort();
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
+
+  function startNotificationReconciliation() {
+    void reconcileNotificationsInBackground();
+  }
+
+  document.querySelectorAll("[data-notification-filter]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      notificationActiveFilter = String(chip.dataset.notificationFilter || "all");
+      document.querySelectorAll("[data-notification-filter]").forEach((other) => {
+        const active = other === chip;
+        other.classList.toggle("is-active", active);
+        other.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      renderFilteredNotifications();
+    });
+  });
+
   async function updateNotificationReadState(notificationId, isRead) {
-    await fetchJson("/notifications/read-state", {
+    return fetchJson("/notifications/read-state", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1258,7 +1518,117 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  async function markAllNotificationsRead() {
+  async function deleteNotification(notificationId) {
+    return fetchJson("/notifications/delete", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        notification_id: notificationId,
+      }),
+    });
+  }
+
+  async function deleteAllNotifications() {
+    return fetchJson("/notifications/delete-all", {
+      method: "POST",
+    });
+  }
+
+  function applyConfirmedNotificationReadState(notificationId, payload) {
+    const confirmed = payload?.notification;
+    if (
+      !confirmed
+      || String(confirmed.notification_id || "").trim() !== notificationId
+      || typeof confirmed.is_read !== "boolean"
+    ) {
+      throw new Error("Notification state response was incomplete.");
+    }
+
+    const index = notificationRowsCache.findIndex(
+      (row) => String(row?.notification_id || "").trim() === notificationId
+    );
+    if (index < 0) return;
+    const wasRead = Boolean(notificationRowsCache[index]?.is_read);
+    const isRead = confirmed.is_read;
+    notificationConfirmedReadStates.set(notificationId, isRead);
+    notificationFetchToken += 1;
+    notificationRowsCache[index] = { ...notificationRowsCache[index], ...confirmed, is_read: isRead };
+    if (wasRead !== isRead) adjustNotificationUnreadCount(isRead ? -1 : 1);
+    renderFilteredNotifications();
+  }
+
+  function applyConfirmedNotificationDelete(notificationId, payload) {
+    if (
+      payload?.deleted !== true
+      || String(payload?.notification_id || "").trim() !== notificationId
+    ) {
+      throw new Error("Notification delete response was incomplete.");
+    }
+    const deletedRow = notificationRowsCache.find(
+      (row) => String(row?.notification_id || "").trim() === notificationId
+    );
+    notificationConfirmedDeletedIds.add(notificationId);
+    notificationConfirmedReadStates.delete(notificationId);
+    notificationFetchToken += 1;
+    notificationRowsCache = notificationRowsCache.filter(
+      (row) => String(row?.notification_id || "").trim() !== notificationId
+    );
+    if (deletedRow && !Boolean(deletedRow.is_read)) adjustNotificationUnreadCount(-1);
+    renderFilteredNotifications();
+  }
+
+  function applyConfirmedDeleteAll(payload) {
+    if (payload?.deleted !== true) {
+      throw new Error("Delete-all response was incomplete.");
+    }
+    notificationDeleteAllCutoff = String(payload?.state_row?.state_timestamp || new Date().toISOString());
+    notificationConfirmedReadStates.clear();
+    notificationFetchToken += 1;
+    notificationRowsCache = [];
+    setNotificationUnreadCount(0);
+    renderFilteredNotifications();
+  }
+
+  function closeNotificationDeleteConfirmation({ restoreFocus = true } = {}) {
+    if (!notificationDeleteConfirmModal) return;
+    notificationDeleteConfirmModal.classList.add("hidden");
+    notificationDeleteConfirmModal.setAttribute("aria-hidden", "true");
+    const returnFocus = notificationDeleteReturnFocus;
+    notificationDeleteIntent = null;
+    notificationDeleteReturnFocus = null;
+    if (restoreFocus && returnFocus instanceof HTMLElement && returnFocus.isConnected) {
+      returnFocus.focus();
+    }
+  }
+
+  function openNotificationDeleteConfirmation(intent, trigger) {
+    if (
+      !notificationDeleteConfirmModal
+      || !notificationDeleteConfirmTitle
+      || !notificationDeleteConfirmBody
+      || !notificationDeleteConfirmBtn
+    ) return;
+
+    const deleteAll = intent?.kind === "all";
+    notificationDeleteIntent = deleteAll
+      ? { kind: "all", notificationId: "" }
+      : { kind: "one", notificationId: String(intent?.notificationId || "").trim() };
+    notificationDeleteReturnFocus = trigger instanceof HTMLElement ? trigger : null;
+    notificationDeleteConfirmTitle.textContent = deleteAll
+      ? "Delete all notifications?"
+      : "Delete notification?";
+    notificationDeleteConfirmBody.textContent = deleteAll
+      ? "This removes all notifications from your inbox. Scheduler history is not affected."
+      : "This removes it from Notifications. Scheduler history is not affected.";
+    notificationDeleteConfirmBtn.textContent = deleteAll ? "Delete all" : "Delete";
+    notificationDeleteConfirmModal.classList.remove("hidden");
+    notificationDeleteConfirmModal.setAttribute("aria-hidden", "false");
+    notificationDeleteCancelBtn?.focus();
+  }
+
+async function markAllNotificationsRead() {
   const payload = await fetchJson("/notifications?is_read=false&limit=100");
   const unreadRows = Array.isArray(payload.rows) ? payload.rows : [];
 
@@ -1266,7 +1636,8 @@ window.addEventListener("DOMContentLoaded", () => {
     const notificationId = String(row.notification_id || "").trim();
     if (!notificationId) continue;
 
-    await updateNotificationReadState(notificationId, true);
+    const confirmed = await updateNotificationReadState(notificationId, true);
+    applyConfirmedNotificationReadState(notificationId, confirmed);
   }
 
   return unreadRows.length;
@@ -1280,9 +1651,7 @@ window.addEventListener("DOMContentLoaded", () => {
       closeProfileMenu();
 
       if (isHidden) {
-        openNotifications();
-        await loadNotifications();
-        await loadUnreadCount();
+        await openNotifications();
       } else {
         closeNotifications();
       }
@@ -1301,37 +1670,144 @@ window.addEventListener("DOMContentLoaded", () => {
   notificationMarkAllReadBtn.addEventListener("click", async (event) => {
     event.preventDefault();
 
+    if (notificationGlobalMutationPending || notificationPendingIds.size > 0) return;
+    notificationGlobalMutationPending = true;
+
     notificationMarkAllReadBtn.setAttribute("disabled", "disabled");
+    syncNotificationPendingButtons();
 
     try {
       await markAllNotificationsRead();
-      await loadNotifications();
-      await loadUnreadCount();
+      releaseNotificationGlobalMutation();
+      startNotificationReconciliation();
     } catch (error) {
       window.alert(
         `Could not mark all notifications read. ${error instanceof Error ? error.message : ""}`.trim()
       );
     } finally {
-      notificationMarkAllReadBtn.removeAttribute("disabled");
+      releaseNotificationGlobalMutation();
     }
   });
 }
 
-  [notificationShowAll, notificationUnreadOnly]
-  .filter(Boolean)
-  .forEach((input) => {
-    input.addEventListener("change", async () => {
-      await loadNotifications();
+  if (notificationDeleteAllBtn) {
+    notificationDeleteAllBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (notificationGlobalMutationPending || notificationPendingIds.size > 0) return;
+      openNotificationDeleteConfirmation({ kind: "all" }, notificationDeleteAllBtn);
     });
-  });
+  }
+
+  if (notificationDeleteCancelBtn) {
+    notificationDeleteCancelBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (notificationGlobalMutationPending || notificationPendingIds.size > 0) return;
+      closeNotificationDeleteConfirmation();
+    });
+  }
+
+  if (notificationDeleteConfirmModal) {
+    notificationDeleteConfirmModal.addEventListener("click", (event) => {
+      if (event.target !== notificationDeleteConfirmModal) return;
+      if (notificationGlobalMutationPending || notificationPendingIds.size > 0) return;
+      closeNotificationDeleteConfirmation();
+    });
+  }
+
+  if (notificationDeleteConfirmBtn) {
+    notificationDeleteConfirmBtn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const intent = notificationDeleteIntent;
+      if (!intent) return;
+      const notificationId = String(intent.notificationId || "").trim();
+      if (intent.kind === "one") {
+        if (!notificationId) return;
+        if (notificationGlobalMutationPending) return;
+        if (notificationPendingIds.has(notificationId)) return;
+        notificationPendingIds.add(notificationId);
+        notificationPendingActions.set(notificationId, "delete");
+      } else {
+        if (notificationGlobalMutationPending || notificationPendingIds.size > 0) return;
+        notificationGlobalMutationPending = true;
+      }
+
+      notificationDeleteConfirmBtn.setAttribute("disabled", "disabled");
+      notificationDeleteConfirmBtn.setAttribute("aria-busy", "true");
+      const confirmLabel = intent.kind === "all" ? "Delete all" : "Delete";
+      notificationDeleteConfirmBtn.textContent = "Deleting\u2026";
+      notificationDeleteCancelBtn?.setAttribute("disabled", "disabled");
+      syncNotificationPendingButtons();
+
+      try {
+        if (intent.kind === "one") {
+          const payload = await deleteNotification(notificationId);
+          applyConfirmedNotificationDelete(notificationId, payload);
+        } else {
+          const payload = await deleteAllNotifications();
+          applyConfirmedDeleteAll(payload);
+        }
+        closeNotificationDeleteConfirmation({ restoreFocus: false });
+        if (intent.kind === "one") {
+          releaseNotificationMutation(notificationId);
+        } else {
+          releaseNotificationGlobalMutation();
+        }
+        notificationDeleteConfirmBtn.removeAttribute("disabled");
+        notificationDeleteConfirmBtn.removeAttribute("aria-busy");
+        notificationDeleteConfirmBtn.textContent = confirmLabel;
+        notificationDeleteCancelBtn?.removeAttribute("disabled");
+        startNotificationReconciliation();
+      } catch (error) {
+        window.alert(
+          `Could not delete notification${intent.kind === "all" ? "s" : ""}. ${error instanceof Error ? error.message : ""}`.trim()
+        );
+      } finally {
+        if (intent.kind === "one") {
+          releaseNotificationMutation(notificationId);
+        } else {
+          releaseNotificationGlobalMutation();
+        }
+        notificationDeleteConfirmBtn.removeAttribute("disabled");
+        notificationDeleteConfirmBtn.removeAttribute("aria-busy");
+        notificationDeleteConfirmBtn.textContent = confirmLabel;
+        notificationDeleteCancelBtn?.removeAttribute("disabled");
+      }
+    });
+  }
 
   if (notificationList) {
     notificationList.addEventListener("click", async (event) => {
       const target = event.target;
-      if (!(target instanceof HTMLElement)) return;
+      // Row actions are compact buttons whose visible surface is almost
+      // entirely their nested SVG icon. A click landing on that <svg> or a
+      // <path>/<rect> inside it sets event.target to an SVGElement, which is
+      // NOT an instanceof HTMLElement even though .closest() works on it
+      // identically. Gating on HTMLElement silently dropped exactly those
+      // clicks: the icon fill, not the button padding, is what users actually
+      // click, so mark-read/unread and delete appeared to "randomly do
+      // nothing" depending on the exact pixel clicked.
+      if (!(target instanceof Element)) return;
 
-      const clickableCard = target.closest(".notification-item[data-notification-destination]");
-      if (clickableCard && !target.closest("[data-notification-toggle]")) {
+      const deleteBtn = target.closest("[data-notification-delete]");
+      if (deleteBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        const notificationId = String(deleteBtn.getAttribute("data-notification-delete") || "").trim();
+        if (!notificationId || notificationGlobalMutationPending) return;
+        if (notificationPendingIds.has(notificationId)) return;
+        openNotificationDeleteConfirmation(
+          { kind: "one", notificationId },
+          deleteBtn
+        );
+        return;
+      }
+
+      const clickableCard = target.closest(".notification-row[data-notification-destination]");
+      if (clickableCard && !target.closest("[data-notification-toggle], [data-notification-delete]")) {
         const destination = String(clickableCard.getAttribute("data-notification-destination") || "").trim();
         if (destination) {
           window.location.href = destination;
@@ -1349,19 +1825,27 @@ window.addEventListener("DOMContentLoaded", () => {
       const nextRead = String(toggleBtn.getAttribute("data-next-read") || "").trim() === "true";
 
       if (!notificationId) return;
+      if (notificationGlobalMutationPending) return;
 
-      toggleBtn.setAttribute("disabled", "disabled");
+      // Exactly one mutation per notification may be in flight. A second click
+      // on the same row (including on the button re-rendered by the refresh)
+      // is dropped rather than racing the first.
+      if (notificationPendingIds.has(notificationId)) return;
+      notificationPendingIds.add(notificationId);
+      notificationPendingActions.set(notificationId, "toggle");
+      syncNotificationPendingButtons();
 
       try {
-        await updateNotificationReadState(notificationId, nextRead);
-        await loadNotifications();
-        await loadUnreadCount();
+        const payload = await updateNotificationReadState(notificationId, nextRead);
+        applyConfirmedNotificationReadState(notificationId, payload);
+        releaseNotificationMutation(notificationId);
+        startNotificationReconciliation();
       } catch (error) {
         window.alert(
           `Could not update notification state. ${error instanceof Error ? error.message : ""}`.trim()
         );
       } finally {
-        toggleBtn.removeAttribute("disabled");
+        releaseNotificationMutation(notificationId);
       }
     });
   }
@@ -1403,6 +1887,15 @@ window.addEventListener("DOMContentLoaded", () => {
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
+      if (
+        notificationDeleteConfirmModal
+        && !notificationDeleteConfirmModal.classList.contains("hidden")
+        && !notificationGlobalMutationPending
+        && notificationPendingIds.size === 0
+      ) {
+        closeNotificationDeleteConfirmation();
+        return;
+      }
       closeProfileMenu({ restoreFocus: true });
       closeNotifications();
     }

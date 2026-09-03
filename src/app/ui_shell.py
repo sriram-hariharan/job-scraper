@@ -201,40 +201,6 @@ def render_top_shell(active_href: str) -> str:
 </aside>
 
 <div class="{toolbar_classes}" role="group" aria-label="Workspace controls">
-  <div class="bulk-generation-shell hidden" id="bulkGenerationShell" data-bulk-safe="true">
-    <button
-      type="button"
-      class="bulk-generation-progress-btn"
-      id="bulkGenerationProgressBtn"
-      aria-controls="bulkGenerationPanel"
-      aria-expanded="false"
-      data-bulk-safe="true"
-    >
-      <span class="bulk-generation-progress-dot" aria-hidden="true"></span>
-      <span id="bulkGenerationProgressLabel">0 / 0</span>
-    </button>
-    <section
-      class="bulk-generation-panel hidden"
-      id="bulkGenerationPanel"
-      aria-label="Bulk Generate progress"
-      data-bulk-safe="true"
-    >
-      <div class="bulk-generation-panel__header">
-        <div>
-          <strong>Bulk Generate</strong>
-          <span id="bulkGenerationStatusLabel">Checking status…</span>
-        </div>
-        <button type="button" class="ghost-btn" id="bulkGenerationMinimizeBtn" data-bulk-safe="true">Minimize</button>
-      </div>
-      <div class="bulk-generation-panel__counts" id="bulkGenerationCounts"></div>
-      <div class="bulk-generation-panel__current" id="bulkGenerationCurrent"></div>
-      <div class="bulk-generation-panel__results" id="bulkGenerationResults"></div>
-      <button type="button" class="ghost-btn" id="bulkGenerationStopBtn" data-bulk-safe="true">
-        Stop after current
-      </button>
-    </section>
-  </div>
-
   <span class="bulk-generation-guard-description" id="bulkGenerationGuardDescription">
     Bulk Generate must finish or be stopped before this action is available.
   </span>
@@ -259,67 +225,90 @@ def render_top_shell(active_href: str) -> str:
       <span class="notification-badge hidden" id="notificationBadge">0</span>
     </button>
 
-    <div class="notification-dropdown hidden" id="notificationDropdown">
-      <div class="notification-dropdown-header">
-        <div>
-          <div class="notification-dropdown-title">Notifications</div>
-          <div class="subtext" id="notificationSubtitle">Recent scheduler activity</div>
+    <div class="notification-center hidden" id="notificationDropdown" role="dialog" aria-label="Notifications">
+      <header class="notification-center__head">
+        <div class="notification-center__identity">
+          <span class="notification-center__tile" aria-hidden="true">
+            <svg class="app-shell-icon" viewBox="0 0 24 24" width="17" height="17"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" focusable="false">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+          </span>
+          <div class="notification-center__heading">
+            <div class="notification-center__title">Notifications</div>
+            <div class="notification-center__subtitle" id="notificationSubtitle">Activity from your automated workflows</div>
+          </div>
+          <span class="notification-center__unread hidden" id="notificationUnreadPill">0 new</span>
         </div>
-
-        <div class="notification-header-actions">
-          <button
-            type="button"
-            class="ghost-btn notification-refresh-btn"
-            id="notificationRefreshBtn"
-          >
-            Refresh
+        <div class="notification-center__actions" aria-label="Notification actions">
+          <button type="button" class="notification-center__text-btn notification-center__refresh"
+                  id="notificationRefreshBtn"
+                  aria-label="Refresh notifications" title="Refresh notifications">
+            <svg class="app-shell-icon" viewBox="0 0 24 24" width="14" height="14"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" />
+            </svg>
+            <span>Refresh</span>
           </button>
-
-          <button
-            type="button"
-            class="ghost-btn notification-mark-all-btn"
-            id="notificationMarkAllReadBtn"
-          >
-            Mark all read
-          </button>
+          <button type="button" class="notification-center__text-btn" id="notificationMarkAllReadBtn"
+                  title="Mark all notifications read">Mark all read</button>
+          <button type="button" class="notification-center__text-btn notification-center__delete-all"
+                  id="notificationDeleteAllBtn" title="Delete all notifications">Delete all</button>
         </div>
+      </header>
+
+      <div class="notification-center__filters" role="tablist" aria-label="Notification filters">
+        <button type="button" class="notification-chip is-active" role="tab" aria-selected="true"
+                id="notificationFilterAll" data-notification-filter="all">All</button>
+        <button type="button" class="notification-chip" role="tab" aria-selected="false"
+                id="notificationUnreadOnly" data-notification-filter="unread">Unread</button>
+        <button type="button" class="notification-chip" role="tab" aria-selected="false"
+                data-notification-filter="pipeline">Pipeline</button>
+        <button type="button" class="notification-chip" role="tab" aria-selected="false"
+                data-notification-filter="discovery">Discovery</button>
       </div>
 
-      <div class="notification-toolbar">
-        <div
-          class="binary-toggle binary-toggle--compact notification-unread-toggle"
-          id="notificationUnreadToggle"
-          role="radiogroup"
-          aria-label="Notification filter"
-        >
-          <label class="binary-toggle-option">
-            <input
-              type="radio"
-              name="notificationUnreadFilter"
-              id="notificationShowAll"
-              value="all"
-              checked
-            />
-            <span>All</span>
-          </label>
-
-          <label class="binary-toggle-option">
-            <input
-              type="radio"
-              name="notificationUnreadFilter"
-              id="notificationUnreadOnly"
-              value="unread"
-            />
-            <span>Unread</span>
-          </label>
-        </div>
+      <div class="notification-center__feed" id="notificationList" tabindex="0">
+        <div class="notification-center__empty">Loading notifications...</div>
       </div>
 
-      <div class="notification-list" id="notificationList">
-        <div class="notification-empty">Loading notifications...</div>
-      </div>
+      <footer class="notification-center__foot">
+        <a class="notification-center__foot-link" href="/scheduler">View scheduler activity &#8594;</a>
+      </footer>
     </div>
   </div>
+
+  <section
+    class="modal-backdrop notification-delete-modal hidden"
+    id="notificationDeleteConfirmModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="notificationDeleteConfirmTitle"
+    aria-describedby="notificationDeleteConfirmBody"
+    aria-hidden="true"
+  >
+    <div class="modal-card notification-delete-modal__card" role="document">
+      <div class="notification-delete-modal__icon" aria-hidden="true">
+        <svg class="app-shell-icon" viewBox="0 0 24 24" width="18" height="18"
+             fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" focusable="false">
+          <path d="M3 6h18" /><path d="M8 6V4h8v2" />
+          <path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5" /><path d="M14 11v5" />
+        </svg>
+      </div>
+      <div class="notification-delete-modal__copy">
+        <h3 id="notificationDeleteConfirmTitle">Delete notification?</h3>
+        <p id="notificationDeleteConfirmBody">This removes it from Notifications. Scheduler history is not affected.</p>
+      </div>
+      <div class="modal-actions notification-delete-modal__actions">
+        <button type="button" class="notification-center__text-btn notification-delete-modal__cancel" id="notificationDeleteCancelBtn">Cancel</button>
+        <button type="button" class="notification-center__text-btn notification-delete-modal__confirm" id="notificationDeleteConfirmBtn">Delete</button>
+      </div>
+    </div>
+  </section>
 
   <button
     type="button"

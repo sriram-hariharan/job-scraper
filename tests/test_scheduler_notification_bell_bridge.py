@@ -8,6 +8,10 @@ from fastapi.testclient import TestClient
 
 from src.app import api, services
 from src.storage import scheduler_artifacts_store
+from src.storage.notification_state.store import (
+    notification_state_contract_health_payload,
+    notification_state_db_row,
+)
 
 
 ADMIN = {
@@ -214,7 +218,11 @@ def test_missing_state_transition_defaults_to_unread(monkeypatch):
         "list_scheduler_artifacts_by_kind",
         lambda **kwargs: _artifact_payload([_artifact(row)]),
     )
-    monkeypatch.setattr(services, "_load_latest_notification_state_overlay", lambda: {})
+    monkeypatch.setattr(
+        services,
+        "_load_latest_notification_state_overlay",
+        lambda **_kwargs: {},
+    )
 
     payload = services.notifications_payload(
         scheduler_notifications_visible=True,
@@ -235,7 +243,16 @@ def test_admin_api_reads_summarizes_counts_and_updates_shared_state(monkeypatch)
         "list_scheduler_artifacts_by_kind",
         lambda **kwargs: storage_calls.append(kwargs) or _artifact_payload([_artifact(row)]),
     )
-    monkeypatch.setattr(services, "_load_latest_notification_state_overlay", lambda: {})
+    monkeypatch.setattr(
+        services,
+        "get_scheduler_artifact_payload",
+        lambda **kwargs: storage_calls.append(kwargs) or deepcopy(row),
+    )
+    monkeypatch.setattr(
+        services,
+        "_load_latest_notification_state_overlay",
+        lambda **_kwargs: {},
+    )
     monkeypatch.setattr(
         services,
         "_dual_write_notification_state_postgres",
@@ -265,6 +282,7 @@ def test_admin_api_reads_summarizes_counts_and_updates_shared_state(monkeypatch)
     assert updated.json()["notification"]["is_read"] is True
     assert len(writes) == 1
     assert writes[0]["notification_id"] == row["notification_id"]
+    assert writes[0]["owner_user_id"] == ADMIN["user_id"]
     assert all(call["artifact_kind"] == "post_run_notification" for call in storage_calls)
 
 
@@ -328,6 +346,11 @@ def test_read_state_does_not_mutate_scheduler_artifacts(monkeypatch):
         "list_scheduler_artifacts_by_kind",
         lambda **kwargs: _artifact_payload([_artifact(row)]),
     )
+    monkeypatch.setattr(
+        services,
+        "get_scheduler_artifact_payload",
+        lambda **_kwargs: deepcopy(row),
+    )
     monkeypatch.setattr(services, "_load_latest_notification_state_overlay", lambda: {})
     writes = []
     monkeypatch.setattr(
@@ -344,3 +367,184 @@ def test_read_state_does_not_mutate_scheduler_artifacts(monkeypatch):
     assert result["notification"]["is_read"] is True
     assert writes and writes[0]["notification_id"] == row["notification_id"]
     assert "upsert_scheduler_artifact" not in services.record_notification_read_state_payload.__code__.co_names
+
+
+def test_notification_state_contract_supports_owner_scoped_tombstones():
+    row = notification_state_db_row(
+        {
+            "state_timestamp": "2026-09-02T12:00:00+00:00",
+            "owner_user_id": "owner-a",
+            "notification_id": "notification-1",
+            "is_read": False,
+            "is_deleted": True,
+        }
+    )
+
+    assert row["owner_user_id"] == "owner-a"
+    assert row["is_deleted"] is True
+    assert notification_state_contract_health_payload()["all_checks_pass"] is True
+
+
+def test_individual_delete_is_owner_scoped_idempotent_and_preserves_source(monkeypatch):
+    row = _notification(
+        "scheduled_run_email::run-delete::agent_discovery",
+        created_at="2026-08-24T08:00:00+00:00",
+        job_name="agent_discovery",
+    )
+    artifacts = [_artifact(row)]
+    state_by_owner = {}
+    writes = []
+
+    monkeypatch.setattr(
+        services,
+        "list_scheduler_artifacts_by_kind",
+        lambda **_kwargs: _artifact_payload(artifacts),
+    )
+    monkeypatch.setattr(
+        services,
+        "get_scheduler_artifact_payload",
+        lambda **_kwargs: deepcopy(row),
+    )
+    monkeypatch.setattr(
+        services,
+        "_load_latest_notification_state_overlay",
+        lambda **kwargs: deepcopy(state_by_owner.get(kwargs.get("owner_user_id", ""), {})),
+    )
+
+    def write_state(state_row):
+        writes.append(deepcopy(state_row))
+        state_by_owner.setdefault(state_row["owner_user_id"], {})[
+            state_row["notification_id"]
+        ] = {
+            **deepcopy(state_row),
+            "is_read": bool(state_row["is_read"]),
+            "is_deleted": bool(state_row["is_deleted"]),
+        }
+        return {"attempted": True, "ok": True}
+
+    monkeypatch.setattr(services, "_dual_write_notification_state_postgres", write_state)
+
+    first = services.delete_notification_payload(
+        notification_id=row["notification_id"],
+        scheduler_notifications_visible=True,
+        owner_user_id="owner-a",
+    )
+    second = services.delete_notification_payload(
+        notification_id=row["notification_id"],
+        scheduler_notifications_visible=True,
+        owner_user_id="owner-a",
+    )
+
+    assert first["already_deleted"] is False
+    assert second["already_deleted"] is True
+    assert len(writes) == 1
+    assert writes[0]["owner_user_id"] == "owner-a"
+    assert writes[0]["is_deleted"] is True
+    assert services.notifications_payload(
+        scheduler_notifications_visible=True,
+        owner_user_id="owner-a",
+    )["rows"] == []
+    assert len(services.notifications_payload(
+        scheduler_notifications_visible=True,
+        owner_user_id="owner-b",
+    )["rows"]) == 1
+    assert len(artifacts) == 1
+
+
+def test_delete_all_tombstone_covers_full_owner_inbox_not_client_window(monkeypatch):
+    rows = [
+        _notification(
+            f"scheduled_run_email::run-{index:03d}::live_pipeline",
+            created_at=f"2026-08-{1 + (index // 24):02d}T{index % 24:02d}:00:00+00:00",
+        )
+        for index in range(120)
+    ]
+    artifacts = [_artifact(row) for row in rows]
+    state_by_owner = {}
+    writes = []
+    monkeypatch.setattr(
+        services,
+        "list_scheduler_artifacts_by_kind",
+        lambda **_kwargs: _artifact_payload(artifacts),
+    )
+    monkeypatch.setattr(
+        services,
+        "_load_latest_notification_state_overlay",
+        lambda **kwargs: deepcopy(state_by_owner.get(kwargs.get("owner_user_id", ""), {})),
+    )
+
+    def write_state(state_row):
+        writes.append(deepcopy(state_row))
+        state_by_owner.setdefault(state_row["owner_user_id"], {})[
+            state_row["notification_id"]
+        ] = deepcopy(state_row)
+        return {"attempted": True, "ok": True}
+
+    monkeypatch.setattr(services, "_dual_write_notification_state_postgres", write_state)
+
+    first = services.delete_all_notifications_payload(
+        scheduler_notifications_visible=True,
+        owner_user_id="owner-a",
+    )
+    second = services.delete_all_notifications_payload(
+        scheduler_notifications_visible=True,
+        owner_user_id="owner-a",
+    )
+
+    assert first["already_deleted"] is False
+    assert second["already_deleted"] is True
+    assert len(writes) == 1
+    assert writes[0]["notification_id"] == services._NOTIFICATION_DELETE_ALL_STATE_ID
+    assert services.notifications_payload(
+        limit=50,
+        scheduler_notifications_visible=True,
+        owner_user_id="owner-a",
+    )["total_matching_rows"] == 0
+    assert services.notifications_unread_count_payload(
+        scheduler_notifications_visible=True,
+        owner_user_id="owner-a",
+    )["unread_count"] == 0
+    assert services.notifications_payload(
+        limit=50,
+        scheduler_notifications_visible=True,
+        owner_user_id="owner-b",
+    )["total_matching_rows"] == 120
+    assert len(artifacts) == 120
+
+
+def test_delete_api_binds_authenticated_owner(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        services,
+        "delete_notification_payload",
+        lambda **kwargs: calls.append(("one", deepcopy(kwargs))) or {"ok": True},
+    )
+    monkeypatch.setattr(
+        services,
+        "delete_all_notifications_payload",
+        lambda **kwargs: calls.append(("all", deepcopy(kwargs))) or {"ok": True},
+    )
+    client = _client_as(monkeypatch, ADMIN)
+
+    assert client.post(
+        "/notifications/delete",
+        json={"notification_id": "notification-1"},
+    ).status_code == 200
+    assert client.post("/notifications/delete-all").status_code == 200
+    assert calls == [
+        (
+            "one",
+            {
+                "notification_id": "notification-1",
+                "scheduler_notifications_visible": True,
+                "owner_user_id": ADMIN["user_id"],
+            },
+        ),
+        (
+            "all",
+            {
+                "scheduler_notifications_visible": True,
+                "owner_user_id": ADMIN["user_id"],
+            },
+        ),
+    ]

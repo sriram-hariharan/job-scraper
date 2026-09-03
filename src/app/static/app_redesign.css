@@ -156,8 +156,7 @@ h2 {
 .intelligence-card,
 .decision-card,
 .modal-card,
-.profile-dropdown,
-.notification-dropdown {
+.profile-dropdown {
   border: 1px solid var(--app-border) !important;
   border-radius: var(--app-radius-xl) !important;
   background:
@@ -178,14 +177,13 @@ html[data-theme="light"] .application-view-card,
 html[data-theme="light"] .intelligence-card,
 html[data-theme="light"] .decision-card,
 html[data-theme="light"] .modal-card,
-html[data-theme="light"] .profile-dropdown,
-html[data-theme="light"] .notification-dropdown {
+html[data-theme="light"] .profile-dropdown {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 251, 255, 0.96)),
     var(--app-surface) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate),
 .btn,
 .ghost-btn,
 .app-shell-primary-link,
@@ -208,7 +206,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
     color var(--app-fast) var(--app-ease) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate),
 .app-shell-primary-link {
   background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
   color: #ffffff !important;
@@ -227,7 +225,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   color: var(--app-text) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate):not(:disabled):hover,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate):not(:disabled):hover,
 .ghost-btn:not(:disabled):hover,
 .job-apply-btn:not(:disabled):hover,
 .apply-btn:not(:disabled):hover,
@@ -237,7 +235,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   box-shadow: var(--app-shadow-sm) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):disabled,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):disabled,
 [aria-disabled="true"] {
   cursor: not-allowed !important;
   opacity: 0.58 !important;
@@ -1401,7 +1399,7 @@ body {
   overscroll-behavior-x: contain;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action),
 .ghost-btn,
 .app-shell-primary-link,
 .job-apply-btn,
@@ -1412,7 +1410,6 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   white-space: nowrap;
 }
 
-.notification-dropdown,
 .profile-dropdown,
 .modal-card {
   max-width: calc(100vw - 28px) !important;
@@ -1422,7 +1419,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   display: grid !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):focus-visible,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):focus-visible:not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action),
 .ghost-btn:focus-visible,
 .app-shell-primary-link:focus-visible,
 .app-shell-nav-link:focus-visible,
@@ -1448,7 +1445,6 @@ html[data-theme="light"] .table-wrap-loading-overlay {
 }
 
 .loading-state,
-.notification-empty,
 .resume-empty-state,
 .saved-scans-empty-cell,
 .tailoring-empty-state {
@@ -1570,7 +1566,7 @@ body .control-group textarea {
   font-size: 13px !important;
 }
 
-body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate),
+body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate),
 body .ghost-btn,
 body .btn-sm {
   min-height: 34px !important;
@@ -4103,7 +4099,7 @@ body .control-group label {
   line-height: 1.1 !important;
 }
 
-body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate),
+body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate),
 body .ghost-btn,
 body .btn-sm {
   min-height: 34px !important;
@@ -4489,21 +4485,6 @@ body .notification-btn:focus,
 body .notification-btn:focus-visible,
 body .notification-btn[aria-expanded="true"] {
   transform: none !important;
-}
-
-body .notification-dropdown {
-  position: fixed !important;
-  top: auto !important;
-  left: auto !important;
-  right: auto !important;
-  bottom: auto !important;
-  z-index: 1000 !important;
-  width: min(440px, calc(100vw - 28px)) !important;
-  overflow: hidden !important;
-}
-
-body .notification-dropdown.hidden {
-  display: none !important;
 }
 
 /* Floating Job Assistant launcher. */
@@ -8697,7 +8678,6 @@ html[data-theme="light"] .pipeline-count-empty {
   color: #64748b !important;
 }
 
-
 html[data-theme="light"] .pipeline-step {
   border-color: #cbd5e1 !important;
   background: #f8fafc !important;
@@ -9912,19 +9892,6 @@ html[data-theme="light"] .profile-dropdown-danger-btn:focus-visible {
   width: 20px;
   height: 20px;
   flex: 0 0 20px;
-}
-
-body .notification-dropdown {
-  border-color: rgba(148, 163, 184, 0.24) !important;
-  border-radius: 16px !important;
-  background: #111827 !important;
-  box-shadow: 0 20px 48px rgba(2, 8, 23, 0.34) !important;
-}
-
-html[data-theme="light"] body .notification-dropdown {
-  border-color: rgba(100, 116, 139, 0.2) !important;
-  background: #ffffff !important;
-  box-shadow: 0 20px 46px rgba(15, 23, 42, 0.14) !important;
 }
 
 @media (max-width: 680px) {

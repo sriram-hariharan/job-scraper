@@ -129,6 +129,7 @@ from src.storage.notification_state.store import (
     insert_notification_state_row_to_postgres,
 )
 from src.storage.notification_state.read_postgres import (
+    get_latest_notification_states_postgres_payload,
     get_notification_state_postgres_status_payload,
 )
 from src.storage.saved_scans.store import (
@@ -9893,9 +9894,10 @@ class NotificationStorageUnavailableError(RuntimeError):
 _SCHEDULER_NOTIFICATION_ARTIFACT_KIND = "post_run_notification"
 _SCHEDULER_NOTIFICATION_KIND = "scheduled_run_email_delivery"
 _SCHEDULER_NOTIFICATION_READ_LIMIT = 500
+_NOTIFICATION_DELETE_ALL_STATE_ID = "__all_notifications__"
 
 
-def _load_scheduler_notification_rows() -> List[Dict[str, Any]]:
+def _load_scheduler_notification_source_rows() -> List[Dict[str, Any]]:
     try:
         artifact_payload = list_scheduler_artifacts_by_kind(
             artifact_kind=_SCHEDULER_NOTIFICATION_ARTIFACT_KIND,
@@ -9931,7 +9933,7 @@ def _load_scheduler_notification_rows() -> List[Dict[str, Any]]:
                 continue
             seen_notification_ids.add(notification_id)
             deduplicated.append(row)
-        return _apply_notification_state_overlay(deduplicated)
+        return deduplicated
     except (Exception, SystemExit) as exc:
         if isinstance(exc, NotificationStorageUnavailableError):
             raise
@@ -9940,13 +9942,66 @@ def _load_scheduler_notification_rows() -> List[Dict[str, Any]]:
         ) from exc
 
 
+def _load_scheduler_notification_source_row(
+    notification_id: str,
+) -> Dict[str, Any] | None:
+    clean_notification_id = _clean_text(notification_id)
+    parts = clean_notification_id.split("::")
+    if (
+        len(parts) != 3
+        or parts[0] != "scheduled_run_email"
+        or not parts[1]
+        or not parts[2]
+    ):
+        return None
+
+    try:
+        payload = get_scheduler_artifact_payload(
+            run_id=parts[1],
+            artifact_kind=_SCHEDULER_NOTIFICATION_ARTIFACT_KIND,
+            initialize=False,
+        )
+    except (Exception, SystemExit) as exc:
+        if isinstance(exc, NotificationStorageUnavailableError):
+            raise
+        raise NotificationStorageUnavailableError(
+            "Notification storage is unavailable."
+        ) from exc
+
+    if not isinstance(payload, dict):
+        return None
+    row = dict(payload)
+    if (
+        _clean_text(row.get("notification_id")) != clean_notification_id
+        or _clean_text(row.get("notification_kind")) != _SCHEDULER_NOTIFICATION_KIND
+        or _clean_text(row.get("run_id")) != parts[1]
+        or _clean_text(row.get("job_name")) != parts[2]
+    ):
+        return None
+    return row
+
+
+def _load_scheduler_notification_rows(
+    *,
+    owner_user_id: str = "",
+) -> List[Dict[str, Any]]:
+    rows = _load_scheduler_notification_source_rows()
+    if owner_user_id:
+        return _apply_notification_state_overlay(
+            rows,
+            owner_user_id=owner_user_id,
+        )
+    return _apply_notification_state_overlay(rows)
+
+
 def _visible_scheduler_notification_rows(
     *,
     scheduler_notifications_visible: bool,
+    owner_user_id: str = "",
 ) -> List[Dict[str, Any]]:
     if not scheduler_notifications_visible:
         return []
-    return _load_scheduler_notification_rows()
+    return _load_scheduler_notification_rows(owner_user_id=owner_user_id)
 
 
 def _normalize_notification_read_flag(value: Any) -> bool:
@@ -9973,24 +10028,52 @@ def _normalize_optional_notification_read_filter(value: Any) -> Any:
         return None
     return _normalize_notification_read_flag(raw)
 
-def _load_latest_notification_state_overlay() -> Dict[str, Dict[str, Any]]:
-    meta_payload = get_notification_state_postgres_status_payload(
-        limit=1,
-        database_url="",
-        database_url_env="DATABASE_URL",
-        psql_bin="psql",
-        print_only=False,
-    )
-    meta_block = dict(meta_payload.get("postgres", {}) or {})
-    query_limit = max(int(meta_block.get("latest_state_count", 0) or 0), 1)
+def _load_latest_notification_state_overlay(
+    *,
+    owner_user_id: str = "",
+    notification_ids: List[str] | None = None,
+) -> Dict[str, Dict[str, Any]]:
+    if owner_user_id and notification_ids is not None:
+        requested_ids = list(
+            dict.fromkeys(
+                [
+                    *(
+                        _clean_text(notification_id)
+                        for notification_id in notification_ids
+                        if _clean_text(notification_id)
+                    ),
+                    _NOTIFICATION_DELETE_ALL_STATE_ID,
+                ]
+            )
+        )
+        postgres_payload = get_latest_notification_states_postgres_payload(
+            notification_ids=requested_ids,
+            owner_user_id=owner_user_id,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+        )
+    else:
+        meta_payload = get_notification_state_postgres_status_payload(
+            limit=1,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            owner_user_id=owner_user_id,
+        )
+        meta_block = dict(meta_payload.get("postgres", {}) or {})
+        query_limit = max(int(meta_block.get("latest_state_count", 0) or 0), 1)
 
-    postgres_payload = get_notification_state_postgres_status_payload(
-        limit=query_limit,
-        database_url="",
-        database_url_env="DATABASE_URL",
-        psql_bin="psql",
-        print_only=False,
-    )
+        postgres_payload = get_notification_state_postgres_status_payload(
+            limit=query_limit,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            owner_user_id=owner_user_id,
+        )
     postgres_block = dict(postgres_payload.get("postgres", {}) or {})
     postgres_rows = list(postgres_block.get("latest_rows", []) or [])
 
@@ -10002,22 +10085,65 @@ def _load_latest_notification_state_overlay() -> Dict[str, Dict[str, Any]]:
 
         latest_overlay[notification_id] = {
             "is_read": bool(row.get("is_read", False)),
+            "is_deleted": bool(row.get("is_deleted", False)),
+            "owner_user_id": _clean_text(row.get("owner_user_id")),
             "state_timestamp": _clean_text(row.get("state_timestamp")),
         }
 
     return latest_overlay
 
+
+def _notification_timestamp_at_or_before(value: Any, cutoff: Any) -> bool:
+    raw_value = _clean_text(value)
+    raw_cutoff = _clean_text(cutoff)
+    if not raw_value:
+        return True
+    try:
+        parsed_value = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+        parsed_cutoff = datetime.fromisoformat(raw_cutoff.replace("Z", "+00:00"))
+        if parsed_value.tzinfo is None:
+            parsed_value = parsed_value.replace(tzinfo=timezone.utc)
+        if parsed_cutoff.tzinfo is None:
+            parsed_cutoff = parsed_cutoff.replace(tzinfo=timezone.utc)
+        return parsed_value <= parsed_cutoff
+    except (TypeError, ValueError):
+        return raw_value <= raw_cutoff
+
+
 def _apply_notification_state_overlay(
     rows: List[Dict[str, Any]],
+    *,
+    owner_user_id: str = "",
 ) -> List[Dict[str, Any]]:
-    latest_by_notification_id = _load_latest_notification_state_overlay()
+    if owner_user_id:
+        latest_by_notification_id = _load_latest_notification_state_overlay(
+            owner_user_id=owner_user_id,
+            notification_ids=[
+                _clean_text(row.get("notification_id"))
+                for row in rows
+                if _clean_text(row.get("notification_id"))
+            ],
+        )
+    else:
+        latest_by_notification_id = _load_latest_notification_state_overlay()
     overlaid_rows: List[Dict[str, Any]] = []
+    delete_all_state = latest_by_notification_id.get(
+        _NOTIFICATION_DELETE_ALL_STATE_ID,
+        {},
+    )
+    delete_all_timestamp = (
+        _clean_text(delete_all_state.get("state_timestamp"))
+        if bool(delete_all_state.get("is_deleted", False))
+        and _clean_text(delete_all_state.get("owner_user_id")) == _clean_text(owner_user_id)
+        else ""
+    )
 
     for row in rows:
         merged = dict(row)
         # Content artifacts do not own read state. Without a transition, every
         # scheduler notification is unread regardless of any payload default.
         merged["is_read"] = False
+        merged["is_deleted"] = False
         merged["read_state_timestamp"] = ""
 
         notification_id = str(merged.get("notification_id", "") or "").strip()
@@ -10025,11 +10151,37 @@ def _apply_notification_state_overlay(
 
         if overlay:
             merged["is_read"] = bool(overlay.get("is_read", False))
+            merged["is_deleted"] = bool(overlay.get("is_deleted", False))
             merged["read_state_timestamp"] = str(overlay.get("state_timestamp", "") or "").strip()
 
-        overlaid_rows.append(merged)
+        if delete_all_timestamp and _notification_timestamp_at_or_before(
+            merged.get("created_at"),
+            delete_all_timestamp,
+        ):
+            merged["is_deleted"] = True
+
+        if not merged["is_deleted"]:
+            overlaid_rows.append(merged)
 
     return overlaid_rows
+
+
+def _visible_scheduler_notification_row(
+    notification_id: str,
+    *,
+    scheduler_notifications_visible: bool,
+    owner_user_id: str = "",
+) -> Dict[str, Any] | None:
+    if not scheduler_notifications_visible:
+        return None
+    source_row = _load_scheduler_notification_source_row(notification_id)
+    if source_row is None:
+        return None
+    visible_rows = _apply_notification_state_overlay(
+        [source_row],
+        owner_user_id=owner_user_id,
+    )
+    return dict(visible_rows[0]) if visible_rows else None
 
 
 def notifications_payload(
@@ -10040,9 +10192,11 @@ def notifications_payload(
     limit: int = 20,
     *,
     scheduler_notifications_visible: bool = False,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     rows = _visible_scheduler_notification_rows(
         scheduler_notifications_visible=scheduler_notifications_visible,
+        owner_user_id=owner_user_id,
     )
 
     normalized_job_name = _normalize_scheduler_filter_text(job_name)
@@ -10096,9 +10250,11 @@ def notifications_summary_payload(
     limit: int = 10,
     *,
     scheduler_notifications_visible: bool = False,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     rows = _visible_scheduler_notification_rows(
         scheduler_notifications_visible=scheduler_notifications_visible,
+        owner_user_id=owner_user_id,
     )
     selected = rows[: max(int(limit), 0)]
 
@@ -10134,9 +10290,11 @@ def notifications_summary_payload(
 def notifications_unread_count_payload(
     *,
     scheduler_notifications_visible: bool = False,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     rows = _visible_scheduler_notification_rows(
         scheduler_notifications_visible=scheduler_notifications_visible,
+        owner_user_id=owner_user_id,
     )
 
     unread_count = sum(1 for row in rows if not bool(row.get("is_read", False)))
@@ -10198,20 +10356,17 @@ def record_notification_read_state_payload(
     notification_id: str = "",
     is_read: Any = True,
     scheduler_notifications_visible: bool = False,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     clean_notification_id = str(notification_id or "").strip()
     if not clean_notification_id:
         raise ValueError("notification_id is required.")
 
-    rows = _visible_scheduler_notification_rows(
+    target_notification = _visible_scheduler_notification_row(
+        clean_notification_id,
         scheduler_notifications_visible=scheduler_notifications_visible,
+        owner_user_id=owner_user_id,
     )
-
-    target_notification = None
-    for row in rows:
-        if str(row.get("notification_id", "") or "").strip() == clean_notification_id:
-            target_notification = dict(row)
-            break
 
     if target_notification is None:
         raise ValueError(f"Notification not found: {clean_notification_id}")
@@ -10220,8 +10375,10 @@ def record_notification_read_state_payload(
 
     state_row = {
         "state_timestamp": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+        "owner_user_id": _clean_text(owner_user_id),
         "notification_id": clean_notification_id,
         "is_read": str(normalized_is_read),
+        "is_deleted": False,
     }
 
     postgres_write = _dual_write_notification_state_postgres(state_row)
@@ -10237,6 +10394,106 @@ def record_notification_read_state_payload(
         "ok": True,
         "state_row": state_row,
         "notification": target_notification,
+    }
+
+
+def delete_notification_payload(
+    *,
+    notification_id: str = "",
+    scheduler_notifications_visible: bool = False,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    clean_notification_id = _clean_text(notification_id)
+    clean_owner_user_id = _clean_text(owner_user_id)
+    if not clean_notification_id:
+        raise ValueError("notification_id is required.")
+    if not clean_owner_user_id:
+        raise ValueError("owner_user_id is required.")
+    if not scheduler_notifications_visible:
+        raise ValueError(f"Notification not found: {clean_notification_id}")
+
+    source_notification = _load_scheduler_notification_source_row(
+        clean_notification_id,
+    )
+    if source_notification is None:
+        raise ValueError(f"Notification not found: {clean_notification_id}")
+
+    visible_rows = _apply_notification_state_overlay(
+        [source_notification],
+        owner_user_id=clean_owner_user_id,
+    )
+    visible_notification = dict(visible_rows[0]) if visible_rows else None
+    if visible_notification is None:
+        return {
+            "ok": True,
+            "notification_id": clean_notification_id,
+            "deleted": True,
+            "already_deleted": True,
+        }
+
+    state_row = {
+        "state_timestamp": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+        "owner_user_id": clean_owner_user_id,
+        "notification_id": clean_notification_id,
+        "is_read": bool(visible_notification.get("is_read", False)),
+        "is_deleted": True,
+    }
+    postgres_write = _dual_write_notification_state_postgres(state_row)
+    if not postgres_write.get("ok"):
+        raise NotificationStorageUnavailableError(
+            "Notification storage is unavailable."
+        )
+
+    return {
+        "ok": True,
+        "notification_id": clean_notification_id,
+        "deleted": True,
+        "already_deleted": False,
+        "state_row": state_row,
+    }
+
+
+def delete_all_notifications_payload(
+    *,
+    scheduler_notifications_visible: bool = False,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    clean_owner_user_id = _clean_text(owner_user_id)
+    if not clean_owner_user_id:
+        raise ValueError("owner_user_id is required.")
+    if not scheduler_notifications_visible:
+        raise ValueError("Notifications are unavailable for this owner.")
+
+    visible_rows = _load_scheduler_notification_rows(
+        owner_user_id=clean_owner_user_id,
+    )
+    if not visible_rows:
+        return {
+            "ok": True,
+            "deleted": True,
+            "already_deleted": True,
+            "deleted_count": 0,
+        }
+
+    state_row = {
+        "state_timestamp": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+        "owner_user_id": clean_owner_user_id,
+        "notification_id": _NOTIFICATION_DELETE_ALL_STATE_ID,
+        "is_read": True,
+        "is_deleted": True,
+    }
+    postgres_write = _dual_write_notification_state_postgres(state_row)
+    if not postgres_write.get("ok"):
+        raise NotificationStorageUnavailableError(
+            "Notification storage is unavailable."
+        )
+
+    return {
+        "ok": True,
+        "deleted": True,
+        "already_deleted": False,
+        "deleted_count": len(visible_rows),
+        "state_row": state_row,
     }
 
 def scheduler_storage_contract_payload(

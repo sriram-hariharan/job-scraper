@@ -277,6 +277,7 @@ def test_live_pipeline_reservation_checks_bulk_under_the_same_advisory_lock():
     "/pipeline/run", "/planning/regenerate-selected-resume", "/planning/save-workspace-draft",
     "/planning/start-scan", "/profile/resumes/upload", "/application-actions",
     "/ai/settings/test-connection", "/assistant/query", "/notifications/read-state",
+    "/notifications/delete", "/notifications/delete-all",
     "/profile/pipeline-runs/run-a/rerun", "/planning/bulk-generation/start",
 ])
 def test_active_bulk_guard_blocks_mutation_and_provider_routes(monkeypatch, path):
@@ -370,8 +371,12 @@ def test_shared_shell_owns_polling_progress_stop_and_accessible_guard():
     assert "aria-describedby" in shell
     assert "event.stopImmediatePropagation()" in shell
     assert bulk.BULK_BLOCK_MESSAGE in shell
-    assert 'id="bulkGenerationProgressBtn"' in markup
-    assert 'id="bulkGenerationPanel"' in markup
+    # The visible shell pill was removed by product decision; the canonical
+    # state, polling, stop API and guard above are all still asserted.
+    assert 'id="bulkGenerationProgressBtn"' not in markup
+    assert 'id="bulkGenerationPanel"' not in markup
+    assert 'id="bulkGenerationShell"' not in markup
+    assert 'id="bulkGenerationGuardDescription"' in markup
     assert 'postJson("/planning/bulk-generation/start"' in planning
     assert "for (let index" not in planning[planning.index("async function executeBulkGenerateSuggestions"):planning.index("function stopBulkGenerateSuggestionsAfterCurrent")]
     assert 'window.addEventListener("pagehide"' not in planning
@@ -396,18 +401,45 @@ def test_bulk_guard_exempts_its_own_controls_and_planning_owns_the_bulk_surface(
     # Unsafe mutation controls keep the original blocked-action treatment.
     guard = shell[
         shell.index("function setBulkGenerationControlGuard")
-        : shell.index("function renderBulkGenerationShell")
+        : shell.index("function applyBulkGenerationControlGuards")
     ]
     assert 'control.setAttribute("aria-disabled", "true")' in guard
     assert 'control.setAttribute("aria-describedby", "bulkGenerationGuardDescription")' in guard
     assert bulk.BULK_BLOCK_MESSAGE in shell
 
-    # Planning owns the Bulk affordance, so the shared pill is suppressed there
-    # for active AND terminal runs, while every other page keeps it.
-    render = shell[
-        shell.index("function renderBulkGenerationShell")
-        : shell.index("function publishBulkGenerationState")
-    ]
-    assert 'planningOwnsBulkSurface = (window.location.pathname || "") === "/planning"' in render
-    assert "shell.classList.toggle(\"hidden\", !hasRun || planningOwnsBulkSurface)" in render
-    assert "state.active" not in render.split("planningOwnsBulkSurface")[0]
+    # The shared shell no longer renders any visible Bulk surface anywhere;
+    # Planning's transformed control is the only Bulk progress affordance.
+    assert "renderBulkGenerationShell" not in shell
+    assert "planningOwnsBulkSurface" not in shell
+
+
+def test_global_bulk_pill_is_absent_while_canonical_state_is_preserved():
+    """Part A: visual removal only — polling, guard and stop API remain."""
+
+    markup = Path("src/app/ui_shell.py").read_text(encoding="utf-8")
+    shell = Path("src/app/static/shell.js").read_text(encoding="utf-8")
+    styles = Path("src/app/static/styles.css").read_text(encoding="utf-8")
+
+    # The shared shell is rendered on every page, so absence here is absence
+    # on Executive, Planning, Scheduler and every other app page.
+    for removed in (
+        'id="bulkGenerationShell"',
+        'id="bulkGenerationProgressBtn"',
+        'id="bulkGenerationPanel"',
+        'id="bulkGenerationProgressLabel"',
+        'id="bulkGenerationMinimizeBtn"',
+    ):
+        assert removed not in markup
+    assert "renderBulkGenerationShell" not in shell
+    assert ".bulk-generation-progress-btn" not in styles
+    assert ".bulk-generation-panel" not in styles
+
+    # Canonical state, polling and the guard must all survive the removal.
+    assert 'fetch("/planning/bulk-generation/status"' in shell
+    assert "bulkGenerationPollTimer" in shell
+    assert "applyBulkGenerationControlGuards" in shell
+    assert "bulkGenerationCanonicalState" in shell
+    assert "requestBulkGenerationStop" in shell
+    assert "ApplyLensBulkGeneration" in shell
+    assert 'id="bulkGenerationGuardDescription"' in markup
+    assert ".bulk-generation-guard-description" in styles

@@ -132,19 +132,23 @@ def profile_page(request: Request) -> str:
     )
     pipeline_runs_section_html = """
     <section class="card profile-section-card profile-pipeline-runs-section hidden" id="profilePipelineRunsSection" data-profile-tab-panel>
-      <div class="section-header">
+      <div class="section-header pipeline-runs-header">
         <div>
           <h2>Pipeline runs</h2>
           <div class="subtext" id="pipelineRunsMeta">Loading pipeline runs...</div>
         </div>
-        <div class="profile-section-header-right">
+        <div class="profile-section-header-right pipeline-runs-header-controls">
           <div class="application-pagination-inline pipeline-runs-pagination-inline" id="pipelineRunsPaginationInline">
             <div class="application-pagination-meta" id="pipelineRunsPaginationMeta">Loading...</div>
-            <div class="application-pagination-actions" id="pipelineRunsPaginationActions"></div>
           </div>
           <button type="button" class="ghost-btn btn-sm pipeline-runs-refresh-btn" id="refreshPipelineRunsBtn">
-            Refresh
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+              <path d="M20 11.5a8 8 0 1 0-.6 3.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M20 4.75v5h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>Refresh</span>
           </button>
+          <div class="application-pagination-actions pipeline-runs-pagination-actions" id="pipelineRunsPaginationActions"></div>
         </div>
       </div>
 
@@ -154,19 +158,16 @@ def profile_page(request: Request) -> str:
         <table class="pipeline-runs-table">
           <thead>
             <tr>
-              <th>Started</th>
+              <th>Run</th>
               <th>Status</th>
-              <th>Summary</th>
-              <th>Final jobs</th>
-              <th>Counts</th>
-              <th>Settings</th>
-              <th>Actions</th>
-              <th>Re-run</th>
+              <th>Output</th>
+              <th>Flow</th>
+              <th class="pipeline-runs-actions-head">Actions</th>
             </tr>
           </thead>
           <tbody id="pipelineRunsTableBody">
             <tr>
-              <td colspan="8">Loading pipeline runs...</td>
+              <td colspan="5">Loading pipeline runs...</td>
             </tr>
           </tbody>
         </table>
@@ -379,7 +380,7 @@ def profile_page(request: Request) -> str:
   <title>{page_title}</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_pipeline_run_buttons_r1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_pipeline_runs_nav_r2" />
 </head>
 <body{body_class}>
   {render_top_shell("/profile")}
@@ -565,14 +566,19 @@ def profile_page(request: Request) -> str:
     </div>
   </section>
 
-  <section class="modal-backdrop hidden" id="pipelineRunRerunModal">
-    <div class="modal-card pipeline-run-rerun-modal-card">
-      <div class="modal-header">
-        <div>
+  <section class="modal-backdrop hidden" id="pipelineRunRerunModal" role="dialog" aria-modal="true" aria-labelledby="pipelineRunRerunTitle" aria-describedby="pipelineRunRerunSubtitle">
+    <div class="modal-card pipeline-run-rerun-modal-card" tabindex="-1">
+      <div class="modal-header pipeline-run-rerun-header">
+        <div class="pipeline-run-rerun-heading">
           <h3 id="pipelineRunRerunTitle">Re-run pipeline</h3>
-          <div class="subtext" id="pipelineRunRerunSubtitle">Review the run before starting a new one.</div>
+          <div class="pipeline-run-rerun-date" id="pipelineRunRerunSubtitle">Review the run before starting a new one.</div>
+          <code class="pipeline-run-rerun-run-id" id="pipelineRunRerunRunId"></code>
         </div>
-        <button class="ghost-btn modal-close-btn" id="pipelineRunRerunCloseBtn" type="button">Close</button>
+        <button class="modal-close-btn pipeline-run-rerun-close" id="pipelineRunRerunCloseBtn" type="button" aria-label="Close re-run confirmation" title="Close">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+            <path d="M6.75 6.75l10.5 10.5M17.25 6.75l-10.5 10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </button>
       </div>
 
       <div class="modal-body">
@@ -580,9 +586,8 @@ def profile_page(request: Request) -> str:
       </div>
 
       <div class="modal-actions pipeline-run-rerun-actions">
-        <div class="pipeline-run-rerun-question">Good to re-run?</div>
-        <button type="button" class="ghost-btn" id="pipelineRunRerunCancelBtn">No</button>
-        <button type="button" class="pipeline-run-rerun-confirm-btn" id="pipelineRunRerunConfirmBtn">Yes</button>
+        <button type="button" class="ghost-btn" id="pipelineRunRerunCancelBtn">Cancel</button>
+        <button type="button" class="pipeline-run-rerun-confirm-btn" id="pipelineRunRerunConfirmBtn">Re-run pipeline</button>
       </div>
     </div>
   </section>

@@ -162,7 +162,13 @@ def test_pipeline_runs_pagination_meta_text_format_preserved():
     render_fn = _block(
         PROFILE_JS_SOURCE, "function renderPipelineRunsPagination()", "\nfunction "
     )
-    assert "Showing ${startRow}-${endRow} of ${totalCount} · Page ${currentPage} of ${totalPages}" in render_fn
+    # The run-history changeover moves page position into the compact
+    # "n / total" control beside the arrows, so the meta line is now a single
+    # quiet range statement. The same startRow/endRow/totalCount values are
+    # still derived from unchanged pagination state.
+    assert "Showing ${startRow}-${endRow} of ${totalCount}" in render_fn
+    assert "· Page ${currentPage} of ${totalPages}" not in render_fn
+    assert "${currentPage} / ${totalPages}" in render_fn
 
 
 def test_pipeline_runs_pagination_ids_preserved():

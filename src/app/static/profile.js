@@ -827,6 +827,8 @@ const PIPELINE_RUN_ICON_PATHS = {
   info: '<circle cx="12" cy="12" r="8.25" stroke="currentColor" stroke-width="1.7"/><path d="M12 11v5.25" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7.9" r="1.15" fill="currentColor"/>',
   copy: '<rect x="9" y="9" width="10.25" height="10.25" rx="2.4" stroke="currentColor" stroke-width="1.6"/><path d="M15 6.4A2.4 2.4 0 0012.6 4H7.4A2.4 2.4 0 005 6.4v5.2A2.4 2.4 0 007.4 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
   chevron: '<path d="M9.5 5.75L16 12l-6.5 6.25" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>',
+  chevronLeft: '<path d="M14.5 5.75L8 12l6.5 6.25" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>',
+  rotate: '<path d="M19.75 11.5a7.75 7.75 0 1 0-.6 3.55" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M19.75 5v5h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 
 function pipelineRunIcon(name, className = "") {
@@ -947,6 +949,20 @@ function pipelineRunSettingsSummary(config) {
   ].filter(Boolean).join(" · ");
 }
 
+// One compact inline flow step. Absent metrics render an em dash rather than
+// borrowing a different metric.
+function pipelineRunFlowStep(label, value) {
+  const text = isDisplayableMetricValue(value)
+    ? formatPipelineRunMetricValue(value)
+    : "—";
+  return `
+    <span class="pipeline-run-flow-step">
+      <span class="pipeline-run-flow-label">${escapeHtml(label)}</span>
+      <strong class="pipeline-run-flow-value">${escapeHtml(text)}</strong>
+    </span>
+  `;
+}
+
 function renderPipelineRuns(runs) {
   const tbody = qs("pipelineRunsTableBody");
   const meta = qs("pipelineRunsMeta");
@@ -954,66 +970,96 @@ function renderPipelineRuns(runs) {
 
   const items = Array.isArray(runs) ? runs : [];
   profileState.pipelineRuns = items;
-  meta.textContent = `${items.length} pipeline run${items.length === 1 ? "" : "s"} shown`;
+  const totalCount = Number(profileState.pipelineRunsTotalCount || 0);
+  const historicalCount = totalCount > 0 ? totalCount : items.length;
+  meta.textContent = `${formatPipelineRunMetricValue(historicalCount)} historical run${historicalCount === 1 ? "" : "s"}`;
 
   if (!items.length) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="8" class="pipeline-runs-empty-cell">No pipeline runs yet.</td>
+        <td colspan="5" class="pipeline-runs-empty-cell">No pipeline runs yet.</td>
       </tr>
     `;
     return;
   }
 
   tbody.innerHTML = items.map((run) => {
-    const runId = escapeHtml(run.run_id || "");
+    const rawRunId = run.run_id || "";
+    const runId = escapeHtml(rawRunId);
     const tone = pipelineRunStatusTone(run.status);
-    const summary = run.summary_message || run.stage_message || run.error || "-";
-    const finalJobs = run.final_job_count ?? run.counts?.final_jobs ?? "-";
+    const counts = run.counts && typeof run.counts === "object" ? run.counts : {};
+    const finalJobs = run.final_job_count ?? counts.final_jobs;
+    // Same authoritative semantics as the Pipeline Run Stats modal: planned
+    // and packet jobs come from the persisted summary sentence, never from
+    // the separate planning_packets_* artifact metrics.
+    const plannedJobs = pipelineRunPlannedJobCount(run.summary_message || "");
+    const packetJobs = pipelineRunPacketJobCount(run.summary_message || "");
+    const outputParts = [];
+    if (isDisplayableMetricValue(plannedJobs)) {
+      outputParts.push(`${formatPipelineRunMetricValue(plannedJobs)} planned`);
+    }
+    if (isDisplayableMetricValue(packetJobs)) {
+      outputParts.push(`${formatPipelineRunMetricValue(packetJobs)} packet`);
+    }
     const agenticReviewAction = isCurrentUserAdmin(profileState.currentUser)
       ? `
             <a
               class="pipeline-run-icon-btn pipeline-run-agentic-review-btn"
-              href="/profile/pipeline-runs/${encodeURIComponent(run.run_id || "")}/agentic-review"
+              href="/profile/pipeline-runs/${encodeURIComponent(rawRunId)}/agentic-review"
               data-tooltip="Agentic review"
-              aria-label="Agentic review"
-              title="Agentic review"
-            >
-              <span class="pipeline-run-action-icon pipeline-run-action-icon--agentic" aria-hidden="true"></span>
-            </a>`
+              aria-label="Open agentic review for ${runId}"
+            >${pipelineRunIcon("sparkle", "pipeline-run-icon-btn-glyph")}</a>`
       : "";
     return `
       <tr data-pipeline-run-id="${runId}">
-        <td>
-          <div class="pipeline-run-date">${escapeHtml(formatDateTime(run.started_at || "")) || "-"}</div>
-          <div class="pipeline-run-id">${runId}</div>
+        <td class="pipeline-run-cell-run">
+          <div class="pipeline-run-date">${escapeHtml(formatPipelineRunHeaderDate(run.started_at || ""))}</div>
+          <div class="pipeline-run-id" title="${runId}">${runId}</div>
         </td>
         <td>
           <span class="pipeline-run-status is-${escapeHtml(tone)}">
+            <span class="pipeline-run-status-dot" aria-hidden="true"></span>
             ${escapeHtml(pipelineRunStatusLabel(run.status))}
           </span>
         </td>
-        <td class="pipeline-run-summary-cell">${escapeHtml(summary)}</td>
-        <td>${escapeHtml(String(finalJobs))}</td>
-        <td class="pipeline-run-compact-cell">${escapeHtml(pipelineRunCountsSummary(run.counts))}</td>
-        <td class="pipeline-run-compact-cell">${escapeHtml(pipelineRunSettingsSummary(run.config))}</td>
-        <td>
+        <td class="pipeline-run-cell-output">
+          <div class="pipeline-run-output-primary">
+            ${escapeHtml(isDisplayableMetricValue(finalJobs) ? formatPipelineRunMetricValue(finalJobs) : "—")}
+            <span>final</span>
+          </div>
+          ${outputParts.length
+            ? `<div class="pipeline-run-output-secondary">${escapeHtml(outputParts.join(" · "))}</div>`
+            : ""}
+        </td>
+        <td class="pipeline-run-cell-flow">
+          <div class="pipeline-run-flow">
+            ${pipelineRunFlowStep("Scraped", getFirstMetricValue(counts, ["scraped_jobs", "scraped"]))}
+            <span class="pipeline-run-flow-arrow" aria-hidden="true">→</span>
+            ${pipelineRunFlowStep("Filtered", getFirstMetricValue(counts, ["filtered_jobs", "filtered"]))}
+            <span class="pipeline-run-flow-arrow" aria-hidden="true">→</span>
+            ${pipelineRunFlowStep("New", getFirstMetricValue(counts, ["new_jobs", "new"]))}
+            <span class="pipeline-run-flow-arrow" aria-hidden="true">→</span>
+            ${pipelineRunFlowStep("Final", finalJobs)}
+          </div>
+        </td>
+        <td class="pipeline-run-cell-actions">
           <div class="pipeline-run-actions-cell" aria-label="Pipeline run actions">
             <button
               type="button"
               class="pipeline-run-icon-btn pipeline-run-view-btn"
               data-pipeline-run-view="${runId}"
-              data-tooltip="View"
-              aria-label="View"
-              title="View"
-            >
-              <span class="pipeline-run-action-icon pipeline-run-action-icon--view" aria-hidden="true"></span>
-            </button>
+              data-tooltip="View stats"
+              aria-label="View stats for ${runId}"
+            >${pipelineRunIcon("chart", "pipeline-run-icon-btn-glyph")}</button>
             ${agenticReviewAction}
+            <button
+              type="button"
+              class="pipeline-run-icon-btn pipeline-run-rerun-btn"
+              data-pipeline-run-rerun="${runId}"
+              data-tooltip="Re-run"
+              aria-label="Re-run ${runId}"
+            >${pipelineRunIcon("rotate", "pipeline-run-icon-btn-glyph")}</button>
           </div>
-        </td>
-        <td>
-          <button type="button" class="pipeline-run-action-btn pipeline-run-rerun-btn" data-pipeline-run-rerun="${runId}">Re-run</button>
         </td>
       </tr>
     `;
@@ -1038,28 +1084,28 @@ function renderPipelineRunsPagination() {
 
   const startRow = (currentPage - 1) * pageSize + 1;
   const endRow = Math.min(startRow + (profileState.pipelineRuns.length || 0) - 1, totalCount);
-  metaEl.textContent = `Showing ${startRow}-${endRow} of ${totalCount} · Page ${currentPage} of ${totalPages}`;
+  // Page position lives in the compact "n / total" control beside the arrows,
+  // so the meta line stays a single quiet range statement.
+  metaEl.textContent = `Showing ${startRow}-${endRow} of ${totalCount}`;
 
   actionsEl.innerHTML = `
     <button
       type="button"
-      class="application-pagination-btn"
+      class="application-pagination-btn pipeline-runs-page-btn"
       data-pipeline-runs-page="${currentPage - 1}"
       aria-label="Previous pipeline runs page"
+      title="Previous page"
       ${profileState.pipelineRunsHasPrevious ? "" : "disabled"}
-    >
-      Previous
-    </button>
-    <span aria-current="page">${currentPage} / ${totalPages}</span>
+    >${pipelineRunIcon("chevronLeft", "pipeline-runs-page-glyph")}</button>
+    <span class="pipeline-runs-page-indicator" aria-current="page">${currentPage} / ${totalPages}</span>
     <button
       type="button"
-      class="application-pagination-btn"
+      class="application-pagination-btn pipeline-runs-page-btn"
       data-pipeline-runs-page="${currentPage + 1}"
       aria-label="Next pipeline runs page"
+      title="Next page"
       ${profileState.pipelineRunsHasNext ? "" : "disabled"}
-    >
-      Next
-    </button>
+    >${pipelineRunIcon("chevron", "pipeline-runs-page-glyph")}</button>
   `;
 }
 
@@ -1078,7 +1124,7 @@ async function loadPipelineRuns(page = profileState.pipelineRunsPage || 1) {
   if (!tbody || !meta) return;
 
   meta.textContent = "Loading pipeline runs...";
-  tbody.innerHTML = `<tr><td colspan="8" class="pipeline-runs-empty-cell">Loading pipeline runs...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="5" class="pipeline-runs-empty-cell">Loading pipeline runs...</td></tr>`;
   const paginationMeta = qs("pipelineRunsPaginationMeta");
   const paginationActions = qs("pipelineRunsPaginationActions");
   if (paginationMeta) paginationMeta.textContent = "Loading...";
@@ -1729,41 +1775,35 @@ function closePipelineRunStatsModal() {
 
 function renderPipelineRunRerunSummary(run) {
   const config = run?.config && typeof run.config === "object" ? run.config : {};
-  const counts = run?.counts && typeof run.counts === "object" ? run.counts : {};
-  const started = formatDateTime(run?.started_at || "");
-  const summary = run?.summary_message || run?.stage_message || run?.error || "";
-  const finalJobs = run?.final_job_count ?? counts.final_jobs ?? "";
   const llmActions = Array.isArray(config.llm_actions)
     ? config.llm_actions.join(", ")
     : config.llm_actions;
   qs("pipelineRunRerunTitle").textContent = "Re-run pipeline";
-  qs("pipelineRunRerunSubtitle").textContent = run?.run_id || "Persisted run";
+  qs("pipelineRunRerunSubtitle").textContent = formatPipelineRunHeaderDate(run?.started_at || "");
+  const runIdEl = qs("pipelineRunRerunRunId");
+  if (runIdEl) runIdEl.textContent = run?.run_id || "Persisted run";
+  // Same saved configuration values as before - only the presentation is an
+  // inset panel now. No field is added that the stored config does not have.
   qs("pipelineRunRerunBody").innerHTML = `
-    <section class="pipeline-run-detail-panel pipeline-run-rerun-panel">
-      <h4>Run snapshot</h4>
-      ${renderKeyValueList([
-        ["Status", pipelineRunStatusLabel(run?.status)],
-        ["Started", started],
-        ["Summary", summary],
-        ["Final jobs", finalJobs],
-        ["Counts", pipelineRunCountsSummary(counts)],
-      ])}
+    <section class="pipeline-run-rerun-panel" aria-label="Saved configuration">
+      <h4>Saved configuration</h4>
+      <div class="pipeline-run-rerun-grid">
+        ${renderPipelineRunSettingsList([
+          ["Job limit", config.job_limit ?? 50],
+          ["Packet limit", config.job_packet_limit ?? 0],
+          ["Actions", llmActions],
+          ["Planning only", config.planning_only ? "Yes" : "No"],
+          ["Generate suggestions", config.generate_tailoring ? "Yes" : "No"],
+          ["Generate LLM suggestions", config.generate_llm_tailoring ? "Yes" : "No"],
+          ["Refresh LLM suggestions", config.refresh_llm_tailoring ? "Yes" : "No"],
+          ["LLM fallback ranking", config.generate_llm_fallback ? "Yes" : "No"],
+          ["LLM judging", config.generate_llm_adjudication ? "Yes" : "No"],
+        ])}
+      </div>
     </section>
-
-    <section class="pipeline-run-detail-panel pipeline-run-rerun-panel">
-      <h4>Re-run settings</h4>
-      ${renderKeyValueList([
-        ["Job limit", config.job_limit ?? 50],
-        ["Packet limit", config.job_packet_limit ?? 0],
-        ["LLM actions", llmActions],
-        ["Planning only", config.planning_only ? "Yes" : "No"],
-        ["Generate suggestions", config.generate_tailoring ? "Yes" : "No"],
-        ["Generate LLM suggestions", config.generate_llm_tailoring ? "Yes" : "No"],
-        ["Refresh LLM suggestions", config.refresh_llm_tailoring ? "Yes" : "No"],
-        ["LLM fallback ranking", config.generate_llm_fallback ? "Yes" : "No"],
-        ["LLM judging", config.generate_llm_adjudication ? "Yes" : "No"],
-      ])}
-    </section>
+    <p class="pipeline-run-rerun-note">
+      This starts a new pipeline run using the saved configuration. The existing run remains unchanged.
+    </p>
   `;
 }
 
@@ -1773,16 +1813,25 @@ function openPipelineRunRerunModal(runId) {
     throw new Error("Pipeline run was not found on this page.");
   }
 
+  const modal = qs("pipelineRunRerunModal");
   profileState.pendingRerunRunId = runId;
+  if (modal) modal._returnFocus = document.activeElement;
   renderPipelineRunRerunSummary(run);
   qs("pipelineRunRerunConfirmBtn").disabled = false;
-  qs("pipelineRunRerunConfirmBtn").textContent = "Yes";
-  qs("pipelineRunRerunModal")?.classList.remove("hidden");
+  qs("pipelineRunRerunConfirmBtn").textContent = "Re-run pipeline";
+  modal?.classList.remove("hidden");
+  window.requestAnimationFrame(() => qs("pipelineRunRerunCancelBtn")?.focus());
 }
 
 function closePipelineRunRerunModal() {
+  const modal = qs("pipelineRunRerunModal");
+  const returnFocus = modal?._returnFocus;
   profileState.pendingRerunRunId = null;
-  qs("pipelineRunRerunModal")?.classList.add("hidden");
+  modal?.classList.add("hidden");
+  if (modal) modal._returnFocus = null;
+  if (returnFocus && document.body && document.body.contains(returnFocus)) {
+    returnFocus.focus();
+  }
 }
 
 async function rerunPipelineRun(runId) {
@@ -1811,7 +1860,7 @@ async function confirmPipelineRunRerun() {
   } catch (err) {
     if (confirmBtn) {
       confirmBtn.disabled = false;
-      confirmBtn.textContent = "Yes";
+      confirmBtn.textContent = "Re-run pipeline";
     }
     throw err;
   }
@@ -2787,6 +2836,15 @@ function bindPipelineRunsInteractions() {
   });
   qs("pipelineRunRerunCloseBtn")?.addEventListener("click", closePipelineRunRerunModal);
   qs("pipelineRunRerunCancelBtn")?.addEventListener("click", closePipelineRunRerunModal);
+
+  qs("pipelineRunRerunModal")?.addEventListener("keydown", (event) => {
+    const modal = qs("pipelineRunRerunModal");
+    if (!modal || modal.classList.contains("hidden")) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closePipelineRunRerunModal();
+    }
+  });
   qs("pipelineRunRerunConfirmBtn")?.addEventListener("click", () => {
     confirmPipelineRunRerun().catch((err) => {
       setPipelineRunsStatus(err.message, "error");

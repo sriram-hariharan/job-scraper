@@ -234,5 +234,5 @@ def test_existing_theme_notification_and_logout_lifecycles_are_preserved() -> No
 def test_changed_shared_assets_use_one_finite_cache_key_on_shell_pages() -> None:
     for relative_path in CACHE_OWNERS:
         source = (ROOT / relative_path).read_text(encoding="utf-8")
-        assert "/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" in source
-        assert "/static/shell.js?v=item7b_account_toolbar_r1" in source
+        assert "/static/app_redesign.css?v=eucalyptus_primary_shell_r1" in source
+        assert "/static/shell.js?v=eucalyptus_primary_shell_r1" in source

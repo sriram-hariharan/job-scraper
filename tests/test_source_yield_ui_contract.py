@@ -54,3 +54,16 @@ def test_source_button_uses_muted_token_surface_without_a_gradient():
     assert "var(--app-border-2)" in scoped
     assert "var(--app-text)" in scoped
     assert 'html[data-theme="dark"] body .source-yield-source-button' in scoped
+
+
+def test_source_yield_root_reserves_space_only_while_loading():
+    """The root must not hold a fixed height: a collapsed card would otherwise
+    leave dead space between Source Yield and the queue filter bar."""
+    styles = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    root = styles.split("#sourceYieldRoot {", 1)[1].split("}", 1)[0]
+    fallback = styles.split(".source-yield-server-fallback {", 1)[1].split("}", 1)[0]
+
+    assert "min-height" not in root
+    assert "margin: 0 0 12px" in root
+    # the loading placeholder still reserves the space it always did
+    assert "min-height: 176px" in fallback

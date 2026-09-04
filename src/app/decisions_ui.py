@@ -16,9 +16,9 @@ def decisions_dashboard() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Decisions Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=shared_filter_fluid_select_r2" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=shared_filter_fluid_select_r2" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=shared_filter_fluid_select_r2" />
+  <link rel="stylesheet" href="/static/styles.css?v=eucalyptus_action_cascade_r2" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1" />
 </head>
 <body class="operational-dashboard-page decisions-dashboard-page">
 {render_top_shell("/decisions-ui")}
@@ -96,9 +96,9 @@ def decisions_dashboard() -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1"></script>
   <script src="/static/decisions.js?v=phase133ef_r5"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=shared_filter_fluid_select_r2"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1"></script>
 </body>
 </html>
     """.strip()

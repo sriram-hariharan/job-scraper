@@ -64,8 +64,12 @@ def test_trigger_and_search_use_eucalyptus_without_electric_focus() -> None:
 
     assert "--shared-filter-accent: #3c746a" in shared
     assert "--shared-filter-accent-deep: #28564f" in shared
-    assert "height: 46px" in trigger
-    assert "border-radius: 12px" in trigger
+    # the trigger is now the owner of the shared filter-control sizing tokens;
+    # the resolved values are unchanged (46px tall, 12px radius).
+    assert "height: var(--filter-control-height)" in trigger
+    assert "border-radius: var(--filter-control-radius)" in trigger
+    assert "--filter-control-height: 46px" in CSS
+    assert "--filter-control-radius: 12px" in CSS
     assert "background-image: none" in trigger
     assert "border-color: var(--filter-menu-search-focus)" in search_focus
     assert "box-shadow: 0 0 0 3px var(--filter-menu-search-ring)" in search_focus
@@ -229,7 +233,13 @@ def test_source_contract_is_present_in_built_assets() -> None:
         assert contract in compact_built_css
 
     built_trigger = compact_built_css.split(".shared-filter-select__trigger{", 1)[1].split("}", 1)[0]
-    for declaration in ("width:100%", "max-width:100%", "min-width:0", "height:46px", "box-sizing:border-box"):
+    for declaration in (
+        "width:100%",
+        "max-width:100%",
+        "min-width:0",
+        "height:var(--filter-control-height)",
+        "box-sizing:border-box",
+    ):
         assert declaration in built_trigger
     built_option = compact_built_css.split(".shared-filter-select__option{", 1)[1].split("}", 1)[0]
     for declaration in ("display:grid", "width:100%", "min-height:40px", "border:0", "border-radius:9px"):
@@ -248,23 +258,36 @@ def test_source_contract_is_present_in_built_assets() -> None:
 
 
 def test_all_real_shared_select_hosts_use_one_fresh_bundle_marker(monkeypatch) -> None:
-    marker = "shared_filter_fluid_select_r2"
+    styles_marker = "shared_filter_fluid_select_r2"
+    release_marker = "eucalyptus_primary_shell_r1"
+    action_marker = "eucalyptus_action_cascade_r2"
     admin_request = SimpleNamespace(
         state=SimpleNamespace(auth_user={"is_admin": True, "user_id": "shared-filter-contract"})
     )
     monkeypatch.setattr("src.app.planning_ui._saved_scan_context_options", lambda **_: [])
-    rendered_hosts = (
+    action_hosts = (
         executive_dashboard(),
-        scheduler_dashboard(admin_request),
         planning_dashboard(),
-        advanced_diagnostics(admin_request),
         decisions_dashboard(),
     )
-    for html in rendered_hosts:
-        for asset in ("styles.css", "app_redesign.css", "executive-kpi.css", "executive-kpi.js"):
-            assert f"{asset}?v={marker}" in html
+    stable_hosts = (
+        scheduler_dashboard(admin_request),
+        advanced_diagnostics(admin_request),
+    )
+    # styles.css keeps its per-route marker; the shared bundle carries one
+    # deterministic marker on every host that renders it.
+    for html in action_hosts:
+        assert f"styles.css?v={action_marker}" in html
+        assert f"app_redesign.css?v={release_marker}" in html
+        for asset in ("executive-kpi.css", "executive-kpi.js"):
+            assert f"{asset}?v={release_marker}" in html
+            assert f"{asset}?v={action_marker}" not in html
+    for html in stable_hosts:
+        assert f"styles.css?v={styles_marker}" in html
+        for asset in ("app_redesign.css", "executive-kpi.css", "executive-kpi.js"):
+            assert f"{asset}?v={release_marker}" in html
 
-    assert marker not in pipeline_dashboard()
+    assert styles_marker not in pipeline_dashboard()
     assert (ROOT / "src/app/static/build/executive-kpi/executive-kpi.css").is_file()
     assert (ROOT / "src/app/static/build/executive-kpi/executive-kpi.js").is_file()
 

@@ -197,14 +197,15 @@ def test_document_library_css_is_single_column_dense_and_responsive():
     assert 'html[data-theme="dark"] .profile-resume-document-row' in css
 
 
-def test_resume_action_colors_override_known_global_gradient_without_leaking():
+def test_resume_action_colors_override_known_global_primary_owner_without_leaking():
     css = _resume_css()
     legacy = APP_REDESIGN_CSS.split("profile_resume_document_library_r1", 1)[0]
 
     assert "#resumeBrowseBtn" in STYLES_CSS
     assert "background: var(--app-primary) !important" in STYLES_CSS
     assert "button:not(.agentic-review-tab)" in legacy
-    assert "linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important" in legacy
+    assert "background: var(--app-action-primary) !important" in legacy
+    assert "background-image: none !important" in legacy
     assert "--profile-resume-accent: #3c746a" in css
     assert "--profile-resume-accent-hover: #315f57" in css
     assert "--profile-resume-accent-pressed: #294f49" in css

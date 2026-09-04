@@ -12,7 +12,7 @@ const BULK_GENERATION_TERMINAL_STATUSES = new Set(["completed", "stopped", "fail
 let bulkGenerationPollTimer = null;
 let bulkGenerationCanonicalState = { verified: false, active: true, status: "unknown", items: [] };
 
-// Desktop sidebar collapse-control icons (Lucide PanelLeftClose / PanelLeftOpen),
+// Desktop sidebar collapse-control icons (Lucide PanelLeftClose / Menu),
 // mirroring the inline geometry rendered server-side in src/app/ui_shell.py so the
 // icon family stays consistent without a runtime dependency.
 const APP_SHELL_ICON_SVG_HEAD =
@@ -22,9 +22,9 @@ const APP_SHELL_ICON_SVG_HEAD =
 const APP_SHELL_COLLAPSE_SVG =
   APP_SHELL_ICON_SVG_HEAD +
   '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></svg>';
-const APP_SHELL_EXPAND_SVG =
+const APP_SHELL_MENU_SVG =
   APP_SHELL_ICON_SVG_HEAD +
-  '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/></svg>';
+  '<line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg>';
 
 function qs(id) {
   return document.getElementById(id);
@@ -223,7 +223,7 @@ function setShellCollapsed(isCollapsed, { persist = true } = {}) {
 
     const iconWrap = collapseBtn.querySelector(".app-shell-collapse-icon");
     if (iconWrap) {
-      iconWrap.innerHTML = isCollapsed ? APP_SHELL_EXPAND_SVG : APP_SHELL_COLLAPSE_SVG;
+      iconWrap.innerHTML = isCollapsed ? APP_SHELL_MENU_SVG : APP_SHELL_COLLAPSE_SVG;
     }
   }
 

@@ -334,7 +334,7 @@ def test_pagination_color_owner_outranks_legacy_catchalls_and_is_cache_busted():
     assert "#profilePipelineRunsSection .pipeline-runs-page-btn:not(:disabled):hover {" in css
     assert "#profilePipelineRunsSection .pipeline-runs-page-btn:not(:disabled):active {" in css
     assert "#profilePipelineRunsSection .pipeline-runs-page-btn:disabled {" in css
-    assert '/static/app_redesign.css?v=profile_pipeline_runs_nav_r2' in html
+    assert '/static/app_redesign.css?v=eucalyptus_primary_shell_r1' in html
 
 
 def test_refresh_remains_a_scoped_neutral_secondary_action():

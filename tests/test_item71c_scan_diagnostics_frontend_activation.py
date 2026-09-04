@@ -139,7 +139,7 @@ def test_advanced_route_owns_only_the_item71c_bundle_cache_key() -> None:
     route = PLANNING_UI.split(
         '@router.get("/advanced-diagnostics", response_class=HTMLResponse)', 1
     )[1].split("\ndef scan_workspace(", 1)[0]
-    marker = "shared_filter_fluid_select_r2"
+    marker = "eucalyptus_primary_shell_r1"
     assert f"executive-kpi.css?v={marker}" in route
     assert f"executive-kpi.js?v={marker}" in route
     assert "item2_phase3_shared_header_r1" not in route

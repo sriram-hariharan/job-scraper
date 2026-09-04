@@ -23,7 +23,7 @@ AGENTIC_MODEL_SOURCE = (
 ).read_text(encoding="utf-8")
 SHELL_JS_SOURCE = (ROOT / "src/app/static/shell.js").read_text(encoding="utf-8")
 OVERVIEW_PATH = "/profile/admin/agentic-operations/overview"
-ASSET_TOKEN = "item61e_operations_overview_r1"
+ASSET_TOKEN = "eucalyptus_primary_shell_r1"
 
 ADMIN_USER = {
     "user_id": "admin-owner",

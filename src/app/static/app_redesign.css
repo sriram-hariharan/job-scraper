@@ -22,6 +22,18 @@ html[data-theme="dark"] {
   --app-warning: #fbbf24;
   --app-danger: #fb7185;
   --app-focus: rgba(124, 156, 255, 0.42);
+  --app-action-primary: #526a64;
+  --app-action-hover: #5b776f;
+  --app-action-pressed: #465d58;
+  --app-action-soft: rgba(99, 132, 123, 0.18);
+  --app-action-soft-hover: rgba(115, 148, 139, 0.24);
+  --app-action-border: #78968e;
+  --app-action-strong: #a9c1ba;
+  --app-action-text: #ffffff;
+  --app-action-focus: rgba(99, 132, 123, 0.28);
+  --app-action-disabled-bg: #27313b;
+  --app-action-disabled-border: #3d4854;
+  --app-action-disabled-text: #7f8b99;
   --app-shadow-sm: 0 10px 26px rgba(0, 0, 0, 0.22);
   --app-shadow-md: 0 18px 48px rgba(0, 0, 0, 0.32);
   --app-radius-md: 14px;
@@ -71,6 +83,18 @@ html[data-theme="light"] {
   --app-warning: #b45309;
   --app-danger: #dc2626;
   --app-focus: rgba(37, 99, 235, 0.26);
+  --app-action-primary: #56746d;
+  --app-action-hover: #49655f;
+  --app-action-pressed: #3f5953;
+  --app-action-soft: #edf2f0;
+  --app-action-soft-hover: #e4ece9;
+  --app-action-border: #c9d6d2;
+  --app-action-strong: #36534c;
+  --app-action-text: #ffffff;
+  --app-action-focus: rgba(86, 116, 109, 0.2);
+  --app-action-disabled-bg: #e5e7eb;
+  --app-action-disabled-border: #d1d5db;
+  --app-action-disabled-text: #8a929d;
   --app-shadow-sm: 0 10px 24px rgba(15, 23, 42, 0.08);
   --app-shadow-md: 0 18px 46px rgba(15, 23, 42, 0.12);
   --surface-page: var(--app-bg);
@@ -183,7 +207,7 @@ html[data-theme="light"] .profile-dropdown {
     var(--app-surface) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate),
 .btn,
 .ghost-btn,
 .app-shell-primary-link,
@@ -206,10 +230,15 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
     color var(--app-fast) var(--app-ease) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate),
+.primary-btn,
+.btn-primary,
 .app-shell-primary-link {
-  background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
-  color: #ffffff !important;
+  border-color: var(--app-action-primary) !important;
+  background: var(--app-action-primary) !important;
+  background-image: none !important;
+  color: var(--app-action-text) !important;
+  box-shadow: 0 7px 18px rgba(54, 83, 76, 0.16) !important;
 }
 
 .ghost-btn,
@@ -225,21 +254,39 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   color: var(--app-text) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate):not(:disabled):hover,
-.ghost-btn:not(:disabled):hover,
-.job-apply-btn:not(:disabled):hover,
-.apply-btn:not(:disabled):hover,
-.planning-tailoring-btn:not(:disabled):hover {
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate):not(:disabled):hover,
+.primary-btn:not(:disabled):hover,
+.btn-primary:not(:disabled):hover,
+.app-shell-primary-link:not([aria-disabled="true"]):hover {
   transform: translateY(-1px);
-  border-color: var(--app-primary) !important;
-  box-shadow: var(--app-shadow-sm) !important;
+  border-color: var(--app-action-hover) !important;
+  background: var(--app-action-hover) !important;
+  background-image: none !important;
+  box-shadow: 0 9px 20px rgba(54, 83, 76, 0.2) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):disabled,
-[aria-disabled="true"] {
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(:disabled):active,
+.primary-btn:not(:disabled):active,
+.btn-primary:not(:disabled):active,
+.app-shell-primary-link:not([aria-disabled="true"]):active {
+  transform: translateY(0) !important;
+  border-color: var(--app-action-pressed) !important;
+  background: var(--app-action-pressed) !important;
+  background-image: none !important;
+  box-shadow: 0 4px 12px rgba(54, 83, 76, 0.16) !important;
+}
+
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):disabled,
+.primary-btn:disabled,
+.btn-primary:disabled,
+.app-shell-primary-link[aria-disabled="true"] {
   cursor: not-allowed !important;
-  opacity: 0.58 !important;
+  opacity: 1 !important;
   transform: none !important;
+  border-color: var(--app-action-disabled-border) !important;
+  background: var(--app-action-disabled-bg) !important;
+  background-image: none !important;
+  color: var(--app-action-disabled-text) !important;
   box-shadow: none !important;
 }
 
@@ -338,23 +385,6 @@ html[data-theme="light"] .app-shell-nav-link {
   color: #64748b !important;
 }
 
-html[data-theme="light"] .app-shell-nav-link:hover {
-  border-color: rgba(37, 99, 235, 0.12) !important;
-  background: rgba(37, 99, 235, 0.06) !important;
-  color: #0f172a !important;
-}
-
-html[data-theme="light"] .app-shell-nav-link.active,
-html[data-theme="light"] .app-shell-nav-link[aria-current="page"] {
-  border-color: rgba(37, 99, 235, 0.2) !important;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(20, 184, 166, 0.07)) !important;
-  color: #0f172a !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.76),
-    0 12px 26px rgba(37, 99, 235, 0.08) !important;
-}
-
 html[data-theme="light"] .app-shell-nav-short {
   border-color: rgba(37, 99, 235, 0.12) !important;
   background: rgba(37, 99, 235, 0.06) !important;
@@ -449,38 +479,6 @@ body.app-shell-collapsed .app-shell ~ .page:not(.preferences-workflow):not(.pref
     color 140ms ease,
     box-shadow 140ms ease,
     transform 140ms ease;
-}
-
-.app-shell-nav-link:hover {
-  border-color: rgba(148, 163, 184, 0.18) !important;
-  background: rgba(255, 255, 255, 0.045) !important;
-  color: #edf4ff !important;
-  transform: translateX(2px) !important;
-}
-
-.app-shell-nav-link.active,
-.app-shell-nav-link[aria-current="page"] {
-  border-color: rgba(125, 170, 255, 0.34) !important;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.24), rgba(14, 165, 233, 0.1)) !important;
-  color: #eef5ff !important;
-  transform: none !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 12px 28px rgba(14, 165, 233, 0.12) !important;
-}
-
-.app-shell-nav-link.active::before,
-.app-shell-nav-link[aria-current="page"]::before {
-  content: "" !important;
-  position: absolute !important;
-  left: -18px !important;
-  top: 12px !important;
-  bottom: 12px !important;
-  width: 3px !important;
-  border-radius: 999px !important;
-  background: linear-gradient(180deg, #7c9cff, #22d3ee) !important;
-  box-shadow: 0 0 18px rgba(34, 211, 238, 0.38) !important;
 }
 
 .app-shell-nav-short {
@@ -1087,8 +1085,16 @@ html[data-theme="light"] .profile-dropdown-danger-btn:focus-visible {
 }
 
 .binary-toggle-option input:checked + span {
-  background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
-  color: #ffffff !important;
+  border-color: var(--app-action-primary) !important;
+  background: var(--app-action-primary) !important;
+  background-image: none !important;
+  color: var(--app-action-text) !important;
+}
+
+.binary-toggle-option input:checked + span:hover {
+  border-color: var(--app-action-hover) !important;
+  background: var(--app-action-hover) !important;
+  background-image: none !important;
 }
 
 .pipeline-run-meta:not(#schedulerOpsMeta) {
@@ -1292,8 +1298,10 @@ html[data-theme="light"] .apply-cell {
 .application-tab.active,
 .scheduler-tab-btn.active,
 .scheduler-tab-btn.is-active {
-  background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
-  color: #ffffff !important;
+  border-color: var(--app-action-primary) !important;
+  background: var(--app-action-primary) !important;
+  background-image: none !important;
+  color: var(--app-action-text) !important;
 }
 
 .resume-delete-btn::before,
@@ -1435,6 +1443,16 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   box-shadow: 0 0 0 4px var(--app-focus) !important;
 }
 
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate):focus-visible,
+.primary-btn:focus-visible,
+.btn-primary:focus-visible,
+.app-shell-primary-link:focus-visible,
+.binary-toggle-option input:focus-visible + span {
+  outline: 3px solid var(--app-action-focus) !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--app-action-focus) !important;
+}
+
 .table-wrap-loading-overlay {
   background: rgba(6, 9, 19, 0.72) !important;
   backdrop-filter: blur(8px);
@@ -1566,7 +1584,7 @@ body .control-group textarea {
   font-size: 13px !important;
 }
 
-body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate),
+body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(.planning-filter-apply):not(.operational-primary-action):not(.executive-queue-apply-btn),
 body .ghost-btn,
 body .btn-sm {
   min-height: 34px !important;
@@ -1590,13 +1608,6 @@ body .scheduler-page .page-header {
 body .scheduler-page .header-actions {
   justify-self: end !important;
   align-self: center !important;
-}
-
-body .scheduler-page #refreshSchedulerSummaryBtn {
-  border: 1px solid #0891b2 !important;
-  background: #06b6d4 !important;
-  color: #ffffff !important;
-  box-shadow: 0 10px 24px rgba(6, 182, 212, 0.22) !important;
 }
 
 html[data-theme="light"] body .scheduler-page .scheduler-table-card {
@@ -1954,7 +1965,8 @@ body .application-tab.active {
 }
 
 body .application-tab.active::after {
-  background: linear-gradient(90deg, #2563eb, #06b6d4) !important;
+  background: var(--app-action-primary) !important;
+  background-image: none !important;
 }
 
 /* Scheduler ops final tab/header/status overrides. */
@@ -4099,12 +4111,106 @@ body .control-group label {
   line-height: 1.1 !important;
 }
 
-body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate),
+body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(.planning-filter-apply):not(.operational-primary-action):not(.executive-queue-apply-btn),
 body .ghost-btn,
 body .btn-sm {
   min-height: 34px !important;
   border-radius: 9px !important;
   font-size: 13px !important;
+}
+
+/* ------------------------------------------------------------------------
+   eucalyptus_action_cascade_r2 - operational row action owner.
+
+   Manual row actions on Decisions and Applications are <button> elements, so
+   the global control rule above claims them with !important. This enforces
+   the neutral eucalyptus treatment at ID scope, and lives here rather than in
+   the React stylesheet because the owner it corrects is here.
+   ------------------------------------------------------------------------ */
+body :is(#decisionsDashboardRoot, #applicationsDashboardRoot) .operational-row-action {
+  min-height: 32px !important;
+  border: 1px solid var(--app-action-border, #c9d6d2) !important;
+  border-radius: 6px !important;
+  background: var(--app-action-soft, #edf2f0) !important;
+  background-image: none !important;
+  color: var(--app-action-strong, #36534c) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+body :is(#decisionsDashboardRoot, #applicationsDashboardRoot) .operational-row-action:not(:disabled):hover {
+  border-color: var(--app-action-primary, #56746d) !important;
+  background: var(--app-action-soft-hover, #e4ece9) !important;
+  color: var(--app-action-strong, #36534c) !important;
+}
+
+body :is(#decisionsDashboardRoot, #applicationsDashboardRoot) .operational-row-action:not(:disabled):active {
+  border-color: var(--app-action-pressed, #3f5953) !important;
+  background: var(--app-action-pressed, #3f5953) !important;
+  color: #ffffff !important;
+}
+
+body :is(#decisionsDashboardRoot, #applicationsDashboardRoot) .operational-row-action:focus-visible {
+  outline: 3px solid var(--app-action-focus, rgba(86, 116, 109, 0.2)) !important;
+  outline-offset: 2px;
+  box-shadow: none !important;
+}
+
+body :is(#decisionsDashboardRoot, #applicationsDashboardRoot) .operational-row-action:disabled,
+body :is(#decisionsDashboardRoot, #applicationsDashboardRoot) .operational-row-action.is-complete {
+  border-color: var(--queue-border) !important;
+  background: var(--queue-surface-muted) !important;
+  color: var(--queue-muted) !important;
+  opacity: 0.72 !important;
+}
+
+/* ------------------------------------------------------------------------
+   filter_control_height_r1 - filter row sizing owner.
+
+   Two legacy owners fought this row. The global control rule directly above
+   hard-set 34px / 9px / 13px on every button, and the global input rule in
+   styles.css hard-sets an 8px radius on every input - which is why Apply
+   Filters rendered shorter than the filter fields beside it and why the text
+   inputs kept a different corner than the shared filter selects.
+
+   This is the single correction. Every control in a filter row - shared
+   filter select, text and number inputs, segmented toggle, Apply Filters and
+   Clear - resolves to the same --filter-control-* contract, so a filter row
+   is one height end to end. The three Apply Filters classes are excluded from
+   the global sizing rule above (colour ownership is untouched) and the ID
+   lines below outrank the legacy ID map in styles.css.
+
+   Deliberately keyed to filter rows. Shared table sort, expand, info-popover
+   and pagination controls also carry .preferences-secondary-action and must
+   keep their compact sizing.
+   ------------------------------------------------------------------------ */
+body .planning-react-limit-field input:not(.shared-filter-select__search-input),
+body .executive-queue-limit-field input:not(.shared-filter-select__search-input),
+body .operational-filter-grid input:not(.shared-filter-select__search-input) {
+  height: var(--filter-control-height, 46px) !important;
+  min-height: var(--filter-control-height, 46px) !important;
+  box-sizing: border-box !important;
+  border-top-left-radius: var(--filter-control-radius, 12px) !important;
+  border-top-right-radius: var(--filter-control-radius, 12px) !important;
+  border-bottom-right-radius: var(--filter-control-radius, 12px) !important;
+  border-bottom-left-radius: var(--filter-control-radius, 12px) !important;
+  font-size: var(--filter-control-font-size, 14px) !important;
+}
+
+body #planningApplyFiltersBtn,
+body #decisionApplyFiltersBtn,
+body #applicationApplyFiltersBtn,
+body .planning-react-filter-actions > button,
+body .operational-filter-actions > button,
+body .executive-queue-filter-actions > button {
+  min-height: var(--filter-control-height, 46px) !important;
+  box-sizing: border-box !important;
+  border-top-left-radius: var(--filter-control-radius, 12px) !important;
+  border-top-right-radius: var(--filter-control-radius, 12px) !important;
+  border-bottom-right-radius: var(--filter-control-radius, 12px) !important;
+  border-bottom-left-radius: var(--filter-control-radius, 12px) !important;
+  font-size: var(--filter-control-font-size, 14px) !important;
+  font-weight: var(--filter-control-font-weight, 650) !important;
 }
 
 html[data-theme="light"] body .scheduler-page {
@@ -4126,10 +4232,18 @@ body .scheduler-page .header-actions {
 }
 
 body .scheduler-page #refreshSchedulerSummaryBtn {
-  border: 1px solid #0891b2 !important;
-  background: #06b6d4 !important;
-  color: #ffffff !important;
-  box-shadow: 0 10px 24px rgba(6, 182, 212, 0.22) !important;
+  border: 1px solid var(--app-action-border) !important;
+  background: var(--app-surface-2) !important;
+  background-image: none !important;
+  color: var(--app-action-strong) !important;
+  box-shadow: none !important;
+}
+
+body .scheduler-page #refreshSchedulerSummaryBtn:not(:disabled):hover {
+  border-color: var(--app-action-primary) !important;
+  background: var(--app-action-soft) !important;
+  background-image: none !important;
+  color: var(--app-action-strong) !important;
 }
 
 html[data-theme="light"] body .scheduler-page .scheduler-table-tabs {
@@ -4231,7 +4345,8 @@ body .application-tab.active::after,
 body .scheduler-page .scheduler-table-tab.is-active::after,
 body .scheduler-page .scheduler-tab-btn.active::after,
 body .scheduler-page .scheduler-tab-btn.is-active::after {
-  background: linear-gradient(90deg, #2563eb, #06b6d4) !important;
+  background: var(--app-action-primary) !important;
+  background-image: none !important;
 }
 
 /* ui_redesign_v25: remove remaining tab button chrome on concrete pages. */
@@ -4281,7 +4396,8 @@ body #applicationViewRoot .application-tab::after {
 }
 
 body #applicationViewRoot .application-tab.active::after {
-  background: linear-gradient(90deg, #2563eb, #06b6d4) !important;
+  background: var(--app-action-primary) !important;
+  background-image: none !important;
 }
 
 /* ui_redesign_v27: icon-only theme toggle. */
@@ -4420,10 +4536,11 @@ html[data-theme="dark"] body .scheduler-page #schedulerTableSubtitle {
 }
 
 html[data-theme="dark"] body .scheduler-page #refreshSchedulerSummaryBtn {
-  border-color: rgba(34, 211, 238, 0.48) !important;
-  background: linear-gradient(135deg, #2563eb, #0891b2) !important;
-  color: #ffffff !important;
-  box-shadow: 0 14px 30px rgba(8, 145, 178, 0.22) !important;
+  border-color: var(--app-action-border) !important;
+  background: var(--app-surface-3) !important;
+  background-image: none !important;
+  color: var(--app-action-strong) !important;
+  box-shadow: none !important;
 }
 
 html[data-theme="dark"] body .scheduler-page .scheduler-attached-table-wrap {
@@ -5016,9 +5133,9 @@ html[data-theme="light"] .floating-intelligence-chat-provider-fallback {
    Single source of truth for the four empty-state action tiles.
 
    IMPORTANT CASCADE NOTE: the global CTA rule near the top of this file,
-   `button:not(...)x24, .app-shell-primary-link`, carries specificity (0,24,1)
-   with !important and paints every unexcluded <button> with the
-   blue -> violet gradient plus white text. These tiles are <button> elements,
+   `button:not(...), .app-shell-primary-link`, carries high class
+   specificity with !important and paints every unexcluded <button> with the
+   shared matte primary treatment. These tiles are <button> elements,
    so class-only rules (0,1,0) lose to it no matter how late they appear.
    Every rule below is therefore scoped under the #floatingIntelligenceMessages
    ID, giving (1,x,y): an ID outranks any number of classes, so these
@@ -5890,14 +6007,15 @@ body.app-new-user-empty .page > :not(.new-user-empty-state) {
   border-radius: 16px;
   padding: 0 24px;
   font-weight: 900;
-  border: 1px solid rgba(37, 99, 235, 0.22);
+  border: 1px solid var(--app-action-border);
 }
 
 .new-user-empty-primary,
 .first-run-prompt-primary {
-  background: linear-gradient(135deg, #2563eb, #0891b2);
-  color: #ffffff;
-  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.22);
+  background: var(--app-action-primary);
+  background-image: none;
+  color: var(--app-action-text);
+  box-shadow: 0 8px 20px rgba(54, 83, 76, 0.18);
 }
 
 .first-run-prompt-secondary {
@@ -8813,8 +8931,10 @@ html[data-theme="light"] .pipeline-overlay-failure .pipeline-success-static-chec
 }
 
 #confirmPipelineRunBtn {
-  background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
-  color: #ffffff !important;
+  border-color: var(--app-action-primary) !important;
+  background: var(--app-action-primary) !important;
+  background-image: none !important;
+  color: var(--app-action-text) !important;
 }
 
 html[data-theme="light"] .pipeline-confirm-hero,
@@ -9186,8 +9306,8 @@ html[data-theme="light"] .app-shell-brand {
 }
 
 /* --- Shell control buttons: collapse (desktop) + close (mobile) ----------- */
-.app-shell-collapse-btn,
-.app-shell-close-btn {
+#appShellCollapseBtn.app-shell-collapse-btn,
+#appShellCloseBtn.app-shell-close-btn {
   align-items: center;
   justify-content: center;
   width: 34px;
@@ -9195,24 +9315,26 @@ html[data-theme="light"] .app-shell-brand {
   min-width: 34px;
   flex: 0 0 34px;
   padding: 0;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--app-border) !important;
   border-radius: 10px;
-  background: var(--app-surface-2);
-  color: var(--app-text-2);
+  background: var(--app-surface-2) !important;
+  background-image: none !important;
+  color: var(--app-text-2) !important;
   cursor: pointer;
   transition: background var(--app-fast) var(--app-ease),
     border-color var(--app-fast) var(--app-ease),
     color var(--app-fast) var(--app-ease);
 }
-.app-shell-collapse-btn:hover,
-.app-shell-close-btn:hover {
-  border-color: var(--app-border-2);
-  color: var(--app-text);
+#appShellCollapseBtn.app-shell-collapse-btn:hover,
+#appShellCloseBtn.app-shell-close-btn:hover {
+  border-color: var(--app-border-2) !important;
+  background: var(--app-surface-3) !important;
+  color: var(--app-text) !important;
 }
-.app-shell-collapse-btn:focus-visible,
-.app-shell-close-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--app-focus);
+#appShellCollapseBtn.app-shell-collapse-btn:focus-visible,
+#appShellCloseBtn.app-shell-close-btn:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 3px var(--app-action-focus) !important;
 }
 .app-shell-collapse-icon,
 .app-shell-close-icon,
@@ -9289,22 +9411,23 @@ html[data-theme="light"] .app-shell-brand {
 }
 .app-shell-nav-link:hover {
   transform: none !important;
-  border-color: var(--app-border) !important;
-  background: rgba(124, 156, 255, 0.08) !important;
+  border-color: var(--app-action-border) !important;
+  background: var(--app-action-soft-hover) !important;
   color: var(--app-text) !important;
 }
 .app-shell-nav-link:focus-visible {
   outline: none !important;
   border-color: transparent !important;
-  box-shadow: 0 0 0 3px var(--app-focus) !important;
+  box-shadow: 0 0 0 3px var(--app-action-focus) !important;
 }
 .app-shell-nav-link.active,
 .app-shell-nav-link[aria-current="page"] {
-  border-color: transparent !important;
-  background: rgba(37, 99, 235, 0.14) !important;
-  color: var(--app-text) !important;
+  border-color: var(--app-action-border) !important;
+  background: var(--app-action-soft) !important;
+  background-image: none !important;
+  color: var(--app-action-strong) !important;
   transform: none !important;
-  box-shadow: inset 3px 0 0 var(--app-primary) !important;
+  box-shadow: inset 3px 0 0 var(--app-action-primary) !important;
 }
 .app-shell-nav-link.active::before,
 .app-shell-nav-link[aria-current="page"]::before,
@@ -9329,7 +9452,7 @@ html[data-theme="light"] .app-shell-brand {
 }
 .app-shell-nav-link.active .app-shell-nav-icon,
 .app-shell-nav-link[aria-current="page"] .app-shell-nav-icon {
-  color: var(--app-primary) !important;
+  color: var(--app-action-strong) !important;
 }
 .app-shell-nav-label {
   display: block !important;
@@ -9343,14 +9466,15 @@ html[data-theme="light"] .app-shell-brand {
 /* Light-theme restrained active state (overrides earlier light gradient). */
 html[data-theme="light"] .app-shell-nav-link.active,
 html[data-theme="light"] .app-shell-nav-link[aria-current="page"] {
-  border-color: transparent !important;
-  background: rgba(37, 99, 235, 0.1) !important;
-  color: #0f172a !important;
-  box-shadow: inset 3px 0 0 #2563eb !important;
+  border-color: var(--app-action-border) !important;
+  background: var(--app-action-soft) !important;
+  background-image: none !important;
+  color: var(--app-action-strong) !important;
+  box-shadow: inset 3px 0 0 var(--app-action-primary) !important;
 }
 html[data-theme="light"] .app-shell-nav-link.active .app-shell-nav-icon,
 html[data-theme="light"] .app-shell-nav-link[aria-current="page"] .app-shell-nav-icon {
-  color: #2563eb !important;
+  color: var(--app-action-strong) !important;
 }
 
 /* --- Collapsed desktop rail: icons only, labels/group titles hidden ------ */
@@ -9365,6 +9489,26 @@ body.app-shell-collapsed .app-shell-brand-row {
   margin: 0 0 8px !important;
   padding: 4px 0 10px !important;
   border-bottom: 0 !important;
+}
+body.app-shell-collapsed #appShellCollapseBtn.app-shell-collapse-btn {
+  order: -1;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  flex: 0 0 40px;
+  border-color: var(--app-action-border) !important;
+  background: var(--app-action-soft) !important;
+  background-image: none !important;
+  color: var(--app-action-strong) !important;
+}
+body.app-shell-collapsed #appShellCollapseBtn.app-shell-collapse-btn:hover {
+  border-color: var(--app-action-primary) !important;
+  background: var(--app-action-soft-hover) !important;
+  color: var(--app-action-strong) !important;
+}
+body.app-shell-collapsed .app-shell-collapse-icon svg {
+  width: 20px;
+  height: 20px;
 }
 body.app-shell-collapsed .app-shell-brand {
   display: inline-flex !important;
@@ -9824,11 +9968,12 @@ body
 .manual-provider-preview-action,
 .manual-provider-preview-confirm-btn {
   width: fit-content;
-  border: 1px solid rgba(99, 102, 241, 0.7);
+  border: 1px solid var(--app-action-primary);
   border-radius: 11px;
   padding: 9px 13px;
   color: #fff;
-  background: linear-gradient(135deg, #2563eb, #6d28d9);
+  background: var(--app-action-primary);
+  background-image: none;
   font-weight: 850;
 }
 
@@ -10009,20 +10154,41 @@ html[data-theme="light"] .app-shell-top-right:not(.app-shell-top-right--flow) .p
   height: 42px !important;
   margin-left: 4px !important;
   padding: 0 13px !important;
-  border: 0 !important;
+  border: 1px solid var(--app-action-primary) !important;
   border-radius: 12px !important;
-  background: linear-gradient(135deg, #2563eb, #4f46e5) !important;
-  box-shadow: 0 7px 18px rgba(37, 99, 235, 0.24) !important;
+  background: var(--app-action-primary) !important;
+  background-image: none !important;
+  color: var(--app-action-text) !important;
+  box-shadow: 0 7px 18px rgba(54, 83, 76, 0.18) !important;
 }
 
 .app-shell-top-right:not(.app-shell-top-right--flow) .profile-menu-shell {
   margin-left: 4px !important;
 }
 
-.app-shell-top-right:not(.app-shell-top-right--flow) .app-shell-primary-link:hover,
+.app-shell-top-right:not(.app-shell-top-right--flow) .app-shell-primary-link:hover {
+  border-color: var(--app-action-hover) !important;
+  background: var(--app-action-hover) !important;
+  background-image: none !important;
+  box-shadow: 0 9px 22px rgba(54, 83, 76, 0.22) !important;
+  transform: none !important;
+}
+
+.app-shell-top-right:not(.app-shell-top-right--flow) .app-shell-primary-link:active {
+  border-color: var(--app-action-pressed) !important;
+  background: var(--app-action-pressed) !important;
+  background-image: none !important;
+  box-shadow: 0 4px 12px rgba(54, 83, 76, 0.16) !important;
+  transform: none !important;
+}
+
 .app-shell-top-right:not(.app-shell-top-right--flow) .app-shell-primary-link:focus-visible {
-  background: linear-gradient(135deg, #1d4ed8, #4338ca) !important;
-  box-shadow: 0 9px 22px rgba(37, 99, 235, 0.3) !important;
+  outline: 3px solid var(--app-action-focus) !important;
+  outline-offset: 2px;
+  border-color: var(--app-action-primary) !important;
+  background: var(--app-action-primary) !important;
+  background-image: none !important;
+  box-shadow: 0 0 0 3px var(--app-action-focus) !important;
   transform: none !important;
 }
 
@@ -10282,8 +10448,8 @@ html[data-theme="light"] .profile-dropdown-danger-btn:focus-visible {
 }
 
 /* profile_resume_document_library_r1
-   ID-scoped ownership is intentional: the legacy global button:not(...) CTA
-   uses high-specificity !important gradients. Resume controls must use their
+   ID-scoped ownership is intentional: the global button:not(...) CTA uses a
+   high-specificity !important shared fill. Resume controls must use their
    owned eucalyptus system without changing buttons on another route or tab. */
 #resumeSection.profile-resume-library,
 #resumeSection.profile-resume-onboarding-card,

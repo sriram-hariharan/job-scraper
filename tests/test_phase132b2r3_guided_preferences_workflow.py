@@ -212,14 +212,21 @@ def test_global_button_owners_exclude_every_neutral_preferences_control():
             for class_name in NEUTRAL_BUTTON_CLASSES:
                 assert f":not(.{class_name})" in selector
 
-    for stylesheet in (STYLES_CSS, APP_REDESIGN_CSS):
-        gradient_rules = re.findall(r"([^{}]*button:not\([^{}]+)\{([^{}]*linear-gradient[^{}]*)\}", stylesheet)
-        assert gradient_rules
-        for selector, body in gradient_rules:
-            if "!important" not in body:
-                continue
-            for class_name in NEUTRAL_BUTTON_CLASSES:
-                assert f":not(.{class_name})" in selector
+    gradient_rules = re.findall(
+        r"([^{}]*button:not\([^{}]+)\{([^{}]*linear-gradient[^{}]*)\}",
+        STYLES_CSS,
+    )
+    assert gradient_rules
+    for selector, body in gradient_rules:
+        if "!important" not in body:
+            continue
+        for class_name in NEUTRAL_BUTTON_CLASSES:
+            assert f":not(.{class_name})" in selector
+
+    # The final loaded shared owner is intentionally matte and supersedes the
+    # older protected gradient layer without recoloring preferences controls.
+    assert "background: var(--app-action-primary) !important" in APP_REDESIGN_CSS
+    assert "background-image: none !important" in APP_REDESIGN_CSS
 
 
 def test_visual_polish_neutralizes_sidebar_and_dropdown_cta_inheritance():
@@ -331,7 +338,8 @@ def test_page_canvas_toolbar_and_summary_share_the_wide_preferences_width_system
     shell_markup = render_top_shell("/onboarding")
     for control_class in ("notification-btn", "theme-toggle-btn", "app-shell-primary-link", "profile-avatar-btn"):
         assert control_class in shell_markup
-    assert "linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important" in APP_REDESIGN_CSS
+    assert "background: var(--app-action-primary) !important" in APP_REDESIGN_CSS
+    assert "background-image: none !important" in APP_REDESIGN_CSS
     assert ".app-shell-top-right--flow::before" not in CSS + STYLES_CSS + APP_REDESIGN_CSS
     assert ".app-shell-top-right--flow::after" not in CSS + STYLES_CSS + APP_REDESIGN_CSS
 
@@ -411,7 +419,7 @@ def test_preferences_assets_are_scoped_ordered_and_cache_busted_consistently():
         # app_redesign.css is bumped uniformly to the Phase 133H shell marker; it
         # now recurs across routes, so anchor the preferences-page ordering check
         # to the app_redesign link that follows this page's styles.css link.
-        redesign = source.index('/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1', styles)
+        redesign = source.index('/static/app_redesign.css?v=eucalyptus_primary_shell_r1', styles)
         preferences = source.index('/static/preferences.css?v=phase1_step8b_r1')
         selector = source.index('/static/preference_location_selector.js?v=preferences_guided_parity_r9')
         workflow = source.index('/static/preferences_workflow.js?v=phase1_step8b_r1')

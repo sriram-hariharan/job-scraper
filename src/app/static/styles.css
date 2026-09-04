@@ -10426,7 +10426,9 @@ html[data-theme="light"] .status-warning,html[data-theme="light"] .status-pendin
   }
 }
 
-/* Primary action mapping for existing server-rendered buttons without classes. */
+/* Legacy ID aliases for server-rendered and React-mounted primary actions.
+   Keep this high-specificity map on the shared matte-Eucalyptus tokens because
+   these IDs otherwise outrank the later shared action classes. */
 #runPipelineBtn,
 #applyFiltersBtn,
 #planningApplyFiltersBtn,
@@ -10444,9 +10446,10 @@ html[data-theme="light"] .status-warning,html[data-theme="light"] .status-pendin
 #scanWorkspaceProcessingOkBtn,
 .status-action-btn.saved-action-btn {
   min-height: 40px;
-  border: 1px solid var(--app-primary) !important;
+  border: 1px solid var(--app-action-primary, #56746d) !important;
   border-radius: 8px !important;
-  background: var(--app-primary) !important;
+  background: var(--app-action-primary, #56746d) !important;
+  background-image: none !important;
   color: #ffffff !important;
   box-shadow: none !important;
   font-weight: 760;
@@ -10468,9 +10471,53 @@ html[data-theme="light"] .status-warning,html[data-theme="light"] .status-pendin
 #scanWorkspaceStartBtn:hover,
 #scanWorkspaceProcessingOkBtn:hover,
 .status-action-btn.saved-action-btn:hover {
-  background: var(--app-primary-hover) !important;
-  border-color: var(--app-primary-hover) !important;
+  background: var(--app-action-hover, #49655f) !important;
+  background-image: none !important;
+  border-color: var(--app-action-hover, #49655f) !important;
   color: #ffffff !important;
+}
+
+#runPipelineBtn:active:not(:disabled),
+#applyFiltersBtn:active:not(:disabled),
+#planningApplyFiltersBtn:active:not(:disabled),
+#decisionApplyFiltersBtn:active:not(:disabled),
+#applicationApplyFiltersBtn:active:not(:disabled),
+#runRagBtn:active:not(:disabled),
+#resumeBrowseBtn:active:not(:disabled),
+#openPipelineConfirmBtn:active:not(:disabled),
+#confirmPipelineRunBtn:active:not(:disabled),
+#resumeChoiceSelectBtn:active:not(:disabled),
+#appErrorOkBtn:active:not(:disabled),
+#pipelineSuccessOkBtn:active:not(:disabled),
+#pipelineFailureOkBtn:active:not(:disabled),
+#scanWorkspaceStartBtn:active:not(:disabled),
+#scanWorkspaceProcessingOkBtn:active:not(:disabled),
+.status-action-btn.saved-action-btn:active:not(:disabled) {
+  background: var(--app-action-pressed, #3f5953) !important;
+  background-image: none !important;
+  border-color: var(--app-action-pressed, #3f5953) !important;
+  color: #ffffff !important;
+}
+
+#runPipelineBtn:focus-visible,
+#applyFiltersBtn:focus-visible,
+#planningApplyFiltersBtn:focus-visible,
+#decisionApplyFiltersBtn:focus-visible,
+#applicationApplyFiltersBtn:focus-visible,
+#runRagBtn:focus-visible,
+#resumeBrowseBtn:focus-visible,
+#openPipelineConfirmBtn:focus-visible,
+#confirmPipelineRunBtn:focus-visible,
+#resumeChoiceSelectBtn:focus-visible,
+#appErrorOkBtn:focus-visible,
+#pipelineSuccessOkBtn:focus-visible,
+#pipelineFailureOkBtn:focus-visible,
+#scanWorkspaceStartBtn:focus-visible,
+#scanWorkspaceProcessingOkBtn:focus-visible,
+.status-action-btn.saved-action-btn:focus-visible {
+  outline: 3px solid var(--app-action-focus, rgba(86, 116, 109, 0.2)) !important;
+  outline-offset: 2px;
+  box-shadow: none !important;
 }
 
 #resumeChoiceSelectBtn:disabled,

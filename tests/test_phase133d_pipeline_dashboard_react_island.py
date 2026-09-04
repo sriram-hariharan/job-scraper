@@ -26,12 +26,10 @@ def test_pipeline_route_renders_one_react_mount_and_shared_pipeline_navigation()
 
     assert markup.count('id="pipelineDashboardRoot"') == 1
     assert 'aria-label="Pipeline monitoring dashboard"' in markup
-    # Bundle cache marker bumped to item2_phase3_shared_header_r1 when Pipeline's
-    # header was migrated onto the shared .app-page-header contract.
-    assert '/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1' in markup
-    assert '/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1' in markup
+    assert '/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1' in markup
+    assert '/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1' in markup
     assert 'src="/static/app.js?v=phase133d_s1"' in markup
-    assert 'src="/static/shell.js?v=item7b_account_toolbar_r1"' in markup
+    assert 'src="/static/shell.js?v=eucalyptus_primary_shell_r1"' in markup
     assert '<body class="pipeline-dashboard-page">' in markup
     assert 'id="executiveKpiRoot"' not in markup
     assert 'id="executiveQueueRoot"' not in markup

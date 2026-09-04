@@ -120,10 +120,10 @@ def planning_dashboard() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Planning</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=shared_filter_fluid_select_r2" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=shared_filter_fluid_select_r2" />
+  <link rel="stylesheet" href="/static/styles.css?v=eucalyptus_action_cascade_r2" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1" />
   <link rel="stylesheet" href="/static/planning_dashboard.css?v=phase133g_s1_r1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=shared_filter_fluid_select_r2" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1" />
 </head>
 <body class="planning-dashboard-page">
 {render_top_shell("/planning")}
@@ -668,8 +668,8 @@ def planning_dashboard() -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=shared_filter_fluid_select_r2"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1"></script>
   <script src="/static/planning.js?v=bulk_generate_suggestions_r2"></script>
 </body>
 </html>
@@ -770,7 +770,7 @@ def tailoring_workspace(
   <title>Tailoring Workspace</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1" />
   <link rel="stylesheet" href="/static/tailoring_workspace_premium.css?v=tailoring_workspace_finish_r3" />
 </head>
 <body>
@@ -1106,7 +1106,7 @@ def tailoring_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1"></script>
   <section class="tailoring-workspace-export-modal hidden" id="tailoringWorkspaceExportModal">
     <div class="tailoring-workspace-export-modal-card" role="dialog" aria-modal="true" aria-labelledby="tailoringWorkspaceExportTitle">
       <div class="tailoring-workspace-export-header">
@@ -1336,8 +1336,8 @@ def advanced_diagnostics(
   <title>Scan Diagnostics</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=shared_filter_fluid_select_r2" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=shared_filter_fluid_select_r2" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=shared_filter_fluid_select_r2" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1" />
 </head>
 <body class="advanced-diagnostics-page">
 {render_top_shell("/advanced-diagnostics")}
@@ -1348,11 +1348,11 @@ def advanced_diagnostics(
   </main>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1"></script>
   <script>
     window.__APPLYLENS_ADVANCED_DIAGNOSTICS_STATE__ = {initial_state_script};
   </script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=shared_filter_fluid_select_r2"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1"></script>
 </body>
 </html>
     """.strip()
@@ -1513,8 +1513,8 @@ def scan_workspace(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item7b_v1_toolbar_notification_r1" />
+  <link rel="stylesheet" href="/static/styles.css?v=eucalyptus_action_cascade_r2" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1" />
   <link rel="stylesheet" href="/static/scan_workspace_premium.css?v=scan_workspace_premium_r1" />
 </head>
 <body>
@@ -2394,7 +2394,7 @@ def scan_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=item7b_account_toolbar_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1"></script>
   <script src="/static/planning.js?v=planning_ui_20260518_scan_replacement_markers"></script>
   <script src="/static/scan_workspace.js?v=scan_workspace_rescan6_popover_phrase_scroll"></script>
 </body>

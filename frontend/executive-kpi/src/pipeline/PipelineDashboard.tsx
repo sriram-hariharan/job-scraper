@@ -27,6 +27,7 @@ import {
   stageOrder,
   STAGE_LABELS,
 } from "./pipelineModel";
+import { SHARED_NEUTRAL_CONTROL_CLASS } from "../table/TablePrimitives";
 
 /**
  * Adapted from Live Sales Dashboard by vaib215.
@@ -183,7 +184,7 @@ function DashboardHeader({
         <p className="app-page-header__description">Monitor job collection, filtering, evaluation, resume matching, and planning.</p>
       </div>
       <div className="pipeline-dashboard-actions app-page-header__actions">
-        <button className="pipeline-dashboard-btn pipeline-dashboard-btn--secondary" type="button" onClick={onRefresh} disabled={refreshing}>
+        <button className={`${SHARED_NEUTRAL_CONTROL_CLASS} pipeline-dashboard-btn pipeline-dashboard-btn--secondary`} type="button" onClick={onRefresh} disabled={refreshing}>
           <RefreshCw size={17} aria-hidden="true" />
           {refreshing ? "Refreshing" : "Refresh Status"}
         </button>

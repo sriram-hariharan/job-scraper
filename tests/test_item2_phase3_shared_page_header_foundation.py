@@ -225,20 +225,20 @@ def test_no_global_shell_toolbar_markup_changed():
         ui_shell_source = (ROOT / "src/app/ui_shell.py").read_text(encoding="utf-8")
         assert '"diagnostics": (' in ui_shell_source
         assert '_icon_svg("diagnostics")' in ui_shell_source
-    assert "src/app/static/shell.js" not in changed
+    shell_js = (ROOT / "src/app/static/shell.js").read_text(encoding="utf-8")
+    assert "src/app/ui_shell.py" not in changed
+    assert "const APP_SHELL_MENU_SVG" in shell_js
+    assert "isCollapsed ? APP_SHELL_MENU_SVG : APP_SHELL_COLLAPSE_SVG" in shell_js
 
 
 # --- 18. Cache marker scoping -------------------------------------------------
 
 
 def test_new_cache_marker_appears_only_on_intended_affected_route_assets():
-    old_marker = "item2_phase3_shared_header_r1"
     planning_marker = "planning_bulk_action_control_r1"
-    shared_filter_marker = "shared_filter_fluid_select_r2"
-    old_css = f'/static/build/executive-kpi/executive-kpi.css?v={old_marker}'
-    old_js = f'/static/build/executive-kpi/executive-kpi.js?v={old_marker}'
-    shared_css = f'/static/build/executive-kpi/executive-kpi.css?v={shared_filter_marker}'
-    shared_js = f'/static/build/executive-kpi/executive-kpi.js?v={shared_filter_marker}'
+    release_marker = "eucalyptus_primary_shell_r1"
+    release_css = f'/static/build/executive-kpi/executive-kpi.css?v={release_marker}'
+    release_js = f'/static/build/executive-kpi/executive-kpi.js?v={release_marker}'
 
     overview_route = _route_block(
         UI_SOURCE,
@@ -273,21 +273,24 @@ def test_new_cache_marker_appears_only_on_intended_affected_route_assets():
         '@router.get("/applications", response_class=HTMLResponse)',
     )
 
-    # Every route that renders SharedFilterSelect owns one deterministic marker
-    # for both rebuilt assets. Unaffected bundle hosts keep their prior marker.
-    for route in (overview_route, scheduler_route, planning_route, advanced_diagnostics_route, decisions_route):
-        assert shared_css in route
-        assert shared_js in route
-        assert old_css not in route
-        assert old_js not in route
+    # Every route that renders the rebuilt shared bundle owns one deterministic
+    # marker, whether or not it also hosts SharedFilterSelect.
+    for route in (
+        overview_route,
+        pipeline_route,
+        scheduler_route,
+        planning_route,
+        advanced_diagnostics_route,
+        decisions_route,
+        applications_route,
+    ):
+        assert release_css in route
+        assert release_js in route
 
     for route in (overview_route, scheduler_route, advanced_diagnostics_route, decisions_route):
         assert planning_marker not in route
 
     for route in (pipeline_route, applications_route):
-        assert old_css in route
-        assert old_js in route
-        assert shared_filter_marker not in route
         assert planning_marker not in route
 
 

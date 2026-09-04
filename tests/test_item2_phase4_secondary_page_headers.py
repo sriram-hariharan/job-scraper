@@ -25,6 +25,7 @@ PLANNING_UI_SOURCE = (ROOT / "src/app/planning_ui.py").read_text(encoding="utf-8
 UI_SOURCE = (ROOT / "src/app/ui.py").read_text(encoding="utf-8")
 DECISIONS_UI_SOURCE = (ROOT / "src/app/decisions_ui.py").read_text(encoding="utf-8")
 APPLICATION_HUB_UI_SOURCE = (ROOT / "src/app/application_hub_ui.py").read_text(encoding="utf-8")
+AUTH_UI_SOURCE = (ROOT / "src/app/auth_ui.py").read_text(encoding="utf-8")
 
 ADVANCED_DIAGNOSTICS_TSX = (
     ROOT / "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx"
@@ -198,7 +199,7 @@ def test_legacy_scan_workspace_stylesheets_are_unchanged():
 # --- 20-21. Cache markers -----------------------------------------------------
 
 
-def test_unaffected_shared_shell_pages_retain_the_item7b_cache_marker():
+def test_shared_shell_pages_use_the_eucalyptus_release_marker():
     sources = (
         UI_SOURCE,
         PLANNING_UI_SOURCE,
@@ -206,21 +207,26 @@ def test_unaffected_shared_shell_pages_retain_the_item7b_cache_marker():
         APPLICATION_HUB_UI_SOURCE,
         PROFILE_UI_SOURCE,
     )
-    # SharedFilterSelect hosts advance with their related cascade fix; the nine
-    # unaffected route references retain the Item 7b marker.
-    assert sum(source.count("item7b_v1_toolbar_notification_r1") for source in sources) == 9
-    assert sum(source.count("item7b_account_toolbar_r1") for source in sources) == 15
+    assert sum(source.count("app_redesign.css?v=eucalyptus_primary_shell_r1") for source in sources) == 15
+    assert sum(source.count("shell.js?v=eucalyptus_primary_shell_r1") for source in sources) == 15
+    # the shared React bundle is one asset, so it carries one marker on every
+    # host that renders it - never split across two release names.
+    assert sum(source.count("executive-kpi.css?v=eucalyptus_primary_shell_r1") for source in sources) == 8
+    assert sum(source.count("executive-kpi.js?v=eucalyptus_primary_shell_r1") for source in sources) == 8
+    assert sum(source.count("executive-kpi.css?v=eucalyptus_action_cascade_r2") for source in sources) == 0
+    assert sum(source.count("executive-kpi.js?v=eucalyptus_action_cascade_r2") for source in sources) == 0
 
 
-def test_javascript_and_bundle_cache_markers_are_unchanged_this_phase():
-    old_bundle_marker = "item2_phase3_shared_header_r1"
+def test_javascript_and_bundle_cache_markers_follow_the_eucalyptus_release():
+    bundle_marker = "eucalyptus_primary_shell_r1"
+    action_marker = "eucalyptus_action_cascade_r2"
     planning_marker = "planning_bulk_action_control_r1"
     shared_filter_marker = "shared_filter_fluid_select_r2"
-    # Bulk Generate Suggestions ships new planning.js/styles.css content;
-    # the executive-kpi bundle markers stay frozen for this phase.
     bulk_marker = "bulk_generate_suggestions_r2"
-    old_css = f'/static/build/executive-kpi/executive-kpi.css?v={old_bundle_marker}'
-    old_js = f'/static/build/executive-kpi/executive-kpi.js?v={old_bundle_marker}'
+    release_css = f'/static/build/executive-kpi/executive-kpi.css?v={bundle_marker}'
+    release_js = f'/static/build/executive-kpi/executive-kpi.js?v={bundle_marker}'
+    action_css = f'/static/build/executive-kpi/executive-kpi.css?v={action_marker}'
+    action_js = f'/static/build/executive-kpi/executive-kpi.js?v={action_marker}'
 
     planning_route = _route_block(
         PLANNING_UI_SOURCE,
@@ -241,33 +247,28 @@ def test_javascript_and_bundle_cache_markers_are_unchanged_this_phase():
 
     # Planning receives the rebuilt component and the two related cascade
     # stylesheets under one deterministic release marker.
-    assert f'/static/styles.css?v={shared_filter_marker}' in planning_route
-    assert f'/static/app_redesign.css?v={shared_filter_marker}' in planning_route
-    assert f'/static/build/executive-kpi/executive-kpi.css?v={shared_filter_marker}' in planning_route
+    assert f'/static/styles.css?v={action_marker}' in planning_route
+    assert '/static/app_redesign.css?v=eucalyptus_primary_shell_r1' in planning_route
+    assert release_css in planning_route
     assert f'/static/planning.js?v={bulk_marker}' in planning_route
-    assert (
-        f'/static/build/executive-kpi/executive-kpi.js?v={shared_filter_marker}'
-        in planning_route
-    )
-    assert old_js not in planning_route
-    assert old_css not in planning_route
-    assert '/static/shell.js?v=item7b_account_toolbar_r1' in planning_route
+    assert release_js in planning_route
+    assert action_css not in planning_route
+    assert action_js not in planning_route
+    assert '/static/shell.js?v=eucalyptus_primary_shell_r1' in planning_route
 
-    # Unaffected bundle hosts retain old references; SharedFilterSelect hosts
-    # use the deterministic rebuilt-asset marker.
-    assert old_css in UI_SOURCE
-    assert old_js in UI_SOURCE
-    assert f'/static/build/executive-kpi/executive-kpi.css?v={shared_filter_marker}' in advanced_diagnostics_route
-    assert f'/static/build/executive-kpi/executive-kpi.js?v={shared_filter_marker}' in advanced_diagnostics_route
+    assert release_css in UI_SOURCE
+    assert release_js in UI_SOURCE
+    assert release_css in advanced_diagnostics_route
+    assert release_js in advanced_diagnostics_route
     assert f'/static/styles.css?v={shared_filter_marker}' in advanced_diagnostics_route
-    assert f'/static/app_redesign.css?v={shared_filter_marker}' in advanced_diagnostics_route
+    assert '/static/app_redesign.css?v=eucalyptus_primary_shell_r1' in advanced_diagnostics_route
 
     # Tailoring Workspace and Scan Workspace retain their distinct historical
     # script ownership and never acquire the Planning-only marker.
-    assert '/static/shell.js?v=item7b_account_toolbar_r1' in tailoring_route
+    assert '/static/shell.js?v=eucalyptus_primary_shell_r1' in tailoring_route
     assert '/static/planning.js?v=planning_ui_20260512_tailoring_tabs8' in tailoring_route
     assert planning_marker not in tailoring_route
-    assert '/static/shell.js?v=item7b_account_toolbar_r1' in scan_workspace_renderer
+    assert '/static/shell.js?v=eucalyptus_primary_shell_r1' in scan_workspace_renderer
     assert '/static/planning.js?v=planning_ui_20260518_scan_replacement_markers' in scan_workspace_renderer
     assert '/static/scan_workspace.js?v=scan_workspace_rescan6_popover_phrase_scroll' in scan_workspace_renderer
     assert planning_marker not in scan_workspace_renderer
@@ -276,10 +277,9 @@ def test_javascript_and_bundle_cache_markers_are_unchanged_this_phase():
 # --- 22. Onboarding/preferences/auth not migrated ----------------------------
 
 
-def test_auth_is_unchanged_while_shared_shell_preferences_use_item7_assets():
-    changed = get_changed_files(ROOT)
-    assert "src/app/auth_ui.py" not in changed
-    assert "app_redesign.css?v=item7b_v1_toolbar_notification_r1" in PROFILE_UI_SOURCE
+def test_auth_and_shared_shell_preferences_receive_only_the_shared_css_release_marker():
+    assert AUTH_UI_SOURCE.count("app_redesign.css?v=eucalyptus_primary_shell_r1") == 2
+    assert "app_redesign.css?v=eucalyptus_primary_shell_r1" in PROFILE_UI_SOURCE
 
 
 # --- 23. Advanced Diagnostics execution remains explicit ----------------------
@@ -298,10 +298,10 @@ def test_advanced_diagnostics_execution_requires_explicit_run():
         assert handler in button_block
 
 
-# --- 24. Global shell markup unchanged ---------------------------------------
+# --- 24. Global shell ownership remains stable -------------------------------
 
 
-def test_global_shell_markup_remains_unchanged():
+def test_global_shell_markup_and_mobile_ownership_remain_unchanged():
     changed = get_changed_files(ROOT)
     if "src/app/ui_shell.py" in changed:
         # Item 2 Phase 4 Correction Pass 1 intentionally adds a "diagnostics"
@@ -311,4 +311,8 @@ def test_global_shell_markup_remains_unchanged():
         ui_shell_source = (ROOT / "src/app/ui_shell.py").read_text(encoding="utf-8")
         assert '"diagnostics": (' in ui_shell_source
         assert '_icon_svg("diagnostics")' in ui_shell_source
-    assert "src/app/static/shell.js" not in changed
+    shell_js = (ROOT / "src/app/static/shell.js").read_text(encoding="utf-8")
+    assert "src/app/ui_shell.py" not in changed
+    assert "const APP_SHELL_MENU_SVG" in shell_js
+    assert 'collapseBtn.addEventListener("click"' in shell_js
+    assert shell_js.count('menuBtn.addEventListener("click"') == 1

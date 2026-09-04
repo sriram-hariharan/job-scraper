@@ -199,6 +199,53 @@ def test_menu_trigger_is_not_a_duplicate_collapse_owner() -> None:
     assert js.count('menuBtn.addEventListener("click"') == 1
 
 
+def test_desktop_collapse_control_switches_to_menu_icon_when_collapsed() -> None:
+    html = render_top_shell("/")
+    js = _read(SHELL_JS)
+
+    assert html.count('id="appShellCollapseBtn"') == 1
+    assert html.count('id="appShellMenuBtn"') == 1
+    assert 'aria-label="Collapse sidebar"' in html
+    assert 'title="Collapse sidebar"' in html
+    assert "const APP_SHELL_MENU_SVG" in js
+    for line in (
+        '<line x1="4" x2="20" y1="6" y2="6"/>',
+        '<line x1="4" x2="20" y1="12" y2="12"/>',
+        '<line x1="4" x2="20" y1="18" y2="18"/>',
+    ):
+        assert line in js
+    assert "isCollapsed ? APP_SHELL_MENU_SVG : APP_SHELL_COLLAPSE_SVG" in js
+    assert 'const label = isCollapsed ? "Expand sidebar" : "Collapse sidebar"' in js
+    assert 'const APP_SHELL_COLLAPSED_KEY = "job_stack_app_shell_collapsed"' in js
+
+
+def test_collapsed_desktop_expand_affordance_stays_above_brand_and_mobile_safe() -> None:
+    css = _read(SHELL_CSS)
+    collapsed = css.split(
+        "body.app-shell-collapsed #appShellCollapseBtn.app-shell-collapse-btn {", 1
+    )[1].split("}", 1)[0]
+    mobile = css.split("@media (max-width: 980px)", 1)[1]
+
+    assert "order: -1" in collapsed
+    assert "width: 40px" in collapsed
+    assert "background: var(--app-action-soft) !important" in collapsed
+    assert ".app-shell-menu-btn {\n  display: none !important;" in css
+    assert ".app-shell-collapse-btn {\n    display: none !important;" in mobile
+
+
+def test_sidebar_active_navigation_uses_shared_eucalyptus_identity() -> None:
+    css = _read(SHELL_CSS)
+    active = css.rsplit(
+        '.app-shell-nav-link.active,\n.app-shell-nav-link[aria-current="page"] {', 1
+    )[1].split("}", 1)[0]
+
+    assert "background: var(--app-action-soft) !important" in active
+    assert "color: var(--app-action-strong) !important" in active
+    assert "inset 3px 0 0 var(--app-action-primary)" in active
+    for forbidden in ("#2563eb", "#4f46e5", "#7c3aed", "linear-gradient"):
+        assert forbidden not in active
+
+
 def test_theme_toggle_and_new_scan_remain_functional() -> None:
     html = render_top_shell("/")
     assert 'id="themeToggleBtn"' in html

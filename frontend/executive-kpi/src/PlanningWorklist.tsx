@@ -6,7 +6,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { CheckCircle2, ClipboardList, FileText, Sparkles, UserRoundCheck, X } from "lucide-react";
+import { CheckCircle2, ClipboardList, FileText, RotateCcw, Sparkles, UserRoundCheck, X } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { SharedFilterSelect, type SharedFilterOption } from "./filter/FilterSelect";
 import {
@@ -827,10 +827,10 @@ export function PlanningFiltersToolbar({ state }: { state: PlanningWorklistState
         >Apply Filters</button>
         <button
           type="button"
-          className="planning-filter-clear"
+          className={`${SHARED_NEUTRAL_CONTROL_CLASS} planning-filter-clear`}
           id="planningClearFiltersBtn"
           onClick={() => publishPlanningAction({ type: "clear_filters" })}
-        >Clear</button>
+        ><RotateCcw size={15} aria-hidden="true" /> Clear</button>
       </div>
     </div>
   );

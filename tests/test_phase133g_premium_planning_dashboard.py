@@ -32,8 +32,8 @@ def test_planning_route_mounts_the_scoped_react_islands_and_canonical_bundle() -
     assert 'id="planningTable"' not in html
     assert 'id="planningTableBody"' not in html
     assert '/static/planning_dashboard.css?v=phase133g_s1_r1' in html
-    assert '/static/build/executive-kpi/executive-kpi.css?v=shared_filter_fluid_select_r2' in html
-    assert '/static/build/executive-kpi/executive-kpi.js?v=shared_filter_fluid_select_r2' in html
+    assert '/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1' in html
+    assert '/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1' in html
     assert '/static/planning.js?v=bulk_generate_suggestions_r2' in html
 
 
@@ -222,13 +222,16 @@ def test_filter_toolbar_preserves_all_controls_and_uses_a_dedicated_actions_grou
 
     segmented_start = css.index(".planning-react-segmented button.is-active {")
     segmented_active = css[segmented_start:css.index("}", segmented_start) + 1]
-    assert "border-color: #2563eb" in segmented_active
-    assert "background: #2563eb" in segmented_active
+    assert "border-color: var(--app-action-primary, #56746d)" in segmented_active
+    assert "background: var(--app-action-primary, #56746d)" in segmented_active
+    assert "background-image: none" in segmented_active
     assert "box-shadow: none" in segmented_active
     assert "color: #ffffff" in segmented_active
     inactive_start = css.index(".planning-react-segmented button {")
     inactive = css[inactive_start:css.index("}", inactive_start) + 1]
-    assert "min-height: 44px" in inactive
+    # the segmented shell now matches the shared 46px filter-control height,
+    # so its inner buttons sit at 40px inside the 2px padding + 1px border.
+    assert "min-height: 40px" in inactive
     assert "color: var(--queue-ink)" in inactive
     assert 'html[data-theme="dark"] .planning-react-segmented button.is-active' in css
     assert ".planning-react-segmented button.is-active:hover" in css

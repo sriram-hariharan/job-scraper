@@ -1,6 +1,21 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ------------------------------------------------------------------------
+   filter_control_height_r1
+   One sizing contract for every filter-bar control on Executive Queue,
+   Planning, Decisions and Applications: shared filter selects, text/number
+   inputs, segmented toggles, Apply Filters and Clear all resolve to the same
+   height and radius. Scoped to filter rows on purpose - shared table sort,
+   expand, info-popover and pagination controls keep their compact sizing.
+   ------------------------------------------------------------------------ */
+:root {
+  --filter-control-height: 46px;
+  --filter-control-radius: 12px;
+  --filter-control-font-size: 14px;
+  --filter-control-font-weight: 650;
+}
+
 #executiveKpiRoot {
   --executive-kpi-surface: rgba(255, 255, 255, 0.94);
   --executive-kpi-border: rgba(148, 163, 184, 0.28);
@@ -183,9 +198,11 @@ html[data-theme="dark"] .executive-kpi-card {
   --source-yield-ink: #0f172a;
   --source-yield-muted: #64748b;
   --source-yield-accent: #2563eb;
-  margin: 0 0 22px;
+  /* The loading reservation lives on .source-yield-server-fallback, not here.
+     Keeping it on the root left dead space under the card once it rendered -
+     most visibly when the section is collapsed to its header. */
+  margin: 0 0 12px;
   min-width: 0;
-  min-height: 176px;
   color: var(--source-yield-ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -548,20 +565,20 @@ html[data-theme="dark"] .shared-filter-select {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  height: 46px;
+  height: var(--filter-control-height);
   box-sizing: border-box;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   padding: 0 13px;
   border: 1px solid var(--shared-filter-border-strong);
-  border-radius: 12px;
+  border-radius: var(--filter-control-radius);
   outline: 0;
   background: var(--shared-filter-surface);
   background-image: none;
   color: var(--shared-filter-text);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--filter-control-font-size);
   font-weight: 600;
   line-height: 1.25;
   text-align: left;
@@ -587,17 +604,18 @@ html[data-theme="dark"] .shared-filter-select {
 .executive-queue-limit-field input {
   display: flex;
   width: 100%;
-  height: 40px;
+  height: var(--filter-control-height);
+  box-sizing: border-box;
   align-items: center;
   padding: 0 12px;
   border: 1px solid var(--queue-border-strong);
-  border-radius: 6px;
+  border-radius: var(--filter-control-radius);
   outline: 0;
   background: var(--queue-surface-strong);
   background-image: none;
   color: var(--queue-ink);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--filter-control-font-size);
 }
 
 .executive-queue-limit-field input:hover {
@@ -967,18 +985,19 @@ html[data-theme="dark"] .shared-filter-select__dot--unavailable { background: #7
 
 .planning-react-segmented {
   display: grid;
-  height: 50px;
+  height: var(--filter-control-height);
+  box-sizing: border-box;
   grid-template-columns: 1fr 1fr;
   padding: 2px;
   border: 1px solid var(--queue-border-strong);
-  border-radius: 6px;
+  border-radius: var(--filter-control-radius);
   background: var(--queue-surface-muted);
 }
 
 .planning-react-segmented button {
-  min-height: 44px;
+  min-height: 40px;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: calc(var(--filter-control-radius) - 3px);
   background: transparent;
   background-image: none;
   box-shadow: none;
@@ -989,8 +1008,9 @@ html[data-theme="dark"] .shared-filter-select__dot--unavailable { background: #7
 }
 
 .planning-react-segmented button.is-active {
-  border-color: #2563eb;
-  background: #2563eb;
+  border-color: var(--app-action-primary, #56746d);
+  background: var(--app-action-primary, #56746d);
+  background-image: none;
   box-shadow: none;
   color: #ffffff;
 }
@@ -1001,15 +1021,23 @@ html[data-theme="dark"] .shared-filter-select__dot--unavailable { background: #7
 }
 
 .planning-react-segmented button.is-active:hover {
-  border-color: #2563eb;
-  background: #2563eb;
+  border-color: var(--app-action-hover, #49655f);
+  background: var(--app-action-hover, #49655f);
+  background-image: none;
   color: #ffffff;
 }
 
 html[data-theme="dark"] .planning-react-segmented button.is-active {
-  border-color: #2563eb;
-  background: #2563eb;
+  border-color: var(--app-action-primary, #526a64);
+  background: var(--app-action-primary, #526a64);
+  background-image: none;
   color: #ffffff;
+}
+
+.planning-react-segmented button.is-active:active {
+  border-color: var(--app-action-pressed, #3f5953);
+  background: var(--app-action-pressed, #3f5953);
+  background-image: none;
 }
 
 .planning-react-limit-field {
@@ -1019,22 +1047,30 @@ html[data-theme="dark"] .planning-react-segmented button.is-active {
 .planning-react-limit-field input {
   box-sizing: border-box;
   width: 100%;
-  height: 40px;
+  height: var(--filter-control-height);
   min-width: 0;
   padding: 0 10px;
   border: 1px solid var(--queue-border-strong);
-  border-radius: 6px;
+  border-radius: var(--filter-control-radius);
   outline: 0;
   background: var(--queue-surface-strong);
   color: var(--queue-ink);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--filter-control-font-size);
 }
 
-.planning-react-limit-field input:focus-visible,
-.planning-react-segmented button:focus-visible,
-.planning-react-filter-actions button:focus-visible {
+.planning-react-limit-field input:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--queue-accent) 58%, transparent);
+  outline-offset: 2px;
+}
+
+.planning-react-filter-actions button:focus-visible {
+  outline: 3px solid var(--app-action-focus, rgba(86, 116, 109, 0.2));
+  outline-offset: 2px;
+}
+
+.planning-react-segmented button:focus-visible {
+  outline: 3px solid var(--app-action-focus, rgba(86, 116, 109, 0.2));
   outline-offset: 2px;
 }
 
@@ -1049,8 +1085,11 @@ html[data-theme="dark"] .planning-react-segmented button.is-active {
 .planning-react-filter-actions button {
   position: static;
   min-width: 0;
-  min-height: 40px;
+  min-height: var(--filter-control-height);
   margin: 0;
+  border-radius: var(--filter-control-radius);
+  font-size: var(--filter-control-font-size);
+  font-weight: var(--filter-control-font-weight);
   transform: none;
 }
 
@@ -1096,17 +1135,18 @@ html[data-theme="dark"] .planning-react-segmented button.is-active {
 
 .executive-queue-segmented {
   display: grid;
-  height: 40px;
+  height: var(--filter-control-height);
+  box-sizing: border-box;
   grid-template-columns: 1fr 1fr;
   padding: 3px;
   border: 1px solid var(--queue-border-strong);
-  border-radius: 6px;
+  border-radius: var(--filter-control-radius);
   background: var(--queue-surface-muted);
 }
 
 .executive-queue-segmented button {
   border: 0;
-  border-radius: 4px;
+  border-radius: calc(var(--filter-control-radius) - 3px);
   background: transparent;
   background-image: none;
   box-shadow: none;
@@ -1118,9 +1158,23 @@ html[data-theme="dark"] .planning-react-segmented button.is-active {
 }
 
 .executive-queue-segmented button.is-active {
-  background: linear-gradient(135deg, var(--queue-accent), var(--queue-accent-violet));
-  box-shadow: 0 4px 10px color-mix(in srgb, var(--queue-accent) 20%, transparent);
+  border-color: var(--app-action-primary, #56746d);
+  background: var(--app-action-primary, #56746d);
+  background-image: none;
+  box-shadow: 0 3px 8px rgba(54, 83, 76, 0.18);
   color: #ffffff;
+}
+
+.executive-queue-segmented button.is-active:hover,
+.executive-queue-view-toggle button.is-active:hover {
+  background: var(--app-action-hover, #49655f);
+  background-image: none;
+}
+
+.executive-queue-segmented button.is-active:active,
+.executive-queue-view-toggle button.is-active:active {
+  background: var(--app-action-pressed, #3f5953);
+  background-image: none;
 }
 
 .executive-queue-segmented button:not(.is-active):hover,
@@ -1151,16 +1205,64 @@ html[data-theme="dark"] .planning-react-segmented button.is-active {
   font-weight: 750;
 }
 
-.executive-queue-apply-btn {
-  border-color: var(--queue-accent);
-  background: linear-gradient(135deg, var(--queue-accent), var(--queue-accent-violet));
-  color: #ffffff;
+.executive-queue-filter-actions button {
+  min-height: var(--filter-control-height);
+  border-radius: var(--filter-control-radius);
+  font-size: var(--filter-control-font-size);
+  font-weight: var(--filter-control-font-weight);
 }
 
-.executive-queue-clear-btn {
+/* Shared owner for neutral React controls. This class was already used by the
+   queue, planning, operational dashboards, and table primitives; defining its
+   visual contract here keeps those controls out of the global primary rule. */
+.preferences-secondary-action {
+  border: 1px solid var(--queue-border-strong);
+  border-radius: 6px;
   background: var(--queue-surface-strong);
   background-image: none;
+  box-shadow: none;
   color: var(--queue-ink);
+}
+
+.preferences-secondary-action:focus-visible {
+  outline: 3px solid var(--app-action-focus, rgba(86, 116, 109, 0.2));
+  outline-offset: 2px;
+}
+
+/* Filter-action Clear contract. Deliberately keyed off the three filter-bar
+   Clear controls rather than .preferences-secondary-action, so shared table
+   sort/expand/info/pagination controls keep their own compact sizing and
+   hover treatment. */
+.executive-queue-clear-btn,
+.planning-filter-clear,
+.operational-secondary-action {
+  display: inline-flex;
+  min-height: var(--filter-control-height);
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.executive-queue-clear-btn:not(:disabled):hover,
+.planning-filter-clear:not(:disabled):hover,
+.operational-secondary-action:not(:disabled):hover {
+  border-color: var(--app-action-border, #c9d6d2);
+  background: var(--app-action-soft-hover, #e4ece9);
+  background-image: none;
+  color: var(--app-action-strong, #36534c);
+}
+
+.executive-queue-clear-btn svg,
+.planning-filter-clear svg,
+.operational-secondary-action svg {
+  flex: 0 0 auto;
+}
+
+.executive-queue-apply-btn {
+  border-color: var(--app-action-primary, #56746d);
+  background: var(--app-action-primary, #56746d);
+  background-image: none;
+  color: #ffffff;
 }
 
 .executive-queue-table-card {
@@ -1213,9 +1315,16 @@ html[data-theme="dark"] .planning-react-segmented button.is-active {
   transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
 }
 .executive-queue-view-toggle button.is-active {
-  background: linear-gradient(135deg, var(--queue-accent), var(--queue-accent-violet));
-  box-shadow: 0 4px 10px color-mix(in srgb, var(--queue-accent) 20%, transparent);
+  background: var(--app-action-primary, #56746d);
+  background-image: none;
+  box-shadow: 0 3px 8px rgba(54, 83, 76, 0.18);
   color: #ffffff;
+}
+
+.executive-queue-segmented button:focus-visible,
+.executive-queue-view-toggle button:focus-visible {
+  outline: 3px solid var(--app-action-focus, rgba(86, 116, 109, 0.2));
+  outline-offset: 2px;
 }
 
 .executive-queue-table-viewport {
@@ -2347,9 +2456,11 @@ html[data-theme="dark"] #pipelineDashboardRoot {
 .pipeline-dashboard-btn--primary,
 .pipeline-status-error button,
 .pipeline-idle-banner button {
-  background: linear-gradient(115deg, #2563eb, #6d3df2);
+  border-color: var(--app-action-primary, #56746d);
+  background: var(--app-action-primary, #56746d);
+  background-image: none;
   color: #ffffff;
-  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18);
+  box-shadow: 0 7px 18px rgba(54, 83, 76, 0.18);
 }
 
 .pipeline-dashboard-top-grid,
@@ -2873,20 +2984,22 @@ html[data-theme="dark"] .operational-dashboard-heading p { color: #9eaac0; }
 .applications-filter-grid { grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) minmax(100px, .45fr) minmax(230px, .8fr); }
 .operational-filter-grid > label { display: grid; min-width: 0; gap: 7px; }
 .operational-filter-grid > label > span { color: var(--queue-muted); font-size: 11px; font-weight: 750; text-transform: uppercase; }
-.operational-filter-grid input { width: 100%; min-width: 0; min-height: 40px; border: 1px solid var(--queue-border-strong); border-radius: 6px; padding: 8px 11px; background: var(--queue-surface-strong); color: var(--queue-ink); font: inherit; }
+.operational-filter-grid input { box-sizing: border-box; width: 100%; min-width: 0; height: var(--filter-control-height); border: 1px solid var(--queue-border-strong); border-radius: var(--filter-control-radius); padding: 0 11px; background: var(--queue-surface-strong); color: var(--queue-ink); font: inherit; font-size: var(--filter-control-font-size); }
 .operational-filter-grid input:focus-visible { outline: 3px solid color-mix(in srgb, var(--queue-accent) 28%, transparent); outline-offset: 1px; }
 .operational-filter-actions { display: grid; grid-template-columns: minmax(132px, 1fr) minmax(76px, auto); min-width: 0; gap: 8px; }
-.operational-filter-actions button { min-height: 40px; border-radius: 6px; font: inherit; font-weight: 750; }
-.operational-filter-actions .operational-primary-action { border: 0; background: linear-gradient(115deg, #2563eb, #6d3df2); color: #fff; }
+.operational-filter-actions button { min-height: var(--filter-control-height); border-radius: var(--filter-control-radius); font: inherit; font-size: var(--filter-control-font-size); font-weight: var(--filter-control-font-weight); }
+.operational-filter-actions .operational-primary-action { border: 1px solid var(--app-action-primary, #56746d); background: var(--app-action-primary, #56746d); background-image: none; color: #fff; }
 .operational-filter-actions .operational-secondary-action { border: 1px solid var(--queue-border-strong); background: var(--queue-surface-strong); background-image: none; box-shadow: none; color: var(--queue-ink); }
-.operational-filter-actions .operational-secondary-action:hover { border-color: var(--queue-accent); color: var(--queue-accent); }
-.operational-filter-actions button:focus-visible { outline: 3px solid color-mix(in srgb, var(--queue-accent) 28%, transparent); outline-offset: 1px; }
+.operational-filter-actions .operational-secondary-action:hover { border-color: var(--app-action-border, #c9d6d2); background: var(--app-action-soft-hover, #e4ece9); color: var(--app-action-strong, #36534c); }
+.operational-filter-actions button:focus-visible { outline: 3px solid var(--app-action-focus, rgba(86, 116, 109, .2)); outline-offset: 1px; }
 .applications-tabs { display: inline-flex; margin-bottom: 14px; border: 1px solid var(--queue-border); border-radius: 7px; padding: 3px; background: var(--queue-surface-muted); }
 .applications-tabs .applications-tab { min-height: 34px; border: 1px solid transparent; border-radius: 5px; padding: 6px 14px; background: transparent; background-image: none; box-shadow: none; color: var(--queue-muted); font: inherit; font-size: 12px; font-weight: 750; }
-.applications-tabs .applications-tab.is-active { border-color: transparent; background: linear-gradient(115deg, #2563eb, #6d3df2); background-image: linear-gradient(115deg, #2563eb, #6d3df2); color: #fff; box-shadow: 0 2px 7px rgba(37, 99, 235, .2); }
+.applications-tabs .applications-tab.is-active { border-color: var(--app-action-primary, #56746d); background: var(--app-action-primary, #56746d); background-image: none; color: #fff; box-shadow: 0 2px 7px rgba(54, 83, 76, .18); }
+.applications-tabs .applications-tab.is-active:hover { border-color: var(--app-action-hover, #49655f); background: var(--app-action-hover, #49655f); background-image: none; }
+.applications-tabs .applications-tab.is-active:active { border-color: var(--app-action-pressed, #3f5953); background: var(--app-action-pressed, #3f5953); background-image: none; }
 .applications-tabs .applications-tab.is-inactive { border-color: transparent; background: transparent; background-image: none; box-shadow: none; color: var(--queue-muted); }
 .applications-tabs .applications-tab.is-inactive:hover { border-color: var(--queue-border-strong); background: var(--queue-surface-strong); background-image: none; color: var(--queue-ink); }
-.applications-tabs button:focus-visible { outline: 3px solid color-mix(in srgb, var(--queue-accent) 28%, transparent); outline-offset: 1px; }
+.applications-tabs button:focus-visible { outline: 3px solid var(--app-action-focus, rgba(86, 116, 109, .2)); outline-offset: 1px; }
 
 .operational-table-card { width: 100%; min-width: 0; margin-right: 0; }
 .operational-table-card > .shared-table-pagination { padding-right: var(--queue-chat-clearance); }
@@ -2901,8 +3014,11 @@ html[data-theme="dark"] .operational-dashboard-heading p { color: #9eaac0; }
 .operational-table-card .shared-table-skeleton-row:nth-child(even) td { background: var(--queue-surface); }
 .operational-table-card .shared-table-skeleton-row span { background: color-mix(in srgb, var(--queue-border-strong) 56%, var(--queue-surface-muted)); }
 .operational-table-card .shared-table-pagination--loading { justify-content: flex-start; color: var(--queue-muted); }
-.operational-row-action { display: inline-flex; min-height: 32px; align-items: center; justify-content: center; border: 1px solid var(--queue-accent); border-radius: 6px; padding: 5px 9px; background: var(--queue-surface-strong); color: var(--queue-accent); font: inherit; font-size: 11px; font-weight: 800; text-decoration: none; }
-.operational-row-action:disabled, .operational-row-action.is-complete { border-color: var(--queue-border); color: var(--queue-muted); opacity: .72; }
+.operational-row-action { display: inline-flex; min-height: 32px; align-items: center; justify-content: center; border: 1px solid var(--app-action-border, #c9d6d2); border-radius: 6px; padding: 5px 9px; background: var(--app-action-soft, #edf2f0); background-image: none; box-shadow: none; color: var(--app-action-strong, #36534c); font: inherit; font-size: 11px; font-weight: 800; text-decoration: none; }
+.operational-row-action:not(:disabled):hover { border-color: var(--app-action-primary, #56746d); background: var(--app-action-soft-hover, #e4ece9); color: var(--app-action-strong, #36534c); }
+.operational-row-action:not(:disabled):active { border-color: var(--app-action-pressed, #3f5953); background: var(--app-action-pressed, #3f5953); color: #ffffff; }
+.operational-row-action:focus-visible { outline: 3px solid var(--app-action-focus, rgba(86, 116, 109, .2)); outline-offset: 2px; }
+.operational-row-action:disabled, .operational-row-action.is-complete { border-color: var(--queue-border); background: var(--queue-surface-muted); color: var(--queue-muted); opacity: .72; }
 .operational-job-cell { display: grid; min-width: 0; gap: 3px; }
 .operational-job-cell strong, .operational-job-cell span, .operational-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .operational-job-cell strong { color: var(--queue-ink); font-size: 12px; }
@@ -3593,7 +3709,10 @@ html[data-theme="dark"] #schedulerHealthDashboardRoot {
 .scheduler-shared-table-card .shared-table-header-actions { margin-left: auto; }
 .scheduler-runs-tabs { display: inline-flex; align-items: center; height: 40px; border: 1px solid var(--scheduler-border); border-radius: 8px; padding: 3px; background: var(--scheduler-surface-muted); }
 .scheduler-runs-tabs .scheduler-runs-tab { display: inline-flex; align-items: center; height: 32px; border: 1px solid transparent; border-radius: 6px; padding: 0 14px; background: transparent; color: var(--scheduler-muted); font: inherit; font-size: 12px; font-weight: 750; }
-.scheduler-runs-tabs .scheduler-runs-tab.is-active { border-color: transparent; background: linear-gradient(115deg, var(--scheduler-blue), #6d3df2); color: #fff; box-shadow: 0 2px 7px rgba(37, 99, 235, 0.2); }
+.scheduler-runs-tabs .scheduler-runs-tab.is-active { border-color: var(--app-action-primary, #56746d); background: var(--app-action-primary, #56746d); background-image: none; color: #fff; box-shadow: 0 2px 7px rgba(54, 83, 76, 0.18); }
+.scheduler-runs-tabs .scheduler-runs-tab.is-active:hover { border-color: var(--app-action-hover, #49655f); background: var(--app-action-hover, #49655f); background-image: none; }
+.scheduler-runs-tabs .scheduler-runs-tab.is-active:active { border-color: var(--app-action-pressed, #3f5953); background: var(--app-action-pressed, #3f5953); background-image: none; }
+.scheduler-runs-tabs .scheduler-runs-tab:focus-visible { outline: 3px solid var(--app-action-focus, rgba(86, 116, 109, 0.2)); outline-offset: 1px; }
 .scheduler-runs-tabs .scheduler-runs-tab.is-inactive:hover { border-color: var(--queue-border-strong); background: var(--scheduler-surface); color: var(--scheduler-ink); }
 
 /* --- Diagnostics modal: reuses global .modal-backdrop/.modal-card --------- */

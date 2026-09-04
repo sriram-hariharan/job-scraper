@@ -25605,7 +25605,7 @@ function aR({ onRefresh: e, onRun: t, refreshing: n, runActive: r, runBlocked: i
 		}), /* @__PURE__ */ (0, Y.jsxs)("div", {
 			className: "pipeline-dashboard-actions app-page-header__actions",
 			children: [/* @__PURE__ */ (0, Y.jsxs)("button", {
-				className: "pipeline-dashboard-btn pipeline-dashboard-btn--secondary",
+				className: `${$I} pipeline-dashboard-btn pipeline-dashboard-btn--secondary`,
 				type: "button",
 				onClick: e,
 				disabled: n,
@@ -30608,12 +30608,15 @@ function GB({ state: e }) {
 						filters: t
 					}),
 					children: "Apply Filters"
-				}), /* @__PURE__ */ (0, Y.jsx)("button", {
+				}), /* @__PURE__ */ (0, Y.jsxs)("button", {
 					type: "button",
-					className: "planning-filter-clear",
+					className: `${$I} planning-filter-clear`,
 					id: "planningClearFiltersBtn",
 					onClick: () => kB({ type: "clear_filters" }),
-					children: "Clear"
+					children: [/* @__PURE__ */ (0, Y.jsx)(we, {
+						size: 15,
+						"aria-hidden": "true"
+					}), " Clear"]
 				})]
 			})
 		]
@@ -30933,11 +30936,14 @@ function gV({ state: e }) {
 							filters: t
 						}),
 						children: "Apply Filters"
-					}), /* @__PURE__ */ (0, Y.jsx)("button", {
+					}), /* @__PURE__ */ (0, Y.jsxs)("button", {
 						id: "decisionClearFiltersBtn",
 						className: `${$I} operational-secondary-action`,
 						onClick: () => dV(XB, { type: "clear_filters" }),
-						children: "Clear"
+						children: [/* @__PURE__ */ (0, Y.jsx)(we, {
+							size: 15,
+							"aria-hidden": "true"
+						}), " Clear"]
 					})]
 				})
 			]
@@ -31241,11 +31247,14 @@ function xV({ state: e }) {
 							filters: t
 						}),
 						children: "Apply Filters"
-					}), /* @__PURE__ */ (0, Y.jsx)("button", {
+					}), /* @__PURE__ */ (0, Y.jsxs)("button", {
 						id: "applicationClearFiltersBtn",
 						className: `${$I} operational-secondary-action`,
 						onClick: () => dV($B, { type: "clear_filters" }),
-						children: "Clear"
+						children: [/* @__PURE__ */ (0, Y.jsx)(we, {
+							size: 15,
+							"aria-hidden": "true"
+						}), " Clear"]
 					})]
 				})
 			]

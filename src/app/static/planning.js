@@ -12672,12 +12672,19 @@ function getWorkspaceBlockedReason(row) {
     return "LLM tailoring generation is off for this row.";
   }
 
-  if (["failed", "unreadable"].includes(llmStatus)) {
-    return "AI tailoring unavailable. No suggestions were produced for this row.";
+  // Authoritative workspace state takes precedence over the optional LLM
+  // refinement pass. Deterministic tailoring (direction/review evidence, or
+  // app-ready replacements) is produced independently of the separate
+  // --use-llm refinement step, so a valid usable workspace must not be
+  // blocked merely because that optional refinement failed/unreadable to
+  // parse. A row with no usable evidence at all (empty/unavailable, or
+  // legacy "review" below) is still blocked by a failed/unreadable LLM pass.
+  if (workspaceState === "no_safe_rewrites" || workspaceState === "ready") {
+    return "";
   }
 
-  if (workspaceState === "no_safe_rewrites") {
-    return "";
+  if (["failed", "unreadable"].includes(llmStatus)) {
+    return "AI tailoring unavailable. No suggestions were produced for this row.";
   }
 
   if (workspaceState === "empty") {

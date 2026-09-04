@@ -578,3 +578,58 @@ it("filters the jobs list to attention rows client-side without new requests", (
   vi.unstubAllGlobals();
   listener.stop();
 });
+
+it("retires the user-facing Tailoring 'Review' filter option", () => {
+  const listener = listenForActions();
+  render(<PlanningFiltersToolbar state={planningState()} />);
+
+  fireEvent.click(screen.getByRole("button", { name: /tailoring all$/i }));
+  const listbox = screen.getByRole("listbox");
+  const optionLabels = within(listbox).getAllByRole("option").map((option) => option.textContent);
+
+  expect(optionLabels).toEqual(["Ready", "No safe rewrites", "Unavailable"]);
+  expect(optionLabels).not.toContain("Review");
+  expect(within(listbox).queryByRole("option", { name: "Review" })).not.toBeInTheDocument();
+
+  fireEvent.click(within(listbox).getByRole("option", { name: "No safe rewrites" }));
+  expect(lastAction(listener.actions)).toEqual(
+    expect.objectContaining({
+      type: "filters_change",
+      filters: expect.objectContaining({ tailoringStates: ["no_safe_rewrites"] }),
+    }),
+  );
+  listener.stop();
+});
+
+it("presents a legacy 'review' row status as 'No safe rewrites' without touching Open Workspace availability", () => {
+  const legacyReviewRow = {
+    ...rows[0],
+    job_doc_id: "job-legacy-review",
+    tailoring_workspace_state: "review",
+    // Open Workspace availability is computed upstream (planning.js) and
+    // handed to React as this pre-resolved field; retiring the "review"
+    // status label must not change what was already decided here.
+    __planning_action: { kind: "open_workspace" as const, label: "Open Workspace", disabled: true, title: "No safe bullet-level rewrites were found for this row." },
+  };
+  render(<PlanningWorklist state={planningState({ rows: [legacyReviewRow] })} />);
+
+  expect(screen.getByText("No safe rewrites")).toBeInTheDocument();
+  expect(screen.queryByText("Review")).not.toBeInTheDocument();
+
+  const workspaceButton = screen.getByRole("button", { name: "Open Workspace" });
+  expect(workspaceButton).toBeDisabled();
+});
+
+it("does not change Open Workspace availability for ready/unavailable rows (review retirement is presentation-only)", () => {
+  const openableRow = {
+    ...rows[0],
+    job_doc_id: "job-openable",
+    tailoring_workspace_state: "no_safe_rewrites",
+    __planning_action: { kind: "open_workspace" as const, label: "Open Workspace", disabled: false, title: "Review-only guidance is available." },
+  };
+  render(<PlanningWorklist state={planningState({ rows: [openableRow] })} />);
+
+  expect(screen.getByText("No safe rewrites")).toBeInTheDocument();
+  const workspaceButton = screen.getByRole("button", { name: "Open Workspace" });
+  expect(workspaceButton).not.toBeDisabled();
+});

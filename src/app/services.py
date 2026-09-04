@@ -14789,10 +14789,15 @@ def _normalize_tailoring_state_filter_values(value: Any) -> List[str]:
         if text == "empty":
             text = "unavailable"
 
-        if text in {"direction_only", "no_safe_rewrite", "no_safe_rewrites"}:
+        # "review" is retired as a user-facing Tailoring state; it overlaps
+        # conceptually with "no_safe_rewrites" (tailoring/review evidence
+        # exists but no actionable rewrite survived), so a saved/legacy
+        # `tailoring_state=review` filter degrades into the modern filter
+        # rather than becoming invalid or silently returning nothing.
+        if text in {"direction_only", "no_safe_rewrite", "no_safe_rewrites", "review"}:
             text = "no_safe_rewrites"
 
-        if text not in {"ready", "review", "unavailable", "no_safe_rewrites"}:
+        if text not in {"ready", "unavailable", "no_safe_rewrites"}:
             continue
 
         if text in seen:
@@ -14821,7 +14826,17 @@ def _row_matches_tailoring_state_filter(
     workspace_state = _clean_text(tailoring_state.get("tailoring_workspace_state")).lower()
 
     normalized_state = "unavailable" if workspace_state == "empty" else workspace_state
-    matches = not requested_states or normalized_state in set(requested_states)
+
+    # "review" is retired as a user-facing Tailoring state filter, folded into
+    # "no_safe_rewrites" for FILTER MATCHING ONLY (a historical/legacy row
+    # that still resolves to "review" must not disappear when "No safe
+    # rewrites" is selected). This intentionally does not touch
+    # `normalized_state`/`enriched_row["tailoring_workspace_state"]` below:
+    # that value also drives getWorkspaceBlockedReason()/
+    # resolvePlanningWorklistAction() in planning.js, and Open Workspace
+    # enable/disable behavior must stay exactly as it was before this task.
+    filter_match_state = "no_safe_rewrites" if normalized_state == "review" else normalized_state
+    matches = not requested_states or filter_match_state in set(requested_states)
 
     enriched_row = {
         **dict(row),

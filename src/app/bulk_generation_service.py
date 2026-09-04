@@ -312,13 +312,23 @@ def request_bulk_generation_stop(*, owner_user_id: str, run_id: str) -> Dict[str
 def _classify_response(response: Dict[str, Any]) -> tuple[bool, str, str, str]:
     llm_status = _clean(response.get("llm_tailoring_status"), 32).lower()
     workspace = _clean(response.get("tailoring_workspace_state"), 32).lower()
-    if response.get("ok") is True and llm_status not in {"failed", "unreadable"}:
-        if workspace == "empty":
-            return True, "empty", "", ""
+    if response.get("ok") is True:
+        # Authoritative workspace state takes precedence over the optional
+        # LLM refinement pass for these two usable states: deterministic
+        # tailoring (review/direction evidence, or app-ready replacements)
+        # is produced independently of the separate --use-llm refinement
+        # step, so a usable workspace must not be classified as a provider
+        # failure merely because that optional refinement failed/was
+        # unreadable. "empty" (no usable evidence at all) is unchanged below:
+        # it still requires the LLM pass to not have failed, preserving the
+        # existing rule that a genuine failure (no usable result produced)
+        # stays a failure.
         if workspace in {"no_safe_rewrites", "review"}:
             return True, "no_safe_rewrites", "", ""
         if workspace == "ready":
             return True, "generated", "", ""
+        if llm_status not in {"failed", "unreadable"} and workspace == "empty":
+            return True, "empty", "", ""
     category = "provider_failure" if llm_status in {"failed", "unreadable"} else "unusable_workspace"
     return False, "failed", category, "A usable tailoring workspace was not produced."
 

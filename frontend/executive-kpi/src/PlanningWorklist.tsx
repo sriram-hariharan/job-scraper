@@ -438,9 +438,12 @@ const PLANNING_MATCH_OPTIONS: SharedFilterOption[] = [
   { value: "filtered_out", label: "No credible match", tone: "unavailable" },
 ];
 
+// "Review" is retired as a user-facing Tailoring state: it overlapped
+// conceptually with "no_safe_rewrites" (tailoring/review evidence exists but
+// no actionable rewrite survived). The server folds any legacy "review" rows
+// into "no_safe_rewrites" for both filtering and display.
 const PLANNING_TAILORING_OPTIONS: SharedFilterOption[] = [
   { value: "ready", label: "Ready", tone: "ready" },
-  { value: "review", label: "Review", tone: "choice" },
   { value: "no_safe_rewrites", label: "No safe rewrites", tone: "later" },
   { value: "unavailable", label: "Unavailable", tone: "unavailable" },
 ];
@@ -466,6 +469,14 @@ function cleanText(value: unknown): string {
 function humanize(value: unknown): string {
   const text = cleanText(value).replace(/_/g, " ");
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : "Unavailable";
+}
+
+// Presentation-only: "review" is retired as a user-facing Tailoring status.
+// This does not touch row.tailoring_workspace_state itself (Open Workspace
+// enable/disable is computed upstream from that raw field and must not
+// change), it only relabels the plain status text shown for a legacy row.
+function tailoringStatusLabel(value: unknown): string {
+  return cleanText(value).toLowerCase() === "review" ? "No safe rewrites" : humanize(value);
 }
 
 function formatResume(value: unknown): string {
@@ -695,7 +706,7 @@ function buildPlanningColumns(): ColumnDef<PlanningRow>[] {
           <span className={`planning-react-badge ${packetLabel(row.original.packet_generation_allowed) === "Packet ready" ? "is-ready" : ""}`}>
             {packetLabel(row.original.packet_generation_allowed)}
           </span>
-          <span>{humanize(row.original.tailoring_workspace_state || "Workspace unavailable")}</span>
+          <span>{tailoringStatusLabel(row.original.tailoring_workspace_state || "Workspace unavailable")}</span>
         </span>
       ),
     },

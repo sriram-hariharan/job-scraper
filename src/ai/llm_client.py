@@ -850,6 +850,7 @@ def run_chat_completion_with_metadata(
             return_parsed=return_parsed,
             thinking_budget=thinking_budget,
             provider_client=provider_client,
+            workload_id=workload_id,
         )
         return {
             "content": content,
@@ -891,6 +892,7 @@ def run_chat_completion_with_metadata(
                 response_schema=response_schema,
                 return_parsed=return_parsed,
                 thinking_budget=thinking_budget,
+                workload_id=workload_id,
             )
             increment_provider_metric("fallback_successes")
             return {

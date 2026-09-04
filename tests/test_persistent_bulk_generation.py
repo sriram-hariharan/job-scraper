@@ -443,3 +443,186 @@ def test_global_bulk_pill_is_absent_while_canonical_state_is_preserved():
     assert "ApplyLensBulkGeneration" in shell
     assert 'id="bulkGenerationGuardDescription"' in markup
     assert ".bulk-generation-guard-description" in styles
+
+
+# ---------------------------------------------------------------------------
+# Bulk item classification: authoritative workspace state takes precedence
+# over the optional LLM refinement pass's status. A usable deterministic
+# result (ready or no_safe_rewrites/review) must not be recorded as a
+# provider_failure merely because the separate --use-llm refinement pass
+# failed/was unreadable. A genuinely unusable result (no workspace evidence
+# at all) remains a failure.
+# ---------------------------------------------------------------------------
+
+
+def test_classify_response_llm_failed_usable_no_safe_rewrites_is_not_provider_failure():
+    # Mirrors a real Bulk-generated response shape (see forensic analysis):
+    # the deterministic artifact produced review/direction evidence
+    # independent of the failed optional LLM refinement.
+    response = {
+        "ok": True,
+        "llm_tailoring_status": "failed",
+        "llm_error_type": "llm_parse_failed",
+        "tailoring_workspace_state": "no_safe_rewrites",
+        "tailoring_actionable_replacement_count": 0,
+        "tailoring_review_replacement_count": 2,
+    }
+    succeeded, outcome, category, message = bulk._classify_response(response)
+    assert succeeded is True
+    assert outcome == "no_safe_rewrites"
+    assert category == ""
+    assert message == ""
+
+
+def test_classify_response_llm_unreadable_usable_no_safe_rewrites_is_not_provider_failure():
+    response = {
+        "ok": True,
+        "llm_tailoring_status": "unreadable",
+        "llm_error_type": "unreadable_json",
+        "tailoring_workspace_state": "no_safe_rewrites",
+    }
+    succeeded, outcome, category, message = bulk._classify_response(response)
+    assert succeeded is True
+    assert outcome == "no_safe_rewrites"
+    assert category == ""
+
+
+def test_classify_response_legacy_review_with_failed_llm_is_not_provider_failure():
+    # Legacy compatibility preserved exactly as after the Review-retirement
+    # task: "review" still folds into the no_safe_rewrites outcome bucket.
+    response = {
+        "ok": True,
+        "llm_tailoring_status": "failed",
+        "tailoring_workspace_state": "review",
+    }
+    succeeded, outcome, category, message = bulk._classify_response(response)
+    assert succeeded is True
+    assert outcome == "no_safe_rewrites"
+
+
+def test_classify_response_llm_failed_usable_ready_is_not_provider_failure():
+    response = {
+        "ok": True,
+        "llm_tailoring_status": "failed",
+        "llm_error_type": "llm_parse_failed",
+        "tailoring_workspace_state": "ready",
+        "tailoring_actionable_replacement_count": 1,
+    }
+    succeeded, outcome, category, message = bulk._classify_response(response)
+    assert succeeded is True
+    assert outcome == "generated"
+    assert category == ""
+
+
+def test_classify_response_llm_failed_no_usable_workspace_remains_provider_failure():
+    # Genuine failure: no usable deterministic evidence survived either.
+    response = {
+        "ok": True,
+        "llm_tailoring_status": "failed",
+        "llm_error_type": "llm_parse_failed",
+        "tailoring_workspace_state": "empty",
+    }
+    succeeded, outcome, category, message = bulk._classify_response(response)
+    assert succeeded is False
+    assert outcome == "failed"
+    assert category == "provider_failure"
+    assert message == "A usable tailoring workspace was not produced."
+
+
+def test_classify_response_llm_failed_unavailable_workspace_remains_provider_failure():
+    response = {
+        "ok": True,
+        "llm_tailoring_status": "unreadable",
+        "tailoring_workspace_state": "unavailable",
+    }
+    succeeded, outcome, category, message = bulk._classify_response(response)
+    assert succeeded is False
+    assert category == "provider_failure"
+
+
+def test_classify_response_regeneration_call_itself_failed_remains_failure():
+    # ok is False: the regenerate() call itself did not complete usably
+    # (e.g. subprocess failure before any output existed). Must not be
+    # reclassified as success regardless of any stray workspace field.
+    response = {
+        "ok": False,
+        "llm_tailoring_status": "failed",
+        "tailoring_workspace_state": "no_safe_rewrites",
+    }
+    succeeded, outcome, category, message = bulk._classify_response(response)
+    assert succeeded is False
+    assert category == "provider_failure"
+
+
+def test_classify_response_empty_workspace_with_generated_llm_is_unchanged_success():
+    # Pre-existing behavior (not touched by this task): empty workspace with
+    # a successful LLM pass is still a non-fatal "empty" outcome.
+    response = {
+        "ok": True,
+        "llm_tailoring_status": "generated",
+        "tailoring_workspace_state": "empty",
+    }
+    succeeded, outcome, category, message = bulk._classify_response(response)
+    assert succeeded is True
+    assert outcome == "empty"
+
+
+def test_worker_records_llm_failed_no_safe_rewrites_item_as_succeeded_not_needs_attention(
+    monkeypatch,
+):
+    """Integration proof (Test A/D end to end): the real worker, driven by a
+    response shape mirroring the six live rows found during forensic
+    analysis (grounding-contract llm failure + deterministic no_safe_rewrites
+    evidence), persists the item as succeeded - not needs_attention/failed -
+    and the outcome/category recorded is exactly the no_safe_rewrites lane,
+    with no rejected LLM content promoted into the response.
+    """
+    state = _install_worker_store(monkeypatch)
+
+    def regenerate(**kwargs):
+        sequence = int(kwargs["queue_rank"])
+        if sequence == 2:
+            # The proven grounding-contract rejection shape: the LLM
+            # responded, but the safety validator rejected the proposed
+            # rewrite direction as unsupported by resume evidence. The
+            # deterministic artifact's review evidence is untouched by this.
+            return {
+                "ok": True,
+                "llm_tailoring_status": "failed",
+                "llm_error_type": "llm_parse_failed",
+                "tailoring_workspace_state": "no_safe_rewrites",
+                "tailoring_actionable_replacement_count": 0,
+                "tailoring_review_replacement_count": 1,
+            }
+        return {"ok": True, "llm_tailoring_status": "generated", "tailoring_workspace_state": "ready"}
+
+    assert bulk.run_bulk_generation_worker(
+        owner_user_id="owner-a", run_id="bulk-a", regenerate=regenerate
+    ) == 0
+
+    persisted = {event[1]: event for event in state["events"] if event[0] == "persist"}
+    # succeeded=True, outcome="no_safe_rewrites" for the previously-misclassified item.
+    assert persisted[2][2] is True
+    assert persisted[2][3] == "no_safe_rewrites"
+    assert state["items"][1]["status"] == "succeeded"
+    assert [event[:2] for event in state["events"]] == [
+        ("start", 1), ("persist", 1), ("start", 2), ("persist", 2),
+        ("start", 3), ("persist", 3), ("terminal", "completed"),
+    ]
+
+
+def test_worker_sequential_and_stop_after_current_semantics_still_hold(monkeypatch):
+    # Step E: reruns the two existing pinned sequential/stop-after-current
+    # tests inline to confirm this task did not touch worker execution order.
+    state = _install_worker_store(monkeypatch, stop_during_first=True)
+    assert bulk.run_bulk_generation_worker(
+        owner_user_id="owner-a", run_id="bulk-a",
+        regenerate=lambda **_: {"ok": True, "llm_tailoring_status": "failed", "tailoring_workspace_state": "no_safe_rewrites"},
+    ) == 0
+    assert [event[:2] for event in state["events"]] == [
+        ("start", 1), ("persist", 1), ("terminal", "stopped"),
+    ]
+    # Even the stopped-after-current item, now llm-failed + no_safe_rewrites,
+    # is recorded as succeeded (not needs_attention) - stop semantics and
+    # classification are independent, unchanged concerns.
+    assert state["items"][0]["status"] == "succeeded"

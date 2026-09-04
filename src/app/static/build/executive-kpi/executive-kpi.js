@@ -24337,13 +24337,13 @@ function QI({ id: e, label: t, options: n, values: r, onChange: i, placeholder: 
 	}).filter(Boolean), j = A.length === 0 ? a : A.length === 1 ? A[0] : `${A.length} selected`, M = () => {
 		let e = b.current;
 		if (!e) return;
-		let t = e.getBoundingClientRect(), n = Math.max(220, window.innerWidth - 24), r = Math.min(Math.max(t.width, 240), n), i = Math.min(Math.max(t.left, 12), window.innerWidth - r - 12), a = window.innerHeight - t.bottom - 12, o = t.top - 12, s = a < 190 && o > a ? "top" : "bottom", c = Math.max(150, Math.min(320, (s === "top" ? o : a) - 8));
+		let t = e.getBoundingClientRect(), n = Math.max(0, window.innerWidth - 24), r = Math.min(240, n), i = Math.min(Math.max(t.width, r), n), a = Math.max(12, window.innerWidth - i - 12), o = Math.min(Math.max(t.left, 12), a), s = window.innerHeight - t.bottom - 12, c = t.top - 12, l = s < 190 && c > s ? "top" : "bottom", u = Math.max(150, Math.min(320, (l === "top" ? c : s) - 8));
 		v({
-			left: i,
-			width: r,
-			maxHeight: c,
-			placement: s,
-			...s === "top" ? { bottom: window.innerHeight - t.top + 6 } : { top: t.bottom + 6 }
+			left: o,
+			width: i,
+			maxHeight: u,
+			placement: l,
+			...l === "top" ? { bottom: window.innerHeight - t.top + 6 } : { top: t.bottom + 6 }
 		});
 	}, F = (e = !1) => {
 		f(!1), m(""), g(0), e && window.requestAnimationFrame(() => {
@@ -24409,6 +24409,7 @@ function QI({ id: e, label: t, options: n, values: r, onChange: i, placeholder: 
 		"aria-labelledby": w,
 		"aria-multiselectable": s === "multiple",
 		"data-placement": _.placement,
+		"data-searchable": c ? "true" : "false",
 		style: re,
 		children: [c ? /* @__PURE__ */ (0, Y.jsxs)("label", {
 			className: "shared-filter-select__search",
@@ -24418,10 +24419,11 @@ function QI({ id: e, label: t, options: n, values: r, onChange: i, placeholder: 
 					children: ["Search ", t.toLowerCase()]
 				}),
 				/* @__PURE__ */ (0, Y.jsx)(Ee, {
-					size: 15,
+					size: 17,
 					"aria-hidden": "true"
 				}),
 				/* @__PURE__ */ (0, Y.jsx)("input", {
+					className: "shared-filter-select__search-input",
 					autoFocus: !0,
 					type: "search",
 					value: p,
@@ -24443,7 +24445,7 @@ function QI({ id: e, label: t, options: n, values: r, onChange: i, placeholder: 
 				let n = e.isAll ? r.length === 0 : r.includes(e.value);
 				return /* @__PURE__ */ (0, Y.jsxs)("button", {
 					type: "button",
-					className: `shared-filter-select__option ${n ? "is-selected" : ""} ${"tone" in e && e.tone ? "has-tone" : ""}`,
+					className: `shared-filter-select__option ${n ? "is-selected" : ""} ${e.isAll ? "is-all" : ""} ${"tone" in e && e.tone ? "has-tone" : ""}`.replace(/\s+/g, " ").trim(),
 					ref: (e) => {
 						S.current[t] = e;
 					},
@@ -24474,8 +24476,10 @@ function QI({ id: e, label: t, options: n, values: r, onChange: i, placeholder: 
 		})]
 	}), document.body) : null;
 	return /* @__PURE__ */ (0, Y.jsxs)("div", {
-		className: "shared-filter-select",
+		className: `shared-filter-select ${d ? "is-open" : ""}`.trim(),
 		"data-filter-select-id": e,
+		"data-searchable": c ? "true" : "false",
+		"data-state": d ? "open" : "closed",
 		children: [
 			/* @__PURE__ */ (0, Y.jsx)("span", {
 				className: "shared-filter-select__label",
@@ -24484,7 +24488,7 @@ function QI({ id: e, label: t, options: n, values: r, onChange: i, placeholder: 
 			}),
 			/* @__PURE__ */ (0, Y.jsxs)("button", {
 				type: "button",
-				className: "shared-filter-select__trigger",
+				className: `shared-filter-select__trigger ${d ? "is-open" : ""}`.trim(),
 				id: e,
 				ref: b,
 				"aria-labelledby": `${w} ${e}-value`,

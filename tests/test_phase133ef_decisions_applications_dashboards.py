@@ -31,12 +31,9 @@ def test_routes_mount_separate_react_islands_and_preserve_manual_modals() -> Non
     assert 'data-status-action="SAVED"' in decisions
     assert 'data-status-action="NOT_APPLIED"' in decisions
     assert 'data-status-action="DISMISSED"' in decisions
-    # Bundle cache marker bumped to item2_phase3_shared_header_r1 when the
-    # Decisions/Applications headers were migrated onto the shared
-    # .app-page-header contract.
-    assert "/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" in decisions
+    assert "/static/build/executive-kpi/executive-kpi.css?v=shared_filter_fluid_select_r2" in decisions
     assert "/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" in applications
-    assert "/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1" in decisions
+    assert "/static/build/executive-kpi/executive-kpi.js?v=shared_filter_fluid_select_r2" in decisions
     assert "/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1" in applications
     assert "/static/decisions.js?v=phase133ef_r5" in decisions
     assert "/static/application_views.js?v=phase133ef_r5" in applications

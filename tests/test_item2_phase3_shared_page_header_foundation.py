@@ -234,16 +234,11 @@ def test_no_global_shell_toolbar_markup_changed():
 def test_new_cache_marker_appears_only_on_intended_affected_route_assets():
     old_marker = "item2_phase3_shared_header_r1"
     planning_marker = "planning_bulk_action_control_r1"
-    # r3 governs the Planning stylesheet; r4 governs the rebuilt bundle.
-    planning_bundle_marker = "planning_dashboard_ui_polish_r6"
+    shared_filter_marker = "shared_filter_fluid_select_r2"
     old_css = f'/static/build/executive-kpi/executive-kpi.css?v={old_marker}'
     old_js = f'/static/build/executive-kpi/executive-kpi.js?v={old_marker}'
-    planning_css = f'/static/build/executive-kpi/executive-kpi.css?v={planning_bundle_marker}'
-    # The "/" dashboard owns its own bundle marker: Source Yield became a
-    # drawer and the Executive Queue sticky column surfaces changed.
-    overview_marker = "dashboard_ui_polish_r3"
-    overview_css = f'/static/build/executive-kpi/executive-kpi.css?v={overview_marker}'
-    overview_js = f'/static/build/executive-kpi/executive-kpi.js?v={overview_marker}'
+    shared_css = f'/static/build/executive-kpi/executive-kpi.css?v={shared_filter_marker}'
+    shared_js = f'/static/build/executive-kpi/executive-kpi.js?v={shared_filter_marker}'
 
     overview_route = _route_block(
         UI_SOURCE,
@@ -278,36 +273,22 @@ def test_new_cache_marker_appears_only_on_intended_affected_route_assets():
         '@router.get("/applications", response_class=HTMLResponse)',
     )
 
-    # Planning intentionally owns the polished stylesheet marker while its
-    # unchanged JavaScript bundle remains owned by the Phase 3 marker.
-    assert planning_css in planning_route
-    assert (
-        f'/static/build/executive-kpi/executive-kpi.js?v={planning_bundle_marker}'
-        in planning_route
-    )
-    assert old_js not in planning_route
-    assert old_css not in planning_route
+    # Every route that renders SharedFilterSelect owns one deterministic marker
+    # for both rebuilt assets. Unaffected bundle hosts keep their prior marker.
+    for route in (overview_route, scheduler_route, planning_route, advanced_diagnostics_route, decisions_route):
+        assert shared_css in route
+        assert shared_js in route
+        assert old_css not in route
+        assert old_js not in route
 
-    # Every unaffected Phase 3 route retains both exact bundle references and
-    # must not acquire the Planning-only marker. Item 7.1C intentionally owns
-    # the Scan Diagnostics bundle cache key.
-    assert overview_css in overview_route
-    assert overview_js in overview_route
-    assert old_css not in overview_route
-    assert planning_marker not in overview_route
+    for route in (overview_route, scheduler_route, advanced_diagnostics_route, decisions_route):
+        assert planning_marker not in route
 
-    for route in (
-        pipeline_route,
-        scheduler_route,
-        decisions_route,
-        applications_route,
-    ):
+    for route in (pipeline_route, applications_route):
         assert old_css in route
         assert old_js in route
+        assert shared_filter_marker not in route
         assert planning_marker not in route
-    assert "/static/build/executive-kpi/executive-kpi.css?v=item71d_diagnostics_rerun_r1" in advanced_diagnostics_route
-    assert "/static/build/executive-kpi/executive-kpi.js?v=item71d_diagnostics_rerun_r1" in advanced_diagnostics_route
-    assert planning_marker not in advanced_diagnostics_route
 
 
 # --- 19. Scan Workspace / Tailoring Workspace exceptions untouched -----------

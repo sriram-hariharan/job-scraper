@@ -198,7 +198,7 @@ def test_legacy_scan_workspace_stylesheets_are_unchanged():
 # --- 20-21. Cache markers -----------------------------------------------------
 
 
-def test_all_shared_shell_pages_use_the_item7b_cache_marker():
+def test_unaffected_shared_shell_pages_retain_the_item7b_cache_marker():
     sources = (
         UI_SOURCE,
         PLANNING_UI_SOURCE,
@@ -206,17 +206,16 @@ def test_all_shared_shell_pages_use_the_item7b_cache_marker():
         APPLICATION_HUB_UI_SOURCE,
         PROFILE_UI_SOURCE,
     )
-    # Planning now owns its own app_redesign.css marker so the Bulk action
-    # control receives the scoped button exemption after a reload; every other
-    # shell page still shares the Item 7b marker.
-    assert sum(source.count("item7b_v1_toolbar_notification_r1") for source in sources) == 14
+    # SharedFilterSelect hosts advance with their related cascade fix; the nine
+    # unaffected route references retain the Item 7b marker.
+    assert sum(source.count("item7b_v1_toolbar_notification_r1") for source in sources) == 9
     assert sum(source.count("item7b_account_toolbar_r1") for source in sources) == 15
 
 
 def test_javascript_and_bundle_cache_markers_are_unchanged_this_phase():
     old_bundle_marker = "item2_phase3_shared_header_r1"
     planning_marker = "planning_bulk_action_control_r1"
-    planning_bundle_marker = "planning_dashboard_ui_polish_r6"
+    shared_filter_marker = "shared_filter_fluid_select_r2"
     # Bulk Generate Suggestions ships new planning.js/styles.css content;
     # the executive-kpi bundle markers stay frozen for this phase.
     bulk_marker = "bulk_generate_suggestions_r2"
@@ -240,29 +239,28 @@ def test_javascript_and_bundle_cache_markers_are_unchanged_this_phase():
     )
     scan_workspace_renderer = PLANNING_UI_SOURCE.split("\ndef scan_workspace(", 1)[1]
 
-    # Planning UI polish owns only these exact Planning route references. The
-    # unchanged executive JavaScript bundle remains on its Phase 3 marker.
-    # styles.css advanced again: the global button exclusion that lets the
-    # Bulk control own its own background changed that file's contents.
-    assert (
-        '/static/styles.css?v=planning_dashboard_ui_polish_r3' in planning_route
-    )
-    assert f'/static/build/executive-kpi/executive-kpi.css?v={planning_bundle_marker}' in planning_route
+    # Planning receives the rebuilt component and the two related cascade
+    # stylesheets under one deterministic release marker.
+    assert f'/static/styles.css?v={shared_filter_marker}' in planning_route
+    assert f'/static/app_redesign.css?v={shared_filter_marker}' in planning_route
+    assert f'/static/build/executive-kpi/executive-kpi.css?v={shared_filter_marker}' in planning_route
     assert f'/static/planning.js?v={bulk_marker}' in planning_route
     assert (
-        f'/static/build/executive-kpi/executive-kpi.js?v={planning_bundle_marker}'
+        f'/static/build/executive-kpi/executive-kpi.js?v={shared_filter_marker}'
         in planning_route
     )
     assert old_js not in planning_route
     assert old_css not in planning_route
     assert '/static/shell.js?v=item7b_account_toolbar_r1' in planning_route
 
-    # The unaffected Phase 3 surfaces retain the old references. Item 7.1C
-    # intentionally gives Advanced Diagnostics a narrow bundle cache key.
+    # Unaffected bundle hosts retain old references; SharedFilterSelect hosts
+    # use the deterministic rebuilt-asset marker.
     assert old_css in UI_SOURCE
     assert old_js in UI_SOURCE
-    assert '/static/build/executive-kpi/executive-kpi.css?v=item71d_diagnostics_rerun_r1' in advanced_diagnostics_route
-    assert '/static/build/executive-kpi/executive-kpi.js?v=item71d_diagnostics_rerun_r1' in advanced_diagnostics_route
+    assert f'/static/build/executive-kpi/executive-kpi.css?v={shared_filter_marker}' in advanced_diagnostics_route
+    assert f'/static/build/executive-kpi/executive-kpi.js?v={shared_filter_marker}' in advanced_diagnostics_route
+    assert f'/static/styles.css?v={shared_filter_marker}' in advanced_diagnostics_route
+    assert f'/static/app_redesign.css?v={shared_filter_marker}' in advanced_diagnostics_route
 
     # Tailoring Workspace and Scan Workspace retain their distinct historical
     # script ownership and never acquire the Planning-only marker.

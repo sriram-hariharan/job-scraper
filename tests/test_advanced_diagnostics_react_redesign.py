@@ -91,12 +91,15 @@ def test_admin_receives_the_react_root_and_initial_state(monkeypatch) -> None:
     assert '"mode": "hub"' in response.text or '"mode":"hub"' in response.text
 
 
-def test_scan_diagnostics_uses_admin_grid_and_scoped_premium_combobox_styles() -> None:
+def test_scan_diagnostics_uses_admin_grid_and_shared_premium_combobox_styles() -> None:
     assert ".advanced-diagnostics-page .page.scan-workspace-diagnostics-page" in EXECUTIVE_STYLES_SOURCE
     assert "width: min(1360px, calc(100% - 56px));" in EXECUTIVE_STYLES_SOURCE
-    assert ".advanced-diagnostics-hub-controls .shared-filter-select__trigger" in EXECUTIVE_STYLES_SOURCE
-    assert ".advanced-diagnostics-scan-menu .shared-filter-select__search:focus-within" in EXECUTIVE_STYLES_SOURCE
-    assert ".advanced-diagnostics-scan-menu .shared-filter-select__option.is-selected" in EXECUTIVE_STYLES_SOURCE
+    assert ".shared-filter-select__trigger[aria-expanded=\"true\"]" in EXECUTIVE_STYLES_SOURCE
+    assert ".shared-filter-select__search:focus-within" in EXECUTIVE_STYLES_SOURCE
+    assert ".shared-filter-select__option.is-selected" in EXECUTIVE_STYLES_SOURCE
+    # The menu is positioned and viewport-bounded by the shared primitive; a
+    # caller-specific minimum would invalidate that calculation near an edge.
+    assert ".advanced-diagnostics-scan-menu {" not in EXECUTIVE_STYLES_SOURCE
 
 
 def test_saved_scan_retrieval_remains_owner_scoped(monkeypatch) -> None:

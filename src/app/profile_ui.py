@@ -233,6 +233,143 @@ def profile_page(request: Request) -> str:
     navigation_html = "" if is_resume_onboarding else _profile_navigation_icon_preloads_html()
     tabs_html = "" if is_resume_onboarding else profile_tabs_html
     secondary_sections_html = "" if is_resume_onboarding else admin_users_section_html + pipeline_runs_section_html
+    upload_controls_html = """
+        <div
+          class="profile-resume-dropzone"
+          id="resumeDropzone"
+          tabindex="0"
+          role="button"
+          aria-label="Upload PDF resumes by dragging and dropping or choosing files"
+        >
+          <input
+            type="file"
+            id="resumeUploadInput"
+            accept=".pdf,application/pdf"
+            multiple
+            class="resume-upload-input"
+          />
+          <span class="profile-resume-upload-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M7.25 3.75h6l3.5 3.5v13H7.25z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+              <path d="M13.25 3.75v3.5h3.5M9.75 12h4.5M12 9.75v4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+          <div class="profile-resume-upload-copy">
+            <strong>Drag PDF files here</strong>
+            <span>or choose files from your computer</span>
+          </div>
+          <button type="button" class="profile-resume-choose-action" id="resumeBrowseBtn">Choose files</button>
+          <span class="profile-resume-upload-help">PDF only · Multiple files supported</span>
+        </div>
+"""
+    resume_section_html = (
+        f"""
+    <section class="card profile-section-card profile-resume-onboarding-card" id="resumeSection" data-profile-tab-panel>
+      <div class="section-header">
+        <div>
+          <h2>Resume upload</h2>
+          <div class="subtext" id="resumeListMeta">Loading resumes...</div>
+        </div>
+      </div>
+      <div class="profile-inline-status hidden" id="resumeStatusBanner" aria-live="polite"></div>
+      <section class="profile-resume-onboarding-uploader" aria-label="Resume upload">
+        {upload_controls_html}
+      </section>
+      <div class="resume-list profile-resume-onboarding-list" id="resumeList"></div>
+    </section>
+"""
+        if is_resume_onboarding
+        else """
+    <section class="profile-section-card profile-resume-library" id="resumeSection" data-profile-tab-panel>
+      <div class="profile-resume-library-header">
+        <div>
+          <h2>Resumes</h2>
+          <div class="subtext" id="resumeListMeta">Loading resumes...</div>
+        </div>
+        <button type="button" class="profile-resume-primary-action" id="openResumeUploadModalBtn">
+          <span aria-hidden="true">+</span> Add resume
+        </button>
+      </div>
+      <div class="profile-inline-status hidden" id="resumeStatusBanner" aria-live="polite"></div>
+      <div class="profile-planning-upload-callout hidden" id="profilePlanningUploadCallout">
+        <div>
+          <strong>Planning update available</strong>
+          <span>Review options so matching can use your latest resumes.</span>
+        </div>
+        <button type="button" class="profile-resume-callout-action" id="openProfilePlanningOptionsBtn">
+          Planning &amp; Tailoring Options
+        </button>
+      </div>
+      <div class="resume-list profile-resume-document-list" id="resumeList" aria-live="polite"></div>
+    </section>
+"""
+    )
+    resume_modals_html = (
+        ""
+        if is_resume_onboarding
+        else f"""
+  <section class="modal-backdrop profile-resume-modal hidden" id="profileResumeUploadModal" role="dialog" aria-modal="true" aria-labelledby="profileResumeUploadTitle" aria-describedby="profileResumeUploadDescription">
+    <div class="modal-card profile-resume-dialog profile-resume-upload-dialog" tabindex="-1">
+      <button type="button" class="profile-resume-dialog-close" id="closeResumeUploadModalBtn" aria-label="Close Add resumes dialog">&times;</button>
+      <div class="profile-resume-dialog-intro">
+        <span class="profile-resume-dialog-symbol" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M7.25 3.75h6l3.5 3.5v13H7.25z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+            <path d="M13.25 3.75v3.5h3.5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+          </svg>
+        </span>
+        <div>
+          <h3 id="profileResumeUploadTitle">Add resumes</h3>
+          <p id="profileResumeUploadDescription">Upload one or more PDF resumes.</p>
+        </div>
+      </div>
+      <div class="profile-resume-dialog-body">
+        {upload_controls_html}
+        <div class="profile-resume-modal-feedback hidden" id="resumeUploadFeedback" aria-live="polite"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="modal-backdrop profile-resume-modal hidden" id="profileResumeRoleModal" role="dialog" aria-modal="true" aria-labelledby="profileResumeRoleTitle" aria-describedby="profileResumeRoleDescription">
+    <div class="modal-card profile-resume-dialog profile-resume-role-dialog" tabindex="-1">
+      <button type="button" class="profile-resume-dialog-close" id="closeResumeRoleModalBtn" aria-label="Close Manage role families dialog">&times;</button>
+      <div class="profile-resume-dialog-intro">
+        <span class="profile-resume-dialog-symbol" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M5 7.25h14M5 12h14M5 16.75h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            <circle cx="8" cy="7.25" r="1.25" fill="currentColor" />
+            <circle cx="15.5" cy="12" r="1.25" fill="currentColor" />
+            <circle cx="10.5" cy="16.75" r="1.25" fill="currentColor" />
+          </svg>
+        </span>
+        <div>
+          <h3 id="profileResumeRoleTitle">Manage role families</h3>
+          <p id="profileResumeRoleDescription" title=""><span id="resumeRoleModalName">Resume</span></p>
+        </div>
+      </div>
+      <div class="profile-resume-role-scroll" id="resumeRoleModalOptions"></div>
+      <div class="profile-resume-auto-save-note" aria-live="polite">Changes save automatically.</div>
+    </div>
+  </section>
+
+  <section class="modal-backdrop profile-resume-modal hidden" id="resumeDeleteModal" role="dialog" aria-modal="true" aria-labelledby="resumeDeleteModalTitle" aria-describedby="resumeDeleteModalDescription">
+    <div class="modal-card profile-resume-dialog profile-resume-delete-dialog" tabindex="-1">
+      <button type="button" class="profile-resume-dialog-close" id="closeResumeDeleteModalBtn" aria-label="Close Delete resume dialog">&times;</button>
+      <div class="profile-resume-dialog-intro profile-resume-delete-intro">
+        <div>
+          <h3 id="resumeDeleteModalTitle">Delete resume</h3>
+          <p id="resumeDeleteModalDescription">This removes the resume from your profile.</p>
+        </div>
+      </div>
+      <div class="profile-resume-delete-name" id="resumeDeleteModalName">-</div>
+      <div class="profile-resume-delete-actions">
+        <button type="button" class="profile-resume-secondary-action" id="resumeDeleteCancelBtn">Cancel</button>
+        <button type="button" class="profile-resume-delete-action" id="resumeDeleteConfirmBtn">Delete resume</button>
+      </div>
+    </div>
+  </section>
+"""
+    )
     return f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -260,101 +397,12 @@ def profile_page(request: Request) -> str:
 
     {tabs_html}
 
-    <section class="card profile-section-card" id="resumeSection" data-profile-tab-panel>
-      <div class="section-header">
-        <div>
-          <h2>{'Resume upload' if is_resume_onboarding else 'Resumes'}</h2>
-          <div class="subtext" id="resumeListMeta">Loading resumes...</div>
-        </div>
-      </div>
-
-      <div class="profile-inline-status hidden" id="resumeStatusBanner"></div>
-
-      <div class="resume-manager-grid">
-        <section class="resume-upload-panel">
-          <div
-            class="resume-dropzone"
-            id="resumeDropzone"
-            tabindex="0"
-            role="button"
-            aria-label="Upload resume PDF by dragging and dropping or browsing"
-          >
-            <input
-              type="file"
-              id="resumeUploadInput"
-              accept=".pdf,application/pdf"
-              multiple
-              class="resume-upload-input"
-            />
-
-            <div class="resume-dropzone-icon">↑</div>
-            <div class="resume-dropzone-title">Upload resume PDF</div>
-            <div class="resume-dropzone-text">
-              Drag and drop one or more PDF resumes here, or browse from your computer.
-            </div>
-
-            <div class="resume-upload-actions">
-              <button type="button" id="resumeBrowseBtn">Choose PDF</button>
-            </div>
-
-            <div class="control-help field-help-wide">
-              Uploaded files are stored securely in your profile and become available to matching and scan workflows.
-            </div>
-          </div>
-
-          <div class="profile-planning-upload-callout hidden" id="profilePlanningUploadCallout">
-            <button type="button" class="profile-planning-options-btn" id="openProfilePlanningOptionsBtn">
-              Planning &amp; Tailoring Options
-            </button>
-            <div class="control-help field-help-wide">
-              You may want to run this after uploading new resumes so planning, fallback ranking, and tailoring can use the latest files.
-            </div>
-          </div>
-        </section>
-
-        <section class="resume-list-panel">
-          <div class="resume-list" id="resumeList"></div>
-        </section>
-      </div>
-    </section>
+    {resume_section_html}
 
     {secondary_sections_html}
   </div>
 
-  <section class="modal-backdrop hidden" id="resumeDeleteModal">
-  <div class="modal-card resume-delete-modal-card">
-    <div class="modal-header">
-      <div>
-        <h3>Delete resume</h3>
-        <div class="subtext">This removes the file from the profile resume directory.</div>
-      </div>
-      <button
-        class="ghost-btn modal-close-btn resume-delete-modal-close-btn"
-        id="closeResumeDeleteModalBtn"
-        type="button"
-      >
-        Close
-      </button>
-    </div>
-
-    <div class="modal-body">
-      <div class="info-pair">
-        <span class="label">Resume</span>
-        <span id="resumeDeleteModalName">-</span>
-      </div>
-    </div>
-
-    <div class="modal-actions resume-delete-modal-actions">
-      <button
-        type="button"
-        class="resume-delete-confirm-btn"
-        id="resumeDeleteConfirmBtn"
-      >
-        Yes, delete
-      </button>
-    </div>
-  </div>
-  </section>
+  {resume_modals_html}
 
   {admin_modals_html}
 
@@ -488,18 +536,31 @@ def profile_page(request: Request) -> str:
     </div>
   </section>
 
-  <section class="modal-backdrop hidden" id="pipelineRunStatsModal">
-    <div class="modal-card pipeline-run-stats-modal-card">
-      <div class="modal-header">
-        <div>
-          <h3 id="pipelineRunStatsTitle">Pipeline run stats</h3>
-          <div class="subtext" id="pipelineRunStatsSubtitle">Persisted run details.</div>
+  <section class="modal-backdrop pipeline-run-stats-modal hidden" id="pipelineRunStatsModal" role="dialog" aria-modal="true" aria-labelledby="pipelineRunStatsTitle" aria-describedby="pipelineRunStatsSubtitle">
+    <div class="modal-card pipeline-run-stats-modal-card" tabindex="-1">
+      <header class="pipeline-run-stats-header">
+        <div class="pipeline-run-stats-heading">
+          <h3 id="pipelineRunStatsTitle">Pipeline run</h3>
+          <div class="pipeline-run-stats-date" id="pipelineRunStatsSubtitle">Loading persisted run details.</div>
+          <div class="pipeline-run-stats-run-id-row">
+            <code class="pipeline-run-stats-run-id" id="pipelineRunStatsRunId">Pipeline run ID pending</code>
+            <button class="pipeline-run-stats-copy-id" id="pipelineRunStatsCopyIdBtn" type="button" aria-label="Copy pipeline run ID" title="Copy run ID">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                <rect x="9" y="9" width="10.25" height="10.25" rx="2.4" stroke="currentColor" stroke-width="1.6" />
+                <path d="M15 6.4A2.4 2.4 0 0012.6 4H7.4A2.4 2.4 0 005 6.4v5.2A2.4 2.4 0 007.4 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              </svg>
+            </button>
+          </div>
         </div>
-        <button class="ghost-btn modal-close-btn" id="pipelineRunStatsCloseBtn" type="button">Close</button>
-      </div>
+        <button class="pipeline-run-stats-close" id="pipelineRunStatsCloseBtn" type="button" aria-label="Close pipeline run details" title="Close">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+            <path d="M6.75 6.75l10.5 10.5M17.25 6.75l-10.5 10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </button>
+      </header>
 
-      <div class="modal-body">
-        <div id="pipelineRunStatsBody" class="pipeline-run-stats-body"></div>
+      <div class="pipeline-run-stats-scroll">
+        <div id="pipelineRunStatsBody" class="pipeline-run-stats-body" aria-live="polite"></div>
       </div>
     </div>
   </section>

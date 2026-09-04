@@ -9922,3 +9922,2223 @@ html[data-theme="light"] .profile-dropdown-danger-btn:focus-visible {
     max-height: calc(100dvh - 78px) !important;
   }
 }
+
+/* profile_resume_document_library_r1
+   ID-scoped ownership is intentional: the legacy global button:not(...) CTA
+   uses high-specificity !important gradients. Resume controls must use their
+   owned eucalyptus system without changing buttons on another route or tab. */
+#resumeSection.profile-resume-library,
+#resumeSection.profile-resume-onboarding-card,
+.profile-resume-modal {
+  --profile-resume-accent: #3c746a;
+  --profile-resume-accent-hover: #315f57;
+  --profile-resume-accent-pressed: #294f49;
+  --profile-resume-accent-soft: rgba(83, 137, 126, 0.16);
+  --profile-resume-accent-whisper: rgba(83, 137, 126, 0.08);
+  --profile-resume-accent-border: rgba(117, 169, 158, 0.42);
+  --profile-resume-accent-text: #9bc4bb;
+  --profile-resume-surface: #111722;
+  --profile-resume-surface-raised: #171e2a;
+  --profile-resume-hover: rgba(155, 196, 187, 0.06);
+  --profile-resume-border: rgba(167, 176, 193, 0.18);
+  --profile-resume-text: #f2f2f5;
+  --profile-resume-muted: #9ba4b3;
+  --profile-resume-focus: rgba(117, 169, 158, 0.42);
+}
+
+html[data-theme="light"] #resumeSection.profile-resume-library,
+html[data-theme="light"] #resumeSection.profile-resume-onboarding-card,
+html[data-theme="light"] .profile-resume-modal {
+  --profile-resume-accent-soft: #e7f0ed;
+  --profile-resume-accent-whisper: rgba(60, 116, 106, 0.055);
+  --profile-resume-accent-border: #b9d1cb;
+  --profile-resume-accent-text: #28564f;
+  --profile-resume-surface: #fdfdfd;
+  --profile-resume-surface-raised: #f6f6f8;
+  --profile-resume-hover: #f7f7f9;
+  --profile-resume-border: #e1e2e6;
+  --profile-resume-text: #252631;
+  --profile-resume-muted: #707383;
+  --profile-resume-focus: rgba(60, 116, 106, 0.32);
+}
+
+#resumeSection.profile-resume-library {
+  padding: 4px 0 30px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.profile-resume-library-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.profile-resume-library-header h2 {
+  margin: 0 0 3px;
+  color: var(--app-text);
+  font-size: 24px;
+  font-weight: 820;
+  letter-spacing: -0.03em;
+}
+
+.profile-resume-library-header .subtext {
+  color: var(--profile-resume-muted) !important;
+  font-size: 13px;
+  font-weight: 620;
+}
+
+#resumeSection .profile-resume-primary-action {
+  min-height: 40px !important;
+  padding: 0 15px !important;
+  border: 1px solid var(--profile-resume-accent) !important;
+  border-radius: 11px !important;
+  background: var(--profile-resume-accent) !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  box-shadow: 0 3px 10px rgba(41, 79, 73, 0.16) !important;
+  font-size: 13.5px !important;
+  font-weight: 740 !important;
+  transform: none !important;
+}
+
+#resumeSection .profile-resume-primary-action:hover {
+  border-color: var(--profile-resume-accent-hover) !important;
+  background: var(--profile-resume-accent-hover) !important;
+  background-image: none !important;
+  box-shadow: 0 4px 12px rgba(41, 79, 73, 0.2) !important;
+  transform: none !important;
+}
+
+#resumeSection .profile-resume-primary-action:active {
+  border-color: var(--profile-resume-accent-pressed) !important;
+  background: var(--profile-resume-accent-pressed) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+#resumeSection .profile-resume-primary-action span {
+  margin-right: 4px;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+#resumeSection.profile-resume-library > .profile-inline-status,
+#resumeSection.profile-resume-library > #resumeOnboardingBanner {
+  margin-bottom: 12px;
+}
+
+#resumeSection .profile-planning-upload-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 12px;
+  padding: 9px 11px 9px 13px;
+  border: 1px solid var(--profile-resume-border) !important;
+  border-radius: 10px;
+  background: var(--profile-resume-surface-raised) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+#resumeSection .profile-planning-upload-callout > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+#resumeSection .profile-planning-upload-callout strong {
+  color: var(--profile-resume-text);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+#resumeSection .profile-planning-upload-callout span {
+  overflow: hidden;
+  color: var(--profile-resume-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#resumeSection .profile-resume-callout-action {
+  flex: 0 0 auto;
+  min-height: 32px !important;
+  padding: 0 10px !important;
+  border: 1px solid var(--profile-resume-border) !important;
+  border-radius: 8px !important;
+  background: var(--profile-resume-surface) !important;
+  background-image: none !important;
+  color: var(--profile-resume-text) !important;
+  box-shadow: none !important;
+  font-size: 11.5px !important;
+  font-weight: 680 !important;
+  transform: none !important;
+}
+
+#resumeSection .profile-resume-callout-action:hover {
+  border-color: var(--profile-resume-accent-border) !important;
+  background: var(--profile-resume-accent-soft) !important;
+  background-image: none !important;
+  transform: none !important;
+}
+
+.profile-resume-document-list {
+  display: block !important;
+  border-top: 1px solid var(--profile-resume-border);
+  border-bottom: 1px solid var(--profile-resume-border);
+}
+
+.profile-resume-document-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px minmax(220px, 1.25fr) minmax(220px, 0.9fr) 78px;
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+  padding: 9px 8px;
+  border-bottom: 1px solid var(--profile-resume-border);
+  color: var(--profile-resume-text);
+  transition: background-color 120ms ease;
+}
+
+.profile-resume-document-row:last-child {
+  border-bottom: 0;
+}
+
+.profile-resume-document-row:hover,
+.profile-resume-document-row:focus-within {
+  background: var(--profile-resume-hover);
+}
+
+.profile-resume-file-icon {
+  display: grid;
+  grid-template-rows: 19px auto;
+  place-items: center;
+  width: 36px;
+  height: 40px;
+  padding: 4px 0 3px;
+  border: 1px solid var(--profile-resume-accent-border);
+  border-radius: 8px;
+  background: var(--profile-resume-accent-soft);
+  color: var(--profile-resume-accent-text);
+  font-size: 7px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+}
+
+.profile-resume-file-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.profile-resume-file-copy {
+  min-width: 0;
+}
+
+.profile-resume-file-name {
+  overflow: hidden;
+  color: var(--profile-resume-text);
+  font-size: 13.5px;
+  font-weight: 730;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-resume-file-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  color: var(--profile-resume-muted);
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+.profile-resume-role-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.profile-resume-role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 23px;
+  padding: 2px 7px;
+  border: 1px solid var(--profile-resume-accent-border);
+  border-radius: 6px;
+  background: var(--profile-resume-accent-soft);
+  color: var(--profile-resume-accent-text);
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.profile-resume-role-chip.is-default {
+  border-color: var(--profile-resume-accent);
+  color: var(--profile-resume-accent-text);
+}
+
+.profile-resume-default-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--profile-resume-accent);
+}
+
+.profile-resume-no-roles {
+  color: var(--profile-resume-muted);
+  font-size: 11.5px;
+}
+
+.profile-resume-row-actions {
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  width: 78px;
+}
+
+#resumeList .profile-resume-row-action,
+#profileResumeUploadModal .profile-resume-dialog-close,
+#profileResumeRoleModal .profile-resume-dialog-close,
+#resumeDeleteModal .profile-resume-dialog-close {
+  display: inline-grid !important;
+  place-items: center;
+  width: 36px !important;
+  min-width: 36px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 0 !important;
+  border: 1px solid transparent !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--profile-resume-muted) !important;
+  box-shadow: none !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
+  transform: none !important;
+}
+
+#profileResumeUploadModal .profile-resume-dialog-close:hover,
+#profileResumeRoleModal .profile-resume-dialog-close:hover,
+#resumeDeleteModal .profile-resume-dialog-close:hover {
+  border-color: var(--profile-resume-border) !important;
+  background: var(--profile-resume-surface-raised) !important;
+  background-image: none !important;
+  color: var(--profile-resume-text) !important;
+  transform: none !important;
+}
+
+#resumeList .profile-resume-row-action-icon {
+  display: block;
+  width: 17px;
+  height: 17px;
+}
+
+#resumeList .profile-resume-delete-icon {
+  background-color: currentColor;
+  -webkit-mask: url("/static/media/discard_img.svg") center / contain no-repeat;
+  mask: url("/static/media/discard_img.svg") center / contain no-repeat;
+}
+
+#resumeList .profile-resume-manage-role-action:hover,
+#resumeList .profile-resume-manage-role-action:focus-visible {
+  border-color: var(--profile-resume-accent-border) !important;
+  background: var(--profile-resume-accent-soft) !important;
+  background-image: none !important;
+  color: var(--profile-resume-accent-text) !important;
+  transform: none !important;
+}
+
+#resumeList .profile-resume-delete-row-action:hover,
+#resumeList .profile-resume-delete-row-action:focus-visible {
+  border-color: rgba(185, 105, 105, 0.34) !important;
+  background: rgba(169, 87, 87, 0.12) !important;
+  background-image: none !important;
+  color: #c98787 !important;
+  transform: none !important;
+}
+
+html[data-theme="light"] #resumeList .profile-resume-delete-row-action:hover,
+html[data-theme="light"] #resumeList .profile-resume-delete-row-action:focus-visible {
+  border-color: #e6caca !important;
+  background: #f8eeee !important;
+  color: #8d4b4b !important;
+}
+
+.profile-resume-document-list .resume-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 34px 20px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--profile-resume-muted) !important;
+  font-size: 12px;
+}
+
+.profile-resume-document-list .resume-empty-state strong {
+  color: var(--profile-resume-text);
+  font-size: 13.5px;
+}
+
+body.profile-resume-modal-open {
+  overflow: hidden;
+}
+
+.profile-resume-modal {
+  z-index: 180 !important;
+  display: grid;
+  place-items: center;
+  padding: 18px !important;
+  background: rgba(8, 10, 16, 0.5) !important;
+  backdrop-filter: blur(5px);
+  animation: profile-resume-backdrop-in 140ms ease-out;
+}
+
+.profile-resume-modal.hidden {
+  display: none !important;
+}
+
+.profile-resume-modal.is-closing {
+  animation: profile-resume-backdrop-out 110ms ease-in forwards;
+}
+
+.profile-resume-modal.is-closing .profile-resume-dialog {
+  animation: profile-resume-dialog-out 110ms ease-in forwards !important;
+  pointer-events: none;
+}
+
+#profileResumeUploadModal .profile-resume-dialog,
+#profileResumeRoleModal .profile-resume-dialog,
+#resumeDeleteModal .profile-resume-dialog {
+  position: relative;
+  width: min(520px, calc(100vw - 32px)) !important;
+  max-height: calc(100dvh - 36px);
+  padding: 25px !important;
+  overflow: hidden;
+  border: 1px solid var(--profile-resume-border) !important;
+  border-radius: 22px !important;
+  background: var(--profile-resume-surface) !important;
+  background-image: none !important;
+  color: var(--profile-resume-text) !important;
+  box-shadow: 0 28px 80px rgba(4, 7, 13, 0.3), 0 2px 8px rgba(4, 7, 13, 0.12) !important;
+  animation: profile-resume-dialog-in 150ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+#profileResumeRoleModal .profile-resume-dialog {
+  width: min(560px, calc(100vw - 32px)) !important;
+}
+
+#resumeDeleteModal .profile-resume-dialog {
+  width: min(440px, calc(100vw - 32px)) !important;
+}
+
+#profileResumeUploadModal .profile-resume-dialog-close,
+#profileResumeRoleModal .profile-resume-dialog-close,
+#resumeDeleteModal .profile-resume-dialog-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 3;
+}
+
+.profile-resume-dialog-intro {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding-right: 42px;
+}
+
+.profile-resume-dialog-symbol {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--profile-resume-accent-border);
+  border-radius: 11px;
+  background: var(--profile-resume-accent-soft);
+  color: var(--profile-resume-accent-text);
+}
+
+.profile-resume-dialog-symbol svg {
+  width: 20px;
+  height: 20px;
+}
+
+.profile-resume-dialog-intro h3 {
+  margin: 0 0 3px;
+  color: var(--profile-resume-text) !important;
+  font-size: 18px;
+  font-weight: 790;
+  letter-spacing: -0.025em;
+}
+
+.profile-resume-dialog-intro p {
+  margin: 0;
+  overflow: hidden;
+  color: var(--profile-resume-muted) !important;
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-resume-dialog-body {
+  margin-top: 20px;
+}
+
+.profile-resume-dropzone {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 112px;
+  padding: 15px;
+  border: 1px dashed var(--profile-resume-border);
+  border-radius: 14px;
+  background: var(--profile-resume-surface-raised);
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.profile-resume-dropzone:hover,
+.profile-resume-dropzone.drag-active {
+  border-color: var(--profile-resume-accent-border);
+  background: var(--profile-resume-accent-soft);
+}
+
+.profile-resume-upload-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--profile-resume-border);
+  border-radius: 10px;
+  background: var(--profile-resume-surface);
+  color: var(--profile-resume-accent-text);
+}
+
+.profile-resume-upload-icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.profile-resume-upload-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.profile-resume-upload-copy strong {
+  color: var(--profile-resume-text);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.profile-resume-upload-copy span,
+.profile-resume-upload-help {
+  color: var(--profile-resume-muted);
+  font-size: 11px;
+}
+
+.profile-resume-upload-help {
+  grid-column: 2 / -1;
+}
+
+#profileResumeUploadModal #resumeBrowseBtn,
+body.profile-resume-onboarding-mode #resumeSection #resumeBrowseBtn {
+  min-height: 34px !important;
+  padding: 0 11px !important;
+  border: 1px solid var(--profile-resume-accent-border) !important;
+  border-radius: 9px !important;
+  background: var(--profile-resume-surface) !important;
+  background-image: none !important;
+  color: var(--profile-resume-text) !important;
+  box-shadow: none !important;
+  font-size: 11.5px !important;
+  font-weight: 680 !important;
+  transform: none !important;
+}
+
+#profileResumeUploadModal #resumeBrowseBtn:hover,
+body.profile-resume-onboarding-mode #resumeSection #resumeBrowseBtn:hover {
+  border-color: var(--profile-resume-accent-border) !important;
+  background: var(--profile-resume-accent-soft) !important;
+  background-image: none !important;
+  transform: none !important;
+}
+
+.profile-resume-modal-feedback {
+  margin-top: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--profile-resume-border);
+  border-radius: 9px;
+  background: var(--profile-resume-surface-raised);
+  color: var(--profile-resume-text);
+  font-size: 11.5px;
+}
+
+.profile-resume-modal-feedback.hidden {
+  display: none;
+}
+
+.profile-resume-modal-feedback.success {
+  border-color: rgba(100, 148, 120, 0.34);
+  color: #9bcbaf;
+}
+
+.profile-resume-modal-feedback.error {
+  border-color: rgba(176, 84, 84, 0.34);
+  color: #d99494;
+}
+
+html[data-theme="light"] .profile-resume-modal-feedback.success {
+  color: #417257;
+}
+
+html[data-theme="light"] .profile-resume-modal-feedback.error {
+  color: #974949;
+}
+
+.profile-resume-role-scroll {
+  max-height: min(430px, calc(100dvh - 190px));
+  margin: 18px -8px 0;
+  padding: 0 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.profile-resume-role-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 48px;
+  padding: 9px 7px;
+  border-bottom: 1px solid var(--profile-resume-border);
+  border-radius: 8px;
+  transition: background-color 120ms ease;
+}
+
+.profile-resume-role-option:last-child {
+  border-bottom: 0;
+}
+
+.profile-resume-role-option:hover,
+.profile-resume-role-option:focus-within,
+.profile-resume-role-option.is-selected {
+  background: var(--profile-resume-accent-whisper);
+}
+
+.profile-resume-role-toggle,
+.profile-resume-role-default {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  color: var(--profile-resume-text);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 680;
+}
+
+.profile-resume-role-default {
+  flex: 0 0 auto;
+  color: var(--profile-resume-muted);
+  font-size: 11px;
+  font-weight: 620;
+}
+
+.profile-resume-role-default:has(input:disabled) {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.profile-resume-role-default:not(:has(input:disabled)),
+.profile-resume-role-option.is-selected .profile-resume-role-toggle {
+  color: var(--profile-resume-accent-text);
+}
+
+.profile-resume-role-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--profile-resume-accent);
+}
+
+.profile-resume-role-empty {
+  padding: 28px 0;
+  color: var(--profile-resume-muted);
+  text-align: center;
+  font-size: 12px;
+}
+
+.profile-resume-auto-save-note {
+  margin-top: 12px;
+  color: var(--profile-resume-muted);
+  font-size: 10.5px;
+  text-align: right;
+}
+
+.profile-resume-delete-intro {
+  display: block;
+}
+
+.profile-resume-delete-name {
+  margin: 19px 0 5px;
+  overflow-wrap: anywhere;
+  color: var(--profile-resume-text);
+  font-size: 13.5px;
+  font-weight: 720;
+}
+
+.profile-resume-delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+#resumeDeleteModal .profile-resume-secondary-action,
+#resumeDeleteModal .profile-resume-delete-action {
+  min-height: 38px !important;
+  padding: 0 13px !important;
+  border-radius: 9px !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  transform: none !important;
+}
+
+#resumeDeleteModal .profile-resume-secondary-action {
+  border: 1px solid var(--profile-resume-border) !important;
+  background: var(--profile-resume-surface-raised) !important;
+  color: var(--profile-resume-text) !important;
+}
+
+#resumeDeleteModal .profile-resume-delete-action {
+  border: 1px solid #a95757 !important;
+  background: #a95757 !important;
+  color: #ffffff !important;
+}
+
+#resumeDeleteModal .profile-resume-secondary-action:hover {
+  border-color: var(--profile-resume-accent-border) !important;
+  background: var(--profile-resume-accent-soft) !important;
+  background-image: none !important;
+}
+
+#resumeDeleteModal .profile-resume-delete-action:hover {
+  border-color: #984949 !important;
+  background: #984949 !important;
+  background-image: none !important;
+}
+
+body.profile-resume-onboarding-mode #resumeSection.profile-resume-onboarding-card {
+  padding: clamp(20px, 3vw, 28px) !important;
+  border: 1px solid var(--profile-resume-border) !important;
+  border-radius: 18px !important;
+  background: var(--profile-resume-surface) !important;
+  background-image: none !important;
+  box-shadow: 0 20px 55px rgba(5, 8, 15, 0.12) !important;
+}
+
+.profile-resume-onboarding-uploader {
+  max-width: 650px;
+  margin: 0 auto;
+}
+
+body.profile-resume-onboarding-mode .profile-resume-dropzone {
+  min-height: 180px;
+  padding: 24px;
+}
+
+.profile-resume-onboarding-list {
+  margin-top: 14px;
+}
+
+#resumeSection .profile-resume-primary-action:focus-visible,
+#resumeSection .profile-resume-callout-action:focus-visible,
+#resumeList .profile-resume-row-action:focus-visible,
+#profileResumeUploadModal .profile-resume-dialog-close:focus-visible,
+#profileResumeRoleModal .profile-resume-dialog-close:focus-visible,
+#resumeDeleteModal .profile-resume-dialog-close:focus-visible,
+#profileResumeUploadModal #resumeBrowseBtn:focus-visible,
+body.profile-resume-onboarding-mode #resumeSection #resumeBrowseBtn:focus-visible,
+#resumeDeleteModal .profile-resume-secondary-action:focus-visible,
+#resumeDeleteModal .profile-resume-delete-action:focus-visible,
+.profile-resume-dropzone:focus-visible,
+.profile-resume-role-option input:focus-visible {
+  outline: 3px solid var(--profile-resume-focus) !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="dark"] .profile-resume-document-row,
+html[data-theme="dark"] #profileResumeUploadModal .profile-resume-dialog,
+html[data-theme="dark"] #profileResumeRoleModal .profile-resume-dialog,
+html[data-theme="dark"] #resumeDeleteModal .profile-resume-dialog {
+  border-color: rgba(167, 176, 193, 0.18) !important;
+}
+
+@keyframes profile-resume-dialog-in {
+  from { opacity: 0; transform: translateY(5px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes profile-resume-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes profile-resume-dialog-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(3px) scale(0.99); }
+}
+
+@keyframes profile-resume-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (max-width: 760px) {
+  .profile-resume-document-row {
+    grid-template-columns: 38px minmax(0, 1fr) 78px;
+    gap: 10px;
+    min-height: 82px;
+    padding: 10px 6px;
+  }
+
+  .profile-resume-role-chips {
+    grid-column: 2 / 3;
+    margin-top: -2px;
+  }
+
+  .profile-resume-row-actions {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}
+
+@media (max-width: 560px) {
+  .profile-resume-library-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  #resumeSection .profile-resume-primary-action {
+    align-self: flex-start;
+  }
+
+  #resumeSection .profile-planning-upload-callout,
+  #resumeSection .profile-planning-upload-callout > div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  #resumeSection .profile-planning-upload-callout span {
+    white-space: normal;
+  }
+
+  .profile-resume-modal {
+    align-items: end;
+    padding: 8px !important;
+  }
+
+  #profileResumeUploadModal .profile-resume-dialog,
+  #profileResumeRoleModal .profile-resume-dialog,
+  #resumeDeleteModal .profile-resume-dialog {
+    width: 100% !important;
+    max-height: calc(100dvh - 16px);
+    padding: 21px !important;
+    border-radius: 20px !important;
+  }
+
+  .profile-resume-dropzone {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  #profileResumeUploadModal #resumeBrowseBtn,
+  body.profile-resume-onboarding-mode #resumeSection #resumeBrowseBtn,
+  .profile-resume-upload-help {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .profile-resume-delete-actions {
+    flex-direction: column-reverse;
+  }
+
+  #resumeDeleteModal .profile-resume-delete-actions button {
+    width: 100% !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-resume-modal,
+  .profile-resume-dialog,
+  .profile-resume-document-row {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* profile_pipeline_run_stats_summary_r1
+   The persisted metric tones remain available to other surfaces. This modal
+   owns a neutral operational summary and never maps those tones to tile fills. */
+#pipelineRunStatsModal {
+  --pipeline-stats-accent: #3c746a;
+  --pipeline-stats-accent-hover: #315f57;
+  --pipeline-stats-accent-pressed: #294f49;
+  --pipeline-stats-accent-soft: rgba(83, 137, 126, 0.16);
+  --pipeline-stats-accent-border: rgba(117, 169, 158, 0.42);
+  --pipeline-stats-accent-text: #9bc4bb;
+  --pipeline-stats-surface: #111722;
+  --pipeline-stats-surface-raised: #171e2a;
+  --pipeline-stats-border: rgba(167, 176, 193, 0.18);
+  --pipeline-stats-text: #f2f2f5;
+  --pipeline-stats-muted: #9ba4b3;
+  --pipeline-stats-focus: rgba(117, 169, 158, 0.42);
+  --pipeline-stats-danger: #c98787;
+  --pipeline-stats-danger-soft: rgba(169, 87, 87, 0.12);
+  --pipeline-stats-warning: #d0aa6c;
+  /* Hero feature-panel palette: deep petrol/eucalyptus, constant in both
+     light and dark mode - the panel is intentionally always dark/rich,
+     never brightened to match the ambient theme. */
+  --pipeline-hero-deep: #0f4e45;
+  --pipeline-hero-deeper: #0a443c;
+  --pipeline-hero-mid: #176357;
+  --pipeline-hero-surface: #0f4e45;
+  --pipeline-hero-surface-alt: #0b6253;
+  --pipeline-jade: #24b99b;
+  --pipeline-jade-light: #67d2b0;
+  --pipeline-mint: #94d89f;
+  --pipeline-lime-muted: #bcd977;
+  --pipeline-gold: #e5b84e;
+  --pipeline-gold-light: #f2ce72;
+  --pipeline-hero-jade: #3c8b78;
+  --pipeline-hero-jade-light: #62b39c;
+  --pipeline-hero-gold: #d2a84f;
+  --pipeline-hero-text: #f5faf8;
+  --pipeline-hero-muted: rgba(245, 250, 248, 0.72);
+  --pipeline-hero-border: rgba(103, 210, 176, 0.24);
+  --pipeline-hero-danger: #cf6a62;
+  /* Completed stage-ribbon progression: deep teal -> eucalyptus -> jade ->
+     mint -> muted lime -> warm gold. One controlled family, never rainbow. */
+  --pipeline-ribbon-0: #258e7c;
+  --pipeline-ribbon-1: #32a98e;
+  --pipeline-ribbon-2: #48bc93;
+  --pipeline-ribbon-3: #69cb91;
+  --pipeline-ribbon-4: #91d58b;
+  --pipeline-ribbon-5: #bbd675;
+  --pipeline-ribbon-6: #e0c75c;
+  --pipeline-ribbon-7: #e8b84d;
+  /* Primary outcome card tones: related eucalyptus -> mint -> jade -> gold.
+     Dark-mode defaults here are desaturated, never neon. */
+  --pipeline-tone-0-bg: rgba(36, 185, 155, 0.10);
+  --pipeline-tone-0-border: rgba(103, 210, 176, 0.28);
+  --pipeline-tone-0-icon: #6ecdb2;
+  --pipeline-tone-1-bg: rgba(63, 145, 188, 0.12);
+  --pipeline-tone-1-border: rgba(120, 178, 209, 0.26);
+  --pipeline-tone-1-icon: #7fb6d6;
+  --pipeline-tone-2-bg: rgba(102, 87, 190, 0.12);
+  --pipeline-tone-2-border: rgba(160, 146, 219, 0.26);
+  --pipeline-tone-2-icon: #a394dd;
+  --pipeline-tone-3-bg: rgba(229, 184, 78, 0.10);
+  --pipeline-tone-3-border: rgba(233, 202, 130, 0.28);
+  --pipeline-tone-3-icon: #dcb55f;
+  --pipeline-callout-bg: rgba(36, 185, 155, 0.10);
+  --pipeline-callout-border: rgba(103, 210, 176, 0.24);
+  --pipeline-callout-text: #a9d8cb;
+  --pipeline-panel-surface: #151c28;
+  --pipeline-panel-border: rgba(167, 176, 193, 0.16);
+  --pipeline-row-surface: rgba(255, 255, 255, 0.035);
+  --pipeline-stats-secondary: #a8b2c0;
+  /* Above the shell's top-right controls (bell/theme/New Scan/avatar sit at
+     z-index 260 in app_redesign.css) so the dimmed backdrop covers the whole
+     shell, matching every other .modal-backdrop in this app (z-index 1000). */
+  z-index: 1000 !important;
+  display: grid;
+  place-items: center;
+  padding: 20px !important;
+  background: rgba(8, 10, 16, 0.5) !important;
+  backdrop-filter: blur(5px);
+  animation: pipeline-run-stats-backdrop-in 140ms ease-out;
+}
+
+html[data-theme="light"] #pipelineRunStatsModal {
+  /* Light-mode surfaces. The hero panel tokens are deliberately NOT
+     overridden here: the feature panel stays deep petrol in both themes. */
+  /* Informational outcome-card tones ONLY. The soft powder blue and
+     lavender below are deliberately scoped to these four read-only cards
+     per the approved target; no button, action, hero, navigation or shell
+     surface uses them. */
+  --pipeline-tone-0-bg: #eef9f5;
+  --pipeline-tone-0-border: #9cddcb;
+  --pipeline-tone-0-icon: #42ac91;
+  --pipeline-tone-1-bg: #eef7fc;
+  --pipeline-tone-1-border: #a8d7ea;
+  --pipeline-tone-1-icon: #3f91bc;
+  --pipeline-tone-2-bg: #f4f1fc;
+  --pipeline-tone-2-border: #c8b9ec;
+  --pipeline-tone-2-icon: #6657be;
+  --pipeline-tone-3-bg: #fff7e7;
+  --pipeline-tone-3-border: #e9ca82;
+  --pipeline-tone-3-icon: #d59a20;
+  --pipeline-callout-bg: #eaf5f1;
+  --pipeline-callout-border: #d3e8e1;
+  --pipeline-callout-text: #244f46;
+  --pipeline-panel-surface: #ffffff;
+  --pipeline-panel-border: #e4ebe8;
+  --pipeline-row-surface: rgba(245, 247, 249, 0.75);
+  --pipeline-stats-secondary: #526173;
+  --pipeline-stats-text: #101828;
+  --pipeline-stats-muted: #8a949f;
+  --pipeline-stats-accent-soft: #e7f0ed;
+  --pipeline-stats-accent-border: #b9d1cb;
+  --pipeline-stats-accent-text: #28564f;
+  --pipeline-stats-surface: #fdfdfd;
+  --pipeline-stats-surface-raised: #f6f7f7;
+  --pipeline-stats-border: #e1e4e3;
+  --pipeline-stats-text: #252b2a;
+  --pipeline-stats-muted: #6d7775;
+  --pipeline-stats-focus: rgba(60, 116, 106, 0.3);
+  --pipeline-stats-danger: #8d4b4b;
+  --pipeline-stats-danger-soft: #f8eeee;
+  --pipeline-stats-warning: #8a672e;
+}
+
+#pipelineRunStatsModal.hidden {
+  display: none !important;
+}
+
+body.pipeline-run-stats-modal-open {
+  overflow: hidden;
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-modal-card {
+  display: flex;
+  flex-direction: column;
+  width: min(1100px, calc(100vw - 48px)) !important;
+  max-width: 1100px !important;
+  max-height: 87dvh;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--pipeline-stats-border) !important;
+  border-radius: 22px !important;
+  background: var(--pipeline-stats-surface) !important;
+  background-image: none !important;
+  color: var(--pipeline-stats-text) !important;
+  box-shadow: 0 28px 80px rgba(4, 7, 13, 0.3), 0 2px 8px rgba(4, 7, 13, 0.12) !important;
+  animation: pipeline-run-stats-dialog-in 150ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+#pipelineRunStatsModal.is-closing {
+  animation: pipeline-run-stats-backdrop-out 110ms ease-in forwards;
+}
+
+#pipelineRunStatsModal.is-closing .pipeline-run-stats-modal-card {
+  animation: pipeline-run-stats-dialog-out 110ms ease-in forwards !important;
+  pointer-events: none;
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px 26px 14px;
+  background: var(--pipeline-stats-surface);
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-heading {
+  min-width: 0;
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-heading h3 {
+  margin: 0;
+  color: var(--pipeline-stats-text) !important;
+  font-size: 28px;
+  font-weight: 720;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-date {
+  margin-top: 3px;
+  color: var(--pipeline-stats-secondary);
+  font-size: 14.5px;
+  font-weight: 620;
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-run-id-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  min-width: 0;
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-run-id {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--pipeline-stats-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12.5px;
+  line-height: 1.35;
+  opacity: 0.72;
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-copy-id {
+  display: inline-grid !important;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 30px !important;
+  min-width: 30px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 !important;
+  border: 1px solid transparent !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--pipeline-stats-muted) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-copy-id svg {
+  width: 16px;
+  height: 16px;
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-copy-id:hover {
+  border-color: var(--pipeline-stats-border) !important;
+  background: var(--pipeline-stats-surface-raised) !important;
+  color: var(--pipeline-stats-text) !important;
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-copy-id.is-copied {
+  border-color: var(--pipeline-stats-accent-border) !important;
+  background: var(--pipeline-stats-accent-soft) !important;
+  color: var(--pipeline-stats-accent-text) !important;
+}
+
+#pipelineRunStatsModal #pipelineRunStatsCloseBtn {
+  display: inline-grid !important;
+  place-items: center;
+  width: 34px !important;
+  min-width: 34px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 !important;
+  border: 1px solid transparent !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--pipeline-stats-secondary) !important;
+  box-shadow: none !important;
+  line-height: 1 !important;
+  transform: none !important;
+}
+
+#pipelineRunStatsModal #pipelineRunStatsCloseBtn svg {
+  width: 19px;
+  height: 19px;
+}
+
+#pipelineRunStatsModal #pipelineRunStatsCloseBtn:hover {
+  border-color: var(--pipeline-stats-border) !important;
+  background: var(--pipeline-stats-surface-raised) !important;
+  background-image: none !important;
+  color: var(--pipeline-stats-text) !important;
+  transform: none !important;
+}
+
+#pipelineRunStatsModal #pipelineRunStatsCloseBtn:active {
+  border-color: var(--pipeline-stats-accent-border) !important;
+  background: var(--pipeline-stats-accent-soft) !important;
+  background-image: none !important;
+  color: var(--pipeline-stats-accent-text) !important;
+  transform: none !important;
+}
+
+#pipelineRunStatsModal #pipelineRunStatsCloseBtn:focus-visible,
+#pipelineRunStatsModal .pipeline-run-technical-disclosure > summary:focus-visible,
+#pipelineRunStatsModal .agent-trace-json-detail > summary:focus-visible {
+  outline: 3px solid var(--pipeline-stats-focus) !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--pipeline-stats-border) transparent;
+  scrollbar-width: thin;
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--pipeline-stats-border);
+  background-clip: padding-box;
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-body {
+  display: block;
+  padding: 0 26px 22px;
+}
+
+/* Hero Run Overview panel: the modal's main visual anchor. Deep petrol/
+   eucalyptus gradient, intentionally dark in both light and dark mode. */
+#pipelineRunStatsModal .pipeline-run-hero {
+  position: relative;
+  overflow: hidden;
+  margin: 0 0 14px;
+  padding: 20px 24px;
+  border: 1px solid var(--pipeline-hero-border);
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--pipeline-hero-deep) 0%, #0c574b 58%, var(--pipeline-hero-surface-alt) 100%);
+  color: var(--pipeline-hero-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Two subtle flowing translucent curves, right-weighted, behind content.
+   Pure CSS - no external image, no large opaque shape. */
+#pipelineRunStatsModal .pipeline-run-hero::before,
+#pipelineRunStatsModal .pipeline-run-hero::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  border-radius: 44% 56% 52% 48%;
+  pointer-events: none;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero::before {
+  right: -16%;
+  bottom: -72%;
+  width: 58%;
+  height: 168%;
+  background: rgba(148, 216, 159, 0.05);
+}
+
+#pipelineRunStatsModal .pipeline-run-hero::after {
+  right: -26%;
+  bottom: -54%;
+  width: 52%;
+  height: 150%;
+  background: rgba(103, 210, 176, 0.045);
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-facts {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 0.85fr));
+  align-items: center;
+  gap: 14px;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-status {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-status-badge {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  /* Gradient is scoped to this badge only. White check, per target. */
+  background: linear-gradient(150deg, var(--pipeline-jade-light) 0%, var(--pipeline-jade) 72%);
+  color: #ffffff;
+  box-shadow:
+    0 0 0 5px rgba(36, 185, 155, 0.14),
+    0 4px 10px rgba(6, 49, 42, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+#pipelineRunStatsModal .pipeline-run-hero.is-danger .pipeline-run-hero-status-badge {
+  background: linear-gradient(150deg, #dc8b81 0%, var(--pipeline-hero-danger) 72%);
+  color: #ffffff;
+  box-shadow:
+    0 0 0 5px rgba(207, 106, 98, 0.14),
+    0 4px 10px rgba(60, 20, 16, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+#pipelineRunStatsModal .pipeline-run-hero.is-running .pipeline-run-hero-status-badge {
+  background: linear-gradient(150deg, var(--pipeline-gold-light) 0%, var(--pipeline-gold) 72%);
+  color: #ffffff;
+  box-shadow:
+    0 0 0 5px rgba(229, 184, 78, 0.14),
+    0 4px 10px rgba(58, 42, 5, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+#pipelineRunStatsModal .pipeline-run-hero.is-muted .pipeline-run-hero-status-badge {
+  background: rgba(245, 250, 248, 0.22);
+  color: var(--pipeline-hero-text);
+  box-shadow: none;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-status-icon {
+  width: 24px;
+  height: 24px;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero.is-running .pipeline-run-hero-status-icon {
+  animation: pipeline-run-hero-spin 1.6s linear infinite;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-status-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-status-copy strong {
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.024em;
+  line-height: 1.1;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-status-copy span {
+  color: var(--pipeline-hero-muted);
+  font-size: 13.5px;
+  font-weight: 550;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding-left: 18px;
+  border-left: 1px solid rgba(245, 250, 248, 0.13);
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-stat > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-stat-icon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  /* Pale off-white so the icon reads against the petrol hero rather than
+     disappearing as teal-on-teal. */
+  color: rgba(245, 250, 248, 0.86);
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-stat strong {
+  overflow-wrap: anywhere;
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.028em;
+  line-height: 1.08;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-stat span {
+  color: var(--pipeline-hero-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-ribbon {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  margin-top: 18px;
+}
+
+/* Sized to the capsule row so the family labels below span exactly the same
+   width as the bars, and shrink together on narrow viewports. */
+#pipelineRunStatsModal .pipeline-run-hero-ribbon-main {
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Slim vertical capsules - telemetry/activity bars, not a segmented
+   progress bar. Bars stay a fixed narrow width and simply wrap-free flex
+   with a bounded max so a long stage_order never stretches them wide. */
+#pipelineRunStatsModal .pipeline-run-hero-ribbon-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-bar {
+  flex: 0 1 13px;
+  width: 13px;
+  min-width: 9px;
+  max-width: 15px;
+  height: 33px;
+  border-radius: 7px;
+  background: rgba(245, 250, 248, 0.14);
+  animation: pipeline-run-hero-bar-in 320ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+/* Completed stages walk the controlled teal -> jade -> mint -> gold ramp. */
+#pipelineRunStatsModal .pipeline-run-hero-bar.is-complete.is-step-0 { background: var(--pipeline-ribbon-0); }
+#pipelineRunStatsModal .pipeline-run-hero-bar.is-complete.is-step-1 { background: var(--pipeline-ribbon-1); }
+#pipelineRunStatsModal .pipeline-run-hero-bar.is-complete.is-step-2 { background: var(--pipeline-ribbon-2); }
+#pipelineRunStatsModal .pipeline-run-hero-bar.is-complete.is-step-3 { background: var(--pipeline-ribbon-3); }
+#pipelineRunStatsModal .pipeline-run-hero-bar.is-complete.is-step-4 { background: var(--pipeline-ribbon-4); }
+#pipelineRunStatsModal .pipeline-run-hero-bar.is-complete.is-step-5 { background: var(--pipeline-ribbon-5); }
+#pipelineRunStatsModal .pipeline-run-hero-bar.is-complete.is-step-6 { background: var(--pipeline-ribbon-6); }
+#pipelineRunStatsModal .pipeline-run-hero-bar.is-complete.is-step-7 { background: var(--pipeline-ribbon-7); }
+#pipelineRunStatsModal .pipeline-run-hero-bar.is-complete { background: var(--pipeline-ribbon-2); }
+
+#pipelineRunStatsModal .pipeline-run-hero-bar.is-running {
+  background: var(--pipeline-gold-light);
+  animation:
+    pipeline-run-hero-bar-in 320ms cubic-bezier(0.2, 0.75, 0.25, 1) both,
+    pipeline-run-hero-shine 1.9s ease-in-out infinite;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-bar.is-failed {
+  background: var(--pipeline-hero-danger);
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-bar.is-pending {
+  background: rgba(245, 250, 248, 0.12);
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-ribbon-labels {
+  display: flex;
+  justify-content: space-between;
+  max-width: 100%;
+  margin-top: 7px;
+  padding-right: 4px;
+  color: var(--pipeline-hero-muted);
+  font-size: 12.5px;
+  font-weight: 560;
+  letter-spacing: 0.01em;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-ribbon-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-ribbon-progress > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-progress-icon {
+  width: 19px;
+  height: 19px;
+  color: rgba(245, 250, 248, 0.9);
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-ribbon-progress strong {
+  font-size: 14.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#pipelineRunStatsModal .pipeline-run-hero-ribbon-progress span {
+  color: var(--pipeline-hero-muted);
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+@keyframes pipeline-run-hero-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@keyframes pipeline-run-hero-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pipeline-run-hero-bar-in {
+  from { opacity: 0; transform: translateY(4px) scaleY(0.72); }
+  to { opacity: 1; transform: translateY(0) scaleY(1); }
+}
+
+@keyframes pipeline-run-hero-shine {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.22); }
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-section {
+  padding: 22px 0;
+  border-bottom: 1px solid var(--pipeline-stats-border);
+}
+
+/* Contained premium panels for Run summary / Pipeline outcomes. */
+#pipelineRunStatsModal .pipeline-run-panel {
+  margin-bottom: 12px;
+  padding: 18px 20px !important;
+  border: 1px solid var(--pipeline-panel-border);
+  border-bottom: 1px solid var(--pipeline-panel-border);
+  border-radius: 16px;
+  background: var(--pipeline-panel-surface);
+}
+
+#pipelineRunStatsModal .pipeline-run-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+#pipelineRunStatsModal .pipeline-run-panel-head h4 {
+  display: flex !important;
+  align-items: center;
+  gap: 9px;
+  margin: 0 !important;
+  color: var(--pipeline-stats-text) !important;
+  font-size: 16.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.012em !important;
+  text-transform: none !important;
+}
+
+#pipelineRunStatsModal .pipeline-run-panel-icon {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  color: var(--pipeline-tone-0-icon);
+}
+
+#pipelineRunStatsModal .pipeline-run-panel-meta {
+  color: var(--pipeline-stats-secondary);
+  font-size: 13px;
+  font-weight: 560;
+  white-space: nowrap;
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-section h4,
+#pipelineRunStatsModal .pipeline-run-technical-section h4,
+#pipelineRunStatsModal .agent-trace-panel > h4 {
+  margin: 0 0 14px;
+  color: var(--pipeline-stats-muted) !important;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.085em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+#pipelineRunStatsModal .pipeline-run-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 0;
+  margin: 0;
+}
+
+/* Spacing carries the 3x2 rhythm; only a light vertical rule separates the
+   columns, so this never reads as a spreadsheet of six cells. */
+#pipelineRunStatsModal .pipeline-run-summary-item {
+  min-width: 0;
+  padding: 0 18px;
+  border-left: 1px solid var(--pipeline-panel-border);
+}
+
+#pipelineRunStatsModal .pipeline-run-summary-item:nth-child(3n + 1) {
+  padding-left: 0;
+  border-left: 0;
+}
+
+#pipelineRunStatsModal .pipeline-run-summary-grid dt {
+  margin: 0 0 5px;
+  color: var(--pipeline-stats-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+#pipelineRunStatsModal .pipeline-run-summary-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--pipeline-stats-text);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  line-height: 1.3;
+}
+
+#pipelineRunStatsModal .pipeline-run-summary-copy {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  margin-top: 16px;
+  padding: 9px 14px;
+  border: 1px solid var(--pipeline-callout-border);
+  border-radius: 10px;
+  background: var(--pipeline-callout-bg);
+}
+
+#pipelineRunStatsModal .pipeline-run-summary-copy-icon {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  color: var(--pipeline-tone-0-icon);
+}
+
+#pipelineRunStatsModal .pipeline-run-summary-copy-label {
+  flex: 0 0 auto;
+  color: var(--pipeline-callout-text);
+  font-size: 12.5px;
+  font-weight: 750;
+}
+
+#pipelineRunStatsModal .pipeline-run-summary-copy p {
+  margin: 0;
+  min-width: 0;
+  color: var(--pipeline-callout-text);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+#pipelineRunStatsModal .pipeline-run-failure-summary,
+#pipelineRunStatsModal .pipeline-run-stats-fetch-error {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 12px;
+  padding: 11px 12px;
+  border: 1px solid rgba(185, 105, 105, 0.34);
+  border-radius: 9px;
+  background: var(--pipeline-stats-danger-soft);
+  color: var(--pipeline-stats-danger);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#pipelineRunStatsModal .pipeline-run-failure-summary strong,
+#pipelineRunStatsModal .pipeline-run-stats-fetch-error strong {
+  font-size: 12.5px;
+  font-weight: 780;
+}
+
+/* Primary metrics: the first four persisted/configured outcome metrics in a
+   single unified lightly-tinted surface with subtle vertical separators -
+   not four separately bordered/colored tiles. */
+/* Four primary outcome cards: compact HORIZONTAL stat cards - icon tile on
+   the left, number + label stacked on the right. Informational only.
+   The soft powder-blue / lavender tones below are scoped strictly to these
+   cards; no action, button, hero or shell surface uses them. */
+#pipelineRunStatsModal .pipeline-run-outcome-primary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+#pipelineRunStatsModal .pipeline-run-outcome-primary-metric {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 84px;
+  padding: 16px;
+  border: 1px solid var(--pipeline-tone-0-border);
+  border-radius: 14px;
+  background: var(--pipeline-tone-0-bg);
+}
+
+#pipelineRunStatsModal .pipeline-run-outcome-primary-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--pipeline-tone-0-icon);
+}
+
+#pipelineRunStatsModal .pipeline-run-outcome-primary-icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+#pipelineRunStatsModal .pipeline-run-outcome-primary-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+#pipelineRunStatsModal .pipeline-run-outcome-primary-metric.is-tone-1 {
+  border-color: var(--pipeline-tone-1-border);
+  background: var(--pipeline-tone-1-bg);
+}
+
+#pipelineRunStatsModal .pipeline-run-outcome-primary-metric.is-tone-1 .pipeline-run-outcome-primary-icon {
+  color: var(--pipeline-tone-1-icon);
+}
+
+#pipelineRunStatsModal .pipeline-run-outcome-primary-metric.is-tone-2 {
+  border-color: var(--pipeline-tone-2-border);
+  background: var(--pipeline-tone-2-bg);
+}
+
+#pipelineRunStatsModal .pipeline-run-outcome-primary-metric.is-tone-2 .pipeline-run-outcome-primary-icon {
+  color: var(--pipeline-tone-2-icon);
+}
+
+#pipelineRunStatsModal .pipeline-run-outcome-primary-metric.is-tone-3 {
+  border-color: var(--pipeline-tone-3-border);
+  background: var(--pipeline-tone-3-bg);
+}
+
+#pipelineRunStatsModal .pipeline-run-outcome-primary-metric.is-tone-3 .pipeline-run-outcome-primary-icon {
+  color: var(--pipeline-tone-3-icon);
+}
+
+#pipelineRunStatsModal .pipeline-run-outcome-primary-metric strong {
+  overflow-wrap: anywhere;
+  color: var(--pipeline-stats-text);
+  font-size: 25px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 720;
+  letter-spacing: -0.032em;
+  line-height: 1.05;
+}
+
+#pipelineRunStatsModal .pipeline-run-outcome-primary-label {
+  color: var(--pipeline-stats-secondary);
+  font-size: 12.5px;
+  font-weight: 570;
+  line-height: 1.3;
+}
+
+html:not([data-theme="light"]) #pipelineRunStatsModal .pipeline-run-outcome-primary-icon {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Secondary metrics: every remaining persisted metric, as a tight compact
+   label/value matrix - not another spreadsheet of bordered boxes. */
+#pipelineRunStatsModal .pipeline-run-outcome-secondary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px 12px;
+  margin: 12px 0 0;
+}
+
+/* Soft contained rows rather than plain text on horizontal rules. */
+#pipelineRunStatsModal .pipeline-run-outcome-secondary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+  padding: 5px 11px;
+  border-radius: 8px;
+  background: var(--pipeline-row-surface);
+}
+
+#pipelineRunStatsModal .pipeline-run-outcome-secondary-row:hover {
+  background: var(--pipeline-stats-accent-soft);
+}
+
+#pipelineRunStatsModal .pipeline-run-outcome-secondary-row dt {
+  overflow-wrap: anywhere;
+  color: var(--pipeline-stats-secondary);
+  font-size: 12.5px;
+  font-weight: 560;
+}
+
+#pipelineRunStatsModal .pipeline-run-outcome-secondary-row dd {
+  flex: 0 0 auto;
+  margin: 0;
+  color: var(--pipeline-stats-text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+/* Premium full-width disclosure rows (Agent trace, Error details). */
+#pipelineRunStatsModal .pipeline-run-disclosure {
+  margin-top: 10px;
+  overflow: hidden;
+  border: 1px solid var(--pipeline-panel-border);
+  border-radius: 14px;
+  background: var(--pipeline-panel-surface);
+}
+
+#pipelineRunStatsModal .pipeline-run-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-height: 56px;
+  padding: 9px 18px;
+  color: var(--pipeline-stats-text);
+  cursor: pointer;
+  list-style: none;
+}
+
+#pipelineRunStatsModal .pipeline-run-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+#pipelineRunStatsModal .pipeline-run-disclosure > summary:hover {
+  background: var(--pipeline-stats-surface-raised);
+}
+
+#pipelineRunStatsModal .pipeline-run-disclosure-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--pipeline-callout-bg);
+  color: var(--pipeline-tone-0-icon);
+}
+
+#pipelineRunStatsModal .pipeline-run-disclosure-icon.is-danger {
+  background: var(--pipeline-stats-danger-soft);
+  color: var(--pipeline-stats-danger);
+}
+
+#pipelineRunStatsModal .pipeline-run-disclosure-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+#pipelineRunStatsModal .pipeline-run-disclosure-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+#pipelineRunStatsModal .pipeline-run-disclosure > summary strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+#pipelineRunStatsModal .pipeline-run-disclosure > summary small {
+  color: var(--pipeline-stats-secondary);
+  font-size: 12.5px;
+  font-weight: 550;
+}
+
+#pipelineRunStatsModal .pipeline-run-disclosure-chevron {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: var(--pipeline-stats-muted);
+  transition: transform 140ms ease;
+}
+
+#pipelineRunStatsModal .pipeline-run-disclosure-chevron svg {
+  width: 18px;
+  height: 18px;
+}
+
+#pipelineRunStatsModal .pipeline-run-disclosure[open] .pipeline-run-disclosure-chevron {
+  transform: rotate(90deg);
+}
+
+/* Compact inline empty rows - never a large dashed panel. */
+#pipelineRunStatsModal .pipeline-run-inline-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 13px;
+  border-radius: 9px;
+  background: var(--pipeline-row-surface);
+  color: var(--pipeline-stats-secondary);
+  font-size: 12.5px;
+  font-weight: 550;
+}
+
+#pipelineRunStatsModal .pipeline-run-inline-empty svg {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+}
+
+#pipelineRunStatsModal .pipeline-run-technical-content {
+  padding: 4px 20px 18px;
+  border-top: 1px solid var(--pipeline-panel-border);
+}
+
+#pipelineRunStatsModal .pipeline-run-technical-section {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--pipeline-stats-border);
+}
+
+#pipelineRunStatsModal .pipeline-run-technical-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 24px;
+}
+
+#pipelineRunStatsModal .pipeline-run-technical-grid .pipeline-run-detail-row {
+  display: block;
+  min-width: 0;
+}
+
+#pipelineRunStatsModal .pipeline-run-detail-label {
+  margin-bottom: 2px;
+  color: var(--pipeline-stats-secondary);
+  font-size: 12px;
+  font-weight: 560;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+#pipelineRunStatsModal .pipeline-run-detail-value {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--pipeline-stats-text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+/* Restrained semantic treatment for boolean settings - a small dot, not a
+   large pill and not raw debug text. */
+#pipelineRunStatsModal .pipeline-run-detail-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pipeline-stats-muted);
+}
+
+#pipelineRunStatsModal .pipeline-run-detail-value.is-yes .pipeline-run-detail-dot {
+  background: var(--pipeline-tone-0-icon);
+}
+
+#pipelineRunStatsModal .pipeline-run-detail-value.is-no .pipeline-run-detail-dot {
+  background: var(--pipeline-stats-muted);
+  opacity: 0.55;
+}
+
+#pipelineRunStatsModal .pipeline-run-stage-chip {
+  padding: 5px 9px;
+  border: 1px solid var(--pipeline-stats-border);
+  border-radius: 7px;
+  background: var(--pipeline-stats-surface-raised);
+  color: var(--pipeline-stats-muted);
+  font-size: 10.5px;
+  font-weight: 680;
+}
+
+/* Same completed/running/failed/pending language as the hero ribbon, so the
+   detailed Stages view and the overview stay visually consistent. */
+#pipelineRunStatsModal .pipeline-run-stage-chip.is-complete {
+  border-color: var(--pipeline-callout-border);
+  background: var(--pipeline-callout-bg);
+  color: var(--pipeline-callout-text);
+}
+
+#pipelineRunStatsModal .pipeline-run-stage-chip.is-running {
+  border-color: rgba(229, 184, 78, 0.42);
+  background: rgba(229, 184, 78, 0.13);
+  color: var(--pipeline-stats-warning);
+}
+
+#pipelineRunStatsModal .pipeline-run-stage-chip.is-failed {
+  border-color: rgba(185, 105, 105, 0.34);
+  background: var(--pipeline-stats-danger-soft);
+  color: var(--pipeline-stats-danger);
+}
+
+#pipelineRunStatsModal .pipeline-run-stage-chip.is-pending {
+  border-color: var(--pipeline-stats-border);
+  background: var(--pipeline-stats-surface-raised);
+  color: var(--pipeline-stats-muted);
+}
+
+#pipelineRunStatsModal .pipeline-run-detail-panel.agent-trace-panel {
+  display: block;
+  padding: 18px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* Compact, contained empty state - not a giant centered sentence filling
+   the disclosure. Scoped to this panel only; unrelated table/list empty
+   states elsewhere keep their own existing style. */
+#pipelineRunStatsModal .agent-trace-panel .pipeline-runs-empty-cell {
+  padding: 16px;
+  border: 1px dashed var(--pipeline-stats-border);
+  border-radius: 10px;
+  background: var(--pipeline-stats-surface-raised);
+  font-size: 12px;
+}
+
+#pipelineRunStatsModal .agent-trace-json-detail pre {
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+#pipelineRunStatsModal .pipeline-run-status.is-success {
+  border-color: var(--pipeline-stats-accent-border);
+  background: var(--pipeline-stats-accent-soft);
+  color: var(--pipeline-stats-accent-text);
+}
+
+#pipelineRunStatsModal .pipeline-run-status.is-danger {
+  border-color: rgba(185, 105, 105, 0.34);
+  background: var(--pipeline-stats-danger-soft);
+  color: var(--pipeline-stats-danger);
+}
+
+#pipelineRunStatsModal .pipeline-run-status.is-running {
+  border-color: rgba(208, 170, 108, 0.34);
+  background: rgba(208, 170, 108, 0.11);
+  color: var(--pipeline-stats-warning);
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 210px;
+  color: var(--pipeline-stats-muted);
+  font-size: 12px;
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-loading-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pipeline-stats-accent);
+  animation: pipeline-run-stats-loading-pulse 900ms ease-in-out infinite alternate;
+}
+
+#pipelineRunStatsModal .pipeline-run-stats-fetch-error {
+  margin: 20px 0;
+}
+
+@keyframes pipeline-run-stats-dialog-in {
+  from { opacity: 0; transform: translateY(5px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes pipeline-run-stats-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pipeline-run-stats-dialog-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(3px) scale(0.99); }
+}
+
+@keyframes pipeline-run-stats-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes pipeline-run-stats-loading-pulse {
+  from { opacity: 0.4; transform: scale(0.86); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (max-width: 1000px) {
+  #pipelineRunStatsModal .pipeline-run-hero-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-hero-status {
+    grid-column: 1 / -1;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-hero-stat:nth-child(2) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-hero-ribbon {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+
+@media (max-width: 800px) {
+  #pipelineRunStatsModal .pipeline-run-summary-grid,
+  #pipelineRunStatsModal .pipeline-run-technical-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #pipelineRunStatsModal .pipeline-run-summary-item:nth-child(3n + 1) {
+    padding-left: 20px;
+    border-left: 1px solid var(--pipeline-panel-border);
+  }
+
+  #pipelineRunStatsModal .pipeline-run-summary-item:nth-child(2n + 1) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-summary-item:nth-child(n + 3) {
+    border-top: 1px solid var(--pipeline-panel-border);
+  }
+
+  #pipelineRunStatsModal .pipeline-run-outcome-primary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  #pipelineRunStatsModal {
+    align-items: end;
+    padding: 8px !important;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-stats-modal-card {
+    width: 100% !important;
+    max-height: calc(100dvh - 16px);
+    border-radius: 20px !important;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-stats-header {
+    padding: 20px 20px 16px;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-stats-heading h3 {
+    font-size: 23px;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-stats-body {
+    padding: 0 20px 22px;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-panel {
+    padding: 18px 16px !important;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-hero {
+    padding: 16px 16px;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-hero-bar {
+    flex: 0 1 10px;
+    width: 10px;
+    min-width: 7px;
+    height: 28px;
+    border-radius: 5px;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-hero-ribbon-bars {
+    gap: 5px;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-outcome-secondary {
+    gap: 3px 0;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-hero-facts {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-hero-stat {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-outcome-secondary {
+    grid-template-columns: 1fr;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-summary-copy {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 390px) {
+  #pipelineRunStatsModal .pipeline-run-summary-grid,
+  #pipelineRunStatsModal .pipeline-run-technical-grid,
+  #pipelineRunStatsModal .pipeline-run-outcome-primary {
+    grid-template-columns: 1fr;
+  }
+
+  #pipelineRunStatsModal .pipeline-run-summary-item:nth-child(n) {
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid var(--pipeline-panel-border);
+  }
+
+  #pipelineRunStatsModal .pipeline-run-summary-item:first-child {
+    border-top: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #pipelineRunStatsModal,
+  #pipelineRunStatsModal .pipeline-run-stats-modal-card,
+  #pipelineRunStatsModal .pipeline-run-disclosure-chevron,
+  #pipelineRunStatsModal .pipeline-run-stats-loading-dot,
+  #pipelineRunStatsModal .pipeline-run-hero-status-icon,
+  #pipelineRunStatsModal .pipeline-run-hero-bar {
+    animation: none !important;
+    transition: none !important;
+  }
+}

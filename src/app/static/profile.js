@@ -12,6 +12,7 @@ const profileState = {
   pipelineRunsHasNext: false,
   resumeRoleFamilies: [],
   resumeRoleMappings: [],
+  activeRoleResumeName: null,
   onboardingPreferences: null,
   onboardingRequirements: {},
   preferencesLoaded: false,
@@ -315,6 +316,53 @@ function formatDateTime(value) {
   return date.toLocaleString();
 }
 
+function formatPipelineRunHeaderDate(value) {
+  if (!value) return "Date unavailable";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatPipelineRunDuration(startedAt, completedAt) {
+  const started = new Date(startedAt || "");
+  const completed = new Date(completedAt || "");
+  if (Number.isNaN(started.getTime()) || Number.isNaN(completed.getTime()) || completed < started) {
+    return "Not available";
+  }
+  const totalMinutes = Math.max(0, Math.round((completed.getTime() - started.getTime()) / 60000));
+  if (totalMinutes < 1) return "<1m";
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  return [
+    days ? `${days}d` : "",
+    hours ? `${hours}h` : "",
+    minutes ? `${minutes}m` : "",
+  ].filter(Boolean).join(" ");
+}
+
+function formatPipelineRunMetricValue(value) {
+  const number = Number(String(value ?? "").trim());
+  return Number.isFinite(number) ? number.toLocaleString() : String(value ?? "-");
+}
+
+function formatResumeDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 function formatPercent(value) {
   if (value === null || value === undefined || value === "") return "-";
   const number = Number(value);
@@ -324,6 +372,7 @@ function formatPercent(value) {
 
 function setStatus(message, tone = "info") {
   const banner = qs("resumeStatusBanner");
+  if (!banner) return;
   banner.textContent = message || "";
   banner.className = `profile-inline-status ${tone}`;
   if (!message) {
@@ -333,8 +382,86 @@ function setStatus(message, tone = "info") {
 
 function clearStatus() {
   const banner = qs("resumeStatusBanner");
+  if (!banner) return;
   banner.textContent = "";
   banner.className = "profile-inline-status hidden";
+}
+
+function setResumeUploadFeedback(message, tone = "info") {
+  const feedback = qs("resumeUploadFeedback");
+  if (!feedback) return;
+  feedback.textContent = message || "";
+  feedback.className = `profile-resume-modal-feedback ${tone}`;
+  feedback.classList.toggle("hidden", !message);
+}
+
+function profileResumeFocusableElements(modal) {
+  if (!modal) return [];
+  return Array.from(modal.querySelectorAll(
+    'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+  )).filter((element) => !element.closest(".hidden"));
+}
+
+function openProfileResumeModal(modal, trigger, initialFocus) {
+  if (!modal) return;
+  if (modal._closeTimer) window.clearTimeout(modal._closeTimer);
+  modal.classList.remove("is-closing");
+  modal._returnFocus = trigger || document.activeElement;
+  modal.classList.remove("hidden");
+  document.body.classList.add("profile-resume-modal-open");
+  window.requestAnimationFrame(() => {
+    (initialFocus || profileResumeFocusableElements(modal)[0] || modal.querySelector(".modal-card"))?.focus();
+  });
+}
+
+function closeProfileResumeModal(modal) {
+  if (!modal || modal.classList.contains("hidden") || modal.classList.contains("is-closing")) return;
+  const returnFocus = modal._returnFocus;
+  const returnResumeName = modal.dataset.returnResumeName || "";
+  const returnResumeAction = modal.dataset.returnResumeAction || "manage";
+  delete modal.dataset.returnResumeName;
+  delete modal.dataset.returnResumeAction;
+  const finishClose = () => {
+    modal.classList.remove("is-closing");
+    modal.classList.add("hidden");
+    modal._closeTimer = null;
+    if (!document.querySelector(".profile-resume-modal:not(.hidden)")) {
+      document.body.classList.remove("profile-resume-modal-open");
+    }
+    if (returnFocus && document.body.contains(returnFocus)) {
+      returnFocus.focus();
+    } else if (returnResumeName) {
+      const selector = returnResumeAction === "delete"
+        ? "[data-resume-delete]"
+        : "[data-manage-resume-roles]";
+      const replacement = Array.from(document.querySelectorAll(selector)).find((button) => {
+        const resumeName = returnResumeAction === "delete"
+          ? button.dataset.resumeDelete
+          : button.dataset.manageResumeRoles;
+        return resumeName === returnResumeName;
+      });
+      (replacement || qs("openResumeUploadModalBtn"))?.focus();
+    } else {
+      qs("openResumeUploadModalBtn")?.focus();
+    }
+  };
+  modal.classList.add("is-closing");
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  modal._closeTimer = window.setTimeout(finishClose, reducedMotion ? 0 : 110);
+}
+
+function trapProfileResumeModalFocus(event, modal) {
+  const focusable = profileResumeFocusableElements(modal);
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 function setAdminUsersStatus(message, tone = "info") {
@@ -638,6 +765,161 @@ function getPipelineRunOutcomeMetrics(counts) {
     .filter((metric) => isDisplayableMetricValue(metric.value));
 }
 
+// The four highlighted outcome metrics, named by their existing config
+// labels. These are chosen from PIPELINE_RUN_OUTCOME_METRICS only - never
+// invented - and every metric not selected here still renders in the
+// secondary list below the cards.
+const PIPELINE_RUN_PRIMARY_METRIC_LABELS = [
+  "Scraped Jobs",
+  "Filtered Jobs",
+  "Unique Jobs",
+  "New Jobs",
+];
+
+function selectPipelineRunPrimaryMetrics(outcomeMetrics) {
+  const byLabel = new Map(outcomeMetrics.map((metric) => [metric.label, metric]));
+  const selected = PIPELINE_RUN_PRIMARY_METRIC_LABELS
+    .map((label) => byLabel.get(label))
+    .filter(Boolean);
+  if (selected.length === PIPELINE_RUN_PRIMARY_METRIC_LABELS.length) return selected;
+  // Preserve four cards for runs that did not persist one of the preferred
+  // metrics by topping up in the existing configured order.
+  const chosen = new Set(selected.map((metric) => metric.label));
+  for (const metric of outcomeMetrics) {
+    if (selected.length >= PIPELINE_RUN_PRIMARY_METRIC_LABELS.length) break;
+    if (chosen.has(metric.label)) continue;
+    chosen.add(metric.label);
+    selected.push(metric);
+  }
+  return selected;
+}
+
+// Groups the current persisted stage_order into the compact family labels
+// shown under the hero ribbon. This never invents a stage: it only relabels
+// whatever raw stage names the run payload actually contains. Any stage name
+// that doesn't match a known family still renders (as its own humanized
+// name), so an unexpected/future stage is never dropped or misrepresented.
+const PIPELINE_STAGE_FAMILY_RULES = [
+  { family: "Scrape", test: /^startup$|scrap/ },
+  { family: "AI", test: /intelligence|ai_evaluation|embedding|^details$/ },
+  { family: "Filter", test: /filter|dedupe/ },
+  { family: "Rank", test: /rank/ },
+  { family: "Match", test: /resume_matching|match|priority/ },
+  { family: "Plan", test: /planning|rag_export|plan/ },
+  { family: "Final", test: /final/ },
+];
+
+// Minimal inline SVG icons, matching the existing profileResumeFileIcon /
+// profileResumeManageRoleIcon pattern already used in this file. No new icon
+// dependency is introduced.
+const PIPELINE_RUN_ICON_PATHS = {
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+  alert: '<path d="M12 8v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.6" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="8.25" stroke="currentColor" stroke-width="1.8"/>',
+  spinner: '<circle cx="12" cy="12" r="8.25" stroke="currentColor" stroke-width="1.8" opacity="0.35"/><path d="M12 3.75a8.25 8.25 0 018.25 8.25" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>',
+  clock: '<circle cx="12" cy="12" r="8.25" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.5V12l3 1.75" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+  document: '<path d="M7 3.75h6l4 4v12.5H7z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M13 3.75v4h4" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+  layers: '<path d="M12 3.75l8 4-8 4-8-4z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M4 12l8 4 8-4M4 16.25l8 4 8-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+  database: '<ellipse cx="12" cy="6.5" rx="7.25" ry="2.75" stroke="currentColor" stroke-width="1.7"/><path d="M4.75 6.5v11c0 1.52 3.25 2.75 7.25 2.75s7.25-1.23 7.25-2.75v-11" stroke="currentColor" stroke-width="1.7"/><path d="M19.25 12c0 1.52-3.25 2.75-7.25 2.75S4.75 13.52 4.75 12" stroke="currentColor" stroke-width="1.7"/>',
+  funnel: '<path d="M4.25 5.25h15.5l-6 7v6.5l-3.5 2v-8.5z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+  sparkle: '<path d="M12 3.75l1.9 4.85 4.85 1.9-4.85 1.9-1.9 4.85-1.9-4.85-4.85-1.9 4.85-1.9z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M18.5 16.25l.75 1.9 1.9.75-1.9.75-.75 1.9-.75-1.9-1.9-.75 1.9-.75z" fill="currentColor"/>',
+  chart: '<path d="M4.75 19.25h14.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M7.5 16.5V10M12 16.5V5.5M16.5 16.5v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  list: '<path d="M9 6.75h10.25M9 12h10.25M9 17.25h10.25" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="5.25" cy="6.75" r="1.2" fill="currentColor"/><circle cx="5.25" cy="12" r="1.2" fill="currentColor"/><circle cx="5.25" cy="17.25" r="1.2" fill="currentColor"/>',
+  info: '<circle cx="12" cy="12" r="8.25" stroke="currentColor" stroke-width="1.7"/><path d="M12 11v5.25" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7.9" r="1.15" fill="currentColor"/>',
+  copy: '<rect x="9" y="9" width="10.25" height="10.25" rx="2.4" stroke="currentColor" stroke-width="1.6"/><path d="M15 6.4A2.4 2.4 0 0012.6 4H7.4A2.4 2.4 0 005 6.4v5.2A2.4 2.4 0 007.4 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+  chevron: '<path d="M9.5 5.75L16 12l-6.5 6.25" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>',
+};
+
+function pipelineRunIcon(name, className = "") {
+  const paths = PIPELINE_RUN_ICON_PATHS[name] || "";
+  if (!paths) return "";
+  return `<svg class="${className}" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">${paths}</svg>`;
+}
+
+function pipelineRunStatusIconName(statusTone) {
+  if (statusTone === "success") return "check";
+  if (statusTone === "danger") return "alert";
+  if (statusTone === "running") return "spinner";
+  return "info";
+}
+
+function pipelineRunStatusCaption(statusTone, statusLabel) {
+  if (statusTone === "success") return "Pipeline completed successfully";
+  if (statusTone === "danger") return "Pipeline did not complete";
+  if (statusTone === "running") return "Pipeline run in progress";
+  return `Pipeline run ${String(statusLabel || "state").toLowerCase()}`;
+}
+
+function pipelineRunStageDisplayName(stage) {
+  const text = String(stage || "").trim().replaceAll("_", " ");
+  return text.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function pipelineRunStageFamily(stage) {
+  const normalized = String(stage || "").trim().toLowerCase();
+  const rule = PIPELINE_STAGE_FAMILY_RULES.find((candidate) => candidate.test.test(normalized));
+  return rule ? rule.family : pipelineRunStageDisplayName(stage);
+}
+
+// One state per ribbon/chip segment, derived only from data the modal
+// already loads (stage_order, completed_stages, current_stage, status) -
+// no new fields, no invented progress.
+function pipelineRunStageSegmentState(stage, { completedStages, currentStage, statusTone }) {
+  if (completedStages.has(stage)) return "complete";
+  if (stage === currentStage) {
+    if (statusTone === "danger") return "failed";
+    if (statusTone === "running") return "running";
+  }
+  return "pending";
+}
+
+// Completed segments walk a fixed premium teal -> jade -> mint -> gold
+// progression so the ribbon reads as a deliberate journey rather than one
+// flat colour. The step is chosen from the segment's own position in the
+// run's real stage_order; the palette itself lives in the stylesheet.
+const PIPELINE_RIBBON_PROGRESSION_STEPS = 8;
+
+function pipelineRunStageProgressionStep(index, total) {
+  const span = Math.max(Number(total) || 0, 1);
+  const position = Math.min(Math.max(Number(index) || 0, 0), span - 1);
+  const ratio = span === 1 ? 0 : position / (span - 1);
+  return Math.round(ratio * (PIPELINE_RIBBON_PROGRESSION_STEPS - 1));
+}
+
+function pipelineRunStageSegmentStatusText(state) {
+  if (state === "complete") return "Completed";
+  if (state === "running") return "In progress";
+  if (state === "failed") return "Failed";
+  return "Pending";
+}
+
+// "Planned jobs" and "Packet jobs" are NOT persisted in status_json.counts.
+// main.py::_application_planning_status_counts computes them per run as
+// planning_total_jobs (rows in application_shortlist_by_job.csv) and
+// planning_packet_jobs (rows in job_packet_manifest.csv), then embeds them in
+// the authoritative summary_message. They are deliberately different concepts
+// from planning_packets_total / planning_packets_generated /
+// planning_packets_completed / planning_llm_generated, which ARE persisted and
+// keep their own labels under Pipeline outcomes. Parsing the authoritative
+// persisted sentence is the only correct source for these two fields; falling
+// back to a packet-artifact count would relabel a different metric.
+const PIPELINE_SUMMARY_PLANNED_JOBS_PATTERN = /(\d[\d,]*)\s+planned\s+jobs?\b/i;
+const PIPELINE_SUMMARY_PACKET_JOBS_PATTERN = /(\d[\d,]*)\s+packet\s+jobs?\b/i;
+
+function pipelineRunSummaryMetric(summaryMessage, pattern) {
+  const match = String(summaryMessage || "").match(pattern);
+  if (!match) return undefined;
+  const numeric = Number(match[1].replaceAll(",", ""));
+  return Number.isFinite(numeric) ? numeric : undefined;
+}
+
+function pipelineRunPlannedJobCount(summaryMessage) {
+  return pipelineRunSummaryMetric(summaryMessage, PIPELINE_SUMMARY_PLANNED_JOBS_PATTERN);
+}
+
+function pipelineRunPacketJobCount(summaryMessage) {
+  return pipelineRunSummaryMetric(summaryMessage, PIPELINE_SUMMARY_PACKET_JOBS_PATTERN);
+}
+
 function pipelineRunCountsSummary(counts) {
   const source = counts && typeof counts === "object" ? counts : {};
   const parts = [
@@ -820,6 +1102,26 @@ function renderKeyValueList(items) {
   `).join("");
 }
 
+// Same label/value pairs as renderKeyValueList, with a restrained semantic
+// treatment for the boolean Yes/No settings so they stop reading as raw debug
+// text. Values themselves are unchanged.
+function renderPipelineRunSettingsList(items) {
+  return items.map(([label, value]) => {
+    const text = value === undefined || value === null || value === "" ? "-" : String(value);
+    const normalized = text.trim().toLowerCase();
+    const booleanClass = normalized === "yes" ? " is-yes" : normalized === "no" ? " is-no" : "";
+    return `
+      <div class="pipeline-run-detail-row">
+        <div class="pipeline-run-detail-label">${escapeHtml(label)}</div>
+        <div class="pipeline-run-detail-value${booleanClass}">
+          ${booleanClass ? '<span class="pipeline-run-detail-dot" aria-hidden="true"></span>' : ""}
+          <span>${escapeHtml(text)}</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
 function renderJsonDetails(label, value) {
   const payload = value && typeof value === "object" && Object.keys(value).length
     ? JSON.stringify(value, null, 2)
@@ -920,7 +1222,7 @@ function renderAgentTracePanel(tracePayload, traceError = "") {
             ${runs.map(renderAgentTraceRun).join("")}
           </div>
         `
-        : `<div class="pipeline-runs-empty-cell">No agent trace recorded for this run.</div>`}
+        : `<div class="pipeline-run-inline-empty">${pipelineRunIcon("list", "")}<span>No agent trace recorded for this run.</span></div>`}
     </section>
   `;
 }
@@ -1111,77 +1413,318 @@ function renderPipelineRunDetail(data, tracePayload = {}, traceError = "") {
   const outcomeMetrics = getPipelineRunOutcomeMetrics(counts);
   const stageOrder = Array.isArray(statusJson.stage_order) ? statusJson.stage_order : [];
   const completedStages = new Set(Array.isArray(statusJson.completed_stages) ? statusJson.completed_stages : []);
+  const statusLabel = pipelineRunStatusLabel(run.status || statusJson.status);
+  const statusTone = pipelineRunStatusTone(run.status || statusJson.status);
+  const startedAt = run.started_at || statusJson.started_at || "";
+  const completedAt = run.completed_at || statusJson.completed_at || statusJson.finished_at || "";
+  const duration = completedAt
+    ? formatPipelineRunDuration(startedAt, completedAt)
+    : statusTone === "running" ? "In progress" : "Not available";
+  const finalJobCount = run.final_job_count ?? statusJson.final_job_count ?? counts.final_jobs ?? "-";
+  const summaryMessage = run.summary_message || statusJson.summary_message || run.stage_message || statusJson.stage_message || "";
+  // Authoritative source for these two: the persisted summary sentence (see
+  // pipelineRunPlannedJobCount). Never substituted from planning_packets_*.
+  const plannedJobCount = pipelineRunPlannedJobCount(summaryMessage);
+  const packetJobCount = pipelineRunPacketJobCount(summaryMessage);
+  // Distinct, separately persisted planning-stage packet artifact count.
+  const planningPacketsTotal = getFirstMetricValue(counts, ["planning_packets_total"]);
+  const scrapedTotal = getFirstMetricValue(counts, ["scraped_jobs", "scraped"]);
+  const errorMessage = run.error || statusJson.error || "";
+  const currentStage = run.current_stage || statusJson.current_stage || "-";
 
-  qs("pipelineRunStatsTitle").textContent = "Pipeline run stats";
-  qs("pipelineRunStatsSubtitle").textContent = run.run_id || "Persisted run details.";
+  // Same outcomeMetrics data as before, split into a primary and secondary
+  // presentation tier. The four highlighted metrics are selected out of the
+  // existing PIPELINE_RUN_OUTCOME_METRICS config by label - no new metric, no
+  // new derivation - and anything not highlighted stays fully visible in the
+  // secondary list. Runs missing one of the four fall back to config order so
+  // four cards always render when four metrics exist.
+  const primaryMetrics = selectPipelineRunPrimaryMetrics(outcomeMetrics);
+  const primaryLabels = new Set(primaryMetrics.map((metric) => metric.label));
+  const secondaryMetrics = outcomeMetrics.filter((metric) => !primaryLabels.has(metric.label));
+  const primaryMetricIcons = ["database", "funnel", "layers", "sparkle"];
+
+  const stageSegmentState = (stage) => pipelineRunStageSegmentState(stage, {
+    completedStages,
+    currentStage,
+    statusTone,
+  });
+  const stageFamilies = [];
+  for (const stage of stageOrder) {
+    const family = pipelineRunStageFamily(stage);
+    if (!stageFamilies.includes(family)) stageFamilies.push(family);
+  }
+  const completedStageCount = stageOrder.filter((stage) => completedStages.has(stage)).length;
+
+  const metricRow = (label, value) => `
+    <div class="pipeline-run-summary-item">
+      <dt>${escapeHtml(label)}</dt>
+      <dd>${escapeHtml(value)}</dd>
+    </div>
+  `;
+  const optionalMetricText = (value) => (
+    isDisplayableMetricValue(value) ? formatPipelineRunMetricValue(value) : "-"
+  );
+
+  qs("pipelineRunStatsTitle").textContent = "Pipeline run";
+  qs("pipelineRunStatsSubtitle").textContent = formatPipelineRunHeaderDate(startedAt);
+  qs("pipelineRunStatsRunId").textContent = run.run_id || "Run ID unavailable";
   qs("pipelineRunStatsBody").innerHTML = `
-    <section class="pipeline-run-detail-panel">
-      <h4>Run</h4>
-      ${renderKeyValueList([
-        ["Status", pipelineRunStatusLabel(run.status)],
-        ["Started", formatDateTime(run.started_at || "")],
-        ["Completed", formatDateTime(run.completed_at || "")],
-        ["Current stage", run.current_stage || ""],
-        ["Summary", run.summary_message || statusJson.summary_message || ""],
-        ["Error", run.error || statusJson.error || ""],
-      ])}
-    </section>
-
-    <section class="pipeline-run-detail-panel">
-      <h4>Run outcomes</h4>
-      <div class="pipeline-run-count-grid">
-        ${outcomeMetrics.length
-          ? outcomeMetrics.map((metric) => `
-              <div class="pipeline-run-count-tile is-${escapeHtml(metric.tone)}">
-                <span>${escapeHtml(metric.label)}</span>
-                <strong>${escapeHtml(formatMetricValue(metric.value))}</strong>
-              </div>
-            `).join("")
-          : `<div class="pipeline-runs-empty-cell">No user-facing outcome metrics were persisted for this run.</div>`}
+    <section class="pipeline-run-hero is-${escapeHtml(statusTone)}" aria-label="Pipeline run overview">
+      <div class="pipeline-run-hero-facts">
+        <div class="pipeline-run-hero-status">
+          <span class="pipeline-run-hero-status-badge" aria-hidden="true">
+            ${pipelineRunIcon(pipelineRunStatusIconName(statusTone), "pipeline-run-hero-status-icon")}
+          </span>
+          <div class="pipeline-run-hero-status-copy">
+            <strong>${escapeHtml(statusLabel)}</strong>
+            <span>${escapeHtml(pipelineRunStatusCaption(statusTone, statusLabel))}</span>
+          </div>
+        </div>
+        <div class="pipeline-run-hero-stat">
+          ${pipelineRunIcon("clock", "pipeline-run-hero-stat-icon")}
+          <div>
+            <strong>${escapeHtml(duration)}</strong>
+            <span>Duration</span>
+          </div>
+        </div>
+        <div class="pipeline-run-hero-stat">
+          ${pipelineRunIcon("document", "pipeline-run-hero-stat-icon")}
+          <div>
+            <strong>${escapeHtml(formatPipelineRunMetricValue(finalJobCount))}</strong>
+            <span>Final jobs</span>
+          </div>
+        </div>
+        <div class="pipeline-run-hero-stat">
+          ${pipelineRunIcon("layers", "pipeline-run-hero-stat-icon")}
+          <div>
+            <strong>${escapeHtml(optionalMetricText(planningPacketsTotal))}</strong>
+            <span>Planning packets</span>
+          </div>
+        </div>
       </div>
+      ${stageOrder.length ? `
+        <div class="pipeline-run-hero-ribbon">
+          <div class="pipeline-run-hero-ribbon-main">
+            <ul class="pipeline-run-hero-ribbon-bars" role="list" aria-label="Pipeline stage progress">
+              ${stageOrder.map((stage, index) => {
+                const state = stageSegmentState(stage);
+                const raw = pipelineRunStageDisplayName(stage);
+                const step = pipelineRunStageProgressionStep(index, stageOrder.length);
+                const stepClass = state === "complete" ? ` is-step-${step}` : "";
+                return `
+                  <li
+                    class="pipeline-run-hero-bar is-${escapeHtml(state)}${stepClass}"
+                    role="listitem"
+                    title="${escapeHtml(raw)} — ${escapeHtml(pipelineRunStageSegmentStatusText(state))}"
+                    aria-label="${escapeHtml(raw)}: ${escapeHtml(pipelineRunStageSegmentStatusText(state))}"
+                  ></li>
+                `;
+              }).join("")}
+            </ul>
+            <div class="pipeline-run-hero-ribbon-labels" aria-hidden="true">
+              ${stageFamilies.map((family) => `<span>${escapeHtml(family)}</span>`).join("")}
+            </div>
+          </div>
+          <div class="pipeline-run-hero-ribbon-progress">
+            ${pipelineRunIcon(completedStageCount === stageOrder.length ? "check" : "spinner", "pipeline-run-hero-progress-icon")}
+            <div>
+              <strong>${escapeHtml(`${completedStageCount} / ${stageOrder.length} stages`)}</strong>
+              <span>${escapeHtml(completedStageCount === stageOrder.length ? "All stages completed" : `${stageOrder.length - completedStageCount} not reached`)}</span>
+            </div>
+          </div>
+        </div>
+      ` : ""}
     </section>
 
-    <section class="pipeline-run-detail-panel">
-      <h4>Settings</h4>
-      ${renderKeyValueList([
-        ["Job limit", config.job_limit ?? 50],
-        ["Packet limit", config.job_packet_limit ?? 0],
-        ["LLM actions", Array.isArray(config.llm_actions) ? config.llm_actions.join(", ") : config.llm_actions],
-        ["Planning only", config.planning_only ? "Yes" : "No"],
-        ["Generate tailoring", config.generate_tailoring ? "Yes" : "No"],
-        ["Generate LLM tailoring", config.generate_llm_tailoring ? "Yes" : "No"],
-        ["Refresh LLM tailoring", config.refresh_llm_tailoring ? "Yes" : "No"],
-        ["Generate LLM fallback", config.generate_llm_fallback ? "Yes" : "No"],
-        ["Generate LLM adjudication", config.generate_llm_adjudication ? "Yes" : "No"],
-        ["Delete seen data", config.delete_seen_data || "no"],
-      ])}
+    <section class="pipeline-run-panel pipeline-run-stats-section pipeline-run-summary-section">
+      <div class="pipeline-run-panel-head">
+        <h4>${pipelineRunIcon("document", "pipeline-run-panel-icon")}<span>Run summary</span></h4>
+      </div>
+      <dl class="pipeline-run-summary-grid">
+        ${metricRow("Started", formatDateTime(startedAt) || "-")}
+        ${metricRow("Completed", formatDateTime(completedAt) || "-")}
+        ${metricRow("Current stage", currentStage)}
+        ${metricRow("Final jobs", formatPipelineRunMetricValue(finalJobCount))}
+        ${metricRow("Planned jobs", optionalMetricText(plannedJobCount))}
+        ${metricRow("Packet jobs", optionalMetricText(packetJobCount))}
+      </dl>
+      <div class="pipeline-run-summary-copy">
+        ${pipelineRunIcon("info", "pipeline-run-summary-copy-icon")}
+        <span class="pipeline-run-summary-copy-label">Summary</span>
+        <p>${escapeHtml(summaryMessage || "No summary persisted for this run.")}</p>
+      </div>
+      ${errorMessage ? `
+        <div class="pipeline-run-failure-summary" role="alert">
+          <strong>Run error</strong>
+          <span>${escapeHtml(errorMessage)}</span>
+        </div>
+      ` : ""}
     </section>
 
-    <section class="pipeline-run-detail-panel">
-      <h4>Stages</h4>
-      <div class="pipeline-run-stage-list">
-        ${stageOrder.length
-          ? stageOrder.map((stage) => `
-              <span class="pipeline-run-stage-chip ${completedStages.has(stage) ? "is-complete" : ""}">
-                ${completedStages.has(stage) ? "✓" : "○"} ${escapeHtml(stage)}
+    <section class="pipeline-run-panel pipeline-run-stats-section pipeline-run-outcomes-section">
+      <div class="pipeline-run-panel-head">
+        <h4>${pipelineRunIcon("chart", "pipeline-run-panel-icon")}<span>Pipeline outcomes</span></h4>
+        ${isDisplayableMetricValue(scrapedTotal) ? `
+          <span class="pipeline-run-panel-meta">Total processed: ${escapeHtml(formatPipelineRunMetricValue(scrapedTotal))} jobs</span>
+        ` : ""}
+      </div>
+      ${primaryMetrics.length ? `
+        <div class="pipeline-run-outcome-primary">
+          ${primaryMetrics.map((metric, index) => `
+            <div class="pipeline-run-outcome-primary-metric is-tone-${index}">
+              <span class="pipeline-run-outcome-primary-icon" aria-hidden="true">
+                ${pipelineRunIcon(primaryMetricIcons[index] || "layers", "")}
               </span>
-            `).join("")
-          : `<span class="pipeline-runs-empty-cell">No stage list persisted for this run.</span>`}
-      </div>
+              <span class="pipeline-run-outcome-primary-body">
+                <strong>${escapeHtml(formatPipelineRunMetricValue(metric.value))}</strong>
+                <span class="pipeline-run-outcome-primary-label">${escapeHtml(metric.label)}</span>
+              </span>
+            </div>
+          `).join("")}
+        </div>
+      ` : `<div class="pipeline-runs-empty-cell">No user-facing outcome metrics were persisted for this run.</div>`}
+      ${secondaryMetrics.length ? `
+        <dl class="pipeline-run-outcome-secondary">
+          ${secondaryMetrics.map((metric) => `
+            <div class="pipeline-run-outcome-secondary-row">
+              <dt>${escapeHtml(metric.label)}</dt>
+              <dd>${escapeHtml(formatPipelineRunMetricValue(metric.value))}</dd>
+            </div>
+          `).join("")}
+        </dl>
+      ` : ""}
     </section>
 
+    <details class="pipeline-run-technical-disclosure pipeline-run-disclosure">
+      <summary>
+        <span class="pipeline-run-disclosure-icon" aria-hidden="true">${pipelineRunIcon("list", "")}</span>
+        <span class="pipeline-run-disclosure-copy">
+          <strong>Agent trace &amp; stage details</strong>
+          <small>Settings, persisted stages, and technical trace</small>
+        </span>
+        <span class="pipeline-run-disclosure-chevron" aria-hidden="true">${pipelineRunIcon("chevron", "")}</span>
+      </summary>
+      <div class="pipeline-run-technical-content">
+        <section class="pipeline-run-technical-section">
+          <h4>Settings</h4>
+          <div class="pipeline-run-technical-grid">
+            ${renderPipelineRunSettingsList([
+              ["Job limit", config.job_limit ?? 50],
+              ["Packet limit", config.job_packet_limit ?? 0],
+              ["LLM actions", Array.isArray(config.llm_actions) ? config.llm_actions.join(", ") : config.llm_actions],
+              ["Planning only", config.planning_only ? "Yes" : "No"],
+              ["Generate tailoring", config.generate_tailoring ? "Yes" : "No"],
+              ["Generate LLM tailoring", config.generate_llm_tailoring ? "Yes" : "No"],
+              ["Refresh LLM tailoring", config.refresh_llm_tailoring ? "Yes" : "No"],
+              ["Generate LLM fallback", config.generate_llm_fallback ? "Yes" : "No"],
+              ["Generate LLM adjudication", config.generate_llm_adjudication ? "Yes" : "No"],
+              ["Delete seen data", config.delete_seen_data || "no"],
+            ])}
+          </div>
+        </section>
+        <section class="pipeline-run-technical-section">
+          <h4>Stages</h4>
+          <div class="pipeline-run-stage-list">
+            ${stageOrder.length
+              ? stageOrder.map((stage) => {
+                  const state = stageSegmentState(stage);
+                  const marker = state === "complete" ? "✓" : state === "failed" ? "✕" : state === "running" ? "●" : "○";
+                  return `
+                    <span class="pipeline-run-stage-chip is-${escapeHtml(state)}" title="${escapeHtml(pipelineRunStageSegmentStatusText(state))}">
+                      ${marker} ${escapeHtml(stage)}
+                    </span>
+                  `;
+                }).join("")
+              : `<span class="pipeline-runs-empty-cell">No stage list persisted for this run.</span>`}
+          </div>
+        </section>
+        ${renderAgentTracePanel(tracePayload, traceError)}
+      </div>
+    </details>
+
+    <details class="pipeline-run-disclosure pipeline-run-error-disclosure">
+      <summary>
+        <span class="pipeline-run-disclosure-icon${errorMessage ? " is-danger" : ""}" aria-hidden="true">${pipelineRunIcon("alert", "")}</span>
+        <span class="pipeline-run-disclosure-copy">
+          <strong>Error details</strong>
+          <small>${escapeHtml(errorMessage ? "Persisted run error is available" : "No error recorded for this run")}</small>
+        </span>
+        <span class="pipeline-run-disclosure-chevron" aria-hidden="true">${pipelineRunIcon("chevron", "")}</span>
+      </summary>
+      <div class="pipeline-run-technical-content">
+        ${errorMessage
+          ? `<div class="pipeline-run-failure-summary" role="alert"><strong>Run error</strong><span>${escapeHtml(errorMessage)}</span></div>`
+          : `<div class="pipeline-run-inline-empty">${pipelineRunIcon("info", "")}<span>No error recorded for this run.</span></div>`}
+      </div>
+    </details>
+  `;
+}
+
+function pipelineRunStatsFocusableElements(modal) {
+  if (!modal) return [];
+  return Array.from(modal.querySelectorAll(
+    'button:not([disabled]), summary, [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )).filter((element) => {
+    if (element.closest(".hidden")) return false;
+    const closedDetails = Array.from(modal.querySelectorAll("details:not([open])"));
+    return closedDetails.every(
+      (details) => !details.contains(element) || element === details.querySelector(":scope > summary")
+    );
+  });
+}
+
+function renderPipelineRunStatsFetchError(runId, error) {
+  qs("pipelineRunStatsTitle").textContent = "Pipeline run";
+  qs("pipelineRunStatsSubtitle").textContent = "Run details unavailable";
+  qs("pipelineRunStatsRunId").textContent = runId || "Run ID unavailable";
+  qs("pipelineRunStatsBody").innerHTML = `
+    <div class="pipeline-run-stats-fetch-error" role="alert">
+      <strong>Could not load pipeline run details</strong>
+      <span>${escapeHtml(error?.message || "The persisted run details could not be loaded.")}</span>
+    </div>
   `;
 }
 
 async function openPipelineRunStatsModal(runId) {
-  qs("pipelineRunStatsBody").innerHTML = `<div class="pipeline-runs-empty-cell">Loading run details...</div>`;
-  qs("pipelineRunStatsModal").classList.remove("hidden");
-  const data = await fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}`);
-  renderPipelineRunDetail(data);
+  const modal = qs("pipelineRunStatsModal");
+  if (!modal) return;
+  if (modal._closeTimer) window.clearTimeout(modal._closeTimer);
+  modal._returnFocus = document.activeElement;
+  modal.classList.remove("hidden", "is-closing");
+  document.body.classList.add("pipeline-run-stats-modal-open");
+  qs("pipelineRunStatsTitle").textContent = "Pipeline run";
+  qs("pipelineRunStatsSubtitle").textContent = "Loading persisted run details.";
+  qs("pipelineRunStatsRunId").textContent = runId || "Pipeline run ID pending";
+  qs("pipelineRunStatsBody").innerHTML = `
+    <div class="pipeline-run-stats-loading" role="status">
+      <span class="pipeline-run-stats-loading-dot" aria-hidden="true"></span>
+      Loading run details...
+    </div>
+  `;
+  window.requestAnimationFrame(() => qs("pipelineRunStatsCloseBtn")?.focus());
+  try {
+    const data = await fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}`);
+    renderPipelineRunDetail(data);
+  } catch (error) {
+    setPipelineRunsStatus(error?.message || "Could not load pipeline run details.", "error");
+    renderPipelineRunStatsFetchError(runId, error);
+  }
 }
 
 function closePipelineRunStatsModal() {
-  qs("pipelineRunStatsModal")?.classList.add("hidden");
+  const modal = qs("pipelineRunStatsModal");
+  if (!modal || modal.classList.contains("hidden") || modal.classList.contains("is-closing")) return;
+  const returnFocus = modal._returnFocus;
+  const finishClose = () => {
+    modal.classList.remove("is-closing");
+    modal.classList.add("hidden");
+    modal._closeTimer = null;
+    document.body.classList.remove("pipeline-run-stats-modal-open");
+    if (returnFocus && document.body.contains(returnFocus)) returnFocus.focus();
+  };
+  modal.classList.add("is-closing");
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  modal._closeTimer = window.setTimeout(finishClose, reducedMotion ? 0 : 110);
 }
 
 function renderPipelineRunRerunSummary(run) {
@@ -1378,16 +1921,21 @@ function getResumeDeleteModal() {
   return qs("resumeDeleteModal");
 }
 
-function openResumeDeleteModal(resumeName) {
+function openResumeDeleteModal(resumeName, trigger = document.activeElement) {
   profileState.pendingDeleteResumeName = resumeName || "";
   qs("resumeDeleteModalName").textContent = resumeName || "-";
-  getResumeDeleteModal().classList.remove("hidden");
+  const modal = getResumeDeleteModal();
+  if (modal) {
+    modal.dataset.returnResumeName = profileState.pendingDeleteResumeName;
+    modal.dataset.returnResumeAction = "delete";
+  }
+  openProfileResumeModal(modal, trigger, qs("resumeDeleteCancelBtn"));
 }
 
 function closeResumeDeleteModal() {
   profileState.pendingDeleteResumeName = null;
   qs("resumeDeleteModalName").textContent = "-";
-  getResumeDeleteModal().classList.add("hidden");
+  closeProfileResumeModal(getResumeDeleteModal());
 }
 
 function resumeRoleMappingsFor(resumeName) {
@@ -1403,26 +1951,50 @@ function resumeRoleMappingFor(resumeName, roleFamilyId) {
   );
 }
 
-function renderResumeRoleMappingPanel(resume) {
-  const resumeName = String(resume?.resume_name || "");
+function resumeRoleFamilyName(roleFamilyId) {
+  const family = profileState.resumeRoleFamilies.find(
+    (item) => String(item.role_family_id || "") === String(roleFamilyId || "")
+  );
+  return family?.display_name || roleFamilyId;
+}
+
+function renderResumeRoleLabels(resume) {
+  const mappings = resumeRoleMappingsFor(String(resume?.resume_name || ""));
+  if (!mappings.length) {
+    return '<span class="profile-resume-no-roles">No role families</span>';
+  }
+  return mappings.map((mapping) => `
+    <span class="profile-resume-role-chip${mapping.is_default_for_role ? " is-default" : ""}">
+      ${escapeHtml(resumeRoleFamilyName(mapping.role_family_id))}
+      ${mapping.is_default_for_role ? '<span class="profile-resume-default-dot" aria-label="Default for this role"></span>' : ""}
+    </span>
+  `).join("");
+}
+
+function renderResumeRoleModalOptions() {
+  const optionsEl = qs("resumeRoleModalOptions");
+  const resumeName = String(profileState.activeRoleResumeName || "");
+  if (!optionsEl || !resumeName) return;
+  const nameEl = qs("resumeRoleModalName");
+  if (nameEl) {
+    nameEl.textContent = resumeName;
+    nameEl.parentElement?.setAttribute("title", resumeName);
+  }
   const families = Array.isArray(profileState.resumeRoleFamilies) ? profileState.resumeRoleFamilies : [];
-  if (!families.length) return "";
+  if (!families.length) {
+    optionsEl.innerHTML = '<div class="profile-resume-role-empty">No role families are available.</div>';
+    return;
+  }
 
-  const assignedCount = resumeRoleMappingsFor(resumeName).length;
-  const summary = assignedCount
-    ? `${assignedCount} role famil${assignedCount === 1 ? "y" : "ies"} assigned`
-    : "Assign role families";
-
-  const options = families.map((family) => {
+  optionsEl.innerHTML = families.map((family) => {
     const roleFamilyId = String(family.role_family_id || "");
     const mapping = resumeRoleMappingFor(resumeName, roleFamilyId);
     const checked = Boolean(mapping);
     const isDefault = Boolean(mapping?.is_default_for_role);
     const displayName = family.display_name || roleFamilyId;
-
     return `
-      <label class="resume-role-family-option${checked ? " is-selected" : ""}">
-        <span class="resume-role-family-main">
+      <div class="profile-resume-role-option${checked ? " is-selected" : ""}">
+        <label class="profile-resume-role-toggle">
           <input
             type="checkbox"
             data-resume-role-toggle
@@ -1431,8 +2003,8 @@ function renderResumeRoleMappingPanel(resume) {
             ${checked ? "checked" : ""}
           />
           <span>${escapeHtml(displayName)}</span>
-        </span>
-        <span class="resume-role-default-wrap">
+        </label>
+        <label class="profile-resume-role-default">
           <input
             type="radio"
             name="resume-role-default-${escapeHtml(roleFamilyId)}"
@@ -1441,26 +2013,62 @@ function renderResumeRoleMappingPanel(resume) {
             data-role-family-id="${escapeHtml(roleFamilyId)}"
             ${isDefault ? "checked" : ""}
             ${checked ? "" : "disabled"}
+            aria-label="Use ${escapeHtml(resumeName)} as the default for ${escapeHtml(displayName)}"
           />
           <span>Default</span>
-        </span>
-      </label>
+        </label>
+      </div>
     `;
   }).join("");
+}
 
+function openResumeRoleModal(resumeName, trigger) {
+  profileState.activeRoleResumeName = resumeName || "";
+  renderResumeRoleModalOptions();
+  const modal = qs("profileResumeRoleModal");
+  if (modal) {
+    modal.dataset.returnResumeName = profileState.activeRoleResumeName;
+    modal.dataset.returnResumeAction = "manage";
+  }
+  openProfileResumeModal(modal, trigger, qs("closeResumeRoleModalBtn"));
+}
+
+function closeResumeRoleModal() {
+  profileState.activeRoleResumeName = null;
+  closeProfileResumeModal(qs("profileResumeRoleModal"));
+}
+
+function openResumeUploadModal(trigger) {
+  setResumeUploadFeedback("");
+  qs("resumeDropzone")?.classList.remove("drag-active");
+  openProfileResumeModal(qs("profileResumeUploadModal"), trigger, qs("resumeDropzone"));
+}
+
+function closeResumeUploadModal() {
+  qs("resumeDropzone")?.classList.remove("drag-active");
+  closeProfileResumeModal(qs("profileResumeUploadModal"));
+}
+
+function profileResumeFileIcon() {
   return `
-    <details class="resume-role-mapping-panel">
-      <summary>
-        <span class="resume-role-summary-title">
-          <span class="resume-role-summary-caret" aria-hidden="true"></span>
-          <span>Role family mapping</span>
-        </span>
-        <span>${escapeHtml(summary)}</span>
-      </summary>
-      <div class="resume-role-mapping-grid">
-        ${options}
-      </div>
-    </details>
+    <span class="profile-resume-file-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M7.25 3.75h6l3.5 3.5v13H7.25z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+        <path d="M13.25 3.75v3.5h3.5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+      </svg>
+      <span>PDF</span>
+    </span>
+  `;
+}
+
+function profileResumeManageRoleIcon() {
+  return `
+    <svg class="profile-resume-row-action-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+      <path d="M5 7.25h14M5 12h14M5 16.75h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+      <circle cx="8" cy="7.25" r="1.35" fill="currentColor" />
+      <circle cx="15.5" cy="12" r="1.35" fill="currentColor" />
+      <circle cx="10.5" cy="16.75" r="1.35" fill="currentColor" />
+    </svg>
   `;
 }
 
@@ -1469,12 +2077,13 @@ function renderResumeList(items) {
   const metaEl = qs("resumeListMeta");
   const resumes = Array.isArray(items) ? items : [];
 
-  metaEl.textContent = `${resumes.length} resume${resumes.length === 1 ? "" : "s"} available`;
+  metaEl.textContent = `${resumes.length} resume${resumes.length === 1 ? "" : "s"}`;
 
   if (!resumes.length) {
     listEl.innerHTML = `
       <div class="resume-empty-state">
-        No resumes uploaded yet.
+        <strong>No resumes yet</strong>
+        <span>Add a PDF to begin your library.</span>
       </div>
     `;
     return;
@@ -1497,28 +2106,41 @@ function renderResumeList(items) {
   }
 
   listEl.innerHTML = resumes.map((resume) => `
-    <article class="resume-row">
-      <div class="resume-row-main">
-        <div class="resume-name">${escapeHtml(resume.resume_name || "")}</div>
-        <div class="resume-meta">
-          <span>${escapeHtml(formatBytes(resume.size_bytes || 0))}</span>
-          <span>${escapeHtml(formatDateTime(resume.modified_at || ""))}</span>
+    <article class="profile-resume-document-row">
+      ${profileResumeFileIcon()}
+      <div class="profile-resume-file-copy">
+        <div class="profile-resume-file-name" title="${escapeHtml(resume.resume_name || "")}">${escapeHtml(resume.resume_name || "")}</div>
+        <div class="profile-resume-file-meta">
+          ${escapeHtml(formatBytes(resume.size_bytes || 0))}<span aria-hidden="true">·</span>${escapeHtml(formatResumeDate(resume.modified_at || ""))}
         </div>
       </div>
 
-      <div class="resume-row-actions">
-        <button
-          type="button"
-          class="ghost-btn resume-delete-btn"
-          data-resume-delete="${escapeHtml(resume.resume_name || "")}"
-        >
-          Delete
-        </button>
+      <div class="profile-resume-role-chips" aria-label="Assigned role families">
+        ${renderResumeRoleLabels(resume)}
       </div>
 
-      ${renderResumeRoleMappingPanel(resume)}
+      <div class="profile-resume-row-actions">
+        <button
+          type="button"
+          class="profile-resume-row-action profile-resume-manage-role-action"
+          data-manage-resume-roles="${escapeHtml(resume.resume_name || "")}"
+          aria-label="Manage role families for ${escapeHtml(resume.resume_name || "resume")}"
+          title="Manage role families for ${escapeHtml(resume.resume_name || "resume")}"
+        >${profileResumeManageRoleIcon()}</button>
+        <button
+          type="button"
+          class="profile-resume-row-action profile-resume-delete-row-action"
+          data-resume-delete="${escapeHtml(resume.resume_name || "")}"
+          aria-label="Delete ${escapeHtml(resume.resume_name || "resume")}"
+          title="Delete ${escapeHtml(resume.resume_name || "resume")}"
+        ><span class="profile-resume-row-action-icon profile-resume-delete-icon" aria-hidden="true"></span></button>
+      </div>
     </article>
   `).join("");
+
+  if (profileState.activeRoleResumeName && !qs("profileResumeRoleModal")?.classList.contains("hidden")) {
+    renderResumeRoleModalOptions();
+  }
 }
 
 async function loadResumeRoleMappings() {
@@ -1754,6 +2376,10 @@ async function uploadResumeFiles(files) {
   };
 
   setStatus(`Uploading ${fileList.length} file${fileList.length === 1 ? "" : "s"}...`, "info");
+  setResumeUploadFeedback(
+    `Uploading ${fileList.length} file${fileList.length === 1 ? "" : "s"}...`,
+    "info"
+  );
 
   for (const file of fileList) {
     try {
@@ -1775,11 +2401,16 @@ async function uploadResumeFiles(files) {
       `Uploaded ${results.uploaded.length} file${results.uploaded.length === 1 ? "" : "s"} successfully.`,
       "success"
     );
+    setResumeUploadFeedback(
+      `Uploaded ${results.uploaded.length} file${results.uploaded.length === 1 ? "" : "s"} successfully.`,
+      "success"
+    );
     if (isResumeOnboardingMode()) {
       window.location.href = "/onboarding";
       return results;
     }
     showProfilePlanningUploadCallout();
+    closeResumeUploadModal();
     return results;
   }
 
@@ -1788,11 +2419,16 @@ async function uploadResumeFiles(files) {
       `Uploaded ${results.uploaded.length} file${results.uploaded.length === 1 ? "" : "s"}, failed ${results.failed.length}.`,
       "error"
     );
+    setResumeUploadFeedback(
+      `Uploaded ${results.uploaded.length}; ${results.failed.length} failed. ${results.failed[0]?.error || ""}`,
+      "error"
+    );
     if (!isResumeOnboardingMode()) showProfilePlanningUploadCallout();
     return results;
   }
 
   const firstError = results.failed[0]?.error || "Upload failed.";
+  setResumeUploadFeedback(firstError, "error");
   throw new Error(firstError);
 }
 
@@ -1897,15 +2533,29 @@ function bindUploadInteractions() {
       input.click();
     }
   });
+
+  qs("openResumeUploadModalBtn")?.addEventListener("click", (event) => {
+    openResumeUploadModal(event.currentTarget);
+  });
+  qs("closeResumeUploadModalBtn")?.addEventListener("click", closeResumeUploadModal);
+  qs("profileResumeUploadModal")?.addEventListener("click", (event) => {
+    if (event.target === qs("profileResumeUploadModal")) closeResumeUploadModal();
+  });
 }
 
 function bindDeleteInteractions() {
   qs("resumeList").addEventListener("click", (event) => {
+    const manageButton = event.target.closest("[data-manage-resume-roles]");
+    if (manageButton) {
+      openResumeRoleModal(manageButton.dataset.manageResumeRoles || "", manageButton);
+      return;
+    }
+
     const button = event.target.closest("[data-resume-delete]");
     if (!button) return;
 
     const resumeName = button.dataset.resumeDelete || "";
-    openResumeDeleteModal(resumeName);
+    openResumeDeleteModal(resumeName, button);
   });
 
   qs("closeResumeDeleteModalBtn").addEventListener("click", closeResumeDeleteModal);
@@ -1935,7 +2585,7 @@ function bindDeleteInteractions() {
 }
 
 function bindResumeRoleMappingInteractions() {
-  qs("resumeList").addEventListener("change", async (event) => {
+  qs("profileResumeRoleModal")?.addEventListener("change", async (event) => {
     const toggle = event.target.closest("[data-resume-role-toggle]");
     const defaultInput = event.target.closest("[data-resume-role-default]");
     const input = toggle || defaultInput;
@@ -1966,6 +2616,25 @@ function bindResumeRoleMappingInteractions() {
       setStatus(err.message, "error");
       await loadResumes();
     }
+  });
+
+  qs("closeResumeRoleModalBtn")?.addEventListener("click", closeResumeRoleModal);
+  qs("profileResumeRoleModal")?.addEventListener("click", (event) => {
+    if (event.target === qs("profileResumeRoleModal")) closeResumeRoleModal();
+  });
+}
+
+function bindProfileResumeKeyboardInteractions() {
+  document.addEventListener("keydown", (event) => {
+    const openModal = Array.from(document.querySelectorAll(".profile-resume-modal:not(.hidden)")).pop();
+    if (event.key === "Escape" && openModal) {
+      event.preventDefault();
+      if (openModal.id === "profileResumeUploadModal") closeResumeUploadModal();
+      if (openModal.id === "profileResumeRoleModal") closeResumeRoleModal();
+      if (openModal.id === "resumeDeleteModal") closeResumeDeleteModal();
+      return;
+    }
+    if (event.key === "Tab" && openModal) trapProfileResumeModalFocus(event, openModal);
   });
 }
 
@@ -2061,7 +2730,7 @@ function bindPipelineRunsInteractions() {
     if (viewBtn) {
       openPipelineRunStatsModal(viewBtn.dataset.pipelineRunView || "").catch((err) => {
         setPipelineRunsStatus(err.message, "error");
-        closePipelineRunStatsModal();
+        renderPipelineRunStatsFetchError(viewBtn.dataset.pipelineRunView || "", err);
       });
       return;
     }
@@ -2077,9 +2746,43 @@ function bindPipelineRunsInteractions() {
   });
 
   qs("pipelineRunStatsCloseBtn")?.addEventListener("click", closePipelineRunStatsModal);
+
+  qs("pipelineRunStatsCopyIdBtn")?.addEventListener("click", async () => {
+    const runId = qs("pipelineRunStatsRunId")?.textContent?.trim() || "";
+    if (!runId) return;
+    try {
+      await navigator.clipboard?.writeText(runId);
+      const button = qs("pipelineRunStatsCopyIdBtn");
+      button?.classList.add("is-copied");
+      window.setTimeout(() => button?.classList.remove("is-copied"), 1200);
+    } catch (_) {
+      /* Clipboard is unavailable or denied; the run id stays selectable. */
+    }
+  });
   qs("pipelineRunStatsModal")?.addEventListener("click", (event) => {
     if (event.target === qs("pipelineRunStatsModal")) {
       closePipelineRunStatsModal();
+    }
+  });
+  qs("pipelineRunStatsModal")?.addEventListener("keydown", (event) => {
+    const modal = qs("pipelineRunStatsModal");
+    if (!modal || modal.classList.contains("hidden")) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closePipelineRunStatsModal();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = pipelineRunStatsFocusableElements(modal);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
     }
   });
   qs("pipelineRunRerunCloseBtn")?.addEventListener("click", closePipelineRunRerunModal);
@@ -2239,6 +2942,7 @@ async function initProfilePage() {
       }
       bindDeleteInteractions();
       bindResumeRoleMappingInteractions();
+      bindProfileResumeKeyboardInteractions();
       bindProfilePlanningOptionsInteractions();
       bindProfileTabs();
       bindPipelineRunsInteractions();

@@ -116,7 +116,7 @@ it("fetches fresh bounded rows on every closed-to-open transition without weaken
   guardedToggle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   expect(mutationCalls).toBe(0);
   expect(document.getElementById("bulkGenerationGuardTooltip")?.textContent).toBe(
-    "Bulk Generate must finish or be stopped before this action is available.",
+    "Checking Bulk Generate status…",
   );
   chip.click();
   expect(chip.classList.contains("is-active")).toBe(true);
@@ -126,6 +126,9 @@ it("fetches fresh bounded rows on every closed-to-open transition without weaken
   await flush();
   await flush();
   expect(guardedToggle.getAttribute("data-bulk-guarded")).toBe("true");
+  expect(document.getElementById("bulkGenerationGuardTooltip")?.textContent).toBe(
+    "Bulk Generate must finish or be stopped before this action is available.",
+  );
 
   // A later canonical INACTIVE result enables the controls in-place; the
   // panel does not need to close/reopen.
@@ -138,6 +141,7 @@ it("fetches fresh bounded rows on every closed-to-open transition without weaken
     String(call[0]).includes("/planning/bulk-generation/status")
   )).toHaveLength(2);
   expect(document.body.classList.contains("bulk-generation-guard-active")).toBe(false);
+  expect(document.getElementById("bulkGenerationGuardTooltip")?.classList.contains("hidden")).toBe(true);
   const enabledToggle = document.querySelector("[data-notification-toggle]") as HTMLElement;
   const enabledDelete = document.querySelector("[data-notification-delete]") as HTMLElement;
   for (const control of [enabledToggle, enabledDelete, markAll, deleteAll]) {

@@ -7,10 +7,18 @@ const APPLYLENS_DEFAULT_IDLE_TIMEOUT_SECONDS = 1800;
 const APPLYLENS_DEFAULT_IDLE_WARNING_SECONDS = 60;
 const BULK_GENERATION_STATE_EVENT = "applylens:bulk-generation-state";
 const BULK_GENERATION_BLOCK_MESSAGE = "Bulk Generate must finish or be stopped before this action is available.";
+const BULK_GENERATION_CHECKING_MESSAGE = "Checking Bulk Generate status…";
+const BULK_GENERATION_FAILED_MESSAGE = "Bulk Generate status could not be verified. Retry before starting this action.";
 const BULK_GENERATION_ACTIVE_STATUSES = new Set(["queued", "running", "stop_requested"]);
 const BULK_GENERATION_TERMINAL_STATUSES = new Set(["completed", "stopped", "failed"]);
 let bulkGenerationPollTimer = null;
-let bulkGenerationCanonicalState = { verified: false, active: true, status: "unknown", items: [] };
+let bulkGenerationCanonicalState = {
+  verified: false,
+  verification: "checking",
+  active: false,
+  status: "unknown",
+  items: [],
+};
 
 // Desktop sidebar collapse-control icons (Lucide PanelLeftClose / Menu),
 // mirroring the inline geometry rendered server-side in src/app/ui_shell.py so the
@@ -33,6 +41,11 @@ function qs(id) {
 function bulkGenerationControlIsSafe(control) {
   if (!(control instanceof Element)) return true;
   if (control.closest("[data-bulk-safe='true']")) return true;
+  if (control.matches(
+    "#scanWorkspaceCompanyInput, #scanWorkspaceRoleInput, #scanWorkspaceJobUrlInput, " +
+    "#scanWorkspaceResumeSelect, #scanWorkspaceResumeFileInput, #scanWorkspaceResumeTextInput, " +
+    "#scanWorkspaceResumeBrowseBtn, #scanWorkspaceJobDescriptionInput"
+  )) return true;
   if (control.matches(".app-shell-nav-link, .app-shell-brand, .profile-dropdown-nav-btn")) return true;
   const safeIds = new Set([
     "appShellMenuBtn", "appShellCollapseBtn", "appShellCloseBtn", "themeToggleBtn",
@@ -63,11 +76,21 @@ function bulkGenerationControlIsSafe(control) {
   return false;
 }
 
+function bulkGenerationGuardMessage() {
+  if (bulkGenerationCanonicalState.verified && bulkGenerationCanonicalState.active) {
+    return BULK_GENERATION_BLOCK_MESSAGE;
+  }
+  if (bulkGenerationCanonicalState.verification === "failed") {
+    return BULK_GENERATION_FAILED_MESSAGE;
+  }
+  return BULK_GENERATION_CHECKING_MESSAGE;
+}
+
 function showBulkGenerationGuardTooltip(control) {
   const tooltip = qs("bulkGenerationGuardTooltip");
   if (!tooltip || !(control instanceof Element)) return;
   const rect = control.getBoundingClientRect();
-  tooltip.textContent = BULK_GENERATION_BLOCK_MESSAGE;
+  tooltip.textContent = bulkGenerationGuardMessage();
   tooltip.style.left = `${Math.max(12, Math.min(window.innerWidth - 332, rect.left))}px`;
   tooltip.style.top = `${Math.min(window.innerHeight - 60, rect.bottom + 8)}px`;
   tooltip.classList.remove("hidden");
@@ -108,18 +131,28 @@ function setBulkGenerationControlGuard(control, blocked) {
 
 function applyBulkGenerationControlGuards() {
   const shouldBlock = !bulkGenerationCanonicalState.verified || bulkGenerationCanonicalState.active;
+  const message = bulkGenerationGuardMessage();
+  const description = qs("bulkGenerationGuardDescription");
+  const tooltip = qs("bulkGenerationGuardTooltip");
+  if (description && description.textContent.trim() !== message) description.textContent = message;
+  if (tooltip && !tooltip.classList.contains("hidden") && tooltip.textContent !== message) {
+    tooltip.textContent = message;
+  }
   document.querySelectorAll("button, a[href], input, select, textarea, [role='button']").forEach((control) => {
     setBulkGenerationControlGuard(control, shouldBlock && !bulkGenerationControlIsSafe(control));
   });
   document.body.classList.toggle("bulk-generation-guard-active", shouldBlock);
+  if (!shouldBlock) hideBulkGenerationGuardTooltip();
 }
 
-function publishBulkGenerationState(payload, { verified = true } = {}) {
+function publishBulkGenerationState(payload, { verification = "verified" } = {}) {
   const status = String(payload?.status || "none");
+  const verified = verification === "verified";
   bulkGenerationCanonicalState = {
     ...(payload || {}),
     verified,
-    active: verified ? BULK_GENERATION_ACTIVE_STATUSES.has(status) : true,
+    verification,
+    active: verified && BULK_GENERATION_ACTIVE_STATUSES.has(status),
     terminal: verified && BULK_GENERATION_TERMINAL_STATUSES.has(status),
   };
   applyBulkGenerationControlGuards();
@@ -135,7 +168,10 @@ async function refreshBulkGenerationState() {
     if (!response.ok || payload?.ok !== true) throw new Error("Bulk Generate status unavailable");
     publishBulkGenerationState(payload);
   } catch (_) {
-    publishBulkGenerationState({ ...bulkGenerationCanonicalState, status: "unknown" }, { verified: false });
+    publishBulkGenerationState(
+      { ...bulkGenerationCanonicalState, status: "unknown" },
+      { verification: "failed" }
+    );
   }
   window.clearTimeout(bulkGenerationPollTimer);
   if (!bulkGenerationCanonicalState.terminal) {
@@ -160,7 +196,7 @@ window.ApplyLensBulkGeneration = {
   getState: () => ({ ...bulkGenerationCanonicalState }),
   refresh: refreshBulkGenerationState,
   stop: requestBulkGenerationStop,
-  isActive: () => !bulkGenerationCanonicalState.verified || bulkGenerationCanonicalState.active,
+  isActive: () => bulkGenerationCanonicalState.verified && bulkGenerationCanonicalState.active,
 };
 
 function normalizeJobstackTheme(value) {

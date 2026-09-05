@@ -1,6 +1,8 @@
 const profileState = {
   pendingDeleteResumeName: null,
   pendingDeleteScanId: null,
+  savedScans: [],
+  savedScansQuery: "",
   currentUser: null,
   adminUsers: [],
   pipelineRuns: [],
@@ -829,6 +831,8 @@ const PIPELINE_RUN_ICON_PATHS = {
   chevron: '<path d="M9.5 5.75L16 12l-6.5 6.25" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>',
   chevronLeft: '<path d="M14.5 5.75L8 12l6.5 6.25" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>',
   rotate: '<path d="M19.75 11.5a7.75 7.75 0 1 0-.6 3.55" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M19.75 5v5h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  eye: '<path d="M2.75 12S6.25 5.75 12 5.75 21.25 12 21.25 12 17.75 18.25 12 18.25 2.75 12 2.75 12z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.9" stroke="currentColor" stroke-width="1.7"/>',
+  trash: '<path d="M4.75 7h14.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M9.5 7V5.4A1.4 1.4 0 0110.9 4h2.2a1.4 1.4 0 011.4 1.4V7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M6.75 7l.8 11.1A1.9 1.9 0 009.45 20h5.1a1.9 1.9 0 001.9-1.8L17.25 7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M10.6 10.75v5.5M13.4 10.75v5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
 };
 
 function pipelineRunIcon(name, className = "") {
@@ -2272,32 +2276,156 @@ function getSavedScanOpenHref(scan) {
 
 function openSavedScanDeleteModal(scan) {
   profileState.pendingDeleteScanId = String(scan?.scan_id || "").trim();
-  const label = [
-    scan?.job_company || "",
-    scan?.job_title || "",
-    scan?.resume_name || scan?.resume_filename || "",
-  ].filter(Boolean).join(" / ") || "this saved scan";
+  const company = String(scan?.job_company || "").trim();
+  const role = String(scan?.job_title || "").trim();
+  const resume = String(scan?.resume_name || scan?.resume_filename || "").trim();
+  const label = [company, role, resume].filter(Boolean).join(" / ") || "this saved scan";
+
+  // Same values, shown as a structured summary instead of one run-on sentence.
+  const setField = (id, value) => {
+    const el = qs(id);
+    if (el) el.textContent = value || "-";
+  };
+  setField("savedScanDeleteCompany", company);
+  setField("savedScanDeleteRole", role);
+  setField("savedScanDeleteResume", resume);
   qs("savedScanDeleteName").textContent = label;
-  qs("savedScanDeleteModal").classList.remove("hidden");
+
+  const modal = qs("savedScanDeleteModal");
+  if (modal) modal._returnFocus = document.activeElement;
+  modal?.classList.remove("hidden");
+  window.requestAnimationFrame(() => qs("savedScanDeleteCancelBtn")?.focus());
 }
 
 function closeSavedScanDeleteModal() {
+  const modal = qs("savedScanDeleteModal");
+  const returnFocus = modal?._returnFocus;
   profileState.pendingDeleteScanId = null;
   const name = qs("savedScanDeleteName");
   if (name) name.textContent = "this saved scan";
-  qs("savedScanDeleteModal")?.classList.add("hidden");
+  ["savedScanDeleteCompany", "savedScanDeleteRole", "savedScanDeleteResume"].forEach((id) => {
+    const el = qs(id);
+    if (el) el.textContent = "-";
+  });
+  modal?.classList.add("hidden");
+  if (modal) modal._returnFocus = null;
+  if (returnFocus && document.body && document.body.contains(returnFocus)) {
+    returnFocus.focus();
+  }
 }
 
-function renderSavedScans(items, { ok = true, error = "" } = {}) {
+function savedScanMatchBarWidth(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return Math.max(0, Math.min(100, number));
+}
+
+function savedScanSearchHaystack(scan) {
+  return [
+    scan?.job_company,
+    scan?.job_title,
+    scan?.resume_name,
+    scan?.resume_filename,
+    normalizeSavedScanSource(scan?.resume_source),
+    savedScanStatusMeta(scan?.scan_status).label,
+    scan?.scan_id,
+  ]
+    .map((value) => String(value || ""))
+    .join(" ")
+    .toLowerCase();
+}
+
+function filterSavedScans(scans, query) {
+  const needle = String(query || "").trim().toLowerCase();
+  if (!needle) return scans;
+  return scans.filter((scan) => savedScanSearchHaystack(scan).includes(needle));
+}
+
+function savedScansMetaText(totalCount, visibleCount, query) {
+  const label = `${totalCount} saved scan${totalCount === 1 ? "" : "s"}`;
+  return String(query || "").trim() ? `${visibleCount} of ${label}` : label;
+}
+
+function savedScanRowHtml(scan) {
+  const statusMeta = savedScanStatusMeta(scan.scan_status);
+  const openHref = getSavedScanOpenHref(scan);
+  const role = scan.job_title || "-";
+  const resume = scan.resume_name || scan.resume_filename || "-";
+  const scoreText = formatPercent(scan.match_rate);
+  const barWidth = savedScanMatchBarWidth(scan.match_rate);
+  const matchLabel = barWidth === null ? "Match rate unavailable" : `Match rate ${scoreText}`;
+
+  const openAction = openHref
+    ? `<a
+        class="saved-scan-action-btn saved-scan-action-btn--open"
+        href="${escapeHtml(openHref)}"
+        aria-label="Open saved scan report"
+        title="Open report"
+      >${pipelineRunIcon("eye", "saved-scan-action-icon")}</a>`
+    : `<button
+        type="button"
+        class="saved-scan-action-btn saved-scan-action-btn--open"
+        disabled
+        aria-disabled="true"
+        aria-label="Report unavailable"
+        title="Report unavailable"
+      >${pipelineRunIcon("eye", "saved-scan-action-icon")}</button>`;
+
+  return `
+      <tr class="saved-scan-row" data-saved-scan-id="${escapeHtml(scan.scan_id || "")}">
+        <td class="saved-scan-cell-scanned">${escapeHtml(formatDateTime(scan.scan_timestamp || ""))}</td>
+        <td class="saved-scan-cell-company">${escapeHtml(scan.job_company || "-")}</td>
+        <td class="saved-scan-cell-role"><span class="saved-scan-truncate" title="${escapeHtml(role)}">${escapeHtml(role)}</span></td>
+        <td class="saved-scan-cell-resume"><span class="saved-scan-truncate" title="${escapeHtml(resume)}">${escapeHtml(resume)}</span></td>
+        <td class="saved-scan-cell-source"><span class="saved-scan-source-tag">${escapeHtml(normalizeSavedScanSource(scan.resume_source))}</span></td>
+        <td class="saved-scan-cell-status">
+          <span class="saved-scan-status is-${escapeHtml(statusMeta.tone)}">
+            <span class="saved-scan-status-dot" aria-hidden="true"></span>
+            ${escapeHtml(statusMeta.label)}
+          </span>
+        </td>
+        <td class="saved-scan-cell-match">
+          <div class="saved-scan-match">
+            <span class="saved-scan-match-value">${escapeHtml(scoreText)}</span>
+            <span
+              class="saved-scan-match-track"
+              role="img"
+              aria-label="${escapeHtml(matchLabel)}"
+            ><span class="saved-scan-match-fill" style="width: ${barWidth === null ? 0 : barWidth}%"></span></span>
+          </div>
+        </td>
+        <td class="saved-scan-cell-actions">
+          <div class="saved-scan-actions">
+            ${openAction}
+            <button
+              type="button"
+              class="saved-scan-action-btn saved-scan-action-btn--delete"
+              aria-label="Delete saved scan"
+              title="Delete saved scan"
+              data-saved-scan-delete="${escapeHtml(scan.scan_id || "")}"
+              data-saved-scan-name="${escapeHtml(scan.resume_name || scan.resume_filename || "saved scan")}"
+            >${pipelineRunIcon("trash", "saved-scan-action-icon")}</button>
+          </div>
+        </td>
+      </tr>
+    `;
+}
+
+function paintSavedScans({ ok = true, error = "" } = {}) {
   const tbody = qs("savedScansTableBody");
   const metaEl = qs("savedScansMeta");
-  const scans = Array.isArray(items) ? items : [];
+  const countEl = qs("savedScansCountBadge");
+  if (!tbody || !metaEl) return;
+
+  const scans = Array.isArray(profileState.savedScans) ? profileState.savedScans : [];
+  const query = String(profileState.savedScansQuery || "");
 
   if (!ok) {
     metaEl.textContent = "Saved scans unavailable";
+    if (countEl) countEl.textContent = "0";
     tbody.innerHTML = `
       <tr>
-        <td colspan="9" class="saved-scans-empty-cell">
+        <td colspan="8" class="saved-scans-empty-cell">
           ${escapeHtml(error || "Could not load saved scans from Postgres.")}
         </td>
       </tr>
@@ -2305,12 +2433,14 @@ function renderSavedScans(items, { ok = true, error = "" } = {}) {
     return;
   }
 
-  metaEl.textContent = `${scans.length} saved scan${scans.length === 1 ? "" : "s"} shown`;
+  const visible = filterSavedScans(scans, query);
+  if (countEl) countEl.textContent = String(scans.length);
+  metaEl.textContent = savedScansMetaText(scans.length, visible.length, query);
 
   if (!scans.length) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="9" class="saved-scans-empty-cell">
+        <td colspan="8" class="saved-scans-empty-cell">
           No saved scans yet.
         </td>
       </tr>
@@ -2318,40 +2448,23 @@ function renderSavedScans(items, { ok = true, error = "" } = {}) {
     return;
   }
 
-  tbody.innerHTML = scans.map((scan) => {
-    const statusMeta = savedScanStatusMeta(scan.scan_status);
-
-    return `
-      <tr class="saved-scan-row saved-scan-row-${escapeHtml(statusMeta.tone)}" data-saved-scan-id="${escapeHtml(scan.scan_id || "")}">
-        <td>${escapeHtml(formatDateTime(scan.scan_timestamp || ""))}</td>
-        <td>${escapeHtml(scan.job_company || "-")}</td>
-        <td>${escapeHtml(scan.job_title || "-")}</td>
-        <td>${escapeHtml(scan.resume_name || scan.resume_filename || "-")}</td>
-        <td>${escapeHtml(normalizeSavedScanSource(scan.resume_source))}</td>
-        <td>
-          <span class="saved-scan-status-badge ${escapeHtml(statusMeta.tone)}">
-            ${escapeHtml(statusMeta.label)}
-          </span>
-        </td>
-        <td>${escapeHtml(formatPercent(scan.match_rate))}</td>
-        <td>
-          ${getSavedScanOpenHref(scan)
-            ? `<a class="saved-scan-action-badge ${escapeHtml(statusMeta.tone)} saved-scan-open-link" href="${escapeHtml(getSavedScanOpenHref(scan))}">${escapeHtml(statusMeta.action)}</a>`
-            : `<span class="saved-scan-action-badge ${escapeHtml(statusMeta.tone)}">${escapeHtml(statusMeta.action)}</span>`}
-        </td>
-        <td class="saved-scan-row-delete-cell">
-          <button
-            type="button"
-            class="saved-scan-delete-btn"
-            aria-label="Delete saved scan"
-            title="Delete saved scan"
-            data-saved-scan-delete="${escapeHtml(scan.scan_id || "")}"
-            data-saved-scan-name="${escapeHtml(scan.resume_name || scan.resume_filename || "saved scan")}"
-          ></button>
+  if (!visible.length) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="saved-scans-empty-cell">
+          No saved scans match this search.
         </td>
       </tr>
     `;
-  }).join("");
+    return;
+  }
+
+  tbody.innerHTML = visible.map(savedScanRowHtml).join("");
+}
+
+function renderSavedScans(items, { ok = true, error = "" } = {}) {
+  profileState.savedScans = ok && Array.isArray(items) ? items : [];
+  paintSavedScans({ ok, error });
 }
 
 async function loadSavedScans() {
@@ -2362,7 +2475,7 @@ async function loadSavedScans() {
   metaEl.textContent = "Loading saved scans...";
   tbody.innerHTML = `
     <tr>
-      <td colspan="9" class="saved-scans-empty-cell">Loading saved scans...</td>
+      <td colspan="8" class="saved-scans-empty-cell">Loading saved scans...</td>
     </tr>
   `;
 
@@ -2914,6 +3027,16 @@ function bindAdminUsersInteractions() {
 }
 
 function bindSavedScansPage() {
+  const searchInput = qs("savedScansSearchInput");
+  if (searchInput) {
+    profileState.savedScansQuery = searchInput.value || "";
+    // Client-side only: filters the already-loaded rows, never re-queries the API.
+    searchInput.addEventListener("input", () => {
+      profileState.savedScansQuery = searchInput.value || "";
+      paintSavedScans({ ok: true });
+    });
+  }
+
   const refreshBtn = qs("refreshSavedScansBtn");
   if (refreshBtn) {
     refreshBtn.addEventListener("click", () => {
@@ -2954,6 +3077,14 @@ function bindSavedScansPage() {
   });
   qs("savedScanDeleteModal")?.addEventListener("click", (event) => {
     if (event.target === qs("savedScanDeleteModal")) {
+      closeSavedScanDeleteModal();
+    }
+  });
+  qs("savedScanDeleteModal")?.addEventListener("keydown", (event) => {
+    const modal = qs("savedScanDeleteModal");
+    if (!modal || modal.classList.contains("hidden")) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
       closeSavedScanDeleteModal();
     }
   });

@@ -15,23 +15,39 @@ const SCAN_WORKSPACE_MODES = ["new_scan", "processing", "review", "compare"];
 const SCAN_WORKSPACE_PROCESSING_STAGES = [
   {
     key: "prepare",
+    icon: "clipboard",
     title: "Prepare request",
     description: "Validate the scan inputs and package the request payload.",
   },
   {
     key: "resume",
+    icon: "file",
     title: "Load resume",
     description: "Resolve the saved resume or pasted resume content for scan processing.",
   },
   {
-    key: "job_description",
-    title: "Parse job description",
-    description: "Normalize the pasted job description and extract scan-ready signals.",
+    key: "ai_analysis",
+    icon: "spark",
+    title: "Analyze job with AI",
+    description: "Use the configured JD intelligence model to extract structured signals.",
+  },
+  {
+    key: "validate_score",
+    icon: "shield",
+    title: "Validate and score match",
+    description: "Ground the AI signals, build evidence, and run deterministic scoring.",
   },
   {
     key: "review_payload",
+    icon: "review",
     title: "Build review payload",
     description: "Generate the optimization review structure for the next screen.",
+  },
+  {
+    key: "persist",
+    icon: "database",
+    title: "Save report",
+    description: "Persist the completed score and review payload as one Saved Scan.",
   },
 ];
 
@@ -53,10 +69,12 @@ const scanWorkspaceSavedResumeState = {
 
 const scanWorkspaceProcessingState = {
   status: "idle",
+  progressValue: 0,
   currentStageKey: "prepare",
   note: "",
   intakeDraft: null,
   pendingReviewPayload: null,
+  resultMeta: null,
 };
 
 const scanWorkspacePreviewState = {
@@ -2001,6 +2019,12 @@ function renderScanWorkspaceIntakeValidation(validation) {
 
 function updateScanWorkspaceIntakeActions() {
   const startBtn = getScanWorkspaceInput("scanWorkspaceStartScanBtn");
+  const characterCount = getScanWorkspaceInput("scanWorkspaceJobDescriptionCount");
+  const jobDescriptionInput = getScanWorkspaceInput("scanWorkspaceJobDescriptionInput");
+  if (characterCount) {
+    const count = String(jobDescriptionInput?.value || "").length;
+    characterCount.textContent = `${count.toLocaleString("en-US")} ${count === 1 ? "character" : "characters"}`;
+  }
   if (!startBtn) return;
 
   const draft = readScanWorkspaceIntakeDraft();
@@ -2121,44 +2145,209 @@ function getScanWorkspaceProcessingStageIndex(stageKey) {
   return SCAN_WORKSPACE_PROCESSING_STAGES.findIndex((stage) => stage.key === stageKey);
 }
 
+function buildScanWorkspaceProcessingIconSvg(iconName, className = "") {
+  const paths = {
+    scan: '<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H14l6 6v4"/><path d="M14 2v6h6"/><circle cx="14.5" cy="16.5" r="3.5"/><path d="m17 19 3 3"/>',
+    building: '<path d="M4 21V5l8-3 8 3v16"/><path d="M2 21h20M8 7h1M8 11h1M8 15h1M15 7h1M15 11h1M15 15h1"/>',
+    briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 12v2h4v-2"/>',
+    file: '<path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5M9 12h6M9 16h6"/>',
+    list: '<path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
+    link: '<path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.1-1.1"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+    clipboard: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4a3 3 0 0 1 6 0v2H9zM9 12h6M9 16h4"/>',
+    spark: '<path d="m12 3 1.3 4.2L17.5 9l-4.2 1.8L12 15l-1.3-4.2L6.5 9l4.2-1.8L12 3Z"/><path d="m18.5 15 .7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3-2.3-.7 2.3-.7.7-2.3Z"/>',
+    shield: '<path d="M12 2 20 5v6c0 5-3.4 9-8 11-4.6-2-8-6-8-11V5z"/><path d="m8.5 12 2.2 2.2 4.8-5"/>',
+    review: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/>',
+    database: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/>',
+    check: '<path d="m5 12 4 4L19 6"/>',
+  };
+  const safeClass = String(className || "").trim();
+  return `<svg${safeClass ? ` class="${safeClass}"` : ""} viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[iconName] || paths.file}</svg>`;
+}
+
+function formatScanWorkspaceProviderName(value) {
+  const provider = String(value || "").trim();
+  if (!provider) return "";
+  return provider
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => {
+      const normalized = part.toLowerCase();
+      if (normalized.length > 2 && normalized.endsWith("ai")) {
+        const prefix = normalized.slice(0, -2);
+        return prefix.charAt(0).toUpperCase() + prefix.slice(1) + "AI";
+      }
+      return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+    })
+    .join(" ");
+}
+
+function getScanWorkspaceProcessingLlmPresentation() {
+  const result = scanWorkspaceProcessingState.resultMeta || {};
+  const status = String(result.llmAnalysisStatus || "").trim().toLowerCase();
+  const provider = result.llmCallAttempted
+    ? formatScanWorkspaceProviderName(result.provider)
+    : "";
+  const model = result.llmCallAttempted ? String(result.model || "").trim() : "";
+  const providerModel = [provider, model].filter(Boolean).join(" / ");
+
+  if (status === "succeeded") {
+    return {
+      status,
+      label: "AI analysis succeeded",
+      toneClass: "is-succeeded",
+      providerModel,
+    };
+  }
+  if (status === "fallback") {
+    return {
+      status,
+      label: "AI unavailable · deterministic fallback used",
+      toneClass: "is-fallback",
+      providerModel,
+    };
+  }
+  if (status === "disabled") {
+    return {
+      status,
+      label: "AI analysis disabled",
+      toneClass: "is-disabled",
+      providerModel: "",
+    };
+  }
+  if (scanWorkspaceProcessingState.status === "running") {
+    return {
+      status: "running",
+      label: "AI analysis pending",
+      toneClass: "is-running",
+      providerModel: "",
+    };
+  }
+  if (scanWorkspaceProcessingState.status === "error") {
+    return {
+      status: "failed",
+      label: "AI analysis not completed",
+      toneClass: "is-fallback",
+      providerModel: "",
+    };
+  }
+  return {
+    status: status || "pending",
+    label: "AI analysis pending",
+    toneClass: "is-pending",
+    providerModel: "",
+  };
+}
+
+function buildScanWorkspaceProcessingSummaryItemHtml({ icon, label, value, className = "", title = "", valueHtml = "" }) {
+  return `
+    <div class="scan-workspace-processing-summary-item ${scanWorkspaceEscapeHtml(className)}">
+      <span class="scan-workspace-processing-summary-item-icon" aria-hidden="true">
+        ${buildScanWorkspaceProcessingIconSvg(icon)}
+      </span>
+      <div class="scan-workspace-processing-summary-item-copy">
+        <div class="scan-workspace-processing-summary-label">${scanWorkspaceEscapeHtml(label)}</div>
+        <div class="scan-workspace-processing-summary-value"${title ? ` title="${scanWorkspaceEscapeHtml(title)}"` : ""}>${valueHtml || scanWorkspaceEscapeHtml(value)}</div>
+      </div>
+    </div>
+  `;
+}
+
 function buildScanWorkspaceProcessingSummaryHtml(draft) {
   if (!draft) return "";
 
   const resumeSource = draft.savedResumeName
-    ? `Saved resume: ${draft.savedResumeName}`
+    ? `Saved resume · ${draft.savedResumeName}`
     : "Missing";
 
   const jobDescriptionValue = draft.jobDescriptionText
-    ? `${draft.jobDescriptionText.length} chars`
+    ? `${draft.jobDescriptionText.length.toLocaleString("en-US")} ${draft.jobDescriptionText.length === 1 ? "character" : "characters"}`
     : "Missing";
 
   const companyValue = draft.company || "Not set";
   const roleValue = draft.role || "Not set";
-  const jobUrlValue = draft.jobUrl ? "Provided" : "Not provided";
+  const llm = getScanWorkspaceProcessingLlmPresentation();
+  const scanTimestamp = String(scanWorkspaceProcessingState.resultMeta?.scanTimestamp || "").trim();
+  const scannedOn = scanTimestamp ? formatScanWorkspaceSavedAt(scanTimestamp) : "";
+  const postingValueHtml = draft.jobUrl
+    ? `Provided <span class="scan-workspace-processing-provided-check" aria-label="provided">${buildScanWorkspaceProcessingIconSvg("check")}</span>`
+    : "";
+  const secondaryItems = [
+    buildScanWorkspaceProcessingSummaryItemHtml({
+      icon: "file",
+      label: "Resume source",
+      value: resumeSource,
+      title: resumeSource,
+      className: "is-resume",
+    }),
+    buildScanWorkspaceProcessingSummaryItemHtml({
+      icon: "list",
+      label: "Job description",
+      value: jobDescriptionValue,
+    }),
+    buildScanWorkspaceProcessingSummaryItemHtml({
+      icon: "link",
+      label: "Posting URL",
+      value: draft.jobUrl ? "Provided" : "Not provided",
+      valueHtml: postingValueHtml,
+    }),
+    scannedOn
+      ? buildScanWorkspaceProcessingSummaryItemHtml({
+          icon: "calendar",
+          label: "Scanned on",
+          value: scannedOn,
+        })
+      : "",
+  ].filter(Boolean).join("");
 
-  const cards = [
-    { label: "Resume source", value: resumeSource },
-    { label: "Job description", value: jobDescriptionValue },
-    { label: "Company", value: companyValue },
-    { label: "Role", value: roleValue },
-    { label: "Posting URL", value: jobUrlValue },
-  ];
-
-  return cards
-    .map(
-      (item) => `
-        <div class="scan-workspace-processing-summary-card">
-          <div class="scan-workspace-processing-summary-label">${scanWorkspaceEscapeHtml(item.label)}</div>
-          <div class="scan-workspace-processing-summary-value">${scanWorkspaceEscapeHtml(item.value)}</div>
+  return `
+    <section class="scan-workspace-processing-summary-surface" aria-label="Scan summary">
+      <header class="scan-workspace-processing-summary-header">
+        <div class="scan-workspace-processing-summary-heading">
+          <span class="scan-workspace-processing-summary-icon" aria-hidden="true">
+            ${buildScanWorkspaceProcessingIconSvg("scan")}
+          </span>
+          <div>
+            <h2>Scan summary</h2>
+            <p>Overview of the inputs used for this scan and AI analysis details.</p>
+          </div>
         </div>
-      `
-    )
-    .join("");
+        <div class="scan-workspace-processing-ai-status ${scanWorkspaceEscapeHtml(llm.toneClass)}" data-llm-analysis-status="${scanWorkspaceEscapeHtml(llm.status)}">
+          <div class="scan-workspace-processing-ai-status-badge">
+            ${buildScanWorkspaceProcessingIconSvg(llm.status === "succeeded" ? "check" : "spark")}
+            <span>${scanWorkspaceEscapeHtml(llm.label)}</span>
+          </div>
+          ${llm.providerModel ? `<div class="scan-workspace-processing-provider-model">${scanWorkspaceEscapeHtml(llm.providerModel)}</div>` : ""}
+        </div>
+      </header>
+
+      <div class="scan-workspace-processing-summary-primary">
+        ${buildScanWorkspaceProcessingSummaryItemHtml({
+          icon: "building",
+          label: "Company",
+          value: companyValue,
+          className: "is-company",
+        })}
+        ${buildScanWorkspaceProcessingSummaryItemHtml({
+          icon: "briefcase",
+          label: "Role",
+          value: roleValue,
+          title: roleValue,
+          className: "is-role",
+        })}
+      </div>
+
+      <div class="scan-workspace-processing-summary-secondary">
+        ${secondaryItems}
+      </div>
+    </section>
+  `;
 }
 
 function buildScanWorkspaceProcessingStepsHtml(currentStageKey) {
   const currentIndex = getScanWorkspaceProcessingStageIndex(currentStageKey);
   const isFinished = scanWorkspaceProcessingState.status === "complete";
+  const isError = scanWorkspaceProcessingState.status === "error";
 
   return SCAN_WORKSPACE_PROCESSING_STAGES.map((stage, index) => {
     let stateClass = "";
@@ -2168,12 +2357,15 @@ function buildScanWorkspaceProcessingStepsHtml(currentStageKey) {
       stateClass = "is-complete";
       stateLabel = "Complete";
     } else if (index === currentIndex) {
-      stateClass = "is-current";
-      stateLabel = "Current";
+      stateClass = isError ? "is-error" : "is-current";
+      stateLabel = isError ? "Stopped" : "Current";
     }
 
     return `
       <div class="scan-workspace-processing-step ${stateClass}">
+        <span class="scan-workspace-processing-step-icon" aria-hidden="true">
+          ${buildScanWorkspaceProcessingIconSvg(isFinished || index < currentIndex ? "check" : stage.icon)}
+        </span>
         <div class="scan-workspace-processing-step-copy">
           <div class="scan-workspace-processing-step-title">${scanWorkspaceEscapeHtml(stage.title)}</div>
           <div class="scan-workspace-processing-step-text">${scanWorkspaceEscapeHtml(stage.description)}</div>
@@ -2192,22 +2384,85 @@ function updateScanWorkspaceProcessingView() {
   const stepList = getScanWorkspaceInput("scanWorkspaceProcessingStepList");
   const note = getScanWorkspaceInput("scanWorkspaceProcessingNote");
   const complete = getScanWorkspaceInput("scanWorkspaceProcessingComplete");
+  const completeTitle = getScanWorkspaceInput("scanWorkspaceProcessingCompleteTitle");
+  const completeCopy = getScanWorkspaceInput("scanWorkspaceProcessingCompleteCopy");
+  const progressBar = getScanWorkspaceInput("scanWorkspaceProcessingBar");
+  const progressLabel = getScanWorkspaceInput("scanWorkspaceProcessingProgressLabel");
 
   const stage = getScanWorkspaceProcessingStage(scanWorkspaceProcessingState.currentStageKey);
   const draft = scanWorkspaceProcessingState.intakeDraft;
+  const status = scanWorkspaceProcessingState.status;
   const isComplete = scanWorkspaceProcessingState.status === "complete";
+  const isError = status === "error";
 
-  if (badge) badge.textContent = isComplete ? "Complete" : stage.title;
-  if (title) title.textContent = isComplete ? "Scan report ready" : "Structuring your content with AI";
-  if (subtitle) subtitle.textContent = isComplete ? "Review the generated match report when you are ready." : stage.description;
+  if (badge) badge.textContent = isComplete ? "Complete" : isError ? "Error" : stage.title;
+  if (title) title.textContent = isComplete ? "Scan report ready" : isError ? "Scan could not be completed" : "Building your scan report";
+  if (subtitle) subtitle.textContent = isComplete
+    ? "Review the generated match report when you are ready."
+    : isError
+      ? "The request stopped before a saved report was confirmed."
+      : "The server is generating the report and confirming persistence.";
   if (summary) summary.innerHTML = buildScanWorkspaceProcessingSummaryHtml(draft);
   if (stepList) stepList.innerHTML = buildScanWorkspaceProcessingStepsHtml(stage.key);
-  if (complete) complete.hidden = !isComplete;
+  if (complete) {
+    complete.hidden = !isComplete;
+    complete.dataset.llmAnalysisStatus = String(
+      scanWorkspaceProcessingState.resultMeta?.llmAnalysisStatus || "unknown"
+    );
+  }
+
+  if (isComplete) {
+    const result = scanWorkspaceProcessingState.resultMeta || {};
+    const llmStatus = String(result.llmAnalysisStatus || "").trim().toLowerCase();
+    const shortScanId = String(result.scanId || "").trim().slice(0, 10);
+    if (completeTitle) {
+      completeTitle.textContent = llmStatus === "succeeded"
+        ? "AI-assisted match report ready"
+        : "Match report ready";
+    }
+    if (completeCopy) {
+      completeCopy.textContent = llmStatus === "fallback"
+        ? "AI analysis was unavailable, so ApplyLens used deterministic fallback."
+        : llmStatus === "disabled"
+          ? "AI analysis was disabled for this scan. A deterministic report was created and saved."
+          : shortScanId
+            ? `Saved scan ${shortScanId} has been created successfully.`
+            : "The saved match report has been created successfully.";
+    }
+  }
+
+  if (progressBar) {
+    const progressValue = Math.max(0, Math.min(100, Number(scanWorkspaceProcessingState.progressValue) || 0));
+    progressBar.dataset.progressState = status;
+    progressBar.setAttribute("aria-busy", status === "running" ? "true" : "false");
+    if (status === "running") {
+      progressBar.removeAttribute("aria-valuenow");
+      progressBar.setAttribute("aria-valuetext", "Scan running; progress percentage unavailable");
+    } else {
+      progressBar.setAttribute("aria-valuenow", String(progressValue));
+      progressBar.setAttribute(
+        "aria-valuetext",
+        isComplete ? "Scan complete" : isError ? "Scan stopped before completion" : "Scan not started"
+      );
+    }
+    progressBar.style.setProperty("--scan-progress", `${progressValue}%`);
+  }
+
+  if (progressLabel) {
+    progressLabel.textContent = isComplete
+      ? "100% complete"
+      : isError
+        ? "Not completed"
+        : status === "running"
+          ? "In progress"
+          : "Not started";
+  }
 
   if (note) {
+    note.hidden = isComplete;
     note.textContent =
       scanWorkspaceProcessingState.note ||
-      "Waiting for the real scan runner. This phase adds the processing shell and stage model only.";
+      "Ready to submit the scan request.";
   }
 }
 
@@ -2314,17 +2569,16 @@ async function beginScanWorkspaceProcessing() {
   const draft = readScanWorkspaceIntakeDraft();
 
   scanWorkspaceProcessingState.status = "running";
+  scanWorkspaceProcessingState.progressValue = 0;
   scanWorkspaceProcessingState.currentStageKey = "prepare";
   scanWorkspaceProcessingState.intakeDraft = { ...draft };
+  scanWorkspaceProcessingState.resultMeta = null;
   scanWorkspaceProcessingState.note =
     "Generating the scan report and saving it to Postgres...";
 
   setScanWorkspaceMode("processing");
 
   try {
-    scanWorkspaceProcessingState.currentStageKey = "resume";
-    updateScanWorkspaceProcessingView();
-
     const response = await fetch("/planning/start-scan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2356,11 +2610,29 @@ async function beginScanWorkspaceProcessing() {
     }
 
     scanWorkspaceProcessingState.status = "complete";
-    scanWorkspaceProcessingState.currentStageKey = "review_payload";
-    scanWorkspaceProcessingState.note = scanId
-      ? `Saved scan ${scanId.slice(0, 10)}. Match report ready.`
-      : "Saved scan. Match report ready.";
+    scanWorkspaceProcessingState.progressValue = 100;
+    scanWorkspaceProcessingState.currentStageKey = "persist";
+    const llmAnalysisStatus = String(data?.llm_analysis_status || "").trim().toLowerCase();
     const pendingPayload = data?.scan_review_payload || data?.preload_payload || null;
+    const llmReadback = data?.jd_llm_extraction_readback
+      || pendingPayload?.jd_llm_extraction_readback
+      || pendingPayload?.jd_llm_extraction
+      || {};
+    scanWorkspaceProcessingState.resultMeta = {
+      scanId,
+      scanTimestamp: String(data?.scan?.scan_timestamp || "").trim(),
+      llmAnalysisStatus,
+      llmCallAttempted: llmReadback?.llm_call_attempted === true,
+      provider: String(llmReadback?.provider || "").trim(),
+      model: String(llmReadback?.model || "").trim(),
+    };
+    scanWorkspaceProcessingState.note = llmAnalysisStatus === "fallback"
+      ? "AI analysis was unavailable. A deterministic fallback report was generated and saved."
+      : llmAnalysisStatus === "disabled"
+        ? "AI analysis was explicitly disabled. A deterministic report was generated and saved."
+        : scanId
+          ? `Saved scan ${scanId.slice(0, 10)}. AI-assisted match report ready.`
+          : "Saved scan. AI-assisted match report ready.";
     scanWorkspaceProcessingState.pendingReviewPayload =
       pendingPayload && typeof pendingPayload === "object"
         ? {
@@ -2385,6 +2657,7 @@ async function beginScanWorkspaceProcessing() {
   } catch (err) {
     scanWorkspaceProcessingState.status = "error";
     scanWorkspaceProcessingState.pendingReviewPayload = null;
+    scanWorkspaceProcessingState.resultMeta = null;
     scanWorkspaceProcessingState.note =
       err instanceof Error ? err.message : "Failed to save scan intake.";
     updateScanWorkspaceProcessingView();

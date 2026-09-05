@@ -63,6 +63,213 @@ html[data-theme="dark"] {
   --accent: var(--accent-solid);
 }
 
+/* Application status dialog — compact shared final owner. */
+#applicationActionModal .application-status-dialog {
+  width: min(520px, calc(100vw - 28px)) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border: 1px solid var(--app-border) !important;
+  border-radius: 20px !important;
+  background: var(--app-surface) !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24) !important;
+}
+
+#applicationActionModal .application-status-dialog__header {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 22px 18px;
+}
+
+#applicationActionModal .application-status-dialog__icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--app-action-border);
+  border-radius: 12px;
+  color: var(--app-action-strong);
+  background: var(--app-action-soft);
+}
+
+#applicationActionModal .application-status-dialog svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#applicationActionModal .application-status-dialog__heading {
+  min-width: 0;
+}
+
+#applicationActionModal .application-status-dialog__heading h3 {
+  margin: 0 !important;
+  color: var(--app-text) !important;
+  font-size: 19px !important;
+  line-height: 1.25 !important;
+  letter-spacing: -0.015em;
+}
+
+#applicationActionModal .application-status-dialog__heading .subtext {
+  margin-top: 3px;
+  color: var(--app-muted) !important;
+  font-size: 12px !important;
+  line-height: 1.4;
+}
+
+#applicationActionModal button.application-status-dialog__close {
+  display: grid !important;
+  place-items: center !important;
+  width: 34px !important;
+  min-width: 34px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 !important;
+  border: 1px solid var(--app-border) !important;
+  border-radius: 10px !important;
+  color: var(--app-muted) !important;
+  background: var(--app-surface-2) !important;
+  box-shadow: none !important;
+}
+
+#applicationActionModal button.application-status-dialog__close:hover {
+  border-color: var(--app-action-border) !important;
+  color: var(--app-action-strong) !important;
+  background: var(--app-action-soft-hover) !important;
+}
+
+#applicationActionModal .application-status-dialog__job {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin: 0 22px;
+  padding: 14px 16px !important;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: var(--app-surface-2);
+}
+
+#applicationActionModal .application-status-dialog__job-field {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+#applicationActionModal .application-status-dialog__job-field .label {
+  color: var(--app-muted) !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+#applicationActionModal .application-status-dialog__job-field > span:last-child {
+  overflow: hidden;
+  color: var(--app-text) !important;
+  font-size: 13px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#applicationActionModal .application-status-dialog__prompt {
+  padding: 18px 22px 9px;
+  color: var(--app-text-2);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+#applicationActionModal .application-status-dialog__actions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px !important;
+  padding: 0 22px 22px !important;
+}
+
+#applicationActionModal .application-status-dialog__actions > button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 44px !important;
+  margin: 0 !important;
+  padding: 10px 14px !important;
+  border-radius: 12px !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  font-weight: 780 !important;
+}
+
+#applicationActionModal .application-status-dialog__actions .applied-action-btn {
+  border: 1px solid var(--app-action-primary) !important;
+  color: #fff !important;
+  background: var(--app-action-primary) !important;
+}
+
+#applicationActionModal .application-status-dialog__actions .applied-action-btn:hover {
+  border-color: var(--app-action-hover) !important;
+  background: var(--app-action-hover) !important;
+}
+
+#applicationActionModal .application-status-dialog__actions .saved-action-btn {
+  border: 1px solid #d8c08b !important;
+  color: #725918 !important;
+  background: #f8f1df !important;
+}
+
+#applicationActionModal .application-status-dialog__actions .saved-action-btn:hover {
+  border-color: #c9ac68 !important;
+  background: #f1e6c8 !important;
+}
+
+#applicationActionModal .application-status-dialog__actions .not-applied-action-btn {
+  border: 1px solid #e4b4aa !important;
+  color: #87483e !important;
+  background: #fbede9 !important;
+}
+
+#applicationActionModal .application-status-dialog__actions .not-applied-action-btn:hover {
+  border-color: #d79789 !important;
+  background: #f7dfd9 !important;
+}
+
+#applicationActionModal .application-status-dialog__actions .application-status-dialog__dismiss {
+  border: 1px solid var(--app-border) !important;
+  color: var(--app-text-2) !important;
+  background: var(--app-surface) !important;
+}
+
+#applicationActionModal .application-status-dialog__actions .application-status-dialog__dismiss:hover {
+  border-color: var(--app-action-border) !important;
+  color: var(--app-action-strong) !important;
+  background: var(--app-action-soft-hover) !important;
+}
+
+/* The collapsed rail keeps the text-only mark intact by scaling, never cropping. */
+body.app-shell-collapsed .app-shell-brand-logo {
+  width: 44px !important;
+  max-width: 44px !important;
+  height: auto !important;
+  object-fit: contain !important;
+}
+
+@media (max-width: 560px) {
+  #applicationActionModal .application-status-dialog__job,
+  #applicationActionModal .application-status-dialog__actions {
+    grid-template-columns: 1fr;
+  }
+}
+
 html[data-theme="light"] {
   --app-bg: #eef4fb;
   --app-bg-2: #f8fbff;
@@ -207,7 +414,7 @@ html[data-theme="light"] .profile-dropdown {
     var(--app-surface) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate),
 .btn,
 .ghost-btn,
 .app-shell-primary-link,
@@ -230,7 +437,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
     color var(--app-fast) var(--app-ease) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate),
 .primary-btn,
 .btn-primary,
 .app-shell-primary-link {
@@ -254,7 +461,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   color: var(--app-text) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate):not(:disabled):hover,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate):not(:disabled):hover,
 .primary-btn:not(:disabled):hover,
 .btn-primary:not(:disabled):hover,
 .app-shell-primary-link:not([aria-disabled="true"]):hover {
@@ -265,7 +472,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   box-shadow: 0 9px 20px rgba(54, 83, 76, 0.2) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(:disabled):active,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(:disabled):active,
 .primary-btn:not(:disabled):active,
 .btn-primary:not(:disabled):active,
 .app-shell-primary-link:not([aria-disabled="true"]):active {
@@ -276,7 +483,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   box-shadow: 0 4px 12px rgba(54, 83, 76, 0.16) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):disabled,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):disabled,
 .primary-btn:disabled,
 .btn-primary:disabled,
 .app-shell-primary-link[aria-disabled="true"] {
@@ -1407,7 +1614,7 @@ body {
   overscroll-behavior-x: contain;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action),
 .ghost-btn,
 .app-shell-primary-link,
 .job-apply-btn,
@@ -1427,7 +1634,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   display: grid !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):focus-visible:not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):focus-visible:not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action),
 .ghost-btn:focus-visible,
 .app-shell-primary-link:focus-visible,
 .app-shell-nav-link:focus-visible,
@@ -1443,7 +1650,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   box-shadow: 0 0 0 4px var(--app-focus) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate):focus-visible,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate):focus-visible,
 .primary-btn:focus-visible,
 .btn-primary:focus-visible,
 .app-shell-primary-link:focus-visible,
@@ -1584,7 +1791,7 @@ body .control-group textarea {
   font-size: 13px !important;
 }
 
-body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(.planning-filter-apply):not(.operational-primary-action):not(.executive-queue-apply-btn),
+body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(.planning-filter-apply):not(.operational-primary-action):not(.executive-queue-apply-btn),
 body .ghost-btn,
 body .btn-sm {
   min-height: 34px !important;
@@ -4111,7 +4318,7 @@ body .control-group label {
   line-height: 1.1 !important;
 }
 
-body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(.planning-filter-apply):not(.operational-primary-action):not(.executive-queue-apply-btn),
+body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(.planning-filter-apply):not(.operational-primary-action):not(.executive-queue-apply-btn),
 body .ghost-btn,
 body .btn-sm {
   min-height: 34px !important;
@@ -12665,4 +12872,870 @@ html:not([data-theme="light"]) #pipelineRunStatsModal .pipeline-run-outcome-prim
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ==========================================================================
+   saved_scans_library_r1 - Saved Scans library surface (/profile/saved-scans)
+
+   The page previously reused .saved-scans-table-wrap / .saved-scans-table,
+   which are welded into the legacy shared table lists above (blue gradient
+   header, pastel zebra rows, 18px cells). The markup now uses its own
+   namespace so the page leaves that system cleanly instead of fighting it
+   with higher-specificity overrides. Scoped to this section only.
+   ========================================================================== */
+
+.profile-saved-scans-section {
+  --scans-surface: #ffffff;
+  --scans-surface-muted: #f8faf9;
+  --scans-head-bg: #f4f8f6;
+  --scans-border: #d9e4e0;
+  --scans-hairline: #e8eeeb;
+  --scans-text: #101828;
+  --scans-secondary: #667085;
+  --scans-muted: #8a949f;
+  --scans-accent: #56746d;
+  --scans-accent-hover: #49655f;
+  --scans-accent-soft: #edf2f0;
+  --scans-accent-soft-hover: #e4ece9;
+  --scans-accent-border: #c9d6d2;
+  --scans-accent-strong: #36534c;
+  --scans-focus: rgba(86, 116, 109, 0.14);
+  --scans-focus-border: #6f9f93;
+  --scans-row-hover: #f6f9f8;
+  --scans-track: #e7ecea;
+  --scans-fill: #56746d;
+  --scans-danger-surface: #fbf1ef;
+  --scans-danger-ink: #b45f57;
+  --scans-danger-strong: #93443f;
+  --scans-danger-border: #e6c8c4;
+  --scans-danger-solid: #b85f58;
+  --scans-danger-solid-hover: #a7504a;
+  --scans-danger-solid-pressed: #93443f;
+  --scans-danger-focus: rgba(184, 95, 88, 0.2);
+}
+
+html:not([data-theme="light"]) .profile-saved-scans-section,
+html[data-theme="dark"] .profile-saved-scans-section {
+  --scans-surface: #111a24;
+  --scans-surface-muted: #141e29;
+  --scans-head-bg: #172230;
+  --scans-border: #2a3644;
+  --scans-hairline: #222d3a;
+  --scans-text: #e8edf3;
+  --scans-secondary: #9aa7b5;
+  --scans-muted: #7d8894;
+  --scans-accent: #7d9c93;
+  --scans-accent-hover: #8fada4;
+  --scans-accent-soft: rgba(125, 156, 147, 0.16);
+  --scans-accent-soft-hover: rgba(125, 156, 147, 0.24);
+  --scans-accent-border: #3d5049;
+  --scans-accent-strong: #a9c1ba;
+  --scans-focus: rgba(125, 156, 147, 0.24);
+  --scans-focus-border: #6f9f93;
+  --scans-row-hover: #17222e;
+  --scans-track: #26313d;
+  --scans-fill: #7d9c93;
+  --scans-danger-surface: rgba(180, 95, 87, 0.16);
+  --scans-danger-ink: #d59189;
+  --scans-danger-strong: #e8b0a8;
+  --scans-danger-border: #5a3a35;
+  --scans-danger-solid: #a5544d;
+  --scans-danger-solid-hover: #b56159;
+  --scans-danger-solid-pressed: #8f453f;
+  --scans-danger-focus: rgba(184, 95, 88, 0.28);
+}
+
+/* --- section header ------------------------------------------------------ */
+
+.profile-saved-scans-section .saved-scans-header {
+  align-items: flex-start !important;
+  gap: 18px;
+}
+
+.saved-scans-header-titles {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.saved-scans-title-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.profile-saved-scans-section .saved-scans-title-row h2 {
+  margin: 0 !important;
+}
+
+.saved-scans-count-badge {
+  display: inline-flex;
+  min-width: 24px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  border: 1px solid var(--scans-accent-border);
+  border-radius: 999px;
+  background: var(--scans-accent-soft);
+  color: var(--scans-accent-strong);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.profile-saved-scans-section .saved-scans-subtitle {
+  margin: 0 !important;
+  color: var(--scans-secondary) !important;
+  font-size: 13px;
+}
+
+.saved-scans-header-captions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 1px;
+}
+
+.saved-scans-meta {
+  color: var(--scans-secondary);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The Postgres storage disclosure is preserved verbatim but demoted from a
+   full-width tinted banner to a muted caption beside the row meta. */
+.saved-scans-storage-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--scans-muted);
+  font-size: 11.5px;
+  font-weight: 550;
+  line-height: 1.35;
+}
+
+.saved-scans-storage-note-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  opacity: 0.85;
+}
+
+/* --- header controls: search + refresh share one 42px height ------------- */
+
+.profile-saved-scans-section .saved-scans-header-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.saved-scans-search {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.saved-scans-search-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.saved-scans-search-icon {
+  position: absolute;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  color: var(--scans-muted);
+  pointer-events: none;
+}
+
+.profile-saved-scans-section .saved-scans-search .saved-scans-search-input {
+  width: 264px;
+  max-width: 100%;
+  height: 42px;
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 0 12px 0 36px !important;
+  border: 1px solid var(--scans-border) !important;
+  border-radius: 12px !important;
+  background: var(--scans-surface) !important;
+  background-image: none !important;
+  color: var(--scans-text) !important;
+  box-shadow: none !important;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.profile-saved-scans-section .saved-scans-search .saved-scans-search-input::placeholder {
+  color: var(--scans-muted) !important;
+  opacity: 1;
+}
+
+.profile-saved-scans-section .saved-scans-search .saved-scans-search-input:hover {
+  border-color: var(--scans-accent-border) !important;
+}
+
+.profile-saved-scans-section .saved-scans-search .saved-scans-search-input:focus,
+.profile-saved-scans-section .saved-scans-search .saved-scans-search-input:focus-visible {
+  outline: 0 !important;
+  border-color: var(--scans-focus-border) !important;
+  box-shadow: 0 0 0 3px var(--scans-focus) !important;
+}
+
+.profile-saved-scans-section .saved-scans-search .saved-scans-search-input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+body .profile-saved-scans-section .saved-scans-header-controls .saved-scans-refresh-btn {
+  display: inline-flex;
+  height: 42px !important;
+  min-height: 42px !important;
+  box-sizing: border-box !important;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px !important;
+  border: 1px solid var(--scans-border) !important;
+  border-radius: 12px !important;
+  background: var(--scans-surface) !important;
+  background-image: none !important;
+  color: var(--scans-text) !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+}
+
+body .profile-saved-scans-section .saved-scans-header-controls .saved-scans-refresh-btn svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--scans-accent);
+}
+
+body .profile-saved-scans-section .saved-scans-header-controls .saved-scans-refresh-btn:hover {
+  border-color: var(--scans-accent-border) !important;
+  background: var(--scans-accent-soft-hover) !important;
+  color: var(--scans-accent-strong) !important;
+  transform: none !important;
+}
+
+body .profile-saved-scans-section .saved-scans-header-controls .saved-scans-refresh-btn:focus-visible {
+  outline: 3px solid var(--scans-focus) !important;
+  outline-offset: 2px;
+}
+
+/* --- table surface ------------------------------------------------------- */
+
+.profile-saved-scans-section .saved-scans-library-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--scans-border) !important;
+  border-radius: 14px !important;
+  background: var(--scans-surface) !important;
+  background-image: none !important;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04) !important;
+}
+
+.saved-scans-library-table {
+  width: 100%;
+  min-width: 1040px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* Global `th` / `td` owners in styles.css paint every table head with a blue
+   gradient under !important, so these carry both the section class and their
+   own !important to take ownership back for this surface only. */
+.profile-saved-scans-section .saved-scans-library-table thead th,
+html[data-theme="light"] .profile-saved-scans-section .saved-scans-library-table thead th {
+  height: 42px !important;
+  padding: 0 16px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--scans-border) !important;
+  background: var(--scans-head-bg) !important;
+  background-image: none !important;
+  color: var(--scans-secondary) !important;
+  box-shadow: none !important;
+  font-size: 12px !important;
+  font-weight: 680 !important;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.profile-saved-scans-section .saved-scans-library-table thead th.saved-scans-actions-head {
+  text-align: right;
+}
+
+.profile-saved-scans-section .saved-scans-library-table tbody td,
+html[data-theme="light"] .profile-saved-scans-section .saved-scans-library-table tbody td {
+  height: 58px !important;
+  padding: 10px 16px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--scans-hairline) !important;
+  background: var(--scans-surface) !important;
+  background-image: none !important;
+  color: var(--scans-text) !important;
+  font-size: 13px !important;
+  font-weight: 550 !important;
+  vertical-align: middle !important;
+}
+
+.profile-saved-scans-section .saved-scans-library-table tbody tr:last-child td {
+  border-bottom: 0 !important;
+}
+
+/* Neutral rows only - no zebra banding. */
+.profile-saved-scans-section .saved-scans-library-table tbody tr:nth-child(even) td,
+html[data-theme="light"] .profile-saved-scans-section .saved-scans-library-table tbody tr:nth-child(even) td {
+  background: var(--scans-surface) !important;
+}
+
+.profile-saved-scans-section .saved-scans-library-table tbody tr:hover td,
+html[data-theme="light"] .profile-saved-scans-section .saved-scans-library-table tbody tr:hover td {
+  background: var(--scans-row-hover) !important;
+}
+
+.profile-saved-scans-section .saved-scans-library-table .saved-scans-empty-cell {
+  height: 108px !important;
+  color: var(--scans-secondary) !important;
+  text-align: center;
+}
+
+/* --- cells --------------------------------------------------------------- */
+
+.saved-scan-cell-scanned {
+  color: var(--scans-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.saved-scan-cell-company {
+  color: var(--scans-text);
+  font-weight: 680;
+}
+
+.saved-scan-cell-role,
+.saved-scan-cell-resume {
+  max-width: 240px;
+}
+
+.saved-scan-cell-resume {
+  color: var(--scans-secondary);
+}
+
+.saved-scan-truncate {
+  display: block;
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-scan-source-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border: 1px solid var(--scans-hairline);
+  border-radius: 7px;
+  background: var(--scans-surface-muted);
+  color: var(--scans-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* --- status: compact dot + label ---------------------------------------- */
+
+.saved-scan-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px 4px 8px;
+  border: 1px solid var(--scans-hairline);
+  border-radius: 999px;
+  background: var(--scans-surface-muted);
+  color: var(--scans-secondary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.saved-scan-status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.saved-scan-status.is-ready {
+  border-color: #cbe4db;
+  background: #edf7f3;
+  color: #27665a;
+}
+
+.saved-scan-status.is-ready .saved-scan-status-dot {
+  background: #1f9d78;
+}
+
+.saved-scan-status.is-failed {
+  border-color: #e8c4bf;
+  background: #fdf1ef;
+  color: #8f4034;
+}
+
+.saved-scan-status.is-failed .saved-scan-status-dot {
+  background: #c2695c;
+}
+
+.saved-scan-status.is-processing,
+.saved-scan-status.is-pending {
+  border-color: #e9d5a6;
+  background: #fdf7e9;
+  color: #7d5c17;
+}
+
+.saved-scan-status.is-processing .saved-scan-status-dot,
+.saved-scan-status.is-pending .saved-scan-status-dot {
+  background: #c08b1f;
+}
+
+html:not([data-theme="light"]) .saved-scan-status.is-ready,
+html[data-theme="dark"] .saved-scan-status.is-ready {
+  border-color: #2f5348;
+  background: rgba(31, 157, 120, 0.14);
+  color: #93c9b6;
+}
+
+html:not([data-theme="light"]) .saved-scan-status.is-failed,
+html[data-theme="dark"] .saved-scan-status.is-failed {
+  border-color: #57352f;
+  background: rgba(194, 105, 92, 0.16);
+  color: #d9a49b;
+}
+
+html:not([data-theme="light"]) .saved-scan-status.is-processing,
+html:not([data-theme="light"]) .saved-scan-status.is-pending,
+html[data-theme="dark"] .saved-scan-status.is-processing,
+html[data-theme="dark"] .saved-scan-status.is-pending {
+  border-color: #57492a;
+  background: rgba(192, 139, 31, 0.16);
+  color: #d8bd85;
+}
+
+/* --- match: value + subtle track ---------------------------------------- */
+
+.saved-scan-match {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.saved-scan-match-value {
+  min-width: 34px;
+  color: var(--scans-text);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.saved-scan-match-track {
+  display: block;
+  overflow: hidden;
+  width: 68px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--scans-track);
+}
+
+.saved-scan-match-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--scans-fill);
+}
+
+/* --- row actions: two permanently visible icon controls ------------------ */
+
+.saved-scan-cell-actions {
+  width: 108px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.saved-scan-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+body .saved-scan-action-btn {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  min-height: 36px !important;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  padding: 0 !important;
+  border: 1px solid var(--scans-border) !important;
+  border-radius: 10px !important;
+  background: var(--scans-surface) !important;
+  background-image: none !important;
+  color: var(--scans-secondary) !important;
+  box-shadow: none !important;
+  text-decoration: none;
+  transform: none !important;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.saved-scan-action-icon {
+  width: 17px;
+  height: 17px;
+}
+
+body a.saved-scan-action-btn--open:hover,
+body button.saved-scan-action-btn--open:not(:disabled):hover {
+  border-color: var(--scans-accent-border) !important;
+  background: var(--scans-accent-soft) !important;
+  color: var(--scans-accent-strong) !important;
+}
+
+body .saved-scan-action-btn--delete {
+  border-color: var(--scans-danger-border) !important;
+  color: var(--scans-danger-ink) !important;
+}
+
+body .saved-scan-action-btn--delete:not(:disabled):hover {
+  border-color: var(--scans-danger-ink) !important;
+  background: var(--scans-danger-surface) !important;
+  color: var(--scans-danger-strong) !important;
+}
+
+body .saved-scan-action-btn:focus-visible {
+  outline: 3px solid var(--scans-focus) !important;
+  outline-offset: 2px;
+}
+
+body .saved-scan-action-btn:disabled,
+body .saved-scan-action-btn[aria-disabled="true"] {
+  border-color: var(--scans-hairline) !important;
+  background: var(--scans-surface-muted) !important;
+  color: var(--scans-muted) !important;
+  cursor: not-allowed !important;
+  opacity: 1 !important;
+}
+
+/* --- responsive ---------------------------------------------------------- */
+
+@media (max-width: 1180px) {
+  .saved-scan-cell-role,
+  .saved-scan-cell-resume {
+    max-width: 168px;
+  }
+
+  .saved-scan-match-track {
+    width: 52px;
+  }
+}
+
+@media (max-width: 900px) {
+  .profile-saved-scans-section .saved-scans-header {
+    flex-direction: column;
+  }
+
+  .profile-saved-scans-section .saved-scans-header-controls {
+    width: 100%;
+  }
+
+  .profile-saved-scans-section .saved-scans-search {
+    flex: 1 1 auto;
+  }
+
+  .profile-saved-scans-section .saved-scans-search .saved-scans-search-input {
+    width: 100%;
+  }
+}
+
+/* --- delete confirmation dialog -----------------------------------------
+   Presentation only. The lifecycle (openSavedScanDeleteModal ->
+   savedScanDeleteConfirmBtn -> DELETE /profile/saved-scans/{id}) is unchanged.
+   Scoped to #savedScanDeleteModal with its own classes so the Profile Resume
+   delete dialog, which used to share .resume-delete-* rules, is untouched.
+   ------------------------------------------------------------------------ */
+
+#savedScanDeleteModal {
+  --scan-dlg-surface: #ffffff;
+  --scan-dlg-inset: #f7f9f8;
+  --scan-dlg-border: #e0e7e4;
+  --scan-dlg-text: #101828;
+  --scan-dlg-secondary: #667085;
+  --scan-dlg-neutral-border: #c9d6d2;
+  --scan-dlg-neutral-hover: #edf2f0;
+  --scan-dlg-danger-tile: #fbf1ef;
+  --scan-dlg-danger-icon: #b45f57;
+  --scan-dlg-danger: #b85f58;
+  --scan-dlg-danger-hover: #a7504a;
+  --scan-dlg-danger-pressed: #93443f;
+  --scan-dlg-danger-focus: rgba(184, 95, 88, 0.2);
+}
+
+html:not([data-theme="light"]) #savedScanDeleteModal,
+html[data-theme="dark"] #savedScanDeleteModal {
+  --scan-dlg-surface: #141e29;
+  --scan-dlg-inset: #1a2531;
+  --scan-dlg-border: #2c3846;
+  --scan-dlg-text: #e8edf3;
+  --scan-dlg-secondary: #9aa7b5;
+  --scan-dlg-neutral-border: #3a4654;
+  --scan-dlg-neutral-hover: #202c3a;
+  --scan-dlg-danger-tile: rgba(180, 95, 87, 0.18);
+  --scan-dlg-danger-icon: #d59189;
+  --scan-dlg-danger: #a5544d;
+  --scan-dlg-danger-hover: #b56159;
+  --scan-dlg-danger-pressed: #8f453f;
+  --scan-dlg-danger-focus: rgba(184, 95, 88, 0.28);
+}
+
+#savedScanDeleteModal .saved-scan-delete-card {
+  position: relative;
+  display: grid;
+  width: min(496px, calc(100vw - 40px)) !important;
+  max-width: min(496px, calc(100vw - 40px)) !important;
+  min-width: 0 !important;
+  gap: 18px;
+  padding: 26px !important;
+  border: 1px solid var(--scan-dlg-border) !important;
+  border-radius: 20px !important;
+  background: var(--scan-dlg-surface) !important;
+  background-image: none !important;
+  color: var(--scan-dlg-text) !important;
+  box-shadow: 0 18px 44px rgba(16, 24, 40, 0.16) !important;
+}
+
+/* compact icon close, replacing the old full-size "Close" text pill */
+#savedScanDeleteModal .saved-scan-delete-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  min-height: 34px !important;
+  align-items: center;
+  justify-content: center;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--scan-dlg-secondary) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+#savedScanDeleteModal .saved-scan-delete-close svg {
+  width: 17px;
+  height: 17px;
+}
+
+#savedScanDeleteModal .saved-scan-delete-close:hover {
+  background: var(--scan-dlg-neutral-hover) !important;
+  color: var(--scan-dlg-text) !important;
+}
+
+#savedScanDeleteModal .saved-scan-delete-close:focus-visible {
+  outline: 3px solid var(--scan-dlg-danger-focus) !important;
+  outline-offset: 2px;
+}
+
+#savedScanDeleteModal .saved-scan-delete-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding-right: 38px;
+}
+
+#savedScanDeleteModal .saved-scan-delete-icon {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  background: var(--scan-dlg-danger-tile);
+  color: var(--scan-dlg-danger-icon);
+}
+
+#savedScanDeleteModal .saved-scan-delete-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+#savedScanDeleteModal .saved-scan-delete-copy {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+#savedScanDeleteModal .saved-scan-delete-copy h3 {
+  margin: 0 !important;
+  color: var(--scan-dlg-text) !important;
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  line-height: 1.25;
+}
+
+#savedScanDeleteModal .saved-scan-delete-copy p {
+  margin: 0 !important;
+  color: var(--scan-dlg-secondary) !important;
+  font-size: 13px !important;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+/* the selected scan identity, structured instead of a run-on sentence */
+#savedScanDeleteModal .saved-scan-delete-summary {
+  display: grid;
+  margin: 0 !important;
+  gap: 9px;
+  padding: 15px !important;
+  border: 1px solid var(--scan-dlg-border) !important;
+  border-radius: 12px !important;
+  background: var(--scan-dlg-inset) !important;
+}
+
+#savedScanDeleteModal .saved-scan-delete-summary-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+}
+
+#savedScanDeleteModal .saved-scan-delete-summary dt {
+  margin: 0;
+  color: var(--scan-dlg-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#savedScanDeleteModal .saved-scan-delete-summary dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--scan-dlg-text);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+/* the joined label is preserved for assistive tech, not shown twice */
+#savedScanDeleteModal .saved-scan-delete-name {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+#savedScanDeleteModal .saved-scan-delete-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+#savedScanDeleteModal .saved-scan-delete-cancel-btn,
+#savedScanDeleteModal .saved-scan-delete-confirm-btn {
+  display: inline-flex;
+  height: 40px;
+  min-height: 40px !important;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px !important;
+  border-radius: 10px !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  transform: none !important;
+}
+
+#savedScanDeleteModal .saved-scan-delete-cancel-btn {
+  border: 1px solid var(--scan-dlg-neutral-border) !important;
+  background: var(--scan-dlg-surface) !important;
+  color: var(--scan-dlg-text) !important;
+}
+
+#savedScanDeleteModal .saved-scan-delete-cancel-btn:hover {
+  background: var(--scan-dlg-neutral-hover) !important;
+  color: var(--scan-dlg-text) !important;
+}
+
+#savedScanDeleteModal .saved-scan-delete-confirm-btn {
+  border: 1px solid var(--scan-dlg-danger) !important;
+  background: var(--scan-dlg-danger) !important;
+  color: #ffffff !important;
+}
+
+#savedScanDeleteModal .saved-scan-delete-confirm-btn:hover {
+  border-color: var(--scan-dlg-danger-hover) !important;
+  background: var(--scan-dlg-danger-hover) !important;
+  color: #ffffff !important;
+}
+
+#savedScanDeleteModal .saved-scan-delete-confirm-btn:active {
+  border-color: var(--scan-dlg-danger-pressed) !important;
+  background: var(--scan-dlg-danger-pressed) !important;
+}
+
+#savedScanDeleteModal .saved-scan-delete-cancel-btn:focus-visible,
+#savedScanDeleteModal .saved-scan-delete-confirm-btn:focus-visible {
+  outline: 3px solid var(--scan-dlg-danger-focus) !important;
+  outline-offset: 2px;
+}
+
+@media (max-width: 560px) {
+  #savedScanDeleteModal .saved-scan-delete-summary-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  #savedScanDeleteModal .saved-scan-delete-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+}
+
+/* Final wordmark rail constraint: later legacy logo dimensions must not crop it. */
+body.app-shell-collapsed .app-shell-brand-logo {
+  width: 44px !important;
+  max-width: 44px !important;
+  height: auto !important;
+  object-fit: contain !important;
 }

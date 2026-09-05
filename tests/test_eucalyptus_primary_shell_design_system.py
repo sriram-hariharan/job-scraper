@@ -10,6 +10,7 @@ LEGACY_CSS = (ROOT / "src/app/static/styles.css").read_text(encoding="utf-8")
 EXECUTIVE_CSS = (ROOT / "frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
 RELEASE_MARKER = "eucalyptus_primary_shell_r1"
 ACTION_RELEASE_MARKER = "eucalyptus_action_cascade_r2"
+SAVED_SCANS_MARKER = "saved_scans_library_r1"
 
 
 def _rule(signature: str, source: str = APP_CSS) -> str:
@@ -351,8 +352,12 @@ def test_every_real_host_busts_both_changed_shared_assets_consistently() -> None
         source = host.read_text(encoding="utf-8")
         if "/static/app_redesign.css?v=" in source:
             seen_app_css += source.count("/static/app_redesign.css?v=")
-            assert source.count(f"/static/app_redesign.css?v={RELEASE_MARKER}") == source.count(
-                "/static/app_redesign.css?v="
+            # Saved Scans appends its own namespaced block to app_redesign.css,
+            # so that single route advances past the shared release marker.
+            assert (
+                source.count(f"/static/app_redesign.css?v={RELEASE_MARKER}")
+                + source.count(f"/static/app_redesign.css?v={SAVED_SCANS_MARKER}")
+                == source.count("/static/app_redesign.css?v=")
             )
         if "/static/shell.js?v=" in source:
             seen_shell_js += source.count("/static/shell.js?v=")

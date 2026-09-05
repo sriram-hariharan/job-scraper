@@ -953,9 +953,16 @@ def test_saved_scans_page_discloses_ready_report_storage():
     html = saved_scans_page()
 
     assert "Review New Scan reports generated from submitted resumes and job descriptions." in html
+    # The storage disclosure is preserved verbatim, demoted from the old
+    # full-width tinted banner to a muted caption in the section header.
     assert "generated match score and review payload in Postgres" in html
-    assert "<th>Action</th>" in html
-    assert 'colspan="9"' in html
+    assert "saved-scans-storage-note" in html
+    assert "saved-scans-note" not in html
+    # One Actions column replaces the old Action + blank delete columns.
+    assert "<th class=\"saved-scans-actions-head\">Actions</th>" in html
+    assert "<th>Action</th>" not in html
+    assert 'colspan="8"' in html
+    assert 'colspan="9"' not in html
     assert "/static/profile.js?v=profile_saved_scans_e5_discard_icon" in html
     assert "savedScanDeleteModal" in html
 
@@ -968,7 +975,10 @@ def test_saved_scans_profile_script_labels_ready_reports():
     assert "Saved intake only" in script
     assert "/scan-workspace?saved_scan_id=" in script
     assert "data-saved-scan-delete" in script
-    assert "saved-scan-action-badge" in script
+    # savedScanStatusMeta keeps its action metadata, but the table no longer
+    # renders it as a badge column - Status and the Open icon carry that now.
+    assert "saved-scan-action-badge" not in script
+    assert "saved-scan-action-btn--open" in script
 
 def test_selector_prefers_score_positive_candidate_over_neutral_llm_candidate():
     plan = build_final_replacement_plan(

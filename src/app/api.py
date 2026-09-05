@@ -152,7 +152,7 @@ class PlanningStartScanRequest(BaseModel):
     upload_filename: str = ""
     upload_content_type: str = ""
     upload_base64: str = ""
-    enable_jd_llm_extraction: bool = False
+    enable_jd_llm_extraction: bool = True
 
 class PlanningExtractResumeUploadRequest(BaseModel):
     filename: str

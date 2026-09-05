@@ -380,7 +380,7 @@ def profile_page(request: Request) -> str:
   <title>{page_title}</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_pipeline_run_buttons_r1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
 </head>
 <body{body_class}>
   {render_top_shell("/profile")}
@@ -593,7 +593,7 @@ def profile_page(request: Request) -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
   <script src="/static/profile.js?v=item2_phase4_profile_corrections_r1"></script>
 </body>
 </html>
@@ -616,7 +616,7 @@ def pipeline_run_agentic_review_page(run_id: str, request: Request) -> str:
   <title>Agentic Review</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=agentic_review_v1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
   <link rel="stylesheet" href="/static/agentic_review.css?v=item6c3_back_navigation_r1" />
 </head>
 <body>
@@ -799,7 +799,7 @@ def pipeline_run_agentic_review_page(run_id: str, request: Request) -> str:
     </div>
   </section>
 
-  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
   <script src="/static/profile.js?v=agentic_review_v1"></script>
   <script src="/static/agentic_review.js?v=item6_final_agentic_review_r1"></script>
 </body>
@@ -818,7 +818,7 @@ def profile_preferences_page() -> str:
   <title>Preferences · My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=preferences_toolbar_ownership_r11" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
   <link rel="stylesheet" href="/static/preferences.css?v=phase1_step8b_r1" />
 </head>
 <body class="preferences-page-shell">
@@ -829,7 +829,7 @@ def profile_preferences_page() -> str:
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
   <script src="/static/preference_location_selector.js?v=preferences_guided_parity_r9"></script>
   <script src="/static/preferences_workflow.js?v=phase1_step8b_r1"></script>
   <script src="/static/profile.js?v=preferences_guided_parity_r9"></script>
@@ -849,7 +849,7 @@ def profile_ai_settings_page() -> str:
   <title>AI Settings · My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_ai_settings_r1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
   <link rel="stylesheet" href="/static/profile_ai_settings.css?v=phase1_task_routing_ux_r3" />
 </head>
 <body class="profile-ai-settings-page-shell">
@@ -1070,7 +1070,7 @@ def profile_ai_settings_page() -> str:
   {render_provider_key_guidance_templates()}
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
   <script src="/static/profile_ai_settings.js?v=item2f5_manual_preview_default_r1"></script>
 </body>
 </html>
@@ -1088,7 +1088,7 @@ def saved_scans_page() -> str:
   <title>Saved Scans</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_confirm_specific_r2" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=saved_scans_library_r1&ui=runtime_truth_r1" />
 </head>
 <body>
   {render_top_shell("/profile/saved-scans")}
@@ -1101,23 +1101,53 @@ def saved_scans_page() -> str:
       </div>
     </header>
 
-    <section class="card profile-section-card">
-      <div class="section-header">
-        <div>
-          <h2>Saved Scans</h2>
-          <div class="subtext" id="savedScansMeta">Loading saved scans...</div>
+    <section class="card profile-section-card profile-saved-scans-section">
+      <div class="section-header saved-scans-header">
+        <div class="saved-scans-header-titles">
+          <div class="saved-scans-title-row">
+            <h2>Saved Scans</h2>
+            <span class="saved-scans-count-badge" id="savedScansCountBadge">0</span>
+          </div>
+          <div class="subtext saved-scans-subtitle">Review and manage your saved scan reports.</div>
+          <div class="saved-scans-header-captions">
+            <span class="saved-scans-meta" id="savedScansMeta">Loading saved scans...</span>
+            <span class="saved-scans-storage-note">
+              <svg class="saved-scans-storage-note-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="12" r="8.25" stroke="currentColor" stroke-width="1.7" />
+                <path d="M12 11v5.25" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                <circle cx="12" cy="7.9" r="1.15" fill="currentColor" />
+              </svg>
+              New Scan rows now store the generated match score and review payload in Postgres.
+            </span>
+          </div>
         </div>
-        <button type="button" class="ghost-btn btn-sm" id="refreshSavedScansBtn">
-          Refresh
-        </button>
+        <div class="profile-section-header-right saved-scans-header-controls">
+          <div class="saved-scans-search">
+            <label class="saved-scans-search-label" for="savedScansSearchInput">Search saved scans</label>
+            <svg class="saved-scans-search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+              <circle cx="11" cy="11" r="6.25" stroke="currentColor" stroke-width="1.8" />
+              <path d="M15.6 15.6L20 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+            <input
+              type="search"
+              id="savedScansSearchInput"
+              class="saved-scans-search-input"
+              placeholder="Search scans, company, or role..."
+              autocomplete="off"
+            />
+          </div>
+          <button type="button" class="ghost-btn btn-sm saved-scans-refresh-btn" id="refreshSavedScansBtn">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+              <path d="M20 11.5a8 8 0 1 0-.6 3.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M20 5v5h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
-      <div class="saved-scans-note">
-        New Scan rows now store the generated match score and review payload in Postgres.
-      </div>
-
-      <div class="saved-scans-table-wrap">
-        <table class="saved-scans-table">
+      <div class="saved-scans-library-table-wrap">
+        <table class="saved-scans-library-table">
           <thead>
             <tr>
               <th>Scanned</th>
@@ -1127,52 +1157,81 @@ def saved_scans_page() -> str:
               <th>Source</th>
               <th>Status</th>
               <th>Match</th>
-              <th>Action</th>
-              <th></th>
+              <th class="saved-scans-actions-head">Actions</th>
             </tr>
           </thead>
           <tbody id="savedScansTableBody">
             <tr>
-              <td colspan="9">Loading saved scans...</td>
+              <td colspan="8" class="saved-scans-empty-cell">Loading saved scans...</td>
             </tr>
           </tbody>
         </table>
       </div>
     </section>
 
-    <section class="modal-backdrop hidden" id="savedScanDeleteModal">
-      <div class="modal-card resume-delete-modal-card">
-        <div class="modal-header">
-          <div>
-            <h3>Delete saved scan?</h3>
-            <p class="subtext">This removes the selected scan row and stored report payload.</p>
+    <section
+      class="modal-backdrop hidden"
+      id="savedScanDeleteModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="savedScanDeleteTitle"
+      aria-describedby="savedScanDeleteDescription"
+    >
+      <div class="modal-card saved-scan-delete-card" tabindex="-1">
+        <button
+          type="button"
+          class="saved-scan-delete-close"
+          id="savedScanDeleteCloseBtn"
+          aria-label="Close delete saved scan dialog"
+          title="Close"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+            <path d="M6.75 6.75l10.5 10.5M17.25 6.75l-10.5 10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </button>
+        <div class="saved-scan-delete-head">
+          <span class="saved-scan-delete-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" focusable="false">
+              <path d="M4.75 7h14.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+              <path d="M9.5 7V5.4A1.4 1.4 0 0110.9 4h2.2a1.4 1.4 0 011.4 1.4V7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+              <path d="M6.75 7l.8 11.1A1.9 1.9 0 009.45 20h5.1a1.9 1.9 0 001.9-1.8L17.25 7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+              <path d="M10.6 10.75v5.5M13.4 10.75v5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            </svg>
+          </span>
+          <div class="saved-scan-delete-copy">
+            <h3 id="savedScanDeleteTitle">Delete saved scan?</h3>
+            <p id="savedScanDeleteDescription">This removes the selected scan row and stored report payload. This action cannot be undone.</p>
           </div>
+        </div>
+        <dl class="saved-scan-delete-summary">
+          <div class="saved-scan-delete-summary-row">
+            <dt>Company</dt>
+            <dd id="savedScanDeleteCompany">-</dd>
+          </div>
+          <div class="saved-scan-delete-summary-row">
+            <dt>Role</dt>
+            <dd id="savedScanDeleteRole">-</dd>
+          </div>
+          <div class="saved-scan-delete-summary-row">
+            <dt>Resume</dt>
+            <dd id="savedScanDeleteResume">-</dd>
+          </div>
+        </dl>
+        <span class="saved-scan-delete-name" id="savedScanDeleteName">this saved scan</span>
+        <div class="saved-scan-delete-actions">
           <button
             type="button"
-            class="ghost-btn modal-close-btn resume-delete-modal-close-btn"
-            id="savedScanDeleteCloseBtn"
-          >
-            Close
-          </button>
-        </div>
-        <div class="modal-body">
-          Are you sure you want to delete
-          <strong id="savedScanDeleteName">this saved scan</strong>?
-        </div>
-        <div class="modal-actions resume-delete-modal-actions">
-          <button
-            type="button"
-            class="ghost-btn resume-delete-cancel-btn"
+            class="saved-scan-delete-cancel-btn"
             id="savedScanDeleteCancelBtn"
           >
-            No
+            Cancel
           </button>
           <button
             type="button"
-            class="resume-delete-confirm-btn"
+            class="saved-scan-delete-confirm-btn"
             id="savedScanDeleteConfirmBtn"
           >
-            Yes, delete
+            Delete scan
           </button>
         </div>
       </div>
@@ -1180,8 +1239,8 @@ def saved_scans_page() -> str:
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1"></script>
-  <script src="/static/profile.js?v=profile_saved_scans_e5_discard_icon_profile_resume_roles_r10"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
+  <script src="/static/profile.js?v=profile_saved_scans_e5_discard_icon_profile_resume_roles_r10_saved_scans_library_r1"></script>
 </body>
 </html>
     """.strip()

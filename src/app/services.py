@@ -5651,6 +5651,34 @@ def _build_new_scan_review_payload(
     }
 
 
+def _apply_grounded_planning_scan_jd_signals(
+    job_record: Dict[str, Any],
+    structured_signals: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    """Add only validated, source-grounded LLM signals to deterministic evidence input."""
+
+    enriched = deepcopy(job_record)
+    signals = deepcopy(structured_signals or {})
+    required_skills = _unique_scan_terms(list(signals.get("required_skills") or []))
+    preferred_skills = _unique_scan_terms(list(signals.get("preferred_skills") or []))
+    tools = _unique_scan_terms(list(signals.get("tools") or []))
+
+    enriched["required_skills"] = _unique_scan_terms(
+        list(enriched.get("required_skills") or []) + required_skills
+    )
+    enriched["preferred_skills"] = _unique_scan_terms(
+        list(enriched.get("preferred_skills") or []) + preferred_skills + tools
+    )
+    enriched["all_skills"] = _unique_scan_terms(
+        list(enriched.get("all_skills") or [])
+        + enriched["required_skills"]
+        + enriched["preferred_skills"]
+    )
+    enriched["jd_intelligence"] = signals
+    enriched["jd_intelligence_grounded"] = True
+    return enriched
+
+
 def create_saved_scan_payload(
     *,
     scan_id: str = "",
@@ -5789,22 +5817,35 @@ def create_saved_scan_payload(
         }
     )
 
+    jd_llm_metadata = _build_planning_scan_jd_llm_extraction_metadata(
+        job_record=job_record,
+        enabled=bool(enable_jd_llm_extraction),
+        owner_user_id=owner_user_id,
+        adapter=jd_llm_provider_adapter,
+        extraction_policy=jd_llm_extraction_policy,
+    )
+    jd_llm_readback = build_planning_scan_jd_llm_extraction_readback(jd_llm_metadata)
+    llm_analysis_status = (
+        "disabled"
+        if not jd_llm_metadata.get("llm_enabled")
+        else "succeeded"
+        if jd_llm_metadata.get("validation_status") == "valid"
+        else "fallback"
+    )
+    scoring_job_record = _apply_grounded_planning_scan_jd_signals(
+        job_record,
+        jd_llm_metadata.get("structured_jd_signals"),
+    )
     review_payload = _build_new_scan_review_payload(
         scan_id=row["scan_id"],
         scan_timestamp=scan_timestamp,
         resume_name=resume_name or resume_filename or "New scan resume",
         resume_file_path=resume_processing_path or resume_file_path,
         resume_text=safe_resume_text,
-        job_record=job_record,
+        job_record=scoring_job_record,
         owner_user_id=owner_user_id,
     )
-    jd_llm_metadata = _build_planning_scan_jd_llm_extraction_metadata(
-        job_record=job_record,
-        enabled=bool(enable_jd_llm_extraction),
-        adapter=jd_llm_provider_adapter,
-        extraction_policy=jd_llm_extraction_policy,
-    )
-    jd_llm_readback = build_planning_scan_jd_llm_extraction_readback(jd_llm_metadata)
+    review_payload["llm_analysis_status"] = llm_analysis_status
     review_payload["jd_llm_extraction"] = jd_llm_metadata
     review_payload["jd_llm_extraction_readback"] = jd_llm_readback
     agentic_workflow_integration_readback = (
@@ -5830,10 +5871,17 @@ def create_saved_scan_payload(
             **row,
             "scan_status": "ready",
             "match_rate": scan_score,
-            "note": "Scan report generated from New Scan.",
+            "note": (
+                "AI-assisted scan report generated from New Scan."
+                if llm_analysis_status == "succeeded"
+                else "Scan report generated with deterministic fallback after AI analysis was unavailable."
+                if llm_analysis_status == "fallback"
+                else "Scan report generated with AI analysis explicitly disabled."
+            ),
             "payload_json": {
                 "version": "saved_scan_report_v1",
                 "scan_review_payload": review_payload,
+                "llm_analysis_status": llm_analysis_status,
                 "jd_llm_extraction": jd_llm_metadata,
                 "jd_llm_extraction_readback": jd_llm_readback,
                 "agentic_workflow_integration_readback": agentic_workflow_integration_readback,
@@ -5853,12 +5901,23 @@ def create_saved_scan_payload(
             "table_name": "saved_scans",
         }
     )
+    persisted = bool(postgres_write.get("ok", False))
+    response_row = row
+    if not persisted:
+        response_row = saved_scan_db_row(
+            {
+                **row,
+                "scan_status": "failed",
+                "note": "Scan report generated, but saved-scan persistence was not confirmed.",
+            }
+        )
 
     return {
-        "ok": bool(postgres_write.get("ok", False)),
-        "scan_status": row["scan_status"],
-        "scan": row,
+        "ok": persisted,
+        "scan_status": response_row["scan_status"],
+        "scan": response_row,
         "scan_review_payload": review_payload,
+        "llm_analysis_status": llm_analysis_status,
         "jd_llm_extraction_readback": jd_llm_readback,
         "agentic_workflow_integration_readback": agentic_workflow_integration_readback,
         "agentic_workflow_production_readiness_checkpoint": production_readiness_checkpoint,
@@ -6127,6 +6186,10 @@ def saved_scan_report_payload(
     refreshed_payload["agentic_workflow_production_readiness_checkpoint"] = (
         production_readiness_checkpoint
     )
+    llm_analysis_status = _clean_text(
+        refreshed_payload.get("llm_analysis_status")
+        or report_payload.get("llm_analysis_status")
+    )
     diagnostic_state = (
         deepcopy(refreshed_payload.get("diagnostic_state"))
         if isinstance(refreshed_payload.get("diagnostic_state"), dict)
@@ -6137,6 +6200,7 @@ def saved_scan_report_payload(
         "ok": True,
         "scan": row,
         "scan_review_payload": refreshed_payload,
+        "llm_analysis_status": llm_analysis_status,
         "jd_llm_extraction_readback": jd_llm_readback,
         "agentic_workflow_integration_readback": agentic_workflow_integration_readback,
         "agentic_workflow_production_readiness_checkpoint": production_readiness_checkpoint,
@@ -16118,6 +16182,7 @@ LIVE_JD_INTELLIGENCE_DRY_RUN_PROMPT_VERSION = "v1"
 LIVE_JD_INTELLIGENCE_DRY_RUN_TEMPERATURE = 0
 LIVE_JD_INTELLIGENCE_DRY_RUN_MAX_TOKENS = 700
 LIVE_JD_INTELLIGENCE_DRY_RUN_THINKING_BUDGET = 0
+PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID = "jd_intelligence"
 LIVE_JD_INTELLIGENCE_DRY_RUN_SYSTEM_PROMPT = (
     "You extract structured job-description intelligence for a manual dry-run. "
     "Return only JSON and never recommend application actions."
@@ -16431,6 +16496,126 @@ def _live_jd_intelligence_provider_adapter(adapter_input: Dict[str, Any]) -> Dic
     return payload
 
 
+_PLANNING_SCAN_JD_SIGNAL_SCHEMA_FIELDS = frozenset(
+    LIVE_JD_INTELLIGENCE_DRY_RUN_RESPONSE_SCHEMA["required"]
+)
+_PLANNING_SCAN_JD_PROVIDER_METADATA_FIELDS = frozenset(
+    {
+        "model_provider",
+        "model_name",
+        "prompt_version",
+        "token_usage",
+        "cost",
+        "latency_ms",
+        "provider_fallback_used",
+        "structured_output_schema",
+        "raw_response",
+    }
+)
+
+
+def _validated_planning_scan_jd_provider_payload(
+    provider_payload: Any,
+) -> Tuple[Dict[str, Any], List[str]]:
+    """Validate the strict JD schema again before any scan evidence can use it."""
+
+    if not isinstance(provider_payload, dict):
+        return {}, ["provider_response_not_object"]
+
+    source = deepcopy(provider_payload)
+    raw_response = source.get("raw_response")
+    if isinstance(raw_response, str):
+        try:
+            decoded = json.loads(raw_response)
+        except json.JSONDecodeError:
+            return {}, ["invalid_json_response"]
+        if not isinstance(decoded, dict):
+            return {}, ["provider_response_not_object"]
+        source.update(decoded)
+
+    errors: List[str] = []
+    missing = sorted(_PLANNING_SCAN_JD_SIGNAL_SCHEMA_FIELDS - set(source))
+    if missing:
+        errors.append("missing_required_fields:" + ",".join(missing))
+
+    allowed = _PLANNING_SCAN_JD_SIGNAL_SCHEMA_FIELDS | _PLANNING_SCAN_JD_PROVIDER_METADATA_FIELDS
+    unexpected = sorted(set(source) - allowed)
+    if unexpected:
+        errors.append("unexpected_fields:" + ",".join(unexpected))
+
+    for field in sorted(_PLANNING_SCAN_JD_SIGNAL_SCHEMA_FIELDS - {"extraction_confidence"}):
+        value = source.get(field)
+        if not isinstance(value, list):
+            errors.append(f"invalid_type:{field}:array_required")
+            continue
+        if any(not isinstance(item, str) for item in value):
+            errors.append(f"invalid_type:{field}:string_items_required")
+
+    confidence = source.get("extraction_confidence")
+    if (
+        not isinstance(confidence, (int, float))
+        or isinstance(confidence, bool)
+        or not 0 <= float(confidence) <= 1
+    ):
+        errors.append("invalid_type:extraction_confidence:number_0_to_1_required")
+
+    return (source if not errors else {}), errors
+
+
+def _configured_planning_scan_jd_provider_adapter(
+    *,
+    owner_user_id: str,
+    route: Dict[str, Any],
+    adapter_input: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Run the owner's qualified JD-intelligence route through shared transport."""
+
+    result = run_user_chat_completion_with_metadata(
+        owner_user_id=_clean_text(owner_user_id),
+        provider=_clean_text(route.get("provider")),
+        model=_clean_text(route.get("model")),
+        temperature=LIVE_JD_INTELLIGENCE_DRY_RUN_TEMPERATURE,
+        max_tokens=LIVE_JD_INTELLIGENCE_DRY_RUN_MAX_TOKENS,
+        response_mime_type="application/json",
+        response_schema=_live_jd_intelligence_structured_output_contract()["schema"],
+        return_parsed=True,
+        thinking_budget=LIVE_JD_INTELLIGENCE_DRY_RUN_THINKING_BUDGET,
+        workload_id=PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID,
+        messages=[
+            {
+                "role": "system",
+                "content": LIVE_JD_INTELLIGENCE_DRY_RUN_SYSTEM_PROMPT,
+            },
+            {
+                "role": "user",
+                "content": _live_jd_intelligence_prompt(
+                    job_title=_clean_text(adapter_input.get("job_title")),
+                    company=_clean_text(adapter_input.get("company")),
+                    location=_clean_text(adapter_input.get("location")),
+                    job_description=_clean_text(adapter_input.get("job_description")),
+                    source_metadata=dict(adapter_input.get("source_metadata") or {}),
+                ),
+            },
+        ],
+    )
+    content = result.get("content")
+    payload = dict(content or {}) if isinstance(content, dict) else {"raw_response": content}
+    payload.update(
+        {
+            "model_provider": _clean_text(result.get("provider"))
+            or _clean_text(route.get("provider")),
+            "model_name": _clean_text(result.get("model")) or _clean_text(route.get("model")),
+            "prompt_version": LIVE_JD_INTELLIGENCE_DRY_RUN_PROMPT_VERSION,
+            "token_usage": dict(result.get("token_usage") or result.get("token_usage_json") or {}),
+            "cost": dict(result.get("cost") or result.get("cost_json") or {}),
+            "latency_ms": result.get("latency_ms", 0),
+            "provider_fallback_used": bool(result.get("fallback_used", False)),
+            "structured_output_schema": _live_jd_intelligence_structured_output_contract(),
+        }
+    )
+    return payload
+
+
 def _planning_scan_jd_provider_input(request_packet: Dict[str, Any]) -> Dict[str, Any]:
     job_record = dict(request_packet.get("job_record") or {})
     return {
@@ -16542,6 +16727,89 @@ def _planning_scan_phase34a_provider_payload(
     }
 
 
+def _planning_scan_grounding_text(value: Any) -> str:
+    return re.sub(r"[^a-z0-9+#.]+", " ", _clean_text(value).casefold()).strip()
+
+
+def _planning_scan_signal_is_grounded(value: Any, source_text: str) -> bool:
+    signal = _planning_scan_grounding_text(value)
+    if not signal:
+        return False
+    return f" {signal} " in f" {_planning_scan_grounding_text(source_text)} "
+
+
+def _ground_planning_scan_jd_signals(
+    signals: Dict[str, Any],
+    *,
+    job_record: Dict[str, Any],
+) -> Tuple[Dict[str, Any], Dict[str, List[str]]]:
+    """Reject provider claims that are not directly supported by submitted JD input."""
+
+    source_text = "\n".join(
+        _clean_text(value)
+        for value in (
+            job_record.get("title") or job_record.get("job_title"),
+            job_record.get("location"),
+            job_record.get("description_text") or job_record.get("retrieval_text"),
+        )
+        if _clean_text(value)
+    )
+    grounded: Dict[str, Any] = {}
+    rejected: Dict[str, List[str]] = {}
+    for field in (
+        "required_skills",
+        "preferred_skills",
+        "responsibilities",
+        "tools",
+        "location_constraints",
+        "visa_constraints",
+        "red_flags",
+        "resume_evidence_needed",
+    ):
+        values = _unique_scan_terms(list(signals.get(field) or []))
+        grounded[field] = [
+            value for value in values if _planning_scan_signal_is_grounded(value, source_text)
+        ]
+        rejected_values = [value for value in values if value not in grounded[field]]
+        if rejected_values:
+            rejected[field] = rejected_values
+
+    for field in ("seniority", "domain"):
+        values = [
+            _clean_text(value)
+            for value in _clean_text(signals.get(field)).split(";")
+            if _clean_text(value)
+        ]
+        accepted = [
+            value for value in values if _planning_scan_signal_is_grounded(value, source_text)
+        ]
+        grounded[field] = "; ".join(accepted) or None
+        rejected_values = [value for value in values if value not in accepted]
+        if rejected_values:
+            rejected[field] = rejected_values
+
+    grounded["confidence"] = signals.get("confidence")
+    return grounded, rejected
+
+
+def _planning_scan_has_grounded_jd_signals(signals: Dict[str, Any]) -> bool:
+    return any(
+        signals.get(field) not in (None, "", [], {})
+        for field in (
+            "required_skills",
+            "preferred_skills",
+            "responsibilities",
+            "seniority",
+            "domain",
+            "tools",
+            "location_constraints",
+            "visa_constraints",
+            "red_flags",
+            "resume_evidence_needed",
+        )
+    )
+
+
 def build_jd_intelligence_production_task_contract_material() -> Dict[str, Any]:
     representative_input = {
         "job_title": "<job_title>",
@@ -16594,11 +16862,43 @@ def _build_planning_scan_jd_llm_extraction_metadata(
     *,
     job_record: Dict[str, Any],
     enabled: bool = False,
+    owner_user_id: str = "",
     adapter: Any = None,
     extraction_policy: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    provider_metadata: Dict[str, Any] = {}
-    provider_adapter = adapter or _live_jd_intelligence_provider_adapter
+    provider_metadata: Dict[str, Any] = {
+        "workload_id": PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID,
+    }
+    provider_adapter = adapter
+
+    if enabled and provider_adapter is None:
+        try:
+            route = resolve_effective_user_provider_route(
+                _clean_text(owner_user_id),
+                PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID,
+            )
+            provider_metadata.update(
+                {
+                    "provider": _clean_text(route.get("provider")),
+                    "model": _clean_text(route.get("model")),
+                    "effective_selection_source": _clean_text(
+                        route.get("effective_selection_source")
+                    ),
+                }
+            )
+
+            def provider_adapter(adapter_input: Dict[str, Any]) -> Dict[str, Any]:
+                return _configured_planning_scan_jd_provider_adapter(
+                    owner_user_id=owner_user_id,
+                    route=route,
+                    adapter_input=adapter_input,
+                )
+        except Exception as route_error:
+            def provider_adapter(
+                _adapter_input: Dict[str, Any],
+                _route_error: Exception = route_error,
+            ) -> Dict[str, Any]:
+                raise _route_error
 
     if not enabled:
         return {
@@ -16606,7 +16906,9 @@ def _build_planning_scan_jd_llm_extraction_metadata(
             "default_off": True,
             "live_jd_llm_extraction_planning_scan_wiring": True,
             "planning_scan_path": True,
-            "metadata_only": True,
+            "metadata_only": False,
+            "workload_id": PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID,
+            "effective_selection_source": "",
             "llm_enabled": False,
             "llm_call_attempted": False,
             "llm_call_performed": False,
@@ -16619,7 +16921,11 @@ def _build_planning_scan_jd_llm_extraction_metadata(
             "fallback_used": True,
             "validation_status": "disabled",
             "validation_errors": ["feature_flag_disabled"],
+            "response_schema_validation_status": "not_attempted",
+            "grounding_status": "disabled",
+            "grounding_rejections": {},
             "structured_jd_signals": {},
+            "validated_signals_applied_to_scoring": False,
             "enricher_result": {},
             "final_scoring_performed": False,
             "score_formula_changed": False,
@@ -16649,7 +16955,16 @@ def _build_planning_scan_jd_llm_extraction_metadata(
                     ),
                 }
             )
-            return _planning_scan_phase34a_provider_payload(raw_payload)
+            validated_payload, schema_errors = _validated_planning_scan_jd_provider_payload(
+                raw_payload
+            )
+            provider_metadata["response_schema_validation_status"] = (
+                "valid" if not schema_errors else "invalid"
+            )
+            provider_metadata["response_schema_validation_errors"] = schema_errors
+            if schema_errors:
+                return {}
+            return _planning_scan_phase34a_provider_payload(validated_payload)
         return {}
 
     planning_row = {
@@ -16669,18 +16984,34 @@ def _build_planning_scan_jd_llm_extraction_metadata(
     )
     extraction_results = list(enricher_result.get("extraction_results") or [])
     extraction = dict(extraction_results[0]) if extraction_results else {}
-    ready = extraction.get("extraction_ready") is True
+    extractor_ready = extraction.get("extraction_ready") is True
     parse_status = _clean_text(extraction.get("provider_response_parse_status"))
     blocked_reasons = list(extraction.get("blocked_reasons") or [])
+    schema_errors = list(provider_metadata.get("response_schema_validation_errors") or [])
+    schema_valid = provider_metadata.get("response_schema_validation_status") == "valid"
+    ungrounded_signals = (
+        deepcopy(extraction.get("jd_signals", {})) if extractor_ready and schema_valid else {}
+    )
+    signals, grounding_rejections = _ground_planning_scan_jd_signals(
+        ungrounded_signals,
+        job_record=job_record,
+    )
+    grounding_ready = _planning_scan_has_grounded_jd_signals(signals)
+    ready = extractor_ready and schema_valid and grounding_ready
+    if extractor_ready and schema_valid and not grounding_ready:
+        blocked_reasons.append("no_grounded_jd_signals")
     validation_status = "valid" if ready else "fallback"
-    signals = deepcopy(extraction.get("jd_signals", {})) if ready else {}
+    if not ready:
+        signals = {}
 
     return {
         "phase": "55A",
         "default_off": False,
         "live_jd_llm_extraction_planning_scan_wiring": True,
         "planning_scan_path": True,
-        "metadata_only": True,
+        "metadata_only": False,
+        "workload_id": PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID,
+        "effective_selection_source": provider_metadata.get("effective_selection_source", ""),
         "llm_enabled": True,
         "llm_call_attempted": bool(extraction.get("provider_callable_invoked", False)),
         "llm_call_performed": ready,
@@ -16690,11 +17021,20 @@ def _build_planning_scan_jd_llm_extraction_metadata(
         "token_usage": deepcopy(provider_metadata.get("token_usage", {})),
         "cost": deepcopy(provider_metadata.get("cost", {})),
         "latency_ms": provider_metadata.get("latency_ms", 0),
+        "provider_fallback_used": bool(
+            provider_metadata.get("provider_fallback_used", False)
+        ),
         "fallback_used": not ready,
         "validation_status": validation_status,
-        "validation_errors": blocked_reasons,
+        "validation_errors": [*blocked_reasons, *schema_errors],
+        "response_schema_validation_status": provider_metadata.get(
+            "response_schema_validation_status", "not_completed"
+        ),
+        "grounding_status": "valid" if ready else "fallback",
+        "grounding_rejections": grounding_rejections,
         "provider_response_parse_status": parse_status,
         "structured_jd_signals": signals,
+        "validated_signals_applied_to_scoring": ready,
         "enricher_result": deepcopy(enricher_result),
         "final_scoring_performed": False,
         "score_formula_changed": False,
@@ -16727,24 +17067,34 @@ def build_planning_scan_jd_llm_extraction_readback(
     return {
         "phase": "55B",
         "source_phase": _clean_text(source.get("phase")) or "55A",
-        "default_off": True,
+        "default_off": bool(source.get("default_off", False)),
         "live_jd_llm_readback": True,
         "planning_scan_path": True,
         "api_readback": True,
         "ui_readback": True,
-        "metadata_only": True,
+        "metadata_only": bool(source.get("metadata_only", False)),
+        "workload_id": _clean_text(source.get("workload_id")),
         "llm_enabled": bool(source.get("llm_enabled", False)),
         "llm_call_attempted": bool(source.get("llm_call_attempted", False)),
         "llm_call_performed": bool(source.get("llm_call_performed", False)),
         "fallback_used": bool(source.get("fallback_used", True)),
         "validation_status": _clean_text(source.get("validation_status")) or "missing",
         "validation_errors": list(source.get("validation_errors") or []),
+        "response_schema_validation_status": _clean_text(
+            source.get("response_schema_validation_status")
+        ) or "not_completed",
+        "grounding_status": _clean_text(source.get("grounding_status")) or "missing",
+        "grounding_rejections": deepcopy(source.get("grounding_rejections", {})),
+        "validated_signals_applied_to_scoring": bool(
+            source.get("validated_signals_applied_to_scoring", False)
+        ),
         "provider": _clean_text(source.get("provider")),
         "model": _clean_text(source.get("model")),
         "prompt_version": _clean_text(source.get("prompt_version")),
         "token_usage": token_usage,
         "cost": cost,
         "latency_ms": source.get("latency_ms", 0),
+        "provider_fallback_used": bool(source.get("provider_fallback_used", False)),
         "structured_jd_signals": structured_signals,
         "signal_summary": {
             "required_skill_count": len(list(structured_signals.get("required_skills") or [])),

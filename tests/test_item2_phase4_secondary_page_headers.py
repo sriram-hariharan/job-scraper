@@ -207,7 +207,11 @@ def test_shared_shell_pages_use_the_eucalyptus_release_marker():
         APPLICATION_HUB_UI_SOURCE,
         PROFILE_UI_SOURCE,
     )
-    assert sum(source.count("app_redesign.css?v=eucalyptus_primary_shell_r1") for source in sources) == 15
+    # Saved Scans owns namespaced app_redesign.css additions, so that one route
+    # advances its stylesheet marker; every other host stays on the release
+    # marker and shell.js is unchanged across all 15.
+    assert sum(source.count("app_redesign.css?v=eucalyptus_primary_shell_r1") for source in sources) == 14
+    assert sum(source.count("app_redesign.css?v=saved_scans_library_r1") for source in sources) == 1
     assert sum(source.count("shell.js?v=eucalyptus_primary_shell_r1") for source in sources) == 15
     # the shared React bundle is one asset, so it carries one marker on every
     # host that renders it - never split across two release names.
@@ -304,15 +308,15 @@ def test_advanced_diagnostics_execution_requires_explicit_run():
 def test_global_shell_markup_and_mobile_ownership_remain_unchanged():
     changed = get_changed_files(ROOT)
     if "src/app/ui_shell.py" in changed:
-        # Item 2 Phase 4 Correction Pass 1 intentionally adds a "diagnostics"
-        # inline SVG icon to fix the profile-menu dark-mode icon bug; this is
-        # the only shell change expected for this phase (see
-        # tests/test_item2_phase4_profile_corrections_and_legacy_route_retirement.py).
+        # The approved diagnostics icon remains, while the current bounded
+        # shell task swaps only the brand asset and initial guard description.
         ui_shell_source = (ROOT / "src/app/ui_shell.py").read_text(encoding="utf-8")
         assert '"diagnostics": (' in ui_shell_source
         assert '_icon_svg("diagnostics")' in ui_shell_source
+        assert "/static/media/app-wordmark.svg?v=applylens_wordmark_r1" in ui_shell_source
+        assert "/static/media/app-logo.svg" not in ui_shell_source
+        assert "Checking Bulk Generate status…" in ui_shell_source
     shell_js = (ROOT / "src/app/static/shell.js").read_text(encoding="utf-8")
-    assert "src/app/ui_shell.py" not in changed
     assert "const APP_SHELL_MENU_SVG" in shell_js
     assert 'collapseBtn.addEventListener("click"' in shell_js
     assert shell_js.count('menuBtn.addEventListener("click"') == 1

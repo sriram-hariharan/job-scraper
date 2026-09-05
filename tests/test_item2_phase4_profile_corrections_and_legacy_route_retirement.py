@@ -208,8 +208,11 @@ def test_profile_js_cache_marker_bumped_only_on_pipeline_runs_page():
 def test_other_profile_js_cache_markers_are_untouched():
     assert '/static/profile.js?v=agentic_review_v1"></script>' in PROFILE_UI_SOURCE
     assert '/static/profile.js?v=preferences_guided_parity_r9"></script>' in PROFILE_UI_SOURCE
+    # Saved Scans owns the changed renderer, so only its marker advances; the
+    # historical prefix is retained so the route stays identifiable.
     assert (
-        '/static/profile.js?v=profile_saved_scans_e5_discard_icon_profile_resume_roles_r10"></script>'
+        '/static/profile.js?v=profile_saved_scans_e5_discard_icon_profile_resume_roles_r10'
+        '_saved_scans_library_r1"></script>'
         in PROFILE_UI_SOURCE
     )
 

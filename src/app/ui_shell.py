@@ -170,7 +170,7 @@ def render_top_shell(active_href: str) -> str:
 <aside class="app-shell" id="appShell" aria-label="Primary">
   <div class="app-shell-brand-row">
     <a class="app-shell-brand" href="/" aria-label="ApplyLens AI home">
-      <img class="app-shell-brand-logo" src="/static/media/app-logo.svg" alt="ApplyLens AI" />
+      <img class="app-shell-brand-logo" src="/static/media/app-wordmark.svg?v=applylens_wordmark_r1" alt="ApplyLens AI" />
     </a>
 
     <button
@@ -202,7 +202,7 @@ def render_top_shell(active_href: str) -> str:
 
 <div class="{toolbar_classes}" role="group" aria-label="Workspace controls">
   <span class="bulk-generation-guard-description" id="bulkGenerationGuardDescription">
-    Bulk Generate must finish or be stopped before this action is available.
+    Checking Bulk Generate status…
   </span>
   <div class="bulk-generation-guard-tooltip hidden" id="bulkGenerationGuardTooltip" role="tooltip"></div>
 

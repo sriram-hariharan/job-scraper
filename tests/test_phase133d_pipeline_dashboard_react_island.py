@@ -29,7 +29,7 @@ def test_pipeline_route_renders_one_react_mount_and_shared_pipeline_navigation()
     assert '/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1' in markup
     assert '/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1' in markup
     assert 'src="/static/app.js?v=phase133d_s1"' in markup
-    assert 'src="/static/shell.js?v=eucalyptus_primary_shell_r1"' in markup
+    assert 'src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"' in markup
     assert '<body class="pipeline-dashboard-page">' in markup
     assert 'id="executiveKpiRoot"' not in markup
     assert 'id="executiveQueueRoot"' not in markup

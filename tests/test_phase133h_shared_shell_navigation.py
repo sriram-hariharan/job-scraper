@@ -255,9 +255,10 @@ def test_theme_toggle_and_new_scan_remain_functional() -> None:
     assert 'themeToggleBtn.addEventListener("click"' in js
 
 
-def test_logo_uses_canonical_asset_without_the_oversized_card() -> None:
+def test_logo_uses_exact_path_wordmark_without_the_oversized_card() -> None:
     html = render_top_shell("/")
-    assert 'src="/static/media/app-logo.svg"' in html
+    assert 'src="/static/media/app-wordmark.svg?v=applylens_wordmark_r1"' in html
+    assert 'src="/static/media/app-logo.svg"' not in html
     # No duplicated app-name text alongside the canonical asset.
     assert "app-shell-brand-text" not in html
     css = _read(SHELL_CSS)

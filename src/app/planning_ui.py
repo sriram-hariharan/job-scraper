@@ -121,7 +121,7 @@ def planning_dashboard() -> str:
   <title>Planning</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=eucalyptus_action_cascade_r2" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
   <link rel="stylesheet" href="/static/planning_dashboard.css?v=phase133g_s1_r1" />
   <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1" />
 </head>
@@ -160,32 +160,34 @@ def planning_dashboard() -> str:
     </div>
   </main>
 
-  <section class="modal-backdrop hidden" id="applicationActionModal">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div>
-          <h3>Update application status</h3>
+  <section class="modal-backdrop hidden" id="applicationActionModal" role="dialog" aria-modal="true" aria-labelledby="applicationStatusDialogTitle" aria-describedby="applicationModalMeta">
+    <div class="modal-card application-status-dialog">
+      <div class="application-status-dialog__header">
+        <span class="application-status-dialog__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+        <div class="application-status-dialog__heading">
+          <h3 id="applicationStatusDialogTitle">Update application status</h3>
           <div class="subtext" id="applicationModalMeta">Choose what happened after opening the job.</div>
         </div>
-        <button class="ghost-btn modal-close-btn" id="closeApplicationModalBtn" type="button">Close</button>
+        <button class="ghost-btn modal-close-btn application-status-dialog__close" id="closeApplicationModalBtn" type="button" aria-label="Close application status dialog" title="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
       </div>
 
-      <div class="modal-body">
-        <div class="info-pair">
+      <div class="modal-body application-status-dialog__job" aria-label="Selected job">
+        <div class="application-status-dialog__job-field">
           <span class="label">Company</span>
           <span id="applicationModalCompany">-</span>
         </div>
-        <div class="info-pair">
-          <span class="label">Title</span>
+        <div class="application-status-dialog__job-field">
+          <span class="label">Role</span>
           <span id="applicationModalTitle">-</span>
         </div>
       </div>
 
-      <div class="modal-actions">
-        <button type="button" class="status-action-btn applied-action-btn" data-status-action="APPLIED">Applied</button>
-        <button type="button" class="status-action-btn saved-action-btn" data-status-action="SAVED">Save for later</button>
-        <button type="button" class="status-action-btn not-applied-action-btn" data-status-action="NOT_APPLIED">Not applied</button>
-        <button type="button" class="ghost-btn" data-status-action="DISMISSED">Dismiss</button>
+      <div class="application-status-dialog__prompt">Choose a status</div>
+      <div class="modal-actions application-status-dialog__actions">
+        <button type="button" class="status-action-btn applied-action-btn" data-status-action="APPLIED"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span>Applied</span></button>
+        <button type="button" class="status-action-btn saved-action-btn" data-status-action="SAVED"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>Save for later</span></button>
+        <button type="button" class="status-action-btn not-applied-action-btn" data-status-action="NOT_APPLIED"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg><span>Not applied</span></button>
+        <button type="button" class="ghost-btn application-status-dialog__dismiss" data-status-action="DISMISSED"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Dismiss</span></button>
       </div>
     </div>
   </section>
@@ -668,7 +670,7 @@ def planning_dashboard() -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
   <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1"></script>
   <script src="/static/planning.js?v=bulk_generate_suggestions_r2"></script>
 </body>
@@ -770,7 +772,7 @@ def tailoring_workspace(
   <title>Tailoring Workspace</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
   <link rel="stylesheet" href="/static/tailoring_workspace_premium.css?v=tailoring_workspace_finish_r3" />
 </head>
 <body>
@@ -1106,7 +1108,7 @@ def tailoring_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
   <section class="tailoring-workspace-export-modal hidden" id="tailoringWorkspaceExportModal">
     <div class="tailoring-workspace-export-modal-card" role="dialog" aria-modal="true" aria-labelledby="tailoringWorkspaceExportTitle">
       <div class="tailoring-workspace-export-header">
@@ -1336,7 +1338,7 @@ def advanced_diagnostics(
   <title>Scan Diagnostics</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=shared_filter_fluid_select_r2" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
   <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1" />
 </head>
 <body class="advanced-diagnostics-page">
@@ -1348,7 +1350,7 @@ def advanced_diagnostics(
   </main>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
   <script>
     window.__APPLYLENS_ADVANCED_DIAGNOSTICS_STATE__ = {initial_state_script};
   </script>
@@ -1514,8 +1516,8 @@ def scan_workspace(
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=eucalyptus_action_cascade_r2" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1" />
-  <link rel="stylesheet" href="/static/scan_workspace_premium.css?v=scan_workspace_premium_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
+  <link rel="stylesheet" href="/static/scan_workspace_premium.css?v=scan_workspace_premium_r1&ui=truthful_scan_r1&ready=summary_r1" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1560,7 +1562,7 @@ def scan_workspace(
           <div>
             <h2>New scan</h2>
             <div class="scan-workspace-supporting-copy">
-              Choose a saved profile resume, paste a job description, and start an AI optimization scan.
+              Choose a saved profile resume and target job to generate an optimization review.
             </div>
           </div>
 
@@ -1588,6 +1590,7 @@ def scan_workspace(
               <select
                 id="scanWorkspaceResumeSelect"
                 class="scan-workspace-input"
+                data-bulk-safe="true"
                 data-initial-resume="{resume_display_safe if raw_resume_name else ''}"
               >
                 <option value="">Loading saved resumes...</option>
@@ -1602,7 +1605,7 @@ def scan_workspace(
 
           <section class="scan-workspace-intake-panel scan-workspace-intake-panel--job">
             <div class="scan-workspace-intake-panel-header">
-              <h3>Job Description</h3>
+              <h3>Target job</h3>
               <div class="scan-workspace-supporting-copy">
                 Paste the target job description to generate the optimization review.
               </div>
@@ -1614,6 +1617,7 @@ def scan_workspace(
                 type="text"
                 id="scanWorkspaceCompanyInput"
                 class="scan-workspace-input"
+                data-bulk-safe="true"
                 value="{loaded_company_safe if loaded_company else ''}"
                 placeholder="Company name"
               />
@@ -1626,6 +1630,7 @@ def scan_workspace(
                 type="text"
                 id="scanWorkspaceRoleInput"
                 class="scan-workspace-input"
+                data-bulk-safe="true"
                 value="{loaded_title_safe if loaded_title else ''}"
                 placeholder="Job title"
               />
@@ -1638,6 +1643,7 @@ def scan_workspace(
                 type="url"
                 id="scanWorkspaceJobUrlInput"
                 class="scan-workspace-input"
+                data-bulk-safe="true"
                 value="{loaded_job_url_safe if loaded_job_url else ''}"
                 placeholder="Posting URL"
               />
@@ -1652,9 +1658,10 @@ def scan_workspace(
               <textarea
                 id="scanWorkspaceJobDescriptionInput"
                 class="scan-workspace-textarea scan-workspace-textarea--jd"
+                data-bulk-safe="true"
                 placeholder="Paste the full job description here."
               >{loaded_job_description_safe}</textarea>
-              <span class="scan-workspace-field-error" id="scanWorkspaceJobDescriptionError"></span>
+              <span class="scan-workspace-textarea-meta"><span class="scan-workspace-field-error" id="scanWorkspaceJobDescriptionError"></span><span id="scanWorkspaceJobDescriptionCount">0 characters</span></span>
             </label>
           </section>
         </div>
@@ -1675,7 +1682,8 @@ def scan_workspace(
               class="scan-workspace-clear-btn"
               id="scanWorkspaceClearIntakeBtn"
             >
-              Clear
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+              <span>Clear</span>
             </button>
 
             <button
@@ -1737,9 +1745,22 @@ def scan_workspace(
           <div
             class="scan-workspace-processing-bar"
             id="scanWorkspaceProcessingBar"
-            aria-hidden="true"
+            role="progressbar"
+            aria-label="Scan progress"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            data-progress-state="idle"
           >
-            <div class="scan-workspace-processing-bar-fill"></div>
+            <div class="scan-workspace-processing-bar-fill" id="scanWorkspaceProcessingBarFill"></div>
+          </div>
+
+          <div
+            class="scan-workspace-processing-progress-label"
+            id="scanWorkspaceProcessingProgressLabel"
+            aria-live="polite"
+          >
+            Not started
           </div>
 
           <div
@@ -1751,7 +1772,7 @@ def scan_workspace(
             class="scan-workspace-processing-note"
             id="scanWorkspaceProcessingNote"
           >
-            Waiting for the real scan runner. This phase adds the processing shell and stage model only.
+            Ready to submit the scan request.
           </div>
 
           <div
@@ -1759,18 +1780,40 @@ def scan_workspace(
             id="scanWorkspaceProcessingComplete"
             hidden
           >
-            <div class="scan-workspace-processing-check" aria-hidden="true"></div>
-            <div>
-              <div class="scan-workspace-processing-complete-title">Scan complete</div>
-              <div class="scan-workspace-processing-complete-copy">The match report is ready to review.</div>
+            <div class="scan-workspace-processing-check" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg>
             </div>
-            <button
-              type="button"
-              class="scan-workspace-processing-ok-btn"
-              id="scanWorkspaceProcessingOkBtn"
-            >
-              OK
-            </button>
+            <div class="scan-workspace-processing-complete-copy-wrap">
+              <div
+                class="scan-workspace-processing-complete-title"
+                id="scanWorkspaceProcessingCompleteTitle"
+              >
+                Match report ready
+              </div>
+              <div
+                class="scan-workspace-processing-complete-copy"
+                id="scanWorkspaceProcessingCompleteCopy"
+              >
+                The match report is ready to review.
+              </div>
+            </div>
+            <div class="scan-workspace-processing-complete-actions">
+              <button
+                type="button"
+                class="scan-workspace-processing-ok-btn"
+                id="scanWorkspaceProcessingOkBtn"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                <span>View Report</span>
+              </button>
+              <a
+                class="scan-workspace-processing-saved-scans-link"
+                href="/profile/saved-scans"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13A2.5 2.5 0 0 1 17.5 21h-11A2.5 2.5 0 0 1 4 18.5v-13Z"/><path d="M8 3v7l4-2 4 2V3"/></svg>
+                <span>Go to Saved Scans</span>
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -2394,9 +2437,9 @@ def scan_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
   <script src="/static/planning.js?v=planning_ui_20260518_scan_replacement_markers"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_rescan6_popover_phrase_scroll"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_rescan6_popover_phrase_scroll&ui=truthful_scan_r1&llm=default_on_r1&ready=summary_r1"></script>
 </body>
 </html>
     """.strip()

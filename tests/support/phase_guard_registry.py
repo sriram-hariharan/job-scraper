@@ -2574,11 +2574,26 @@ LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES = {
     "tests/test_score_first_scan.py",
 }
 
+PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES = {
+    "src/matching/jd_intelligence_contract.py",
+    "src/matching/job_adapter.py",
+    "src/resume/evidence_builder.py",
+    "tests/fixtures/p1s3_jd_evidence/corpus_jobevidence_baseline.json",
+    "tests/fixtures/p1s3_jd_evidence/starved_jd_records.json",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_problem1_experience_skill_morphology.py",
+    "tests/test_problem1_jd_evidence_starvation.py",
+    "tests/test_problem1_jd_category_validator.py",
+    "tests/test_problem1_jd_intelligence_contract_v2.py",
+}
+
 
 def current_milestone_guard_compatibility_allowlist() -> set[str]:
     """Exact current milestone files accepted by stale registry-backed guards."""
     return (
         LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES
+        | PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES
         | STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
         | STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES

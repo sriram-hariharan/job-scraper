@@ -484,8 +484,59 @@ function formatResume(value: unknown): string {
   return text ? text.replace(/\.pdf$/i, "").replace(/_/g, " ") : "Not selected";
 }
 
+// P1S40 selection provenance.
+//
+// `winner_resume` is the selector's nominal top-ranked candidate and is
+// intentionally populated on unresolved rows too. Presenting it as the chosen
+// resume made review-required jobs look decided. A resume is now shown as
+// selected only when an operator picked it or the selector genuinely resolved;
+// otherwise the nominal candidate is still shown, labelled as a candidate.
+const REVIEW_SELECTION_SIGNALS = new Set(["effective_tie", "manual_review_close_call"]);
+
+function isTruthyFlag(value: unknown): boolean {
+  return ["true", "1", "yes", "y", "on"].includes(cleanText(value).toLowerCase());
+}
+
+// Positive evidence only: a row is treated as resolved when an authority field
+// says so, never merely because the review flags are absent. Older rows that
+// carry no authority fields therefore fall back to "top candidate", not
+// "selected".
+function selectionIsResolved(row: PlanningRow): boolean {
+  if (isTruthyFlag(row.variant_review_required) || isTruthyFlag(row.needs_variant_review)) return false;
+  const status = cleanText(row.resolved_selection_status).toLowerCase();
+  if (status) return status === "resolved";
+  if (REVIEW_SELECTION_SIGNALS.has(cleanText(row.selection_signal).toLowerCase())) return false;
+  return cleanText(row.action).toUpperCase() === "APPLY";
+}
+
+function operatorSelectedResume(row: PlanningRow): string {
+  return cleanText(row.operator_selected_resume || row.selected_resume);
+}
+
 function selectedResume(row: PlanningRow): string {
-  return cleanText(row.operator_selected_resume || row.selected_resume || row.winner_resume);
+  const operator = operatorSelectedResume(row);
+  if (operator) return operator;
+  return selectionIsResolved(row) ? cleanText(row.winner_resume) : "";
+}
+
+function nominalCandidateResume(row: PlanningRow): string {
+  return operatorSelectedResume(row) ? "" : cleanText(row.winner_resume);
+}
+
+// Hover text keeps the raw filename for a real selection; an unresolved row
+// carries the same qualifier the cell shows.
+export function resumeSelectionTitle(row: PlanningRow): string {
+  const selected = selectedResume(row);
+  if (selected) return selected;
+  const nominal = nominalCandidateResume(row);
+  return nominal ? `Top candidate: ${nominal}` : "";
+}
+
+export function resumeSelectionLabel(row: PlanningRow): string {
+  const selected = selectedResume(row);
+  if (selected) return formatResume(selected);
+  const nominal = nominalCandidateResume(row);
+  return nominal ? `Top candidate: ${formatResume(nominal)}` : formatResume("");
 }
 
 function formatDate(value: unknown): string {
@@ -684,8 +735,8 @@ function buildPlanningColumns(): ColumnDef<PlanningRow>[] {
       size: 230,
       minSize: 200,
       maxSize: 360,
-      accessorFn: selectedResume,
-      cell: ({ row }) => <span className="planning-react-resume" title={selectedResume(row.original)}>{formatResume(selectedResume(row.original))}</span>,
+      accessorFn: resumeSelectionLabel,
+      cell: ({ row }) => <span className="planning-react-resume" title={resumeSelectionTitle(row.original)}>{resumeSelectionLabel(row.original)}</span>,
     },
     {
       id: "packet_status",

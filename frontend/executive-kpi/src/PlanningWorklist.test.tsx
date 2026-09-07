@@ -6,6 +6,7 @@ import {
   PlanningFiltersToolbar,
   PlanningSummary,
   PlanningWorklist,
+  resumeSelectionLabel,
   type PlanningWorklistAction,
   type PlanningWorklistState,
 } from "./PlanningWorklist";
@@ -632,4 +633,108 @@ it("does not change Open Workspace availability for ready/unavailable rows (revi
   expect(screen.getByText("No safe rewrites")).toBeInTheDocument();
   const workspaceButton = screen.getByRole("button", { name: "Open Workspace" });
   expect(workspaceButton).not.toBeDisabled();
+});
+
+
+// --- P1S40 selection provenance -------------------------------------------
+//
+// `winner_resume` is the selector's nominal top-ranked candidate and is
+// populated on unresolved rows by contract. These pin the four representative
+// P1S39 rows plus the operator override and the effective-tie flag trap.
+
+it("shows the resume as selected only when the selector genuinely resolved it", () => {
+  // A. Decisive winner (Life Sciences shape): resolved, no review.
+  expect(
+    resumeSelectionLabel({
+      winner_resume: "Sriram_Neelakantan_AI1.pdf",
+      action: "APPLY",
+      resolved_selection_status: "resolved",
+      variant_review_required: "False",
+      needs_variant_review: "False",
+      selection_signal: "decisive_winner",
+    }),
+  ).toBe("Sriram Neelakantan AI1");
+});
+
+it("never labels an unresolved nominal winner as selected", () => {
+  // B. Exact substantive tie (Knowledge Team shape).
+  const exactTie = resumeSelectionLabel({
+    winner_resume: "Sriram_Neelakantan_AIML_resume_no_syn_v1.pdf",
+    action: "APPLY_REVIEW_VARIANTS",
+    resolved_selection_status: "unresolved",
+    variant_review_required: "True",
+    needs_variant_review: "True",
+    selection_signal: "effective_tie",
+  });
+  expect(exactTie).toContain("Top candidate");
+  expect(exactTie).not.toBe("Sriram Neelakantan AIML resume no syn v1");
+
+  // C. Semantic reversal (MongoDB shape): nominal winner is not even the
+  // substantive winner, so it must not be presented as chosen.
+  const reversal = resumeSelectionLabel({
+    winner_resume: "Sriram_Neelakantan_Product_Data_Scientist.pdf",
+    action: "APPLY_REVIEW_VARIANTS",
+    resolved_selection_status: "unresolved",
+    variant_review_required: "True",
+    selection_signal: "effective_tie",
+  });
+  expect(reversal).toContain("Top candidate");
+
+  // D. Manual-review close call (Frontier Red Team shape).
+  const closeCall = resumeSelectionLabel({
+    winner_resume: "Sriram_Neelakantan_AI1.pdf",
+    action: "APPLY_REVIEW_VARIANTS",
+    resolved_selection_status: "unresolved",
+    variant_review_required: "True",
+    selection_signal: "manual_review_close_call",
+  });
+  expect(closeCall).toContain("Top candidate");
+});
+
+it("keeps the operator selection authoritative on review-required rows", () => {
+  // E. Operator override must win over both the review state and the nominal winner.
+  expect(
+    resumeSelectionLabel({
+      operator_selected_resume: "Sriram_Neelakantan_AI2.pdf",
+      winner_resume: "Sriram_Neelakantan_AIML_resume_no_syn_v1.pdf",
+      action: "APPLY_REVIEW_VARIANTS",
+      resolved_selection_status: "unresolved",
+      variant_review_required: "True",
+      selection_signal: "effective_tie",
+    }),
+  ).toBe("Sriram Neelakantan AI2");
+});
+
+it("guards effective ties even when requires_manual_review is false", () => {
+  // requires_manual_review is a close-call diagnostic and is false on effective
+  // ties, so it must never be the sole guard.
+  const label = resumeSelectionLabel({
+    winner_resume: "Sriram_Neelakantan_AIML_resume_no_syn_v2.pdf",
+    action: "MAYBE_TAILOR",
+    requires_manual_review: "False",
+    variant_review_required: "True",
+    selection_signal: "effective_tie",
+  });
+  expect(label).toContain("Top candidate");
+});
+
+it("allows a genuinely resolved tie (equivalent variants / adjudication) to be selected", () => {
+  expect(
+    resumeSelectionLabel({
+      winner_resume: "Sriram_Neelakantan_AIML_resume_no_syn_v2.pdf",
+      action: "APPLY",
+      resolved_selection_status: "resolved",
+      resolved_resume_source: "deterministic_equivalent_variants",
+      variant_review_required: "False",
+      selection_signal: "effective_tie",
+    }),
+  ).toBe("Sriram Neelakantan AIML resume no syn v2");
+});
+
+it("falls back conservatively when older rows omit the review fields", () => {
+  // No authority fields at all: a bare nominal winner is NOT treated as selected.
+  expect(resumeSelectionLabel({ winner_resume: "Sriram_AI1.pdf" })).toBe("Top candidate: Sriram AI1");
+  // A historical row carrying only action=APPLY is genuinely resolved.
+  expect(resumeSelectionLabel({ winner_resume: "Sriram_AI1.pdf", action: "APPLY" })).toBe("Sriram AI1");
+  expect(resumeSelectionLabel({})).toBe("Not selected");
 });

@@ -1,0 +1,203 @@
+{
+  "provenance": {
+    "source": "outputs/application_planning/current_run_job_corpus.jsonl",
+    "source_run": "application_planning corpus captured 2026-08-04",
+    "derived_at_head": "e57b90ae27bc3ca7a6350cf36e74874500fd47d7",
+    "reduction": "retrieval_text reduced to the smallest verbatim prefix/excerpt of the real record that reproduces byte-identical build_job_evidence output for every JobEvidence target field; no text was invented or paraphrased",
+    "note": "Public job-posting text only. No resume or other user content is stored here."
+  },
+  "jobs": [
+    {
+      "doc_id": "mattel_lean_process_improvement",
+      "company": "mattelinc",
+      "title": "Staff Data Analyst, Lean and Process Improvement, Co Manufacturing",
+      "location": "El Segundo",
+      "source": "smartrecruiters",
+      "role_family": "analytics",
+      "seniority": "",
+      "required_skills": [],
+      "preferred_skills": [
+        "applied ai",
+        "black belt",
+        "contract manufacturing",
+        "erp",
+        "excel",
+        "google bigquery",
+        "manufacturing",
+        "planning",
+        "power bi",
+        "powerpoint",
+        "process improvement certification",
+        "process mining",
+        "procurement",
+        "python",
+        "quality",
+        "r",
+        "sigma",
+        "sql",
+        "supplier management systems",
+        "tableau",
+        "vendor manufacturing"
+      ],
+      "all_skills": [
+        "applied ai",
+        "black belt",
+        "contract manufacturing",
+        "erp",
+        "excel",
+        "google bigquery",
+        "manufacturing",
+        "planning",
+        "power bi",
+        "powerpoint",
+        "process improvement certification",
+        "process mining",
+        "procurement",
+        "python",
+        "quality",
+        "r",
+        "sigma",
+        "sql",
+        "supplier management systems",
+        "tableau",
+        "vendor manufacturing"
+      ],
+      "retrieval_text": "Company: mattelinc Title: Staff Data Analyst, Lean and Process Improvement, Co Manufacturing Location: El Segundo Source: smartrecruiters Role family: analytics Seniority: Required skills: Preferred skills: applied ai, black belt, contract manufacturing, erp, excel, google bigquery, manufacturing, planning, power bi, powerpoint, process improvement certification, process mining, procurement, python, quality, r, sigma, sql, supplier management systems, tableau, vendor manufacturing AI flags: Visa sponsorship: possible AI fit score: 2 Job description: The Opportunity: Mattel is seeking a Staff Data Analyst, Lean and Process Improvement, Co Manufacturing, to lead complex process improvement initiatives across Product Supply Organization. What Your Impact Will Be: Translate data into actionable insights: Analyze operational, financial and supply chain data and processes to identify trends, performance drivers, recurring issues and improvement opportunities. Use Lean tools such as value stream mapping, SIPOC, A3 problem solving, 5 Whys, root cause analysis, Kaizen, standard work and control plans to identify bottlenecks, rework, manual workarounds, unclear ownership. Build management decision making processes, such as; scorecards and leadership reporting that track cycle time, service, schedule adherence, capacity utilization, supplier performance, inventory health, quality. Promote continuous improvement culture: Help Product Supply move from reactive issue resolution to proactive performance management. Work with IT, analytics and business teams to document business requirements, improve data flows, automate manual reporting and support adoption of digital tools that enable process visibility and control. Advanced Excel and PowerPoint skills, with experience using Tableau, Power BI, SQL, Google BigQuery or similar tools preferred. Preferred Qualifications MBA, Master degree or advanced degree in a relevant discipline. Lean Six Sigma Green Belt, Black Belt or equivalent process improvement certification."
+    },
+    {
+      "doc_id": "anthropic_research_engineer_code_rl",
+      "company": "anthropic",
+      "title": "Research Engineer, Code RL (Reinforcement Learning)",
+      "location": "San Francisco, CA | New York City, NY",
+      "source": "greenhouse",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "python"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "python"
+      ],
+      "retrieval_text": "Company: anthropic Title: Research Engineer, Code RL (Reinforcement Learning) Location: San Francisco, CA | New York City, NY Source: greenhouse Role family: ml_ai_engineering Seniority: Required skills: python Preferred skills: AI flags: Visa sponsorship: possible AI fit score: 0 AI fit reason: No skills match Job description:  About Anthropic Anthropic’s mission is to create reliable, interpretable, and steerable AI systems. We want AI to be safe and beneficial for our users and for society as a whole. Our team is a quickly growing group of committed researchers, engineers, policy experts, and business leaders working together to build beneficial AI systems. About the RL Teams Our Reinforcement Learning teams play a critical role in advancing our AI systems. We've contributed to all Claude models, with significant impacts on the autonomy and coding capabilities of our latest Claude models. Our work spans several key areas: Developing systems that enable models to use computers effectively Advancing code generation through reinforcement learning Pioneering fundamental RL research for large language models Building scalable RL infrastructure and training methodologies Enhancing model reasoning capabilities We collaborate closely with Anthropic's alignment and frontier red teams to ensure our systems are both capable and safe. We partner with the applied production training team to bring research innovations into deployed models, and are dedicated to implement our research at scale. Our Reinforcement Learning teams sit at the intersection of cutting-edge research and engineering excellence, with a deep commitment to building high-quality, scalable systems that push the boundaries of what AI can accomplish. About the Role We're hiring for the Code RL team within the RL organization. As a Research Engineer, you'll advance our models' ability to write, edit, test, debug, and ship real software — end to end, on real codebases, with real tools — and to do it correctly, fast, and safely. This role blends research and engineering. You'll design RL environments and coding tasks, build the reward signals and verifiers that capture what \"good code\" means, run training experiments on frontier models, diagnose why a model does (or doesn't) get better at a class of software-engineering work, and improve the speed and reliability of the pipelines that make all of that iterate fast. Code RL spans several focus areas — from agentic coding behaviors and code correctness, to long-horizon autonomous engineering, to high-performance code for accelerators — and we'll match you to the area where you'll have the most impact. You may be a good fit if you: Have strong software-engineering skills and deep Python expertise, including async/concurrent programming Are comfortable owning systems end to end and debugging across the stack Can balance research exploration with engineering implementation, and engage rigorously in shaping experimental design and interpreting results Care about code quality, testing, and performance Are passionate about the potential impact of AI and are committed to developing safe and beneficial systems Strong candidates may also have: Experience with reinforcement learning, RLHF, post-training, or LLM finetuning Built coding agents, code-execution sandboxes, eval harnesses, verifiers, or developer tooling Background in program analysis, testing, verification, compilers, or formal methods Experience with PyTorch and large-scale distributed training; performance profiling and optimization of ML systems CUDA / GPU or TPU kernel experience and accelerator-performance intuition Experience with virtualization and sandboxed code execution environments Related roles If your background leans toward one of these areas specifically, you may also want to look at these postings: Research Engineer, Performance RL (Reinforcement Learning) — teaching Claude to write correct, fast code for accelerators Research Engineer, Universes — long-horizon, ultra-realistic agentic training environments Research Engineer, Cybersecurity RL (Reinforcement Learning) — RL for security-relevant coding capabilities The annual compensation range for this role is listed below. For sales roles, the range provided is the role’s On Target Earnings (\"OTE\") range, meaning that the range includes both the sales commissions/sales bonuses target and annual base salary for the role. Annual Salary: $500,000 — $850,000 USD Logistics Minimum education: Bachelor’s degree or an equivalent combination of education, training, and/or experience Required field of study: A field relevant to the role as demonstrated through coursework, training, or professional experience Minimum years of experience: Years of experience required will correlate with the internal job level requirements"
+    },
+    {
+      "doc_id": "anthropic_research_engineer_performance_rl",
+      "company": "anthropic",
+      "title": "Research Engineer, Performance RL (Reinforcement Learning)",
+      "location": "San Francisco, CA",
+      "source": "greenhouse",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "accelerators",
+        "distributed systems",
+        "jax or pytorch",
+        "kernels",
+        "ml framework programming",
+        "model code"
+      ],
+      "preferred_skills": [
+        "ai",
+        "design",
+        "implement",
+        "invent",
+        "llm training methodologies",
+        "public benefit corporation",
+        "reinforcement learning"
+      ],
+      "all_skills": [
+        "accelerators",
+        "distributed systems",
+        "jax or pytorch",
+        "kernels",
+        "ml framework programming",
+        "model code",
+        "ai",
+        "design",
+        "implement",
+        "invent",
+        "llm training methodologies",
+        "public benefit corporation",
+        "reinforcement learning"
+      ],
+      "retrieval_text": "Company: anthropic Title: Research Engineer, Performance RL (Reinforcement Learning) Location: San Francisco, CA Source: greenhouse Role family: ml_ai_engineering Seniority: Required skills: accelerators, distributed systems, jax or pytorch, kernels, ml framework programming, model code Preferred skills: ai, design, implement, invent, llm training methodologies, public benefit corporation, reinforcement learning AI flags: Visa sponsorship: possible AI fit score: 3 AI fit reason: Strong skills match, but no AI signals and unknown seniority Job description:"
+    },
+    {
+      "doc_id": "anthropic_research_engineer_knowledge_team",
+      "company": "anthropic",
+      "title": "Research Engineer, Knowledge Team",
+      "location": "Remote-Friendly (Travel-Required) | San Francisco, CA | Seattle, WA | New York City, NY",
+      "source": "greenhouse",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "distributed data processing",
+        "finetuning",
+        "indexing",
+        "llm",
+        "llms",
+        "python",
+        "rag",
+        "ranking",
+        "reinforcement learning",
+        "search engines"
+      ],
+      "preferred_skills": [
+        "machine learning research",
+        "pair programming"
+      ],
+      "all_skills": [
+        "distributed data processing",
+        "finetuning",
+        "indexing",
+        "llm",
+        "llms",
+        "python",
+        "rag",
+        "ranking",
+        "reinforcement learning",
+        "search engines",
+        "machine learning research",
+        "pair programming"
+      ],
+      "retrieval_text": "Company: anthropic Title: Research Engineer, Knowledge Team Location: Remote-Friendly (Travel-Required) | San Francisco, CA | Seattle, WA | New York City, NY Source: greenhouse Role family: ml_ai_engineering Seniority: Required skills: distributed data processing, finetuning, indexing, llm, llms, python, rag, ranking, reinforcement learning, search engines Preferred skills: machine learning research, pair programming AI flags: Visa sponsorship: possible AI fit score: 4 AI fit reason: Strong ML research skills, but no AI relevance Job description:"
+    },
+    {
+      "doc_id": "scaleai_ml_research_engineer_ml_systems",
+      "company": "scaleai",
+      "title": "ML Research Engineer, ML Systems",
+      "location": "San Francisco, CA; Seattle, WA; New York, NY",
+      "source": "greenhouse",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "cuda",
+        "flash attention",
+        "pytorch",
+        "transformers"
+      ],
+      "preferred_skills": [
+        "agents",
+        "instruction tuning",
+        "multimodal",
+        "reasoning",
+        "rlhf",
+        "tool use"
+      ],
+      "all_skills": [
+        "cuda",
+        "flash attention",
+        "pytorch",
+        "transformers",
+        "agents",
+        "instruction tuning",
+        "multimodal",
+        "reasoning",
+        "rlhf",
+        "tool use"
+      ],
+      "retrieval_text": "Company: scaleai Title: ML Research Engineer, ML Systems Location: San Francisco, CA; Seattle, WA; New York, NY Source: greenhouse Role family: ml_ai_engineering Seniority: Required skills: cuda, flash attention, pytorch, transformers Preferred skills: agents, instruction tuning, multimodal, reasoning, rlhf, tool use AI flags: Visa sponsorship: possible AI fit score: 8.75 AI fit reason: Strong AI signals and highly relevant skills Job description:"
+    }
+  ]
+}

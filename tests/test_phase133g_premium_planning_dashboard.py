@@ -89,7 +89,10 @@ def test_planning_keeps_the_exact_nine_column_order_and_truthful_fields() -> Non
     assert 'row.original.posted_at' in columns
     assert "recommendation(row.original)" in columns
     assert "row.original.winner_score" in columns
-    assert "selectedResume(row.original)" in columns
+    # P1S40 renamed the resume-selection accessor so unresolved rows are shown
+    # as a top candidate rather than a selection. The column still renders the
+    # resume-selection value; only the helper name changed.
+    assert "resumeSelectionLabel(row.original)" in columns
 
 
 def test_shared_expansion_is_collapsed_by_default_and_resets_on_result_changes() -> None:

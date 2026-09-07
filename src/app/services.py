@@ -13706,6 +13706,18 @@ def _scan_issue_from_replacement_row(
 
     can_direct_accept = score_gate == "direct_replacement"
 
+    # The raw-sign score gate governs direct acceptance. It must not also veto
+    # operator visibility for a rewrite that materiality classified as safe and
+    # optional with no user-visible score movement: that row carries concrete
+    # replacement text and is meant for human review, unlike a genuine point loss.
+    export_safe_zero_point = (
+        _clean_text(row.get("materiality_validation_status")) == "export_safe_no_score_lift"
+        and delta_points == 0
+    )
+    is_visible_in_review = (
+        score_gate != "rejected_by_score_gate" or export_safe_zero_point
+    )
+
     resolved_group_id = _scan_issue_group_id_for_row(row, lane=lane)
     resolved_group_label = _scan_issue_group_label(resolved_group_id)
 
@@ -13748,7 +13760,7 @@ def _scan_issue_from_replacement_row(
         "original_final_score": row.get("original_final_score", None),
         "projected_final_score": row.get("projected_final_score", None),
         "scan_issue_type": score_gate,
-        "is_visible_in_review": score_gate != "rejected_by_score_gate",
+        "is_visible_in_review": is_visible_in_review,
         "llm_judge_score_intent": _clean_text(row.get("llm_judge_score_intent")),
         "llm_judge_expected_dimensions": list(row.get("llm_judge_expected_dimensions", []) or []),
         "llm_judge_risk_flags": list(row.get("llm_judge_risk_flags", []) or []),

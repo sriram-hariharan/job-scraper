@@ -70,6 +70,7 @@ from tests.support.phase_guard_registry import (
     PHASE21_RELEASE_CANDIDATE_FILES,
     PHASE21R_HISTORICAL_GUARD_FILES,
     PERSONIO_SOURCE_RETIREMENT_FILES,
+    PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
     RECRUITEE_STANDALONE_DISCOVERY_FILES,
     SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES,
@@ -582,6 +583,22 @@ def test_phase2d_b2_strict_seniority_filter_surface_is_exact():
 
 
 def test_current_milestone_guard_compatibility_is_exact_registered_surface():
+    assert PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES == {
+        "src/matching/jd_intelligence_contract.py",
+        "src/matching/job_adapter.py",
+        "src/resume/evidence_builder.py",
+        "tests/fixtures/p1s3_jd_evidence/corpus_jobevidence_baseline.json",
+        "tests/fixtures/p1s3_jd_evidence/starved_jd_records.json",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_problem1_experience_skill_morphology.py",
+        "tests/test_problem1_jd_category_validator.py",
+        "tests/test_problem1_jd_evidence_starvation.py",
+        "tests/test_problem1_jd_intelligence_contract_v2.py",
+    }
+    assert not any(
+        "*" in path for path in PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES
+    )
     assert STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES == {
         "main.py",
         "src/pipeline/collector.py",
@@ -2429,6 +2446,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
 
     assert current_milestone_guard_compatibility_allowlist() == (
         LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES
+        | PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES
         | STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
         | STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES

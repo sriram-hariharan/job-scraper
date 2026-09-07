@@ -187,7 +187,7 @@ PATCH_REFINEMENT_PROVIDER = os.getenv(
 
 PATCH_REFINEMENT_MODEL = os.getenv(
     "PATCH_REFINEMENT_MODEL",
-    "llama-3.3-70b-versatile",
+    "openai/gpt-oss-120b",
 ).strip()
 
 PATCH_REFINEMENT_MAX_TOKENS = 260
@@ -240,7 +240,7 @@ PATCH_REFINEMENT_JUDGE_PROVIDER = os.getenv(
 
 PATCH_REFINEMENT_JUDGE_MODEL = os.getenv(
     "TAILORING_JUDGE_MODEL",
-    os.getenv("PATCH_REFINEMENT_JUDGE_MODEL", "llama-3.3-70b-versatile"),
+    os.getenv("PATCH_REFINEMENT_JUDGE_MODEL", "openai/gpt-oss-120b"),
 ).strip()
 
 PATCH_REFINEMENT_JUDGE_MAX_TOKENS = 500

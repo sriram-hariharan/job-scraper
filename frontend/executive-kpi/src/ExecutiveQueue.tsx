@@ -56,6 +56,10 @@ export type QueueRow = Record<string, unknown> & {
   winner_score?: number | string | null;
   operator_selected_resume?: string;
   winner_resume?: string;
+  resolved_selection_status?: string;
+  variant_review_required?: boolean | string;
+  needs_variant_review?: boolean | string;
+  selection_signal?: string;
   runner_up_resume?: string;
   score_gap?: number | string | null;
   missing_requirement_count?: number | string | null;
@@ -152,6 +156,54 @@ function publishQueueAction(action: ExecutiveQueueAction) {
 
 function cleanText(value: unknown): string {
   return String(value ?? "").trim();
+}
+
+// P1S40 selection provenance.
+//
+// The queue CSV carries the selector's nominal top-ranked candidate in
+// `winner_resume` even when the row still needs variant review. Showing it
+// under "Selected Resume" made unresolved rows look decided, so a resume is
+// presented as selected only when an operator chose it or the selector
+// genuinely resolved; otherwise the nominal candidate is labelled as such.
+const REVIEW_SELECTION_SIGNALS = new Set(["effective_tie", "manual_review_close_call"]);
+
+function isTruthyFlag(value: unknown): boolean {
+  return ["true", "1", "yes", "y", "on"].includes(cleanText(value).toLowerCase());
+}
+
+// Positive evidence only: a row is treated as resolved when an authority field
+// says so, never merely because the review flags are absent. Older rows that
+// carry no authority fields therefore fall back to "top candidate", not
+// "selected".
+function selectionIsResolved(row: QueueRow): boolean {
+  if (isTruthyFlag(row.variant_review_required) || isTruthyFlag(row.needs_variant_review)) return false;
+  const status = cleanText(row.resolved_selection_status).toLowerCase();
+  if (status) return status === "resolved";
+  if (REVIEW_SELECTION_SIGNALS.has(cleanText(row.selection_signal).toLowerCase())) return false;
+  return cleanText(row.action).toUpperCase() === "APPLY";
+}
+
+// Raw resume name when the row is genuinely selected, empty otherwise.
+export function queueSelectedResumeValue(row: QueueRow): string {
+  const operator = cleanText(row.operator_selected_resume);
+  if (operator) return operator;
+  return selectionIsResolved(row) ? cleanText(row.winner_resume) : "";
+}
+
+export function queueSelectedResumeLabel(row: QueueRow): string {
+  const selected = queueSelectedResumeValue(row);
+  if (selected) return formatResume(selected);
+  const nominal = cleanText(row.winner_resume);
+  return nominal ? `Top candidate: ${formatResume(nominal)}` : formatResume("");
+}
+
+// Hover text keeps the raw filename for a real selection; an unresolved row
+// carries the same qualifier the cell shows.
+export function queueSelectedResumeTitle(row: QueueRow): string {
+  const selected = queueSelectedResumeValue(row);
+  if (selected) return selected;
+  const nominal = cleanText(row.winner_resume);
+  return nominal ? `Top candidate: ${nominal}` : "";
 }
 
 function formatAction(value: unknown): string {
@@ -340,7 +392,7 @@ function QueueDetails({ row }: { row: QueueRow }) {
       <div className="executive-queue-details executive-queue-details--neutral">
       <div><span>Priority reason</span><strong>{formatDiagnostic(row.queue_priority_reason) || "—"}</strong></div>
       <div><span>Next step</span><strong>{formatNextStep(row)}</strong></div>
-      <div><span>Selected resume</span><strong>{formatResume(row.operator_selected_resume || row.winner_resume)}</strong></div>
+      <div><span>Selected resume</span><strong>{queueSelectedResumeLabel(row)}</strong></div>
       <div><span>Runner-up</span><strong>{formatResume(row.runner_up_resume)}</strong></div>
       <div><span>Score gap</span><strong>{cleanText(row.score_gap) || "—"}</strong></div>
       <div><span>Missing requirements</span><strong>{cleanText(row.missing_requirement_count) || "0"}</strong></div>
@@ -459,13 +511,13 @@ function buildColumns(mode: QueueViewMode): ColumnDef<QueueRow>[] {
       header: "Selected Resume",
       size: 240,
       minSize: QUEUE_SELECTED_RESUME_MIN_WIDTH,
-      accessorFn: (row) => cleanText(row.operator_selected_resume || row.winner_resume),
+      accessorFn: (row) => queueSelectedResumeLabel(row),
       cell: ({ row }) => (
         <span
           className="executive-queue-selected-resume-value"
-          title={cleanText(row.original.operator_selected_resume || row.original.winner_resume)}
+          title={queueSelectedResumeTitle(row.original)}
         >
-          {formatResume(row.original.operator_selected_resume || row.original.winner_resume)}
+          {queueSelectedResumeLabel(row.original)}
         </span>
       ),
     },

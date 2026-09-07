@@ -2083,7 +2083,7 @@ def _successful_tailoring_runtime(provider, model):
 
 
 @pytest.mark.parametrize("owner_value", (None, "   "))
-def test_live_tailoring_without_owner_preserves_legacy_provider_path(
+def test_live_tailoring_without_owner_preserves_primary_and_hard_disables_fallback(
     monkeypatch,
     tmp_path,
     owner_value,
@@ -2129,10 +2129,7 @@ def test_live_tailoring_without_owner_preserves_legacy_provider_path(
     assert len(legacy_calls) == 1
     assert legacy_calls[0]["provider"] == tailoring_llm.LLM_TAILOR_PROVIDER
     assert legacy_calls[0]["model"] == tailoring_llm.LLM_TAILOR_MODEL
-    assert (
-        legacy_calls[0]["fallback_enabled"]
-        == tailoring_llm.TAILOR_LLM_FALLBACK_ENABLED
-    )
+    assert legacy_calls[0]["fallback_enabled"] is False
     assert (
         legacy_calls[0]["fallback_provider"]
         == tailoring_llm.TAILOR_LLM_FALLBACK_PROVIDER
@@ -2141,6 +2138,24 @@ def test_live_tailoring_without_owner_preserves_legacy_provider_path(
         legacy_calls[0]["fallback_model"]
         == tailoring_llm.TAILOR_LLM_FALLBACK_MODEL
     )
+    assert legacy_calls[0]["workload_id"] == "tailoring_generation"
+    assert legacy_calls[0]["temperature"] == tailoring_llm.LLM_TAILOR_TEMPERATURE
+    assert legacy_calls[0]["max_tokens"] == tailoring_llm.LLM_TAILOR_MAX_TOKENS
+    assert legacy_calls[0]["response_mime_type"] == "application/json"
+    assert legacy_calls[0]["response_schema"] == tailoring_llm._live_rewrite_response_schema(
+        False
+    )
+    assert legacy_calls[0]["return_parsed"] is True
+    assert legacy_calls[0]["thinking_budget"] == 0
+    assert legacy_calls[0]["messages"][0]["content"] == (
+        tailoring_llm.TAILORING_GENERATION_PRIMARY_SYSTEM_PROMPT
+    )
+    assert legacy_calls[0]["messages"][1]["content"] == payload["live_rewrite_prompt"]
+    assert result["fallback_enabled"] is False
+    assert result["fallback_attempted"] is False
+    assert result["fallback_used"] is False
+    assert result["fallback_provider"] == ""
+    assert result["fallback_model"] == ""
 
 
 def test_owner_tailoring_cache_miss_freezes_route_and_disables_fallback(

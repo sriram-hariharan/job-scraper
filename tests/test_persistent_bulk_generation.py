@@ -10,6 +10,82 @@ from src.app import api, bulk_generation_service as bulk
 from src.storage.bulk_generation import store
 
 
+TAILORING_ALIAS_VALUES = {
+    "TAILORING_EXTRACTION_PROVIDER": "sentinel-extraction-provider",
+    "TAILORING_EXTRACTION_MODEL": "sentinel-extraction-model",
+    "TAILORING_REWRITE_PROVIDER": "sentinel-rewrite-provider",
+    "TAILORING_REWRITE_MODEL": "sentinel-rewrite-model",
+    "TAILORING_JUDGE_PROVIDER": "sentinel-judge-provider",
+    "TAILORING_JUDGE_MODEL": "sentinel-judge-model",
+}
+
+
+def test_pipeline_child_env_forwards_only_exact_tailoring_model_aliases():
+    lower_precedence_values = {
+        "LLM_TAILOR_PROVIDER": "lower-extraction-provider",
+        "LLM_TAILOR_MODEL": "lower-extraction-model",
+        "PATCH_REFINEMENT_WRITER_PROVIDER": "lower-writer-provider",
+        "PATCH_REFINEMENT_WRITER_MODEL": "lower-writer-model",
+        "PATCH_REFINEMENT_JUDGE_PROVIDER": "lower-judge-provider",
+        "PATCH_REFINEMENT_JUDGE_MODEL": "lower-judge-model",
+    }
+    child_env = bulk.services._pipeline_child_env(
+        base_env={
+            **TAILORING_ALIAS_VALUES,
+            **lower_precedence_values,
+            "TAILORING_PHRASE_MODEL": "blocked-unrelated-tailoring-model",
+            "UNKNOWN_CONFIGURATION": "blocked-unknown-value",
+            "PATH": "/usr/bin",
+        }
+    )
+
+    assert {
+        key: child_env.get(key) for key in TAILORING_ALIAS_VALUES
+    } == TAILORING_ALIAS_VALUES
+    assert {
+        key: child_env.get(key) for key in lower_precedence_values
+    } == lower_precedence_values
+    assert "TAILORING_" not in bulk.services._PIPELINE_CHILD_ENV_PREFIXES
+    assert "TAILORING_PHRASE_MODEL" not in child_env
+    assert "UNKNOWN_CONFIGURATION" not in child_env
+
+
+def test_bulk_worker_and_regeneration_child_preserve_tailoring_aliases(monkeypatch):
+    for key, value in TAILORING_ALIAS_VALUES.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv(
+        "TAILORING_PHRASE_MODEL",
+        "blocked-unrelated-tailoring-model",
+    )
+    captured = {}
+    process = SimpleNamespace(pid=4242)
+
+    def fake_popen(command, **kwargs):
+        captured["command"] = list(command)
+        captured["env"] = dict(kwargs.get("env") or {})
+        return process
+
+    monkeypatch.setattr(bulk.subprocess, "Popen", fake_popen)
+
+    assert bulk._launch_worker("owner-a", "bulk-a") is process
+    worker_env = captured["env"]
+    assert {
+        key: worker_env.get(key) for key in TAILORING_ALIAS_VALUES
+    } == TAILORING_ALIAS_VALUES
+    assert "TAILORING_PHRASE_MODEL" not in worker_env
+
+    # The worker is the parent of selected-resume regeneration. That second hop
+    # copies the worker environment and adds only owner-scoped execution flags.
+    monkeypatch.setattr(bulk.services.os, "environ", worker_env)
+    regeneration_env = bulk.services._targeted_regeneration_child_env("owner-a")
+
+    assert {
+        key: regeneration_env.get(key) for key in TAILORING_ALIAS_VALUES
+    } == TAILORING_ALIAS_VALUES
+    assert "TAILORING_PHRASE_MODEL" not in regeneration_env
+    assert regeneration_env["JOB_STACK_OWNER_USER_ID"] == "owner-a"
+
+
 def test_schema_enforces_one_active_run_per_owner_and_ordered_unique_items():
     sql = store.bulk_generation_schema_sql_text()
     assert "idx_bulk_generation_runs_one_active_owner" in sql

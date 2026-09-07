@@ -12,7 +12,6 @@ from collections import Counter
 from src.tailoring.replacement_selector import build_final_replacement_plan
 
 from src.ai.llm_client import (
-    FALLBACK_ENABLED as LLM_FALLBACK_ENABLED,
     run_chat_completion_with_metadata,
 )
 from src.ai.user_provider_runtime import (
@@ -70,19 +69,14 @@ LLM_TAILOR_PROVIDER = os.getenv(
 ).strip().lower()
 LLM_TAILOR_MODEL = os.getenv(
     "TAILORING_EXTRACTION_MODEL",
-    os.getenv("LLM_TAILOR_MODEL", "llama-3.3-70b-versatile"),
+    os.getenv("LLM_TAILOR_MODEL", "openai/gpt-oss-120b"),
 ).strip()
 LLM_TAILOR_MAX_TOKENS = 700
 LLM_TAILOR_TEMPERATURE = 0
 LLM_TAILOR_PROMPT_VERSION = "v9"
 TAILORING_GENERATION_TRANSFORMATION_CONTRACT_VERSION = "tailoring-generation-validation-v5"
 
-TAILOR_LLM_FALLBACK_ENABLED = (
-    os.getenv(
-        "TAILOR_LLM_FALLBACK_ENABLED",
-        "true" if LLM_FALLBACK_ENABLED else "false",
-    ).strip().lower() == "true"
-)
+TAILOR_LLM_FALLBACK_ENABLED = False
 TAILOR_LLM_FALLBACK_PROVIDER = os.getenv(
     "TAILOR_LLM_FALLBACK_PROVIDER",
     "groq",

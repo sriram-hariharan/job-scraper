@@ -813,6 +813,13 @@ def test_owner_grounded_answer_executes_exact_route_once_inside_timeout(
     )
     monkeypatch.setattr(
         rag_answerer,
+        "resolve_recommended_user_provider_route",
+        lambda *_args, **_kwargs: pytest.fail(
+            "owner execution must not resolve the ownerless recommendation"
+        ),
+    )
+    monkeypatch.setattr(
+        rag_answerer,
         "run_user_chat_completion_with_metadata",
         lambda **kwargs: runtime_calls.append(kwargs)
         or _grounded_llm_result(),
@@ -1004,7 +1011,37 @@ def test_owner_grounded_provider_failure_never_uses_legacy_fallback(monkeypatch)
     assert result["llm_fallback_used"] is False
 
 
-def test_blank_owner_grounded_answer_preserves_legacy_timeout_path(monkeypatch):
+def _install_recommended_rag_route(
+    rag_answerer,
+    monkeypatch,
+    *,
+    provider="sentinel-qualified-provider",
+    model="sentinel-qualified-model",
+    route_calls=None,
+):
+    """Stub the ownerless recommendation authority with sentinel identity."""
+
+    calls = [] if route_calls is None else route_calls
+
+    def resolve(workload_id):
+        calls.append(workload_id)
+        return {
+            "workload_id": workload_id,
+            "provider": provider,
+            "model": model,
+        }
+
+    monkeypatch.setattr(
+        rag_answerer,
+        "resolve_recommended_user_provider_route",
+        resolve,
+    )
+    return calls
+
+
+def test_blank_owner_grounded_answer_uses_recommended_route_explicitly(
+    monkeypatch,
+):
     from src.rag import rag_answerer
 
     legacy_calls = []
@@ -1012,6 +1049,10 @@ def test_blank_owner_grounded_answer_preserves_legacy_timeout_path(monkeypatch):
         rag_answerer,
         "search_jobs",
         lambda **_kwargs: [_grounded_answer_result()],
+    )
+    recommendation_calls = _install_recommended_rag_route(
+        rag_answerer,
+        monkeypatch,
     )
     monkeypatch.setattr(
         rag_answerer,
@@ -1027,17 +1068,89 @@ def test_blank_owner_grounded_answer_preserves_legacy_timeout_path(monkeypatch):
         rag_answerer,
         "run_chat_completion_with_metadata",
         lambda **kwargs: legacy_calls.append(kwargs)
-        or _grounded_llm_result("legacy", rag_answerer.MODEL),
+        or _grounded_llm_result(
+            "sentinel-qualified-provider",
+            "sentinel-qualified-model",
+        ),
     )
 
     result = rag_answerer.answer_job_query(
         "Which jobs require Python?",
     )
 
+    assert recommendation_calls == ["grounded_rag_answer"]
     assert len(legacy_calls) == 1
-    assert legacy_calls[0]["model"] == rag_answerer.MODEL
-    assert result["llm_provider"] == "legacy"
-    assert result["llm_model"] == rag_answerer.MODEL
+    assert legacy_calls[0]["provider"] == "sentinel-qualified-provider"
+    assert legacy_calls[0]["model"] == "sentinel-qualified-model"
+    assert legacy_calls[0]["workload_id"] == "grounded_rag_answer"
+    assert legacy_calls[0]["fallback_enabled"] is False
+    assert legacy_calls[0]["temperature"] == rag_answerer.GROUNDED_RAG_TEMPERATURE
+    assert legacy_calls[0]["max_tokens"] == rag_answerer.GROUNDED_RAG_MAX_TOKENS
+    # Provenance reports the actual routed identity, not the generic default.
+    assert result["llm_provider"] == "sentinel-qualified-provider"
+    assert result["llm_model"] == "sentinel-qualified-model"
+    assert result["llm_fallback_used"] is False
+    assert result["insufficient_evidence"] is False
+
+
+@pytest.mark.parametrize(
+    "route_result",
+    [
+        RuntimeError("bounded recommendation failure"),
+        {"provider": "", "model": "sentinel-model"},
+        {"provider": "sentinel-provider", "model": ""},
+    ],
+)
+def test_blank_owner_route_failure_fails_closed_without_provider_call(
+    monkeypatch,
+    route_result,
+):
+    from src.rag import rag_answerer
+
+    monkeypatch.setattr(
+        rag_answerer,
+        "search_jobs",
+        lambda **_kwargs: [_grounded_answer_result()],
+    )
+
+    def resolve(_workload_id):
+        if isinstance(route_result, Exception):
+            raise route_result
+        return route_result
+
+    monkeypatch.setattr(
+        rag_answerer,
+        "resolve_recommended_user_provider_route",
+        resolve,
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "resolve_effective_user_provider_route",
+        lambda *_args, **_kwargs: pytest.fail("owner routing must not execute"),
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not execute"),
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("provider runtime must not execute"),
+    )
+
+    result = rag_answerer.answer_job_query(
+        "Which jobs require Python?",
+    )
+
+    assert result["insufficient_evidence"] is True
+    assert "grounded_rag_recommended_route_unavailable" in result["answer"]
+    assert result["used_source_ids"] == []
+    assert result["sources"] == []
+    assert result["job_evidence"] == []
+    assert result["llm_provider"] == ""
+    assert result["llm_model"] == ""
+    assert result["llm_fallback_used"] is False
 
 
 def test_execute_rag_request_blank_owner_remains_cli_compatible(monkeypatch):

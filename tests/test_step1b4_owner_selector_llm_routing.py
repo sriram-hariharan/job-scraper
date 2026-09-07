@@ -271,14 +271,10 @@ def test_authenticated_cache_identity_is_owner_partitioned_without_raw_owner_ids
     )
     context_a = selector._selector_llm_execution_context(
         workload_id=selector.RESUME_FALLBACK_RANKING_WORKLOAD_ID,
-        legacy_provider="legacy",
-        legacy_model="legacy-model",
     )
     monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "owner-b@example.test")
     context_b = selector._selector_llm_execution_context(
         workload_id=selector.RESUME_FALLBACK_RANKING_WORKLOAD_ID,
-        legacy_provider="legacy",
-        legacy_model="legacy-model",
     )
 
     fallback_a = selector._llm_fallback_cache_redis_key(
@@ -313,71 +309,157 @@ def test_authenticated_cache_identity_is_owner_partitioned_without_raw_owner_ids
         assert "owner-b@example.test" not in key
 
 
-def test_legacy_selector_keeps_shared_client_failover_and_cache_identity(monkeypatch):
+def _legacy_mode(monkeypatch):
     monkeypatch.delenv("JOB_STACK_USER_PIPELINE_MODE", raising=False)
     monkeypatch.delenv("JOB_STACK_OWNER_USER_ID", raising=False)
-    monkeypatch.setattr(selector, "_build_llm_fallback_prompt", lambda **_kwargs: "prompt")
-    monkeypatch.setattr(selector, "_load_llm_fallback_cache", lambda _key: None)
-    monkeypatch.setattr(selector, "_write_llm_fallback_cache", lambda *_args: None)
     monkeypatch.setattr(
         selector,
         "_resolve_selector_effective_user_provider_route",
         lambda *_args: pytest.fail("legacy execution must not resolve an owner route"),
     )
+
+
+def test_selector_workload_qualification_matches_p4s12_policy():
+    """resume_fallback_ranking must stay unroutable; adjudication must stay routable."""
+    from importlib import import_module
+
+    routing_service = import_module("src.app.provider_model_" "routing_service")
+
+    try:
+        routing_service.resolve_recommended_user_provider_route(
+            selector.RESUME_FALLBACK_RANKING_WORKLOAD_ID
+        )
+    except Exception as exc:
+        assert "zero_qualified" in str(exc)
+    else:
+        raise AssertionError("resume_fallback_ranking unexpectedly has a qualified route")
+
+    adjudication_route = routing_service.resolve_recommended_user_provider_route(
+        selector.AMBIGUOUS_RESUME_ADJUDICATION_WORKLOAD_ID
+    )
+    assert str(adjudication_route.get("provider") or "").strip()
+    assert str(adjudication_route.get("model") or "").strip()
+
+
+def test_legacy_fallback_ranking_fails_closed_with_zero_qualified_candidates(monkeypatch):
+    """P4S12: ownerless resume_fallback_ranking must never execute an LLM call."""
+    _legacy_mode(monkeypatch)
+    monkeypatch.setattr(selector, "_build_llm_fallback_prompt", lambda **_kwargs: "prompt")
     monkeypatch.setattr(
         selector,
-        "_selector_provider_failover_kwargs",
-        lambda _provider: {
-            "fallback_enabled": True,
-            "fallback_provider": "openai",
-            "fallback_model": "legacy-fallback-model",
-        },
+        "_load_llm_fallback_cache",
+        lambda _key: pytest.fail("no cache lookup before an authorized route"),
     )
+    monkeypatch.setattr(
+        selector,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("shared provider client must not be called"),
+    )
+
+    llm_result = selector._run_llm_fallback_ranking({}, [_result("resume-a.pdf")], [])
+
+    assert llm_result["status"] == "error"
+    assert llm_result["parse_ok"] is False
+    assert llm_result["best_resume"] == ""
+    assert llm_result["provider"] == ""
+    assert llm_result["model"] == ""
+    assert "forbidden" not in llm_result["error_type"]
+
+    projection = selector._resolved_selection_projection(
+        results=[_result("resume-a.pdf")],
+        selection_signal="no_credible_match",
+        winner=None,
+        runner_up=None,
+        llm_fallback=llm_result,
+        llm_adjudication={},
+    )
+    assert projection["resolved_selection_status"] == "unresolved"
+    assert projection["resolved_resume"] == ""
+
+
+@pytest.mark.parametrize(
+    "route_result",
+    ["raise", None, {}, {"provider": "", "model": "m"}, {"provider": "p", "model": ""}],
+)
+def test_legacy_adjudication_route_failure_fails_closed(monkeypatch, route_result):
+    _legacy_mode(monkeypatch)
+    monkeypatch.setattr(selector, "_build_llm_adjudication_prompt", lambda **_kwargs: "prompt")
+    monkeypatch.setattr(
+        selector,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("shared provider client must not be called"),
+    )
+
+    def fake_route(_workload_id):
+        if route_result == "raise":
+            raise RuntimeError("recommendation authority unavailable")
+        return route_result
+
+    monkeypatch.setattr(
+        selector, "_resolve_selector_recommended_user_provider_route", fake_route
+    )
+
+    llm_result = selector._run_llm_adjudication(
+        {},
+        _result("resume-a.pdf"),
+        _result("resume-b.pdf"),
+        [],
+    )
+
+    assert llm_result["status"] == "error"
+    assert llm_result["parse_ok"] is False
+    assert llm_result["adjudicated_resume"] == ""
+    assert llm_result["provider"] == ""
+    assert llm_result["model"] == ""
+
+
+def test_legacy_adjudication_uses_recommended_route_without_generic_fallback(monkeypatch):
+    """P4S12: ownerless adjudication routes explicitly and disables generic failover."""
+    _legacy_mode(monkeypatch)
+    monkeypatch.setattr(selector, "_build_llm_adjudication_prompt", lambda **_kwargs: "prompt")
+    monkeypatch.setattr(selector, "_load_llm_adjudication_cache", lambda _key: None)
+    monkeypatch.setattr(selector, "_write_llm_adjudication_cache", lambda *_args: None)
+    seen = []
+
+    def fake_route(workload_id):
+        seen.append(workload_id)
+        return {"provider": "groq", "model": "routed-model"}
+
+    monkeypatch.setattr(
+        selector, "_resolve_selector_recommended_user_provider_route", fake_route
+    )
+
     observed = {}
 
     def shared_completion(**kwargs):
         observed.update(kwargs)
         return {
-            "best_resume": "resume-a.pdf",
-            "best_score": 0.4,
-            "backup_resume": "",
-            "backup_score": 0,
+            "adjudicated_resume": "resume-a.pdf",
             "confidence": "low",
-            "reason": "Best available option.",
+            "reason": "Closest available evidence.",
         }
 
     monkeypatch.setattr(selector, "run_chat_completion", shared_completion)
-    result = selector._run_llm_fallback_ranking(
+
+    result = selector._run_llm_adjudication(
         {},
-        [_result("resume-a.pdf")],
+        _result("resume-a.pdf"),
+        _result("resume-b.pdf"),
         [],
     )
 
-    expected_legacy_payload = {
-        "prompt_version": selector.LLM_FALLBACK_PROMPT_VERSION,
-        "provider": selector.LLM_FALLBACK_PROVIDER,
-        "model": selector.LLM_FALLBACK_MODEL,
-        "system_prompt": selector.LLM_FALLBACK_SYSTEM_PROMPT,
-        "prompt": "prompt",
-    }
-    expected_legacy_key = hashlib.sha256(
-        json.dumps(
-            expected_legacy_payload,
-            sort_keys=True,
-            ensure_ascii=False,
-        ).encode("utf-8")
-    ).hexdigest()
-
+    assert seen == [selector.AMBIGUOUS_RESUME_ADJUDICATION_WORKLOAD_ID]
     assert result["status"] == "generated"
-    assert observed["provider"] == selector.LLM_FALLBACK_PROVIDER
-    assert observed["model"] == selector.LLM_FALLBACK_MODEL
-    assert observed["fallback_enabled"] is True
-    assert selector._llm_fallback_cache_key(
-        selector.LLM_FALLBACK_PROVIDER,
-        selector.LLM_FALLBACK_MODEL,
-        selector.LLM_FALLBACK_SYSTEM_PROMPT,
-        "prompt",
-    ) == expected_legacy_key
+    assert observed["provider"] == "groq"
+    assert observed["model"] == "routed-model"
+    assert observed["workload_id"] == selector.AMBIGUOUS_RESUME_ADJUDICATION_WORKLOAD_ID
+    assert observed["fallback_enabled"] is False
+    assert "fallback_provider" not in observed
+    assert "fallback_model" not in observed
+    assert observed["provider"] != "forbidden-generic-provider"
+    assert observed["model"] != "forbidden-generic-model"
+    assert result["provider"] == "groq"
+    assert result["model"] == "routed-model"
 
 
 def test_authenticated_resume_loading_remains_owner_postgres_scoped(monkeypatch):

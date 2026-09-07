@@ -218,6 +218,13 @@ def test_gate_on_routes_through_critic_helper_and_injects_service_provider(monke
         assert kwargs["guardrail_adapter"] is fake_live_adapter
         return _artifact()
 
+    # P4S11: the built-in adapter is only injected when a qualified critic route
+    # exists. Supply one so this test still covers the helper wiring itself.
+    monkeypatch.setattr(
+        services,
+        "_resolve_manual_critic_route",
+        lambda: {"provider": "routed-provider", "model": "routed-model"},
+    )
     monkeypatch.setattr(services, "_live_critic_guardrail_provider_adapter", fake_live_adapter)
     monkeypatch.setattr(
         services.critic_agent,

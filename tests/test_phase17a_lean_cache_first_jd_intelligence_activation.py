@@ -361,6 +361,13 @@ def test_production_jd_cache_hit_makes_zero_provider_and_cache_write_calls(
     )
     monkeypatch.setattr(
         skill_enricher,
+        "resolve_recommended_user_provider_route",
+        lambda *_args, **_kwargs: pytest.fail(
+            "cache hit must not resolve a recommended route"
+        ),
+    )
+    monkeypatch.setattr(
+        skill_enricher,
         "store_cached_llm_skills",
         lambda **kwargs: stores.append(kwargs),
     )
@@ -965,6 +972,13 @@ def test_owner_skill_live_miss_executes_exact_route_once_and_stores_model(
     )
     monkeypatch.setattr(
         skill_enricher,
+        "resolve_recommended_user_provider_route",
+        lambda *_args, **_kwargs: pytest.fail(
+            "owner execution must not resolve the ownerless recommendation"
+        ),
+    )
+    monkeypatch.setattr(
+        skill_enricher,
         "run_user_chat_completion_with_metadata",
         lambda **kwargs: runtime_calls.append(kwargs) or {
             "content": _skill_response(),
@@ -1220,7 +1234,7 @@ def test_skill_owner_falls_back_to_existing_pipeline_environment(monkeypatch):
     assert result["required_skills"] == ["python", "sql"]
 
 
-def test_blank_owner_skill_cache_miss_preserves_legacy_model_execution(
+def test_blank_owner_skill_cache_miss_uses_recommended_route_explicitly(
     monkeypatch,
 ):
     skill_enricher, _job_intelligence = _production_modules(monkeypatch)
@@ -1234,6 +1248,15 @@ def test_blank_owner_skill_cache_miss_preserves_legacy_model_execution(
         skill_enricher,
         "resolve_effective_user_provider_route",
         lambda *_args, **_kwargs: pytest.fail("resolver must not execute"),
+    )
+    recommendation_calls = []
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_recommended_user_provider_route",
+        lambda workload: recommendation_calls.append(workload) or {
+            "provider": "sentinel-qualified-provider",
+            "model": "sentinel-qualified-model",
+        },
     )
     monkeypatch.setattr(
         skill_enricher,
@@ -1255,10 +1278,76 @@ def test_blank_owner_skill_cache_miss_preserves_legacy_model_execution(
 
     result = skill_enricher.enrich_skills_with_llm(_skill_job_text())
 
+    assert recommendation_calls == ["skill_extraction"]
     assert len(legacy_calls) == 1
-    assert legacy_calls[0]["model"] == skill_enricher.MODEL
+    assert legacy_calls[0]["provider"] == "sentinel-qualified-provider"
+    assert legacy_calls[0]["model"] == "sentinel-qualified-model"
+    assert legacy_calls[0]["workload_id"] == "skill_extraction"
+    assert legacy_calls[0]["fallback_enabled"] is False
     assert result["required_skills"] == ["python", "sql"]
-    assert stores[0]["model"] == skill_enricher.MODEL
+    assert stores[0]["model"] == "sentinel-qualified-model"
+
+
+@pytest.mark.parametrize(
+    "route_result",
+    [
+        RuntimeError("bounded recommendation failure"),
+        {"provider": "", "model": "sentinel-model"},
+        {"provider": "sentinel-provider", "model": ""},
+    ],
+)
+def test_blank_owner_skill_route_failure_is_bounded_without_provider_call(
+    monkeypatch,
+    route_result,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    monkeypatch.delenv("JOB_STACK_OWNER_USER_ID", raising=False)
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda _key: None,
+    )
+
+    def resolve_route(_workload):
+        if isinstance(route_result, Exception):
+            raise route_result
+        return route_result
+
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_recommended_user_provider_route",
+        resolve_route,
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_effective_user_provider_route",
+        lambda *_args, **_kwargs: pytest.fail(
+            "owner routing must not execute"
+        ),
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not execute"),
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("provider runtime must not execute"),
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "store_cached_llm_skills",
+        lambda **_kwargs: pytest.fail("route failure must not write cache"),
+    )
+
+    result = skill_enricher.enrich_skills_with_llm(_skill_job_text())
+
+    assert result == skill_enricher.get_empty_skill_result(
+        failure_category="unknown",
+        failure_stage="route",
+    )
+    assert skill_enricher.get_skill_cache_metrics()["live_failures"] == 1
 
 
 def test_owner_skill_live_only_bypasses_cache_and_store(monkeypatch):

@@ -223,8 +223,26 @@ def test_service_enabled_critic_provider_exception_falls_back_safely():
     _assert_readonly_safety(payload, did_call_llm=True)
 
 
+def _install_qualified_critic_route(monkeypatch, *, provider="routed-provider", model="routed-model"):
+    """Pretend ``critic_evaluation`` has a qualified route.
+
+    Production has zero qualified critic candidates, so the built-in adapter is
+    unreachable in real runtime; this seam keeps its payload-shaping contract
+    covered without ever reaching generic provider/model configuration.
+    """
+    seen = []
+
+    def fake_route():
+        seen.append(services.MANUAL_CRITIC_GUARDRAIL_WORKLOAD_ID)
+        return {"provider": provider, "model": model}
+
+    monkeypatch.setattr(services, "_resolve_manual_critic_route", fake_route)
+    return seen
+
+
 def test_live_critic_provider_adapter_reuses_existing_llm_client_with_schema(monkeypatch):
     captured = {}
+    seen = _install_qualified_critic_route(monkeypatch)
 
     def fake_run_chat_completion_with_metadata(**kwargs):
         captured.update(kwargs)
@@ -261,6 +279,16 @@ def test_live_critic_provider_adapter_reuses_existing_llm_client_with_schema(mon
     assert result["token_usage"] == {"total_token_count": 55}
     assert result["cost"] == {"estimated_cost": 0.03, "cost_currency": "USD"}
     assert result["latency_ms"] == 99
+    assert seen == [services.MANUAL_CRITIC_GUARDRAIL_WORKLOAD_ID]
+    assert captured["provider"] == "routed-provider"
+    assert captured["model"] == "routed-model"
+    assert captured["workload_id"] == services.MANUAL_CRITIC_GUARDRAIL_WORKLOAD_ID
+    assert captured["provider"] != "forbidden-generic-provider"
+    assert captured["model"] != "forbidden-generic-model"
+    assert (
+        captured["fallback_enabled"]
+        is services.LIVE_CRITIC_GUARDRAIL_DRY_RUN_FALLBACK_ENABLED
+    )
 
 
 def test_live_critic_structured_output_schema_closes_every_object_node():
@@ -451,3 +479,121 @@ def test_ui_manual_critic_click_posts_endpoint_and_existing_dry_runs_still_exist
     assert "renderManualJdIntelligenceDryRunSection(tracePayload)" in source
     assert "renderManualResumeMatchDryRunSection(tracePayload)" in source
     assert "renderManualTailoringSuggestionDryRunSection(tracePayload)" in source
+
+
+def test_critic_evaluation_has_no_qualified_recommended_route():
+    """P4S11 rests on this: the critic workload must stay unroutable."""
+    from importlib import import_module
+
+    routing_service = import_module("src.app.provider_model_" "routing_service")
+
+    try:
+        route = routing_service.resolve_recommended_user_provider_route(
+            services.MANUAL_CRITIC_GUARDRAIL_WORKLOAD_ID
+        )
+    except Exception as exc:
+        assert "critic_evaluation" in str(exc)
+        assert "zero_qualified" in str(exc)
+    else:
+        raise AssertionError(
+            "critic_evaluation unexpectedly has a qualified route: %r" % (route,)
+        )
+
+
+def test_service_disabled_never_resolves_critic_route(monkeypatch):
+    resolver_calls = []
+
+    def tracking_route():
+        resolver_calls.append(services.MANUAL_CRITIC_GUARDRAIL_WORKLOAD_ID)
+        raise AssertionError("route resolution must not run while the feature is off")
+
+    monkeypatch.setattr(services, "_resolve_manual_critic_route", tracking_route)
+    monkeypatch.setattr(services, "LIVE_CRITIC_GUARDRAIL_DRY_RUN_ENABLED", False)
+
+    payload = services.build_manual_critic_guardrail_dry_run_payload(**_request_payload())
+
+    assert resolver_calls == []
+    assert payload["validation_status"] == "disabled"
+    assert payload["fallback_used"] is True
+    assert payload["validation_errors"] == ["feature_flag_disabled"]
+    _assert_readonly_safety(payload, did_call_llm=False)
+
+
+def test_service_enabled_explicit_injected_adapter_requires_no_qualified_route(monkeypatch):
+    """An explicitly injected adapter owns its own execution seam.
+
+    Route resolution is only required when the service is about to attach its
+    own built-in live critic adapter, so a caller-supplied adapter must not be
+    blocked by critic qualification.
+    """
+    calls = []
+
+    def forbidden_route():
+        raise AssertionError(
+            "critic route resolution must not run for an explicitly injected adapter"
+        )
+
+    monkeypatch.setattr(services, "_resolve_manual_critic_route", forbidden_route)
+    def injected_adapter(payload):
+        calls.append(payload)
+        return _valid_provider_payload()
+
+    payload = services.build_manual_critic_guardrail_dry_run_payload(
+        **_request_payload(),
+        adapter=injected_adapter,
+        feature_enabled=True,
+    )
+
+    assert len(calls) == 1
+    assert payload["validation_status"] == "valid"
+    assert payload["fallback_used"] is False
+    _assert_readonly_safety(payload, did_call_llm=True)
+
+
+def test_service_enabled_builtin_path_fails_closed_with_zero_qualified_candidates(monkeypatch):
+    """Feature on, no injected adapter, no qualified critic route -> no LLM call."""
+    provider_calls = []
+
+    def tracking_adapter(payload):
+        provider_calls.append(payload)
+        return _valid_provider_payload()
+
+    monkeypatch.setattr(services, "_live_critic_guardrail_provider_adapter", tracking_adapter)
+    payload = services.build_manual_critic_guardrail_dry_run_payload(
+        **_request_payload(),
+        feature_enabled=True,
+    )
+
+    assert provider_calls == []
+    assert payload["fallback_used"] is True
+    assert payload["validation_status"] == "fallback"
+    assert payload["validation_errors"] == ["critic_llm_guardrail_adapter_missing"]
+    _assert_readonly_safety(payload, did_call_llm=False)
+
+    artifact = payload["critic_controlled_llm_guardrail_artifact"]
+    assert artifact["provider_call_performed"] is False
+    assert artifact["live_llm_call_performed"] is False
+    assert artifact["reason"] == "critic_llm_guardrail_adapter_missing"
+    assert payload["critic_status"]
+    assert payload["env_feature_flag_enabled"] is False
+
+
+def test_builtin_critic_adapter_itself_fails_closed_without_qualified_route(monkeypatch):
+    """Even a direct call to the built-in adapter must not reach the LLM client."""
+    client_calls = []
+
+    import src.ai.llm_client as llm_client
+
+    monkeypatch.setattr(
+        llm_client,
+        "run_chat_completion_with_metadata",
+        lambda **kwargs: client_calls.append(kwargs),
+    )
+    try:
+        services._live_critic_guardrail_provider_adapter(_request_payload())
+    except Exception as exc:
+        assert "critic_evaluation" in str(exc) or "critic" in str(exc)
+    else:
+        raise AssertionError("built-in critic adapter must fail closed")
+
+    assert client_calls == []

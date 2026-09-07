@@ -157,6 +157,34 @@ def _install_owner_route(
     return calls
 
 
+def _install_recommended_route(
+    evaluator,
+    monkeypatch,
+    *,
+    provider="sentinel-qualified-provider",
+    model="sentinel-qualified-model",
+    route_calls=None,
+):
+    """Stub the ownerless recommendation authority with sentinel identity."""
+
+    calls = [] if route_calls is None else route_calls
+
+    def resolve(workload_id):
+        calls.append(workload_id)
+        return {
+            "workload_id": workload_id,
+            "provider": provider,
+            "model": model,
+        }
+
+    monkeypatch.setattr(
+        evaluator,
+        "resolve_recommended_user_provider_route",
+        resolve,
+    )
+    return calls
+
+
 def _install_cache_miss(evaluator, monkeypatch):
     monkeypatch.setattr(
         evaluator,
@@ -391,9 +419,10 @@ def test_graph_does_not_recompute_upstream_or_downstream_stages():
         assert token not in source
 
 
-def test_no_owner_preserves_exact_legacy_live_runtime(monkeypatch):
+def test_no_owner_uses_recommended_route_explicitly(monkeypatch):
     evaluator = _evaluator(monkeypatch)
     _install_cache_miss(evaluator, monkeypatch)
+    recommendation_calls = _install_recommended_route(evaluator, monkeypatch)
     legacy_calls = []
     monkeypatch.setattr(
         evaluator,
@@ -415,11 +444,65 @@ def test_no_owner_preserves_exact_legacy_live_runtime(monkeypatch):
 
     result = evaluator.evaluate_jobs(_jobs(1))
 
+    assert recommendation_calls == ["job_fit_evaluation"]
     assert result[0]["ai_fit_score"] == 8
     assert len(legacy_calls) == 1
-    assert legacy_calls[0]["model"] == evaluator.MODEL
+    assert legacy_calls[0]["provider"] == "sentinel-qualified-provider"
+    assert legacy_calls[0]["model"] == "sentinel-qualified-model"
+    assert legacy_calls[0]["workload_id"] == "job_fit_evaluation"
+    assert legacy_calls[0]["fallback_enabled"] is False
     assert legacy_calls[0]["temperature"] == evaluator.JOB_FIT_TEMPERATURE
     assert legacy_calls[0]["max_tokens"] == evaluator.JOB_FIT_MAX_TOKENS
+
+
+@pytest.mark.parametrize(
+    "route_result",
+    [
+        RuntimeError("bounded recommendation failure"),
+        {"provider": "", "model": "sentinel-model"},
+        {"provider": "sentinel-provider", "model": ""},
+    ],
+)
+def test_no_owner_route_failure_fails_closed_without_provider_call(
+    monkeypatch,
+    route_result,
+):
+    evaluator = _evaluator(monkeypatch)
+    _install_cache_miss(evaluator, monkeypatch)
+
+    def resolve(_workload_id):
+        if isinstance(route_result, Exception):
+            raise route_result
+        return route_result
+
+    monkeypatch.setattr(
+        evaluator,
+        "resolve_recommended_user_provider_route",
+        resolve,
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "resolve_effective_user_provider_route",
+        lambda *_args: pytest.fail("owner routing must not execute"),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not execute"),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("provider runtime must not execute"),
+    )
+
+    result = evaluator.evaluate_jobs(_jobs(2))
+
+    assert [job["ai_fit"] for job in result] == [
+        "LLM_CALL_FAIL",
+        "LLM_CALL_FAIL",
+    ]
+    assert evaluator.get_eval_cache_metrics()["eval_live_failures"] == 1
 
 
 @pytest.mark.parametrize(
@@ -544,6 +627,13 @@ def test_owner_cache_miss_executes_exact_effective_route(
         monkeypatch,
         provider=provider,
         model=model,
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "resolve_recommended_user_provider_route",
+        lambda *_args, **_kwargs: pytest.fail(
+            "owner execution must not resolve the ownerless recommendation"
+        ),
     )
     runtime_calls = []
     monkeypatch.setattr(
@@ -1274,7 +1364,6 @@ def test_owner_runtime_failure_has_no_legacy_or_provider_fallback(monkeypatch):
 
 def test_owner_success_stores_frozen_routed_model(monkeypatch):
     evaluator = _evaluator(monkeypatch)
-    monkeypatch.setattr(evaluator, "MODEL", "legacy-default-model")
     monkeypatch.setattr(
         evaluator,
         "get_cached_job_evaluation",
@@ -1302,7 +1391,32 @@ def test_owner_success_stores_frozen_routed_model(monkeypatch):
 
     assert len(stores) == 1
     assert stores[0]["model"] == "gpt-5-mini"
-    assert stores[0]["model"] != evaluator.MODEL
+
+
+def test_no_owner_success_stores_recommended_routed_model(monkeypatch):
+    evaluator = _evaluator(monkeypatch)
+    monkeypatch.setattr(
+        evaluator,
+        "get_cached_job_evaluation",
+        lambda _key: None,
+    )
+    stores = []
+    monkeypatch.setattr(
+        evaluator,
+        "store_cached_job_evaluation",
+        lambda **kwargs: stores.append(kwargs),
+    )
+    _install_recommended_route(evaluator, monkeypatch)
+    monkeypatch.setattr(
+        evaluator,
+        "run_chat_completion",
+        lambda **_kwargs: _response_for(_jobs(1)),
+    )
+
+    evaluator.evaluate_jobs(_jobs(1))
+
+    assert len(stores) == 1
+    assert stores[0]["model"] == "sentinel-qualified-model"
 
 
 def test_live_only_owner_bypasses_cache_and_resolves_once(monkeypatch):
@@ -1374,6 +1488,7 @@ def test_output_order_restored_after_existing_batch_shuffle(monkeypatch):
 
 def test_progress_prepared_and_batch_counts_are_exact(monkeypatch):
     evaluator = _evaluator(monkeypatch)
+    _install_recommended_route(evaluator, monkeypatch)
     monkeypatch.setattr(evaluator, "BATCH_SIZE", 2)
     cached_values = iter([_evaluation(), None, None, None, None, None])
     monkeypatch.setattr(
@@ -1491,6 +1606,7 @@ def test_progress_cache_only_misses_are_terminal_without_live_batches(monkeypatc
 
 def test_progress_counts_terminally_failed_batch_without_reprojection(monkeypatch):
     evaluator = _evaluator(monkeypatch)
+    _install_recommended_route(evaluator, monkeypatch)
     monkeypatch.setattr(evaluator, "BATCH_SIZE", 2)
     _install_cache_miss(evaluator, monkeypatch)
     calls = []

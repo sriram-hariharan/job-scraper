@@ -11,11 +11,7 @@ from difflib import SequenceMatcher
 from src.agents.llm_adjudicator_readback import (
     build_policy_driven_llm_adjudicator_readback,
 )
-from src.ai.llm_client import (
-    get_default_model,
-    get_default_provider,
-    run_chat_completion,
-)
+from src.ai.llm_client import run_chat_completion
 from src.agents.resume_match_agent import (
     agent_trace_strict,
     record_resume_match_agent_trace,
@@ -39,11 +35,6 @@ TITLE_ONLY_TIE_EPSILON = SELECTOR_POLICY["title_only_tie_epsilon"]
 NON_TITLE_DELTA_EPSILON = SELECTOR_POLICY["non_title_delta_epsilon"]
 CLOSE_CALL_REVIEW_EPSILON = SELECTOR_POLICY["close_call_review_epsilon"]
 
-LLM_FALLBACK_PROVIDER = os.getenv("LLM_FALLBACK_PROVIDER", "groq").strip().lower()
-LLM_FALLBACK_MODEL = os.getenv(
-    "LLM_FALLBACK_MODEL",
-    "llama-3.3-70b-versatile",
-    ).strip()
 LLM_FALLBACK_DEFAULT_MAX_TOKENS = 900
 LLM_FALLBACK_DEFAULT_TEMPERATURE = 0.0
 LLM_FALLBACK_MAX_TOKENS = int(
@@ -89,14 +80,6 @@ Rules:
 8. Return ONLY valid JSON.
 """.strip()
 
-LLM_ADJUDICATION_PROVIDER = os.getenv(
-    "LLM_ADJUDICATION_PROVIDER",
-    LLM_FALLBACK_PROVIDER,
-).strip().lower()
-LLM_ADJUDICATION_MODEL = os.getenv(
-    "LLM_ADJUDICATION_MODEL",
-    LLM_FALLBACK_MODEL,
-).strip()
 LLM_ADJUDICATION_MAX_TOKENS = int(os.getenv("LLM_ADJUDICATION_MAX_TOKENS", "700"))
 LLM_ADJUDICATION_TEMPERATURE = float(os.getenv("LLM_ADJUDICATION_TEMPERATURE", "0"))
 LLM_ADJUDICATION_PROMPT_VERSION = "v1"
@@ -187,6 +170,35 @@ def _resolve_selector_effective_user_provider_route(
     return resolve_effective_user_provider_route(owner_user_id, workload_id)
 
 
+def _resolve_selector_recommended_user_provider_route(workload_id: str) -> Dict[str, Any]:
+    from src.app.provider_model_routing_service import (
+        resolve_recommended_user_provider_route,
+    )
+
+    return resolve_recommended_user_provider_route(workload_id)
+
+
+def _selector_adjudicator_readback_route() -> Dict[str, str]:
+    """Recommendation-routed provider/model for the advisory adjudicator readback.
+
+    Returns blanks when no qualified route can be established so the readback's
+    existing ``provider_not_configured`` policy skip applies, instead of the
+    shared client substituting generic provider/model defaults.
+    """
+    try:
+        route = _resolve_selector_recommended_user_provider_route(
+            AMBIGUOUS_RESUME_ADJUDICATION_WORKLOAD_ID
+        )
+    except Exception:
+        return {"provider": "", "model": ""}
+    if not isinstance(route, dict):
+        return {"provider": "", "model": ""}
+    return {
+        "provider": str(route.get("provider") or "").strip().lower(),
+        "model": str(route.get("model") or "").strip(),
+    }
+
+
 def _run_effective_selector_user_chat_completion_with_metadata(
     **kwargs: Any,
 ) -> Dict[str, Any]:
@@ -200,12 +212,15 @@ def _run_effective_selector_user_chat_completion_with_metadata(
 def _selector_llm_execution_context(
     *,
     workload_id: str,
-    legacy_provider: str,
-    legacy_model: str,
 ) -> Dict[str, Any]:
-    provider = str(legacy_provider or "").strip().lower()
-    model = str(legacy_model or "").strip()
     if not _is_user_pipeline_mode():
+        route = _resolve_selector_recommended_user_provider_route(workload_id)
+        if not isinstance(route, dict):
+            raise RuntimeError("selector_recommended_route_unavailable")
+        provider = str(route.get("provider") or "").strip().lower()
+        model = str(route.get("model") or "").strip()
+        if not provider or not model:
+            raise RuntimeError("selector_recommended_route_unavailable")
         return {
             "authenticated": False,
             "owner_user_id": "",
@@ -251,6 +266,7 @@ def _run_selector_chat_completion(
         return run_chat_completion(
             provider=context["provider"],
             model=context["model"],
+            workload_id=context["workload_id"],
             **kwargs,
         )
 
@@ -956,19 +972,6 @@ def _parse_llm_fallback_response(response: Any) -> Dict[str, Any]:
 
     return json.loads(text)
 
-def _selector_provider_failover_kwargs(primary_provider: str) -> Dict[str, Any]:
-    primary = str(primary_provider or "").strip().lower()
-    default_provider = str(get_default_provider() or "").strip().lower()
-    default_model = str(get_default_model() or "").strip()
-
-    if default_provider and primary and primary != default_provider:
-        return {
-            "fallback_enabled": True,
-            "fallback_provider": default_provider,
-            "fallback_model": default_model,
-        }
-
-    return {}
 
 def _run_llm_fallback_ranking(
     record: dict,
@@ -982,17 +985,14 @@ def _run_llm_fallback_ranking(
     )
 
     allowed_resume_names = [result.pair.resume_name for result in strict_results]
-    authenticated = _is_user_pipeline_mode()
-    provider = "" if authenticated else str(LLM_FALLBACK_PROVIDER or "").strip().lower()
-    model = "" if authenticated else str(LLM_FALLBACK_MODEL or "").strip()
+    provider = ""
+    model = ""
 
     system_prompt = LLM_FALLBACK_SYSTEM_PROMPT
 
     try:
         context = _selector_llm_execution_context(
             workload_id=RESUME_FALLBACK_RANKING_WORKLOAD_ID,
-            legacy_provider=LLM_FALLBACK_PROVIDER,
-            legacy_model=LLM_FALLBACK_MODEL,
         )
         provider = context["provider"]
         model = context["model"]
@@ -1008,11 +1008,9 @@ def _run_llm_fallback_ranking(
         if cached is not None:
             return cached
 
-        failover_kwargs = (
-            {}
-            if context["authenticated"]
-            else _selector_provider_failover_kwargs(provider)
-        )
+        # P4S12: the route is now explicitly qualified per workload, so no
+        # generic cross-provider failover is permitted on the shared client.
+        failover_kwargs = {} if context["authenticated"] else {"fallback_enabled": False}
         if provider == "groq":
             response = _run_selector_chat_completion(
                 context,
@@ -1242,9 +1240,8 @@ def _run_llm_adjudication(
         winner.pair.resume_name,
         runner_up.pair.resume_name,
     ]
-    authenticated = _is_user_pipeline_mode()
-    provider = "" if authenticated else str(LLM_ADJUDICATION_PROVIDER or "").strip().lower()
-    model = "" if authenticated else str(LLM_ADJUDICATION_MODEL or "").strip()
+    provider = ""
+    model = ""
 
     system_prompt = """
 You adjudicate between two finalist resume variants after deterministic scoring found an ambiguous result.
@@ -1259,8 +1256,6 @@ Rules:
     try:
         context = _selector_llm_execution_context(
             workload_id=AMBIGUOUS_RESUME_ADJUDICATION_WORKLOAD_ID,
-            legacy_provider=LLM_ADJUDICATION_PROVIDER,
-            legacy_model=LLM_ADJUDICATION_MODEL,
         )
         provider = context["provider"]
         model = context["model"]
@@ -1276,11 +1271,9 @@ Rules:
         if cached is not None:
             return cached
 
-        failover_kwargs = (
-            {}
-            if context["authenticated"]
-            else _selector_provider_failover_kwargs(provider)
-        )
+        # P4S12: the route is now explicitly qualified per workload, so no
+        # generic cross-provider failover is permitted on the shared client.
+        failover_kwargs = {} if context["authenticated"] else {"fallback_enabled": False}
         if provider == "groq":
             response = _run_selector_chat_completion(
                 context,
@@ -1916,10 +1909,11 @@ def main() -> None:
             if has_credible_match
             else []
         )
+        adjudicator_readback_route = _selector_adjudicator_readback_route()
         llm_adjudicator_readback = build_policy_driven_llm_adjudicator_readback(
             candidates=llm_adjudicator_candidates,
-            provider=LLM_ADJUDICATION_PROVIDER,
-            model=LLM_ADJUDICATION_MODEL,
+            provider=adjudicator_readback_route["provider"],
+            model=adjudicator_readback_route["model"],
         )
                 
         output_row = {

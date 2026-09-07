@@ -37,6 +37,10 @@ resolve_effective_user_provider_route = getattr(
     importlib.import_module("src.app.provider_model_" "routing_service"),
     "resolve_effective_user_provider_route",
 )
+resolve_recommended_user_provider_route = getattr(
+    importlib.import_module("src.app.provider_model_" "routing_service"),
+    "resolve_recommended_user_provider_route",
+)
 run_effective_user_chat_completion_with_metadata = getattr(
     importlib.import_module("src.app.provider_model_" "routing_service"),
     "run_effective_user_chat_completion_with_metadata",
@@ -10614,6 +10618,12 @@ _PIPELINE_CHILD_ENV_EXACT_NAMES = {
     "TZ",
     "PYTHONPATH",
     "PYTHONUNBUFFERED",
+    "TAILORING_EXTRACTION_PROVIDER",
+    "TAILORING_EXTRACTION_MODEL",
+    "TAILORING_REWRITE_PROVIDER",
+    "TAILORING_REWRITE_MODEL",
+    "TAILORING_JUDGE_PROVIDER",
+    "TAILORING_JUDGE_MODEL",
     "SSL_CERT_FILE",
     "REQUESTS_CA_BUNDLE",
     "CURL_CA_BUNDLE",
@@ -16203,14 +16213,6 @@ LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED = (
     os.getenv("APPLYLENS_LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED", "false").strip().lower()
     == "true"
 )
-LIVE_JD_INTELLIGENCE_DRY_RUN_PROVIDER = os.getenv(
-    "APPLYLENS_LIVE_JD_INTELLIGENCE_DRY_RUN_PROVIDER",
-    os.getenv("LLM_PROVIDER", "groq"),
-).strip().lower()
-LIVE_JD_INTELLIGENCE_DRY_RUN_MODEL = os.getenv(
-    "APPLYLENS_LIVE_JD_INTELLIGENCE_DRY_RUN_MODEL",
-    os.getenv("LLM_MODEL", "llama-3.1-8b-instant"),
-).strip()
 LIVE_JD_INTELLIGENCE_DRY_RUN_FALLBACK_ENABLED = (
     os.getenv("APPLYLENS_LIVE_JD_INTELLIGENCE_DRY_RUN_FALLBACK_ENABLED", "false")
     .strip()
@@ -16412,20 +16414,13 @@ LIVE_CRITIC_GUARDRAIL_DRY_RUN_ENABLED = (
     .lower()
     == "true"
 )
-LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROVIDER = os.getenv(
-    "APPLYLENS_LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROVIDER",
-    os.getenv("LLM_PROVIDER", "groq"),
-).strip().lower()
-LIVE_CRITIC_GUARDRAIL_DRY_RUN_MODEL = os.getenv(
-    "APPLYLENS_LIVE_CRITIC_GUARDRAIL_DRY_RUN_MODEL",
-    os.getenv("LLM_MODEL", "llama-3.1-8b-instant"),
-).strip()
 LIVE_CRITIC_GUARDRAIL_DRY_RUN_FALLBACK_ENABLED = (
     os.getenv("APPLYLENS_LIVE_CRITIC_GUARDRAIL_DRY_RUN_FALLBACK_ENABLED", "false")
     .strip()
     .lower()
     == "true"
 )
+MANUAL_CRITIC_GUARDRAIL_WORKLOAD_ID = "critic_evaluation"
 
 
 def _live_jd_intelligence_structured_output_contract() -> Dict[str, Any]:
@@ -16459,14 +16454,33 @@ def _live_jd_intelligence_prompt(
     ])
 
 
+def _resolve_manual_jd_intelligence_route() -> Dict[str, str]:
+    """Resolve the recommended provider/model route for the manual JD dry-run.
+
+    Raises when the recommendation authority is unavailable or returns a blank
+    provider/model so callers fail closed instead of executing on generic
+    provider/model defaults.
+    """
+    route = resolve_recommended_user_provider_route(
+        PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID
+    )
+    resolved_provider = str((route or {}).get("provider") or "").strip()
+    resolved_model = str((route or {}).get("model") or "").strip()
+    if not resolved_provider or not resolved_model:
+        raise ValueError("manual_jd_intelligence_recommended_route_unavailable")
+    return {"provider": resolved_provider, "model": resolved_model}
+
+
 def _live_jd_intelligence_provider_adapter(adapter_input: Dict[str, Any]) -> Dict[str, Any]:
     from src.ai.llm_client import run_chat_completion_with_metadata
 
-    provider = LIVE_JD_INTELLIGENCE_DRY_RUN_PROVIDER
-    model = LIVE_JD_INTELLIGENCE_DRY_RUN_MODEL
+    route = _resolve_manual_jd_intelligence_route()
+    resolved_provider = route["provider"]
+    resolved_model = route["model"]
     result = run_chat_completion_with_metadata(
-        provider=provider,
-        model=model,
+        provider=resolved_provider,
+        model=resolved_model,
+        workload_id=PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID,
         temperature=LIVE_JD_INTELLIGENCE_DRY_RUN_TEMPERATURE,
         max_tokens=LIVE_JD_INTELLIGENCE_DRY_RUN_MAX_TOKENS,
         response_mime_type="application/json",
@@ -22437,12 +22451,30 @@ def _live_critic_guardrail_prompt(adapter_input: Dict[str, Any]) -> str:
     ])
 
 
+def _resolve_manual_critic_route() -> Dict[str, str]:
+    """Resolve the qualified provider/model route for the manual critic dry-run.
+
+    ``critic_evaluation`` currently has zero qualified candidates, so this
+    raises and the built-in live critic adapter stays unreachable. Raising is
+    the point: it keeps the manual critic surface fail-closed instead of
+    executing on generic provider/model defaults.
+    """
+    route = resolve_recommended_user_provider_route(MANUAL_CRITIC_GUARDRAIL_WORKLOAD_ID)
+    resolved_provider = str((route or {}).get("provider") or "").strip()
+    resolved_model = str((route or {}).get("model") or "").strip()
+    if not resolved_provider or not resolved_model:
+        raise ValueError("manual_critic_qualified_route_unavailable")
+    return {"provider": resolved_provider, "model": resolved_model}
+
+
 def _live_critic_guardrail_provider_adapter(adapter_input: Dict[str, Any]) -> Dict[str, Any]:
     from src.ai.llm_client import run_chat_completion_with_metadata
 
+    route = _resolve_manual_critic_route()
     result = run_chat_completion_with_metadata(
-        provider=LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROVIDER,
-        model=LIVE_CRITIC_GUARDRAIL_DRY_RUN_MODEL,
+        provider=route["provider"],
+        model=route["model"],
+        workload_id=MANUAL_CRITIC_GUARDRAIL_WORKLOAD_ID,
         temperature=LIVE_CRITIC_GUARDRAIL_DRY_RUN_TEMPERATURE,
         max_tokens=LIVE_CRITIC_GUARDRAIL_DRY_RUN_MAX_TOKENS,
         response_mime_type="application/json",
@@ -22635,7 +22667,12 @@ def build_manual_jd_intelligence_dry_run_payload(
     )
     effective_adapter = adapter
     if effective_feature_enabled and effective_adapter is None:
-        effective_adapter = _live_jd_intelligence_provider_adapter
+        try:
+            route = _resolve_manual_jd_intelligence_route()
+        except Exception:
+            route = None
+        if route is not None:
+            effective_adapter = _live_jd_intelligence_provider_adapter
     payload = jd_intelligence.build_live_jd_intelligence_dry_run_payload(
         job_title=job_title,
         company=company,
@@ -22886,7 +22923,12 @@ def build_manual_critic_guardrail_dry_run_payload(
     )
     effective_adapter = adapter
     if effective_feature_enabled and effective_adapter is None:
-        effective_adapter = _live_critic_guardrail_provider_adapter
+        try:
+            _resolve_manual_critic_route()
+        except Exception:
+            pass
+        else:
+            effective_adapter = _live_critic_guardrail_provider_adapter
     critic_input = {
         "tailoring_suggestion_payload": normalized_tailoring or {},
         "jd_intelligence": normalized_jd or normalized_jd_signals or {},
@@ -22968,6 +23010,20 @@ def build_manual_critic_guardrail_dry_run_payload(
                 "validation_errors": provider_validation_errors,
                 **provider_metadata,
             }
+    elif effective_feature_enabled:
+        payload = {
+            **payload,
+            "fallback_used": True,
+            "validation_status": "fallback",
+            "validation_errors": [
+                _clean_text(
+                    controlled_artifact.get("reason")
+                    if isinstance(controlled_artifact, dict)
+                    else ""
+                )
+                or "critic_llm_guardrail_adapter_missing"
+            ],
+        }
     else:
         payload = {
             **payload,

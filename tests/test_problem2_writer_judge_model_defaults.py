@@ -27,9 +27,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 QUALIFIED_REFINEMENT_MODEL = "openai/gpt-oss-120b"
 QUALIFIED_REFINEMENT_PROVIDER = "groq"
 
-# Every environment variable that participates in the writer or judge
+# Every environment variable that participates in the Stage-1, writer, or judge
 # provider/model chains. Scrubbed so the child process observes source defaults.
 WRITER_JUDGE_ENV_NAMES = (
+    "TAILORING_EXTRACTION_MODEL",
+    "TAILORING_EXTRACTION_PROVIDER",
+    "LLM_TAILOR_MODEL",
+    "LLM_TAILOR_PROVIDER",
     "TAILORING_REWRITE_MODEL",
     "TAILORING_REWRITE_PROVIDER",
     "PATCH_REFINEMENT_WRITER_MODEL",
@@ -59,6 +63,8 @@ import json, sys
 sys.path.insert(0, {repo!r})
 from src.tailoring import llm
 print("@@RESULT@@" + json.dumps({{
+    "stage1_provider": llm.LLM_TAILOR_PROVIDER,
+    "stage1_model": llm.LLM_TAILOR_MODEL,
     "writer_provider": llm.PATCH_REFINEMENT_WRITER_PROVIDER,
     "writer_model": llm.PATCH_REFINEMENT_WRITER_MODEL,
     "judge_provider": llm.PATCH_REFINEMENT_JUDGE_PROVIDER,
@@ -265,15 +271,19 @@ def test_writer_and_judge_request_settings_are_unchanged():
     )
 
 
-def test_packet_level_generation_model_is_untouched_by_the_refinement_defaults():
-    """Stage-1 packet generation keeps its own configuration chain."""
+def test_packet_level_generation_defaults_to_qualified_groq_model():
+    resolved = _resolve_config()
 
-    source = (REPO_ROOT / "src" / "tailoring" / "llm.py").read_text(encoding="utf-8")
+    assert resolved["stage1_provider"] == QUALIFIED_REFINEMENT_PROVIDER
+    assert resolved["stage1_model"] == QUALIFIED_REFINEMENT_MODEL
 
-    # The stage-1 chain is defined independently of the refinement chain.
-    assert 'os.getenv("LLM_TAILOR_MODEL", "llama-3.3-70b-versatile")' in source
-    # Refinement writer/judge no longer default to the legacy model.
-    assert 'os.getenv("PATCH_REFINEMENT_JUDGE_MODEL", "openai/gpt-oss-120b")' in source
+
+def test_packet_level_generation_explicit_model_override_still_wins():
+    resolved = _resolve_config({"LLM_TAILOR_MODEL": "sentinel-stage1-model"})
+
+    assert resolved["stage1_model"] == "sentinel-stage1-model"
+    assert resolved["writer_model"] == QUALIFIED_REFINEMENT_MODEL
+    assert resolved["judge_model"] == QUALIFIED_REFINEMENT_MODEL
 
 
 # --- G. deterministic tailoring is unaffected -------------------------------

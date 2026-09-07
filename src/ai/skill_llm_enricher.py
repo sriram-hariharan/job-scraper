@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from tqdm import tqdm
 from threading import Lock
 
-from src.ai.llm_client import run_chat_completion, get_default_model
+from src.ai.llm_client import run_chat_completion
 from src.utils.skill_normalizer import (
     EXTRACTED_SKILL_NORMALIZATION_CONTRACT_VERSION,
     normalize_extracted_skills,
@@ -28,7 +28,6 @@ load_dotenv()
 
 logger = get_logger("ai_eval_filter")
 
-MODEL = get_default_model()
 SKILL_EXTRACTION_MODE = os.getenv("SKILL_EXTRACTION_MODE", "cache_prefer_live").strip().lower()
 VALID_EXTRACTION_MODES = {"cache_prefer_live", "cache_only", "live_only"}
 
@@ -211,6 +210,17 @@ def resolve_effective_user_provider_route(owner_user_id: str, workload_id: str):
     )
     return routing_service.resolve_effective_user_provider_route(
         owner_user_id,
+        workload_id,
+    )
+
+
+def resolve_recommended_user_provider_route(workload_id: str):
+    from importlib import import_module
+
+    routing_service = import_module(
+        "src.app.provider_model_" "routing_service"
+    )
+    return routing_service.resolve_recommended_user_provider_route(
         workload_id,
     )
 
@@ -961,7 +971,7 @@ def enrich_skills_with_llm(job_text, owner_user_id: str = ""):
         os.environ.get("JOB_STACK_OWNER_USER_ID", "") or ""
     ).strip()
     active_provider = ""
-    active_model = MODEL
+    active_model = ""
     if owner:
         try:
             route = resolve_effective_user_provider_route(
@@ -977,6 +987,28 @@ def enrich_skills_with_llm(job_text, owner_user_id: str = ""):
             route_diagnostic = _bounded_live_failure_diagnostic(route_exc)
             logger.warning(
                 "LLM skill extraction owner route unavailable | "
+                "error_type=%s category=%s",
+                route_diagnostic["error_type"],
+                route_diagnostic["category"],
+            )
+            return get_empty_skill_result(
+                failure_category=route_diagnostic["category"],
+                failure_stage="route",
+            )
+    else:
+        try:
+            route = resolve_recommended_user_provider_route(
+                "skill_extraction",
+            )
+            active_provider = str(route.get("provider") or "").strip()
+            active_model = str(route.get("model") or "").strip()
+            if not active_provider or not active_model:
+                raise ValueError("invalid recommended route")
+        except (Exception, SystemExit) as route_exc:
+            increment_skill_cache_metric("live_failures")
+            route_diagnostic = _bounded_live_failure_diagnostic(route_exc)
+            logger.warning(
+                "LLM skill extraction recommended route unavailable | "
                 "error_type=%s category=%s",
                 route_diagnostic["error_type"],
                 route_diagnostic["category"],
@@ -1003,9 +1035,12 @@ def enrich_skills_with_llm(job_text, owner_user_id: str = ""):
             )
             return result.get("content", "")
         return run_chat_completion(
-            model=MODEL,
+            provider=active_provider,
+            model=active_model,
             temperature=SKILL_EXTRACTION_TEMPERATURE,
             max_tokens=SKILL_EXTRACTION_MAX_TOKENS,
+            fallback_enabled=False,
+            workload_id="skill_extraction",
             messages=messages,
         )
 

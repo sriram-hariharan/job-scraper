@@ -375,15 +375,6 @@ def test_provider_model_credentials_runtime_and_operational_state_are_excluded(
     baseline = fingerprints.build_all_production_task_contract_fingerprints()
 
     for owner, name in (
-        (skill_llm_enricher, "MODEL"),
-        (job_fit_evaluator, "MODEL"),
-        (rag_answerer, "MODEL"),
-        (resume_selector, "LLM_FALLBACK_PROVIDER"),
-        (resume_selector, "LLM_FALLBACK_MODEL"),
-        (services, "LIVE_JD_INTELLIGENCE_DRY_RUN_PROVIDER"),
-        (services, "LIVE_JD_INTELLIGENCE_DRY_RUN_MODEL"),
-        (services, "LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROVIDER"),
-        (services, "LIVE_CRITIC_GUARDRAIL_DRY_RUN_MODEL"),
         (services, "SCAN_PHRASE_PROVIDER"),
         (services, "SCAN_PHRASE_MODEL"),
         (tailoring_llm, "LLM_TAILOR_PROVIDER"),

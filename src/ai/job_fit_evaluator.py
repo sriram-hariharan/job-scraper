@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Semaphore
 from dotenv import load_dotenv
 from threading import Lock
-from src.ai.llm_client import run_chat_completion, get_default_model
+from src.ai.llm_client import run_chat_completion
 from src.config.consts import NEGATIVE_VISA_PATTERNS, POSITIVE_VISA_PATTERNS
 from src.storage.skill_corpus_store import (
     get_cached_job_evaluation,
@@ -21,7 +21,6 @@ last_request_time = 0
 
 load_dotenv()
 
-MODEL = get_default_model()
 BATCH_SIZE = 5
 JOB_FIT_TASK_CONTRACT_VERSION = "v1"
 JOB_FIT_TEMPERATURE = 0
@@ -346,6 +345,17 @@ def resolve_effective_user_provider_route(owner_user_id, workload_id):
     )
 
 
+def resolve_recommended_user_provider_route(workload_id):
+    from importlib import import_module
+
+    routing_service = import_module(
+        "src.app.provider_model_" "routing_service"
+    )
+    return routing_service.resolve_recommended_user_provider_route(
+        workload_id,
+    )
+
+
 def run_user_chat_completion_with_metadata(**kwargs):
     from src.ai.user_provider_runtime import (
         run_user_chat_completion_with_metadata as execute,
@@ -505,9 +515,12 @@ def evaluate_batch(
                     response = result["content"]
                 else:
                     response = run_chat_completion(
-                        model=MODEL,
+                        provider=routed_provider,
+                        model=routed_model,
                         temperature=JOB_FIT_TEMPERATURE,
                         max_tokens=JOB_FIT_MAX_TOKENS,
+                        fallback_enabled=False,
+                        workload_id="job_fit_evaluation",
                         messages=messages,
                     )
 
@@ -629,7 +642,7 @@ def evaluate_batch(
             if cache_key and eval_mode != "live_only":
                 store_cached_job_evaluation(
                     cache_key=cache_key,
-                    model=routed_model if owner_user_id else MODEL,
+                    model=routed_model,
                     evaluation=evaluation_data,
                 )
                 increment_eval_cache_metric("eval_cache_stores")
@@ -711,7 +724,7 @@ def evaluate_jobs(jobs, owner_user_id="", progress_callback=None):
         os.environ.get("JOB_STACK_OWNER_USER_ID", "") or ""
     ).strip()
     routed_provider = ""
-    routed_model = MODEL
+    routed_model = ""
 
     if uncached_jobs and owner:
         try:
@@ -723,6 +736,22 @@ def evaluate_jobs(jobs, owner_user_id="", progress_callback=None):
             routed_model = str(route.get("model") or "").strip()
             if not routed_provider or not routed_model:
                 raise ValueError("invalid effective route")
+        except (Exception, SystemExit):
+            increment_eval_cache_metric("eval_live_failures")
+            for job in uncached_jobs:
+                job["ai_fit"] = "LLM_CALL_FAIL"
+            if progress_state is not None:
+                progress_state["failed_live_jobs"] = len(uncached_jobs)
+            uncached_jobs = []
+    elif uncached_jobs:
+        try:
+            route = resolve_recommended_user_provider_route(
+                "job_fit_evaluation",
+            )
+            routed_provider = str(route.get("provider") or "").strip()
+            routed_model = str(route.get("model") or "").strip()
+            if not routed_provider or not routed_model:
+                raise ValueError("invalid recommended route")
         except (Exception, SystemExit):
             increment_eval_cache_metric("eval_live_failures")
             for job in uncached_jobs:

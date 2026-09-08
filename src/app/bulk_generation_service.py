@@ -140,6 +140,88 @@ def get_bulk_generation_status(*, owner_user_id: str, run_id: str = "") -> Dict[
     return _public_status(dict(payload.get("run", {}) or {}), payload.get("items", []))
 
 
+# Item outcomes a re-run may legitimately target. "generated" is deliberately
+# excluded by default only from the *eligible* count, not from the view: the
+# operator still sees it and may select it explicitly.
+RERUNNABLE_ITEM_OUTCOMES = ("no_safe_rewrites", "empty", "failed", "")
+
+
+def _public_result_item(row: Dict[str, Any]) -> Dict[str, Any]:
+    status = _clean(row.get("status"), 32)
+    outcome = _clean(row.get("outcome"), 32)
+    return {
+        "run_id": _clean(row.get("run_id"), 64),
+        "sequence": int(row.get("sequence") or 0),
+        "job_identity": _clean(row.get("job_identity")),
+        "job_doc_id": _clean(row.get("job_doc_id")),
+        "queue_rank": _clean(row.get("queue_rank"), 64),
+        "selected_resume": _clean(row.get("selected_resume"), 255),
+        "job_label": _clean(row.get("job_label"), 255),
+        "status": status,
+        "outcome": outcome,
+        "error_category": _clean(row.get("error_category"), 80),
+        # Bounded exactly like every other operator-visible Bulk error string.
+        "error_message": _clean(row.get("error_message"), 500),
+        "started_at": _clean(row.get("started_at"), 64),
+        "finished_at": _clean(row.get("finished_at"), 64),
+        "attempt_count": int(row.get("attempt_count") or 1),
+        "rerunnable": status != "running" and outcome in RERUNNABLE_ITEM_OUTCOMES,
+    }
+
+
+def get_bulk_generation_pipeline_results(
+    *, owner_user_id: str, pipeline_run_id: str
+) -> Dict[str, Any]:
+    """Read-only latest-attempt-per-job history for one pipeline run.
+
+    Owner scoped. Never mutates. Deliberately separate from
+    ``get_bulk_generation_status`` so the canonical polling/guard payload keeps
+    its narrow active-run semantics.
+    """
+    owner = _clean(owner_user_id)
+    if not owner:
+        raise BulkGenerationError("authentication_required", "Authentication required.", status_code=401)
+    pipeline = _clean(pipeline_run_id, 128)
+    if not pipeline:
+        raise BulkGenerationError(
+            "bulk_generation_pipeline_required",
+            "A pipeline run is required to load Bulk Generate results.",
+            status_code=400,
+        )
+    try:
+        payload = store.get_bulk_generation_pipeline_results_postgres_payload(
+            owner_user_id=owner, pipeline_run_id=pipeline
+        )
+    except (Exception, SystemExit) as exc:
+        raise BulkGenerationError(
+            "bulk_generation_state_unavailable",
+            "Bulk Generate results are temporarily unavailable.",
+            status_code=503,
+        ) from exc
+
+    items = [_public_result_item(dict(row or {})) for row in payload.get("items", []) or []]
+    latest_run = dict(payload.get("latest_run", {}) or {})
+    generated = len([row for row in items if row["outcome"] == "generated"])
+    needs_attention = len(
+        [row for row in items if row["status"] == "needs_attention" or row["outcome"] == "failed"]
+    )
+    return {
+        "ok": True,
+        "found": bool(payload.get("found")),
+        "pipeline_run_id": pipeline,
+        "run_count": int(payload.get("run_count") or 0),
+        "latest_run_id": _clean(latest_run.get("run_id"), 64),
+        "latest_status": _clean(latest_run.get("status"), 32),
+        "latest_started_at": _clean(latest_run.get("started_at"), 64),
+        "latest_finished_at": _clean(latest_run.get("finished_at"), 64),
+        "processed_count": len(items),
+        "generated_count": generated,
+        "needs_attention_count": needs_attention,
+        "rerunnable_count": len([row for row in items if row["rerunnable"]]),
+        "items": items,
+    }
+
+
 def active_bulk_generation_guard_state(*, owner_user_id: str) -> Dict[str, Any]:
     status = get_bulk_generation_status(owner_user_id=owner_user_id)
     return status if status.get("active") else {}

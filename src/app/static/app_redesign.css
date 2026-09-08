@@ -340,7 +340,7 @@ html[data-theme="light"] body {
     linear-gradient(135deg, #eef4fb 0%, #f8fbff 50%, #edf4fb 100%) !important;
 }
 
-:where(a, button, input, select, textarea, [tabindex]):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.shared-filter-select__search-input):focus-visible {
+:where(a, button, input, select, textarea, [tabindex]):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.shared-filter-select__search-input):focus-visible:where(:not(.planning-bulk-results__search-input)) {
   outline: 3px solid var(--app-focus) !important;
   outline-offset: 2px;
 }
@@ -414,7 +414,7 @@ html[data-theme="light"] .profile-dropdown {
     var(--app-surface) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate):where(:not(.planning-bulk-results__close, .planning-bulk-results__pill, .planning-bulk-results__clear, .planning-bulk-results__secondary, .planning-bulk-results__primary)),
 .btn,
 .ghost-btn,
 .app-shell-primary-link,
@@ -437,7 +437,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
     color var(--app-fast) var(--app-ease) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate):where(:not(.planning-bulk-results__close, .planning-bulk-results__pill, .planning-bulk-results__clear, .planning-bulk-results__secondary, .planning-bulk-results__primary)),
 .primary-btn,
 .btn-primary,
 .app-shell-primary-link {
@@ -461,7 +461,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   color: var(--app-text) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate):not(:disabled):hover,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate):not(:disabled):hover:where(:not(.planning-bulk-results__close, .planning-bulk-results__pill, .planning-bulk-results__clear, .planning-bulk-results__secondary, .planning-bulk-results__primary)),
 .primary-btn:not(:disabled):hover,
 .btn-primary:not(:disabled):hover,
 .app-shell-primary-link:not([aria-disabled="true"]):hover {
@@ -472,7 +472,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   box-shadow: 0 9px 20px rgba(54, 83, 76, 0.2) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(:disabled):active,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(:disabled):active:where(:not(.planning-bulk-results__close, .planning-bulk-results__pill, .planning-bulk-results__clear, .planning-bulk-results__secondary, .planning-bulk-results__primary)),
 .primary-btn:not(:disabled):active,
 .btn-primary:not(:disabled):active,
 .app-shell-primary-link:not([aria-disabled="true"]):active {
@@ -483,7 +483,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   box-shadow: 0 4px 12px rgba(54, 83, 76, 0.16) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):disabled,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):disabled:where(:not(.planning-bulk-results__close, .planning-bulk-results__pill, .planning-bulk-results__clear, .planning-bulk-results__secondary, .planning-bulk-results__primary)),
 .primary-btn:disabled,
 .btn-primary:disabled,
 .app-shell-primary-link[aria-disabled="true"] {
@@ -530,7 +530,7 @@ html[data-theme="dark"] body .source-yield-source-button:not(:disabled):hover {
   background: color-mix(in srgb, var(--app-primary) 20%, var(--app-surface-2)) !important;
 }
 
-input:not(.shared-filter-select__search-input),
+input:not(.shared-filter-select__search-input):where(:not(.planning-bulk-results__search-input, .planning-bulk-results__checkbox)),
 select,
 textarea,
 .multi-select-trigger {
@@ -540,13 +540,13 @@ textarea,
   color: var(--app-text) !important;
 }
 
-input:not(.shared-filter-select__search-input)::placeholder,
+input:not(.shared-filter-select__search-input):where(:not(.planning-bulk-results__search-input, .planning-bulk-results__checkbox))::placeholder,
 textarea::placeholder {
   color: var(--app-muted) !important;
   opacity: 0.9;
 }
 
-input:not(.shared-filter-select__search-input):focus,
+input:not(.shared-filter-select__search-input):focus:where(:not(.planning-bulk-results__search-input, .planning-bulk-results__checkbox)),
 select:focus,
 textarea:focus,
 .multi-select.is-open .multi-select-trigger {
@@ -1614,7 +1614,7 @@ body {
   overscroll-behavior-x: contain;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):where(:not(.planning-bulk-results__close, .planning-bulk-results__pill, .planning-bulk-results__clear, .planning-bulk-results__secondary, .planning-bulk-results__primary)),
 .ghost-btn,
 .app-shell-primary-link,
 .job-apply-btn,
@@ -1634,7 +1634,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   display: grid !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):focus-visible:not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):focus-visible:not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):where(:not(.planning-bulk-results__close, .planning-bulk-results__pill, .planning-bulk-results__clear, .planning-bulk-results__secondary, .planning-bulk-results__primary)),
 .ghost-btn:focus-visible,
 .app-shell-primary-link:focus-visible,
 .app-shell-nav-link:focus-visible,
@@ -1650,7 +1650,7 @@ button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-bt
   box-shadow: 0 0 0 4px var(--app-focus) !important;
 }
 
-button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate):focus-visible,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.app-shell-collapse-btn):not(.app-shell-close-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.source-yield-source-button):not(.planning-react-bulk-generate):focus-visible:where(:not(.planning-bulk-results__close, .planning-bulk-results__pill, .planning-bulk-results__clear, .planning-bulk-results__secondary, .planning-bulk-results__primary)),
 .primary-btn:focus-visible,
 .btn-primary:focus-visible,
 .app-shell-primary-link:focus-visible,
@@ -1791,7 +1791,7 @@ body .control-group textarea {
   font-size: 13px !important;
 }
 
-body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(.planning-filter-apply):not(.operational-primary-action):not(.executive-queue-apply-btn),
+body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(.planning-filter-apply):not(.operational-primary-action):not(.executive-queue-apply-btn):where(:not(.planning-bulk-results__close, .planning-bulk-results__pill, .planning-bulk-results__clear, .planning-bulk-results__secondary, .planning-bulk-results__primary)),
 body .ghost-btn,
 body .btn-sm {
   min-height: 34px !important;
@@ -4318,7 +4318,7 @@ body .control-group label {
   line-height: 1.1 !important;
 }
 
-body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(.planning-filter-apply):not(.operational-primary-action):not(.executive-queue-apply-btn),
+body button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.saved-scan-action-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn):not(.ghost-btn):not(.notification-btn):not(.notification-chip):not(.notification-center__icon-btn):not(.notification-center__text-btn):not(.notification-row__action):not(.theme-toggle-btn):not(.profile-avatar-btn):not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option):not(.shared-filter-select__trigger):not(.shared-filter-select__option):not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button):not(.preference-location-chip-remove):not(.preferences-utility-button):not(.preferences-back-button):not(.preferences-secondary-action):not(.planning-react-bulk-generate):not(.planning-filter-apply):not(.operational-primary-action):not(.executive-queue-apply-btn):where(:not(.planning-bulk-results__close, .planning-bulk-results__pill, .planning-bulk-results__clear, .planning-bulk-results__secondary, .planning-bulk-results__primary)),
 body .ghost-btn,
 body .btn-sm {
   min-height: 34px !important;

@@ -297,3 +297,77 @@ WITH updated AS (
     payload = _query(sql, database_url=database_url, database_url_env=database_url_env,
                      psql_bin=psql_bin, print_only=print_only)
     return _response(payload, finished=bool(dict(payload.get("data", {}) or {}).get("finished")), sql=payload.get("sql", ""))
+
+
+def get_bulk_generation_pipeline_results_postgres_payload(
+    *, owner_user_id: str, pipeline_run_id: str,
+    database_url: str = "", database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql", print_only: bool = False, ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    """Latest Bulk Generate attempt per job for one owner's pipeline run.
+
+    Read-only history view over the existing run/item tables. Every attempt for
+    the pipeline is considered, so a later subset re-run replaces only the jobs
+    it touched and never hides the earlier attempts for the other jobs. Ranking
+    is fully tie-broken so the "latest attempt" is deterministic.
+    """
+    owner = _required(owner_user_id, "owner_user_id")
+    pipeline = _required(pipeline_run_id, "pipeline_run_id")
+    sql = _prefix(ensure_schema) + f"""
+WITH pipeline_runs AS (
+    -- Must project every column the latest_run CTE below consumes: it selects
+    -- from this CTE, not from the base table.
+    SELECT run_id, status, total_count, completed_count, succeeded_count,
+           needs_attention_count, started_at, finished_at
+    FROM bulk_generation_runs
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND pipeline_run_id = {_sql_quote_text(pipeline)}
+), attempts AS (
+    SELECT i.*, r.started_at AS run_started_at, r.status AS run_status
+    FROM bulk_generation_items i
+    JOIN pipeline_runs r ON r.run_id = i.run_id
+    WHERE i.owner_user_id = {_sql_quote_text(owner)}
+), ranked AS (
+    SELECT a.*,
+           COUNT(*) OVER (PARTITION BY a.job_identity) AS attempt_count,
+           ROW_NUMBER() OVER (
+               PARTITION BY a.job_identity
+               ORDER BY a.finished_at DESC NULLS LAST,
+                        a.started_at DESC NULLS LAST,
+                        a.run_started_at DESC NULLS LAST,
+                        a.run_id DESC,
+                        a.sequence DESC
+           ) AS attempt_rank
+    FROM attempts a
+), latest AS (
+    SELECT run_id, sequence, job_identity, job_doc_id, queue_rank, selected_resume,
+           job_label, status, outcome, error_category, error_message,
+           started_at, finished_at, attempt_count, run_status
+    FROM ranked WHERE attempt_rank = 1
+    ORDER BY job_identity
+), latest_run AS (
+    SELECT run_id, status, total_count, completed_count, succeeded_count,
+           needs_attention_count, started_at, finished_at
+    FROM pipeline_runs
+    ORDER BY started_at DESC, run_id DESC LIMIT 1
+)
+SELECT json_build_object(
+    'found', EXISTS (SELECT 1 FROM pipeline_runs),
+    'pipeline_run_id', {_sql_quote_text(pipeline)},
+    'run_count', (SELECT COUNT(*) FROM pipeline_runs),
+    'latest_run', COALESCE((SELECT row_to_json(latest_run) FROM latest_run), '{{}}'::json),
+    'items', COALESCE((SELECT json_agg(row_to_json(latest)) FROM latest), '[]'::json)
+);
+""".strip()
+    payload = _query(sql, database_url=database_url, database_url_env=database_url_env,
+                     psql_bin=psql_bin, print_only=print_only)
+    data = dict(payload.get("data", {}) or {})
+    return _response(
+        payload,
+        found=bool(data.get("found")),
+        pipeline_run_id=pipeline,
+        run_count=int(data.get("run_count") or 0),
+        latest_run=dict(data.get("latest_run", {}) or {}),
+        items=list(data.get("items", []) or []),
+        sql=payload.get("sql", ""),
+    )

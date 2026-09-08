@@ -1,4 +1,5 @@
 import json
+import os
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -85,6 +86,19 @@ def _safe_json_script(payload: dict) -> str:
     script-breakout or entity injection from user-controlled string fields."""
     encoded = json.dumps(payload, ensure_ascii=True)
     return encoded.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+
+
+def _planning_public_config_script() -> str:
+    """Public, non-secret Planning browser configuration.
+
+    Only the Brandfetch *client* id is exposed. It is intended for the browser
+    CDN/Search request and is optional: when unset the Planning results modal
+    performs no Brandfetch call at all and renders local lettermarks instead.
+    No private Brandfetch API key is read or exposed here.
+    """
+    return _safe_json_script(
+        {"brandfetchClientId": os.getenv("BRANDFETCH_CLIENT_ID", "").strip()}
+    )
 
 
 _PLANNING_JSON_CONTEXT_SUFFIXES = ("__tailoring.json", "_tailoring.json", ".json")
@@ -671,8 +685,11 @@ def planning_dashboard() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
+  <script>
+    window.__APPLYLENS_PLANNING_CONFIG__ = """ + _planning_public_config_script() + """;
+  </script>
   <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1"></script>
-  <script src="/static/planning.js?v=bulk_generate_suggestions_r2"></script>
+  <script src="/static/planning.js?v=bulk_generate_results_r1"></script>
 </body>
 </html>
     """.strip()

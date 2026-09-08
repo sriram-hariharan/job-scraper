@@ -1043,7 +1043,13 @@ def test_bulk_configuration_progress_and_safety_contract_is_explicit_and_bounded
     assert "resetBulkGenerateSuggestionsState(selection.candidateRows)" in start_source
     assert "await executeBulkGenerateSuggestions()" in start_source
     assert "postJson" not in open_source + update_source
-    assert 'primaryBtn.textContent = "Generate suggestions"' in overlay_source
+    # The one overlay serves both flows: the initial CTA is unchanged, and the
+    # re-run flow reuses the same settings step with re-run copy.
+    assert '? `Re-run selected (${selection.selectedCount})`' in overlay_source
+    assert ': "Generate suggestions"' in overlay_source
+    assert '"Re-run bulk suggestions"' in overlay_source
+    assert '"Bulk generate suggestions"' in overlay_source
+    assert "Review the settings before re-running suggestions for the selected jobs." in overlay_source
     assert "Generate suggestion for 1 job" not in overlay_source
     assert "Generate suggestions for ${selection.selectedCount} jobs" not in overlay_source
     assert "primaryBtn.disabled = selection.selectedCount === 0" in overlay_source
@@ -2272,3 +2278,501 @@ def test_tailoring_workspace_ui_e_generated_actions_use_dedicated_visual_classes
     assert 'classList.toggle("tailoring-workspace-free-edit-action--save"' in inline_score
     assert 'workspacePresentation ? "tailoring-workspace-review-action-btn"' in replacement
     assert 'workspacePresentation ? "tailoring-workspace-select-btn"' in replacement
+
+
+def test_bulk_rerun_reuses_the_existing_settings_overlay_and_start_path():
+    """Re-run is the same settings step and the same executor, only scoped."""
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    rerun_source = planning[
+        planning.index("function openBulkGenerateSuggestionsRerun") :
+        planning.index("function updateBulkGenerateSuggestionsConfiguration")
+    ]
+    selection_source = planning[
+        planning.index("function getPlanningBulkSuggestionSelection") :
+        planning.index("function buildPlanningWorklistBridgeState")
+    ]
+
+    # Reuses the existing overlay + existing confirm render. No second dialog.
+    assert 'renderBulkGenerateSuggestionsOverlay("confirm", getPlanningBulkSuggestionSelection())' in rerun_source
+    assert "resetBulkGenerateSuggestionsConfiguration(" in rerun_source
+    assert "getBulkGenerateSuggestionsOverlay()" in rerun_source
+    # No parallel executor: re-run never posts or starts on its own.
+    for forbidden in ("postJson", "fetch(", "/planning/bulk-generation/start", "executeBulkGenerateSuggestions"):
+        assert forbidden not in rerun_source
+    # Existing admission guards are still respected before opening.
+    assert "bulkGenerateSuggestionsState.isRunning" in rerun_source
+    assert "generateSuggestionsState.isRunning" in rerun_source
+    # Selected jobs are the MAXIMUM scope; filters can only narrow it.
+    assert 'String(config.mode || "initial") === "rerun"' in selection_source
+    assert "rerunScope" in selection_source
+    assert "generatable.filter((row) =>" in selection_source
+
+
+def test_planning_exposes_only_the_public_brandfetch_client_id():
+    ui = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    config_source = ui[
+        ui.index("def _planning_public_config_script") :
+        ui.index("_PLANNING_JSON_CONTEXT_SUFFIXES")
+    ]
+    assert 'os.getenv("BRANDFETCH_CLIENT_ID", "")' in config_source
+    assert "_safe_json_script(" in config_source
+    # Never a private Brandfetch key, and no other credential family.
+    for forbidden in ("BRANDFETCH_API_KEY", "BRANDFETCH_SECRET", "API_KEY"):
+        assert forbidden not in config_source
+    assert "window.__APPLYLENS_PLANNING_CONFIG__" in ui
+
+
+def test_company_logo_resolution_is_bridge_owned_deduplicated_and_unpersisted():
+    """planning.js owns every logo request; the React island stays network-free."""
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    resolver = planning[
+        planning.index("const planningCompanyLogoDomains") :
+        planning.index("function resetBulkGenerateResultsState")
+    ]
+
+    # One in-memory page-lifetime cache, one request per unresolved company.
+    assert "new Map()" in resolver
+    assert "planningCompanyLogoDomains.has(normalized)" in resolver
+    assert "planningCompanyLogoDomains.set(normalized, pending)" in resolver
+    # Deterministic matching only: exact normalized name, verified tie-break.
+    assert "normalizePlanningCompanyName(entry?.name) === normalized" in resolver
+    assert "verified.length === 1" in resolver
+    # Never persisted anywhere.
+    for forbidden in ("localStorage", "sessionStorage", "postJson", "INSERT", "indexedDB"):
+        assert forbidden not in resolver
+    # Requests are scoped to the modal, not the whole page load.
+    assert 'action.type === "bulk_view_results"' in planning
+    assert "void resolveBulkResultCompanyLogos();" in planning
+    # Absent client id short-circuits before any network call.
+    assert "if (!clientId) return;" in resolver
+
+    react = Path("frontend/executive-kpi/src/PlanningWorklist.tsx").read_text(encoding="utf-8")
+    assert "fetch(" not in react
+    assert "cdn.brandfetch.io" in react
+    assert 'loading="lazy"' in react
+    assert "api.brandfetch.io" not in react
+
+
+def test_company_logo_matching_is_slug_tolerant_but_still_exact():
+    """`andurilindustries` (ATS board slug) and `Anduril Industries` must reduce
+    to the same identity, without introducing fuzzy matching."""
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    resolver = planning[
+        planning.index("function normalizePlanningCompanyName") :
+        planning.index("function resetBulkGenerateResultsState")
+    ]
+
+    # Whitespace is removed entirely, so a slug and a spaced brand name match.
+    assert 'replace(/[^a-z0-9]+/g, "")' in resolver
+    assert 'replace(/[^a-z0-9]+/g, " ")' not in resolver
+
+    # Brandfetch commonly returns several identically named brands on different
+    # domains; its own `verified` flag is the deterministic tie-break.
+    assert "entry?.verified === true" in resolver
+    assert "verified.length === 1" in resolver
+    assert "named.length === 1" in resolver
+
+    # Still exact-only: no similarity, ranking, or first-result-wins.
+    for forbidden in ("levenshtein", "includes(", "startsWith(", "results[0]", "_score", "sort("):
+        assert forbidden not in resolver
+
+
+def test_company_logo_uses_the_explicit_brandfetch_domain_route():
+    react = Path("frontend/executive-kpi/src/PlanningWorklist.tsx").read_text(encoding="utf-8")
+    assert "cdn.brandfetch.io/domain/" in react
+    assert "/w/64/h/64/fallback/lettermark/type/icon" in react
+    assert 'loading="lazy"' in react
+    # No referrer policy override: Brandfetch requires a normal browser Referer.
+    assert "no-referrer" not in react
+
+
+def test_bulk_results_controls_opt_out_of_the_global_important_skin():
+    """The page-level `button`/`input` skins use !important, which no stylesheet
+    specificity can beat. Modal controls must join the existing :not() opt-out
+    chain, exactly like .planning-react-bulk-generate already does."""
+    button_classes = (
+        "planning-bulk-results__close",
+        "planning-bulk-results__pill",
+        "planning-bulk-results__clear",
+        "planning-bulk-results__secondary",
+        "planning-bulk-results__primary",
+    )
+    input_classes = (
+        "planning-bulk-results__search-input",
+        "planning-bulk-results__checkbox",
+    )
+
+    def split_selectors(selector_line):
+        """Split a selector list while ignoring commas inside :not()/:where()."""
+        depth = 0
+        start = 0
+        selectors = []
+        for index, character in enumerate(selector_line):
+            if character == "(":
+                depth += 1
+            elif character == ")":
+                depth -= 1
+            elif character == "," and depth == 0:
+                selectors.append(selector_line[start:index])
+                start = index + 1
+        selectors.append(selector_line[start:].removesuffix(" {").removesuffix("{"))
+        return [selector.strip() for selector in selectors]
+
+    for path in ("src/app/static/app_redesign.css", "src/app/static/styles.css"):
+        css = Path(path).read_text(encoding="utf-8")
+        assert "::placeholder:where(" not in css
+        for line in css.splitlines():
+            stripped = line.strip()
+            # Excluded via a single zero-specificity :where(:not(...)) list so
+            # the surrounding cascade keeps its exact original weight.
+            for selector in (
+                selector for selector in split_selectors(stripped)
+                if selector.startswith("button:not(") or selector.startswith("body button:not(")
+            ):
+                for name in button_classes:
+                    assert f".{name}" in selector, f"{path}: button skin does not exclude {name}"
+                assert ":where(:not(" in selector
+            for selector in (
+                selector for selector in split_selectors(stripped)
+                if selector.startswith("input:not(")
+                or selector.startswith('html[data-theme="light"] input:not(')
+            ):
+                for name in input_classes:
+                    assert f".{name}" in selector, f"{path}: input skin does not exclude {name}"
+                assert ":where(:not(" in selector
+            if stripped.startswith(":where(a, button, input, select, textarea, [tabindex])"):
+                assert ":where(:not(.planning-bulk-results__search-input))" in stripped
+
+
+def test_bulk_results_search_parent_is_the_only_visual_field_surface():
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    shell_selector = ".planning-bulk-results .planning-bulk-results__search {"
+    shell = css[css.index(shell_selector) : css.index("}", css.index(shell_selector))]
+    for visual_owner in ("border:", "border-radius:", "background:"):
+        assert visual_owner in shell
+
+    input_selector = ".planning-bulk-results .planning-bulk-results__search-input {"
+    input_rule = css[css.index(input_selector) : css.index("}", css.index(input_selector))]
+    for reset in (
+        "border: 0",
+        "border-radius: 0",
+        "outline: none",
+        "appearance: none",
+        "background: transparent",
+        "background-image: none",
+        "box-shadow: none",
+    ):
+        assert reset in input_rule
+
+
+def test_bulk_results_clear_selection_is_a_compact_secondary_button():
+    react = Path("frontend/executive-kpi/src/PlanningWorklist.tsx").read_text(encoding="utf-8")
+    clear_control = react[
+        react.index('className="planning-bulk-results__clear"') - 80 :
+        react.index("Clear selection") + len("Clear selection")
+    ]
+    assert '<button' in clear_control
+    assert 'type="button"' in clear_control
+
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    selector = ".planning-bulk-results .planning-bulk-results__clear {"
+    rule = css[css.index(selector) : css.index("}", css.index(selector))]
+    assert "height: 36px" in rule
+    assert "padding: 0 12px" in rule
+    assert "border: 1px solid var(--bulk-control-border)" in rule
+    assert "border-radius: 8px" in rule
+    assert "background: var(--bulk-control-bg)" in rule
+    assert "box-shadow: none" in rule
+    assert "text-decoration: none" in rule
+
+
+def test_bulk_results_theme_blocks_define_palette_tokens_only():
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    dark_selector = (
+        'html:not([data-theme="light"]) .planning-bulk-results,\n'
+        'html[data-theme="dark"] .planning-bulk-results {'
+    )
+    light_selector = 'html[data-theme="light"] .planning-bulk-results {'
+    for selector in (dark_selector, light_selector):
+        start = css.index(selector)
+        rule = css[start : css.index("}", start)]
+        body = rule.split("{", 1)[1]
+        declarations = [line.strip() for line in body.splitlines() if line.strip()]
+        assert len(declarations) > 30
+        assert all(line.startswith("--bulk-") for line in declarations)
+        for token in (
+            "--bulk-bg:",
+            "--bulk-text-strong:",
+            "--bulk-control-bg:",
+            "--bulk-table-head:",
+            "--bulk-row-selected:",
+            "--bulk-neutral-bg:",
+            "--bulk-primary-bg:",
+        ):
+            assert token in rule
+
+
+def test_bulk_results_header_adds_top_breathing_room_without_growing():
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    selector = ".planning-bulk-results .planning-bulk-results__head {"
+    rule = css[css.index(selector) : css.index("}", css.index(selector))]
+    assert "height: 78px" in rule
+    assert "box-sizing: border-box" in rule
+    assert "padding: 10px 18px 0 20px" in rule
+
+
+def test_bulk_results_neutral_badge_and_active_filter_use_theme_tokens():
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    neutral_selector = ".planning-bulk-results .planning-bulk-results__badge.is-neutral {"
+    neutral = css[css.index(neutral_selector) : css.index("}", css.index(neutral_selector))]
+    for token in ("--bulk-neutral-text", "--bulk-neutral-bg", "--bulk-neutral-border"):
+        assert token in neutral
+
+    active_selector = ".planning-bulk-results .planning-bulk-results__pill.is-active {"
+    active = css[css.index(active_selector) : css.index("}", css.index(active_selector))]
+    # Superseded contract: selection now ONLY outlines; the pill keeps its
+    # own semantic tone, so .is-active declares no background or text colour.
+    assert "border-color: var(--bulk-accent)" in active
+    assert "var(--bulk-accent-ring)" in active
+    assert "background:" not in active
+
+
+def test_bulk_results_bridge_publishes_truthful_resume_score_pair_fields():
+    javascript = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    score_start = javascript.index("function planningResumeMatchScore")
+    score_fn = javascript[score_start : javascript.index("/** Join persisted Bulk history", score_start)]
+    assert "normalizeResumeName(selectedResume)" in score_fn
+    assert "normalizeResumeName(row.winner_resume)" in score_fn
+    assert "row.winner_score" in score_fn
+    assert "row.runner_up_resume || row.runnerup_resume" in score_fn
+    assert "row.runner_up_score ?? row.runnerup_score" in score_fn
+
+    merge_start = javascript.index("function mergeBulkResultItems")
+    merge_fn = javascript[merge_start : javascript.index("/**\n * Company -> employer", merge_start)]
+    for field in ("winner_resume:", "winner_score:", "runner_up_resume:", "runner_up_score:", "match_score:"):
+        assert field in merge_fn
+
+
+def test_bulk_results_rows_own_a_canonical_theme_cell_surface():
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    selector = (
+        ".planning-bulk-results .planning-bulk-results__table "
+        "tbody .planning-bulk-results__row > td {"
+    )
+    rule = css[css.index(selector) : css.index("}", css.index(selector))]
+    assert "background:" in rule
+    assert "color:" in rule
+    assert rule.count("!important") == 2
+    for state in (":hover > td", ".is-selected > td", ".is-selected:hover > td"):
+        assert state in css
+
+
+def test_bulk_results_modal_allocates_all_spare_height_to_the_table():
+    """Header/cards/toolbar must not push the table below the fold."""
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    shell = css[
+        css.index(".planning-bulk-results {") :
+        css.index(".planning-bulk-results:focus-visible")
+    ]
+    assert "display: grid" in shell
+    assert "grid-template-rows: auto auto auto minmax(0, 1fr) auto" in shell
+    assert "min-height: 0" in shell
+
+    table_wrap = css[
+        css.index(".planning-bulk-results .planning-bulk-results__table-wrap {") :
+    ][:400]
+    assert "min-height: 0" in table_wrap
+    assert "overflow-y: auto" in table_wrap
+    assert "overflow-x: hidden" in table_wrap
+
+
+def _bulk_results_base_selectors(css_text):
+    """Base (non-state, non-media) `.planning-bulk-results*` selectors."""
+    import collections
+    import re as _re
+
+    text = _re.sub(r"/\*.*?\*/", "", css_text, flags=_re.S)
+    state = _re.compile(r"(:hover|:focus|:focus-within|:focus-visible|:disabled|:checked|::[a-z-]+|\.is-[a-z-]+|\[)")
+    counts = collections.Counter()
+    depth = media = 0
+    for match in _re.finditer(r"@media[^{]*\{|\{|\}|[^{}]+", text):
+        token = match.group(0)
+        if token.startswith("@media"):
+            media += 1
+            depth += 1
+            continue
+        if token == "{":
+            depth += 1
+            continue
+        if token == "}":
+            depth -= 1
+            if media and depth < media:
+                media -= 1
+            continue
+        if depth != media or media:
+            continue
+        for selector in token.split(","):
+            selector = " ".join(selector.split())
+            if ".planning-bulk-results" not in selector or state.search(selector):
+                continue
+            counts[selector] += 1
+    return counts
+
+
+def test_bulk_results_css_has_exactly_one_base_block_per_selector():
+    """Maintainability guard: no stacking a second copy of a selector later in
+    the file. State (:hover/.is-active/...) and @media overrides are allowed."""
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    counts = _bulk_results_base_selectors(css)
+    duplicates = {sel: n for sel, n in counts.items() if n > 1}
+    assert not duplicates, f"duplicate base selectors: {sorted(duplicates)}"
+    # The modal really is defined here (guards against an empty/no-op audit).
+    assert len(counts) > 25
+
+
+def test_served_stylesheets_carry_only_a_zero_specificity_modal_opt_out():
+    """app_redesign.css / styles.css must hold NO modal design - only the
+    :where(:not(...)) exclusion, which contributes zero specificity so the
+    existing shell cascade (notification/theme/profile buttons) is untouched."""
+    for path in ("src/app/static/app_redesign.css", "src/app/static/styles.css"):
+        css = Path(path).read_text(encoding="utf-8")
+        mentions = css.count("planning-bulk-results")
+        inside_where = css.count(":where(:not(.planning-bulk-results")
+        assert mentions > 0
+        # Every single mention lives inside a :where() opt-out list.
+        assert mentions == sum(
+            line.count("planning-bulk-results")
+            for line in css.splitlines()
+            if ":where(:not(.planning-bulk-results" in line
+        ), f"{path} contains modal styling outside the opt-out"
+        assert inside_where > 0
+        # No modal colour/layout leaked into the shared sheets.
+        for leaked in (".planning-bulk-results--dark", ".planning-bulk-results__table {"):
+            assert leaked not in css
+
+
+def test_modal_opt_out_does_not_touch_shared_shell_controls():
+    """The opt-out must never change which rules match the shell toolbar."""
+    import re as _re
+
+    shell = ("notification-btn", "theme-toggle-btn", "profile-avatar-btn",
+             "profile-menu-button", "notification-chip")
+    where = _re.compile(r":where\(:not\([^()]*\)\)")
+    for path in ("src/app/static/app_redesign.css", "src/app/static/styles.css"):
+        for line in Path(path).read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if ":where(:not(.planning-bulk-results" not in stripped:
+                continue
+            # The opt-out lists modal classes only - never a shell control.
+            opt_out = where.search(stripped).group(0)
+            for name in shell:
+                assert name not in opt_out
+            # The entire exclusion remains inside :where(), so the inner
+            # :not() contributes zero selector specificity.
+            assert opt_out.startswith(":where(:not(")
+
+
+def _bulk_theme_vars(css_text, selector):
+    """Read the --bulk-* custom properties from one modal theme block."""
+    import re as _re
+
+    start = css_text.index(selector)
+    block = css_text[start:css_text.index("}", start)]
+    return dict(_re.findall(r"(--bulk-[a-z0-9-]+)\s*:\s*([^;]+);", block))
+
+
+def _relative_luminance(hex_colour):
+    value = hex_colour.strip().lstrip("#")
+    channels = [int(value[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def _contrast(foreground, background):
+    a, b = _relative_luminance(foreground), _relative_luminance(background)
+    high, low = max(a, b), min(a, b)
+    return (high + 0.05) / (low + 0.05)
+
+
+def test_filter_pills_carry_a_semantic_tone_in_both_themes():
+    """Every filter has its OWN default background, present whether or not it
+    is selected. Tones are composed from existing semantic tokens."""
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    expected = {
+        "is-tone-all": "--bulk-accent-fill",
+        "is-tone-generated": "--bulk-success-bg",
+        "is-tone-safe": "--bulk-neutral-bg",
+        "is-tone-attention": "--bulk-attention-bg",
+    }
+    for modifier, token in expected.items():
+        anchor = f".planning-bulk-results .planning-bulk-results__pill.{modifier} {{"
+        assert anchor in css, f"missing tone modifier {modifier}"
+        block = css[css.index(anchor):css.index("}", css.index(anchor))]
+        assert "--pill-bg:" in block and token in block
+        for variable in ("--pill-border:", "--pill-text:", "--pill-count-bg:", "--pill-count-text:"):
+            assert variable in block, f"{modifier} missing {variable}"
+
+    # Both themes define every token those tones consume.
+    for selector in (".planning-bulk-results {", 'html[data-theme="light"] .planning-bulk-results {'):
+        variables = _bulk_theme_vars(css, selector)
+        for token in ("--bulk-accent-fill", "--bulk-success-bg", "--bulk-neutral-bg",
+                      "--bulk-attention-bg", "--bulk-neutral-border", "--bulk-neutral-text"):
+            assert token in variables, f"{selector} missing {token}"
+
+
+def test_active_filter_only_adds_an_outline_and_never_replaces_the_tone():
+    """Selection must not repaint the pill: no background/colour in .is-active."""
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    anchor = ".planning-bulk-results .planning-bulk-results__pill.is-active {"
+    block = css[css.index(anchor):css.index("}", css.index(anchor))]
+
+    assert "border-color: var(--bulk-accent)" in block
+    assert "box-shadow:" in block
+    # The selected state owns no fill or text colour at all.
+    declarations = {
+        line.split(":", 1)[0].strip()
+        for line in block.splitlines()
+        if ":" in line and not line.strip().startswith(("/*", "*", "."))
+    }
+    for forbidden in ("background", "background-color", "color", "--pill-bg", "--pill-text"):
+        assert forbidden not in declarations, f".is-active must not set {forbidden}"
+
+    # Hover must not repaint the semantic background either.
+    hover_anchor = ".planning-bulk-results .planning-bulk-results__pill:hover {"
+    hover = css[css.index(hover_anchor):css.index("}", css.index(hover_anchor))]
+    assert "background:" not in hover
+
+
+def test_safe_no_rewrite_status_is_visibly_blue_not_neutral_grey():
+    """Safe / no rewrite is an intentional cool blue in both themes - neither
+    success green, failure red, nor near-grey."""
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    anchor = ".planning-bulk-results .planning-bulk-results__badge.is-neutral {"
+    block = css[css.index(anchor):css.index("}", css.index(anchor))]
+    for token in ("--bulk-neutral-text", "--bulk-neutral-bg", "--bulk-neutral-border"):
+        assert token in block
+
+    for selector in (".planning-bulk-results {", 'html[data-theme="light"] .planning-bulk-results {'):
+        variables = _bulk_theme_vars(css, selector)
+        border = variables["--bulk-neutral-border"].strip()
+        marker = variables["--bulk-neutral-marker"].strip()
+        # Blue channel must dominate red and green for the border and dot.
+        for name, colour in (("border", border), ("marker", marker)):
+            assert colour.startswith("#"), f"{selector} {name} is not a hex colour"
+            r, g, b = (int(colour[i:i + 2], 16) for i in (1, 3, 5))
+            assert b > r + 40 and b > g + 20, f"{selector} neutral {name} is not blue enough"
+            # Not a grey: channels must not be near-equal.
+            assert max(r, g, b) - min(r, g, b) > 60, f"{selector} neutral {name} reads as grey"
+
+
+def test_primary_rerun_action_does_not_reuse_the_filter_count_colour():
+    """The CTA sits on deep indigo and needs white text; it must not share the
+    filter chip's near-black variable."""
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    start = css.index(".planning-bulk-results .planning-bulk-results__primary {")
+    block = css[start:css.index("}", start)]
+    assert "--bulk-primary-text" in block
+    assert "--bulk-active-count-text" not in block
+    for selector in (".planning-bulk-results {", 'html[data-theme="light"] .planning-bulk-results {'):
+        variables = _bulk_theme_vars(css, selector)
+        assert _contrast(variables["--bulk-primary-text"], variables["--bulk-primary-bg"]) >= 4.5

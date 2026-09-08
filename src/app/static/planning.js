@@ -55,6 +55,10 @@ let bulkGenerateSuggestionsState = {
   reviewAction: "",
   winnerBucket: "",
   preferenceId: "",
+  // "initial" keeps the existing first-run copy/CTA; "rerun" reuses the very
+  // same overlay for a scoped re-run from the results workspace.
+  mode: "initial",
+  rerunIdentities: [],
 };
 
 const PLANNING_TABLE_LAST_RESPONSE_STORAGE_KEY = "planningTableLastResponse_v4";
@@ -1703,13 +1707,278 @@ function normalizeBulkGenerateSuggestionsCount(value) {
   return parsed;
 }
 
+/**
+ * Terminal Bulk Generate history for the CURRENT Live Pipeline run.
+ * Read-only presentation state: it never starts, stops or mutates a run and it
+ * never touches the canonical /planning/bulk-generation/status polling used by
+ * the shared shell guard.
+ */
+let bulkGenerateResultsState = {
+  pipelineRunId: "",
+  loadStatus: "idle",
+  found: false,
+  items: [],
+  latestRunId: "",
+  latestStatus: "",
+  lastFinishedAt: "",
+  processedCount: 0,
+  generatedCount: 0,
+  rerunnableCount: 0,
+  requestToken: 0,
+};
+
+function getPlanningBrandfetchClientId() {
+  const raw = window.__APPLYLENS_PLANNING_CONFIG__ || {};
+  return String(raw.brandfetchClientId || "").trim();
+}
+
+function getPlanningCurrentPipelineRunId(rows = planningTableState.bulkSuggestionRows) {
+  const scopeRows = Array.isArray(rows) ? rows : [];
+  for (const row of scopeRows) {
+    const candidate = String(row?.pipeline_run_id || "").trim();
+    if (candidate) return candidate;
+  }
+  for (const row of planningTableState.rows || []) {
+    const candidate = String(row?.pipeline_run_id || "").trim();
+    if (candidate) return candidate;
+  }
+  return "";
+}
+
+function planningRowIdentityKeys(row) {
+  return [
+    String(row?.job_doc_id || "").trim(),
+    String(row?.job_identity || "").trim(),
+    String(row?.queue_rank || "").trim(),
+  ].filter(Boolean);
+}
+
+/**
+ * Score that actually corresponds to the resume Bulk selected. Never shows the
+ * winner score against a different resume; unknown pairings return null.
+ */
+function planningResumeMatchScore(row, selectedResume) {
+  const resume = normalizeResumeName(selectedResume);
+  if (!row || !resume) return null;
+  if (resume === normalizeResumeName(row.winner_resume)) {
+    if (row.winner_score === null || row.winner_score === undefined || String(row.winner_score).trim() === "") return null;
+    const score = Number(row.winner_score);
+    return Number.isFinite(score) ? score : null;
+  }
+  if (resume === normalizeResumeName(row.runner_up_resume || row.runnerup_resume)) {
+    const rawScore = row.runner_up_score ?? row.runnerup_score;
+    if (rawScore === null || rawScore === undefined || String(rawScore).trim() === "") return null;
+    const score = Number(rawScore);
+    return Number.isFinite(score) ? score : null;
+  }
+  return null;
+}
+
+/** Join persisted Bulk history to current Planning rows on stable identity. */
+function mergeBulkResultItems(items, rows = planningTableState.bulkSuggestionRows) {
+  const byIdentity = new Map();
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    planningRowIdentityKeys(row).forEach((key) => {
+      if (!byIdentity.has(key)) byIdentity.set(key, row);
+    });
+  });
+  return (Array.isArray(items) ? items : []).map((item) => {
+    const keys = [
+      String(item.job_doc_id || "").trim(),
+      String(item.job_identity || "").trim(),
+      String(item.queue_rank || "").trim(),
+    ].filter(Boolean);
+    let row = null;
+    for (const key of keys) {
+      if (byIdentity.has(key)) {
+        row = byIdentity.get(key);
+        break;
+      }
+    }
+    return {
+      ...item,
+      job_title: String(row?.job_title || "").trim(),
+      job_company: String(row?.job_company || "").trim(),
+      job_location: String(row?.job_location || "").trim(),
+      company_domain: String(row?.company_domain || row?.company_website || "").trim(),
+      winner_resume: normalizeResumeName(row?.winner_resume),
+      winner_score: row?.winner_score ?? null,
+      runner_up_resume: normalizeResumeName(row?.runner_up_resume || row?.runnerup_resume),
+      runner_up_score: row?.runner_up_score ?? row?.runnerup_score ?? null,
+      match_score: planningResumeMatchScore(row, item.selected_resume),
+    };
+  });
+}
+
+/**
+ * Company -> employer domain resolution for the results workspace logos.
+ * Page-lifetime in-memory only: never written to localStorage, the database, or
+ * any repository asset, and never issued for the whole Planning job set at page
+ * load. One Brand Search request per unresolved company, reused across every
+ * duplicate of that company.
+ */
+const planningCompanyLogoDomains = new Map();
+
+function normalizePlanningCompanyName(value) {
+  // Whitespace is removed entirely so an ATS board slug and a spaced brand name
+  // collapse to the same identity: "andurilindustries" == "Anduril Industries".
+  // Still an exact comparison - no fuzzy/similarity matching.
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[.,]/g, " ")
+    .replace(/\b(inc|llc|ltd|corp|corporation|co|gmbh|plc|sa|bv)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+}
+
+async function resolvePlanningCompanyLogoDomain(company, clientId) {
+  const normalized = normalizePlanningCompanyName(company);
+  if (!normalized || !clientId) return "";
+  if (planningCompanyLogoDomains.has(normalized)) {
+    return planningCompanyLogoDomains.get(normalized);
+  }
+  const pending = (async () => {
+    try {
+      const response = await fetch(
+        `https://api.brandfetch.io/v2/search/${encodeURIComponent(company)}?c=${encodeURIComponent(clientId)}`
+      );
+      if (!response.ok) return "";
+      const payload = await response.json();
+      const results = Array.isArray(payload) ? payload : [];
+      // Deterministic: accept only an unambiguous exact normalized-name match.
+      // A wrong employer logo is worse than a lettermark, so anything ambiguous
+      // deliberately falls back.
+      const named = results.filter(
+        (entry) =>
+          normalizePlanningCompanyName(entry?.name) === normalized
+          && String(entry?.domain || "").trim()
+      );
+      // Exactly one Brandfetch-verified brand with this exact normalized name
+      // is trustworthy. Zero or several -> lettermark, because a wrong employer
+      // logo is worse than no logo.
+      const verified = named.filter((entry) => entry?.verified === true);
+      if (verified.length === 1) return String(verified[0].domain || "").trim();
+      if (named.length === 1) return String(named[0].domain || "").trim();
+      return "";
+    } catch {
+      return "";
+    }
+  })();
+  planningCompanyLogoDomains.set(normalized, pending);
+  return pending;
+}
+
+/** Resolve only the companies actually present in the results, once each. */
+async function resolveBulkResultCompanyLogos() {
+  const clientId = getPlanningBrandfetchClientId();
+  if (!clientId) return;
+  const items = bulkGenerateResultsState.items || [];
+  const pendingCompanies = new Map();
+  items.forEach((item) => {
+    if (String(item.company_domain || "").trim()) return;
+    const company = String(item.job_company || "").trim();
+    const normalized = normalizePlanningCompanyName(company);
+    if (!normalized || pendingCompanies.has(normalized)) return;
+    pendingCompanies.set(normalized, company);
+  });
+  if (!pendingCompanies.size) return;
+  const resolved = new Map();
+  await Promise.all(
+    Array.from(pendingCompanies.entries()).map(async ([normalized, company]) => {
+      resolved.set(normalized, await resolvePlanningCompanyLogoDomain(company, clientId));
+    })
+  );
+  let changed = false;
+  bulkGenerateResultsState.items = items.map((item) => {
+    if (String(item.company_domain || "").trim()) return item;
+    const domain = resolved.get(normalizePlanningCompanyName(item.job_company)) || "";
+    if (!domain) return item;
+    changed = true;
+    return { ...item, company_domain: domain };
+  });
+  if (changed) publishPlanningWorklistState();
+}
+
+function resetBulkGenerateResultsState() {
+  bulkGenerateResultsState = {
+    ...bulkGenerateResultsState,
+    pipelineRunId: "",
+    loadStatus: "idle",
+    found: false,
+    items: [],
+    latestRunId: "",
+    latestStatus: "",
+    lastFinishedAt: "",
+    processedCount: 0,
+    generatedCount: 0,
+    rerunnableCount: 0,
+  };
+}
+
+async function loadBulkGenerationResults({ force = false } = {}) {
+  const pipelineRunId = getPlanningCurrentPipelineRunId();
+  if (!pipelineRunId) {
+    if (bulkGenerateResultsState.pipelineRunId) {
+      resetBulkGenerateResultsState();
+      publishPlanningWorklistState();
+    }
+    return;
+  }
+  if (!force && bulkGenerateResultsState.pipelineRunId === pipelineRunId
+      && bulkGenerateResultsState.loadStatus === "ready") {
+    return;
+  }
+  const token = bulkGenerateResultsState.requestToken + 1;
+  bulkGenerateResultsState.requestToken = token;
+  bulkGenerateResultsState.loadStatus = "loading";
+  try {
+    const payload = await fetchJson(
+      `/planning/bulk-generation/results?pipeline_run_id=${encodeURIComponent(pipelineRunId)}`
+    );
+    if (bulkGenerateResultsState.requestToken !== token) return;
+    bulkGenerateResultsState = {
+      ...bulkGenerateResultsState,
+      pipelineRunId,
+      loadStatus: "ready",
+      found: Boolean(payload?.found),
+      items: mergeBulkResultItems(payload?.items || []),
+      latestRunId: String(payload?.latest_run_id || ""),
+      latestStatus: String(payload?.latest_status || ""),
+      lastFinishedAt: String(payload?.latest_finished_at || ""),
+      processedCount: Number(payload?.processed_count || 0),
+      generatedCount: Number(payload?.generated_count || 0),
+      rerunnableCount: Number(payload?.rerunnable_count || 0),
+    };
+  } catch (err) {
+    if (bulkGenerateResultsState.requestToken !== token) return;
+    // Results are an enhancement: a failure must never break Planning.
+    bulkGenerateResultsState = {
+      ...bulkGenerateResultsState,
+      pipelineRunId,
+      loadStatus: "error",
+      found: false,
+      items: [],
+    };
+  }
+  publishPlanningWorklistState();
+}
+
 function getPlanningBulkSuggestionSelection(
   rows = planningTableState.bulkSuggestionRows,
   config = bulkGenerateSuggestionsState
 ) {
-  const eligibleRows = (Array.isArray(rows) ? rows : []).filter(
+  const generatable = (Array.isArray(rows) ? rows : []).filter(
     (row) => resolvePlanningWorklistAction(row).kind === "generate_suggestions"
   );
+  // In rerun mode the jobs chosen in the results workspace are the MAXIMUM
+  // scope. Filters below can narrow it; nothing can widen it.
+  const rerunScope = String(config.mode || "initial") === "rerun"
+    ? new Set((config.rerunIdentities || []).map((value) => String(value || "").trim()).filter(Boolean))
+    : null;
+  const eligibleRows = rerunScope
+    ? generatable.filter((row) =>
+        planningRowIdentityKeys(row).some((key) => rerunScope.has(key)))
+    : generatable;
   const reviewAction = String(config.reviewAction || "").trim().toUpperCase();
   const winnerBucket = String(config.winnerBucket || "").trim().toLowerCase();
   const preferenceId = String(config.preferenceId || "").trim();
@@ -1773,6 +2042,22 @@ function buildPlanningWorklistBridgeState() {
         status: String(item.status || "pending"),
         outcome: String(item.outcome || ""),
       })),
+      // Terminal Bulk history for the current Live Pipeline job set. Both
+      // pipeline ids travel so presentation can invalidate a stale result set
+      // without deleting any persisted history.
+      currentPipelineRunId: getPlanningCurrentPipelineRunId(),
+      resultPipelineRunId: String(bulkGenerateResultsState.pipelineRunId || ""),
+      hasResults: Boolean(bulkGenerateResultsState.found)
+        && bulkGenerateResultsState.items.length > 0,
+      latestRunId: String(bulkGenerateResultsState.latestRunId || ""),
+      latestStatus: String(bulkGenerateResultsState.latestStatus || ""),
+      lastFinishedAt: String(bulkGenerateResultsState.lastFinishedAt || ""),
+      processedCount: Number(bulkGenerateResultsState.processedCount || 0),
+      generatedCount: Number(bulkGenerateResultsState.generatedCount || 0),
+      rerunnableCount: Number(bulkGenerateResultsState.rerunnableCount || 0),
+      resultLoadStatus: String(bulkGenerateResultsState.loadStatus || "idle"),
+      resultItems: bulkGenerateResultsState.items.map((item) => ({ ...item })),
+      brandfetchClientId: getPlanningBrandfetchClientId(),
     },
   };
 }
@@ -2025,6 +2310,19 @@ function applyPlanningTableResponse(data, { historyMode = "replace" } = {}) {
     contextualRows,
     `Planning detail view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
   );
+
+  // A new Live Pipeline run is a new job-set context: drop the previous result
+  // presentation immediately, then load this pipeline's own Bulk history.
+  // Persisted history for older runs is never deleted or mutated.
+  const activePipelineRunId = getPlanningCurrentPipelineRunId();
+  if (bulkGenerateResultsState.pipelineRunId
+      && bulkGenerateResultsState.pipelineRunId !== activePipelineRunId) {
+    resetBulkGenerateResultsState();
+    bulkGenerateSuggestionsState.mode = "initial";
+    bulkGenerateSuggestionsState.rerunIdentities = [];
+  }
+  // Non-blocking: Planning must render even if Bulk history is unavailable.
+  void loadBulkGenerationResults();
 }
 
 function prefetchPlanningTablePage(pageNumber) {
@@ -13214,10 +13512,15 @@ function renderBulkGenerateSuggestionsOverlay(state, scopeSummary = null) {
 
   if (state === "confirm") {
     const selection = scopeSummary || getPlanningBulkSuggestionSelection();
-    if (badgeEl) badgeEl.textContent = "Bulk suggestion generation";
-    if (titleEl) titleEl.textContent = "Bulk generate suggestions";
+    const isRerun = String(bulkGenerateSuggestionsState.mode || "initial") === "rerun";
+    if (badgeEl) badgeEl.textContent = isRerun ? "Bulk suggestion re-run" : "Bulk suggestion generation";
+    if (titleEl) {
+      titleEl.textContent = isRerun ? "Re-run bulk suggestions" : "Bulk generate suggestions";
+    }
     if (textEl) {
-      textEl.textContent = "Choose which eligible Planning jobs should receive tailoring suggestions.";
+      textEl.textContent = isRerun
+        ? "Review the settings before re-running suggestions for the selected jobs."
+        : "Choose which eligible Planning jobs should receive tailoring suggestions.";
     }
     controlsEl?.classList.remove("hidden");
     syncBulkGenerateSuggestionsControls(selection);
@@ -13236,7 +13539,9 @@ function renderBulkGenerateSuggestionsOverlay(state, scopeSummary = null) {
       secondaryBtn.classList.remove("hidden");
     }
     if (primaryBtn) {
-      primaryBtn.textContent = "Generate suggestions";
+      primaryBtn.textContent = isRerun
+        ? `Re-run selected (${selection.selectedCount})`
+        : "Generate suggestions";
       primaryBtn.disabled = selection.selectedCount === 0;
       primaryBtn.classList.remove("hidden");
     }
@@ -13320,7 +13625,43 @@ function openBulkGenerateSuggestionsConfirmation() {
   if (overlay && !overlay.classList.contains("hidden")) return;
   const scopeSummary = getPlanningBulkSuggestionSummary();
   if (!scopeSummary.eligibleCount) return;
+  bulkGenerateSuggestionsState.mode = "initial";
+  bulkGenerateSuggestionsState.rerunIdentities = [];
   resetBulkGenerateSuggestionsConfiguration(scopeSummary.eligibleCount);
+  renderBulkGenerateSuggestionsPreferenceOptions();
+  renderBulkGenerateSuggestionsOverlay("confirm", getPlanningBulkSuggestionSelection());
+}
+
+/**
+ * Re-run entry point. Reuses the EXISTING settings overlay and the existing
+ * start path; it only narrows the candidate scope to the jobs chosen in the
+ * results workspace. No second settings dialog, no second executor.
+ */
+function openBulkGenerateSuggestionsRerun(scope, jobIdentities) {
+  if (bulkGenerateSuggestionsState.isRunning || generateSuggestionsState.isRunning) return;
+  const overlay = getBulkGenerateSuggestionsOverlay();
+  if (overlay && !overlay.classList.contains("hidden")) return;
+  const identities = (Array.isArray(jobIdentities) ? jobIdentities : [])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  if (!identities.length) return;
+  bulkGenerateSuggestionsState.mode = "rerun";
+  bulkGenerateSuggestionsState.rerunIdentities = identities;
+  const scoped = getPlanningBulkSuggestionSelection(planningTableState.bulkSuggestionRows, {
+    ...bulkGenerateSuggestionsState,
+    requestedCount: identities.length,
+    reviewAction: "",
+    winnerBucket: "",
+    preferenceId: "",
+  });
+  if (!scoped.eligibleCount) {
+    bulkGenerateSuggestionsState.mode = "initial";
+    bulkGenerateSuggestionsState.rerunIdentities = [];
+    return;
+  }
+  resetBulkGenerateSuggestionsConfiguration(scoped.eligibleCount);
+  bulkGenerateSuggestionsState.mode = "rerun";
+  bulkGenerateSuggestionsState.rerunIdentities = identities;
   renderBulkGenerateSuggestionsPreferenceOptions();
   renderBulkGenerateSuggestionsOverlay("confirm", getPlanningBulkSuggestionSelection());
 }
@@ -14205,6 +14546,16 @@ function attachPlanningHandlers() {
       }
       if (action.type === "bulk_stop_after_current") {
         await stopBulkGenerateSuggestionsAfterCurrent();
+        return;
+      }
+      if (action.type === "bulk_view_results") {
+        await loadBulkGenerationResults({ force: true });
+        // Logos belong to the modal: resolve lazily on open, never at page load.
+        void resolveBulkResultCompanyLogos();
+        return;
+      }
+      if (action.type === "bulk_rerun") {
+        openBulkGenerateSuggestionsRerun(action.scope, action.jobIdentities);
         return;
       }
       if (action.type !== "next_step" || !action.row) return;

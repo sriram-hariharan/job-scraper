@@ -980,6 +980,7 @@ _BULK_SAFE_GET_PATHS = frozenset({
     "/profile/admin/agentic-operations/overview", "/profile/pipeline-runs",
     "/profile/saved-scans/data", "/auth/session-config", "/auth/me", "/logout",
     "/planning/bulk-generation/status",
+    "/planning/bulk-generation/results",
     "/api/agent-feedback", "/api/agent-feedback/summary", "/api/agent-feedback/export",
 })
 
@@ -3971,6 +3972,22 @@ def planning_bulk_generation_status(http_request: Request):
     try:
         return bulk_generation_service.get_bulk_generation_status(
             owner_user_id=_require_auth_owner_user_id(http_request)
+        )
+    except bulk_generation_service.BulkGenerationError as exc:
+        return _bulk_generation_error_response(exc)
+
+
+@app.get("/planning/bulk-generation/results")
+def planning_bulk_generation_results(http_request: Request, pipeline_run_id: str = ""):
+    """Owner-scoped, read-only Bulk Generate history for one pipeline run.
+
+    Kept separate from /status so the canonical polling and active-run guard
+    payload is not widened with an unrelated history body.
+    """
+    try:
+        return bulk_generation_service.get_bulk_generation_pipeline_results(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            pipeline_run_id=pipeline_run_id,
         )
     except bulk_generation_service.BulkGenerationError as exc:
         return _bulk_generation_error_response(exc)

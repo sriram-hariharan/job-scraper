@@ -34,7 +34,7 @@ def test_planning_route_mounts_the_scoped_react_islands_and_canonical_bundle() -
     assert '/static/planning_dashboard.css?v=phase133g_s1_r1' in html
     assert '/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1' in html
     assert '/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1' in html
-    assert '/static/planning.js?v=bulk_generate_suggestions_r2' in html
+    assert '/static/planning.js?v=bulk_generate_results_r1' in html
 
 
 def test_executive_and_planning_import_the_same_real_table_primitives() -> None:

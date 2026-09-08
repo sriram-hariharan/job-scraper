@@ -6,7 +6,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { CheckCircle2, ClipboardList, FileText, RotateCcw, Sparkles, UserRoundCheck, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, ClipboardList, FileText, RotateCcw, Search, Sparkles, UserRoundCheck, X } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { SharedFilterSelect, type SharedFilterOption } from "./filter/FilterSelect";
 import {
@@ -112,7 +112,56 @@ export type PlanningWorklistState = {
     stopRequested?: boolean;
     verified?: boolean;
     items?: { label: string; status: string; outcome?: string }[];
+    /**
+     * Terminal Bulk result history for the CURRENT Live Pipeline run. The
+     * bridge publishes both pipeline ids so presentation can tell a result
+     * that belongs to this job set from a stale one without guessing.
+     */
+    currentPipelineRunId?: string;
+    resultPipelineRunId?: string;
+    hasResults?: boolean;
+    latestRunId?: string;
+    latestStatus?: string;
+    lastFinishedAt?: string;
+    processedCount?: number;
+    generatedCount?: number;
+    rerunnableCount?: number;
+    resultLoadStatus?: "idle" | "loading" | "ready" | "error";
+    resultItems?: BulkResultItem[];
+    brandfetchClientId?: string;
   };
+};
+
+/**
+ * One job's latest Bulk Generate attempt for the current pipeline run, already
+ * joined by the bridge against current Planning row metadata on stable
+ * identity. Bulk history owns the attempt fields; Planning owns the job fields.
+ */
+export type BulkResultItem = {
+  job_identity: string;
+  job_doc_id?: string;
+  queue_rank?: string;
+  job_label?: string;
+  selected_resume?: string;
+  status?: string;
+  outcome?: string;
+  error_category?: string;
+  error_message?: string;
+  finished_at?: string;
+  attempt_count?: number;
+  rerunnable?: boolean;
+  /** Merged from the current Planning row. */
+  job_title?: string;
+  job_company?: string;
+  job_location?: string;
+  company_domain?: string;
+  winner_resume?: string;
+  winner_score?: number | string | null;
+  runner_up_resume?: string;
+  runnerup_resume?: string;
+  runner_up_score?: number | string | null;
+  runnerup_score?: number | string | null;
+  match_score?: number | string | null;
 };
 
 export type PlanningWorklistAction =
@@ -124,6 +173,8 @@ export type PlanningWorklistAction =
   | { type: "clear_filters" }
   | { type: "bulk_generate_suggestions" }
   | { type: "bulk_stop_after_current" }
+  | { type: "bulk_view_results" }
+  | { type: "bulk_rerun"; scope: "selected" | "eligible"; jobIdentities: string[] }
   | { type: "next_step"; row: PlanningRow };
 
 export const DEFAULT_PLANNING_STATE: PlanningWorklistState = {
@@ -173,6 +224,540 @@ function bulkItemPresentation(status: string) {
   return BULK_ITEM_PRESENTATION[status] || BULK_ITEM_PRESENTATION.pending;
 }
 
+/* ------------------------------------------------------------------ *
+ * Bulk generation results + re-run center
+ *
+ * Composition references (visual/interaction only, no dependencies added):
+ *  - 21st.dev "Contacts Table With Modal" by Isaiah — table workspace, search,
+ *    filter pills, row composition, scroll treatment.
+ *  - 21st.dev "Leads Data Table" by Isaiah — checkbox selection, selected-row
+ *    highlight, sticky bulk action bar, selected-count feedback.
+ *  - 21st.dev "Dialog" (ReUI) by Sean Hello — large dialog shell, header
+ *    hierarchy, scroll boundaries, close + focus treatment, footer separation.
+ * ------------------------------------------------------------------ */
+
+/** User-facing status vocabulary. Never collapses distinct outcomes. */
+const BULK_RESULT_PRESENTATION: Record<string, { label: string; tone: string }> = {
+  generated: { label: "Ready rewrites", tone: "ready" },
+  no_safe_rewrites: { label: "Safe / no rewrite", tone: "neutral" },
+  empty: { label: "No usable rewrite", tone: "info" },
+  failed: { label: "Failed", tone: "attention" },
+};
+
+export function bulkResultPresentation(item: BulkResultItem): { label: string; tone: string } {
+  const outcome = String(item.outcome || "").trim();
+  if (String(item.status || "").trim() === "needs_attention" && outcome !== "failed") {
+    return { label: "Needs attention", tone: "attention" };
+  }
+  return BULK_RESULT_PRESENTATION[outcome] || { label: "Needs attention", tone: "attention" };
+}
+
+export function normalizeCompanyName(value: string): string {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[.,]/g, " ")
+    .replace(/\b(inc|llc|ltd|corp|corporation|co|gmbh|plc|sa|bv)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/** "Today 7:42 PM" / "Sep 7, 11:08 PM". Never manufactured. */
+export function formatBulkTimestamp(value?: string): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "—";
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  const time = parsed.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const today = new Date();
+  const sameDay =
+    parsed.getFullYear() === today.getFullYear() &&
+    parsed.getMonth() === today.getMonth() &&
+    parsed.getDate() === today.getDate();
+  if (sameDay) return `Today ${time}`;
+  const day = parsed.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `${day}, ${time}`;
+}
+
+function normalizeBulkResumeName(value: unknown): string {
+  return String(value || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .split("/")
+    .pop()
+    ?.trim() || "";
+}
+
+function numericBulkScore(value: unknown): number | null {
+  if (value === null || value === undefined || String(value).trim() === "") return null;
+  const score = Number(value);
+  return Number.isFinite(score) ? score : null;
+}
+
+/** Score paired with the resume Bulk actually selected; never a different candidate's score. */
+export function bulkResultMatchScore(item: BulkResultItem): number | null {
+  const selected = normalizeBulkResumeName(item.selected_resume);
+  if (!selected) return null;
+
+  const winner = normalizeBulkResumeName(item.winner_resume);
+  if (winner && selected === winner) return numericBulkScore(item.winner_score);
+
+  const runnerUp = normalizeBulkResumeName(item.runner_up_resume || item.runnerup_resume);
+  if (runnerUp && selected === runnerUp) {
+    return numericBulkScore(item.runner_up_score ?? item.runnerup_score);
+  }
+
+  // A score without a matching candidate name is not enough evidence to pair
+  // it with the selected resume.
+  return null;
+}
+
+export function formatBulkMatchScore(item: BulkResultItem): string {
+  const score = bulkResultMatchScore(item);
+  if (score === null) return "—";
+  const percent = Math.abs(score) <= 1 ? score * 100 : score;
+  // Two decimals matches the Planning worklist's own match-score convention
+  // (SharedMatchMeter formats with toFixed(2)).
+  return `${percent.toFixed(2)}%`;
+}
+
+function lettermark(company: string): string {
+  const clean = String(company || "").trim();
+  if (!clean) return "?";
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return `${words[0][0]}${words[1][0]}`.toUpperCase();
+  return clean.slice(0, 2).toUpperCase();
+}
+
+/**
+ * Company logo presentation only. The React island performs no network calls:
+ * planning.js owns every request, resolves company -> employer domain once per
+ * company for the page lifetime, and publishes `company_domain` on each result
+ * item. Here we only render the Brandfetch CDN image for an already-resolved
+ * domain, and fall back to a deterministic local lettermark otherwise, so the
+ * layout never breaks when Brandfetch is unavailable or unconfigured.
+ */
+export function CompanyLogo({
+  company,
+  domain,
+  clientId,
+}: {
+  company: string;
+  domain?: string;
+  clientId?: string;
+}) {
+  const resolved = String(domain || "").trim();
+  const client = String(clientId || "").trim();
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => setFailed(false), [resolved, client]);
+
+  const showImage = Boolean(resolved) && Boolean(client) && !failed;
+  return (
+    <span className="planning-bulk-results__logo" aria-hidden="true">
+      {showImage ? (
+        <img
+          src={`https://cdn.brandfetch.io/domain/${encodeURIComponent(resolved)}/w/64/h/64/fallback/lettermark/type/icon?c=${encodeURIComponent(client)}`}
+          alt=""
+          width={32}
+          height={32}
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <span className="planning-bulk-results__lettermark">{lettermark(company)}</span>
+      )}
+    </span>
+  );
+}
+
+type BulkResultFilterId = "all" | "generated" | "no_safe_rewrites" | "attention";
+
+/** Semantic tone; drives each pill's own default background in both themes. */
+export type BulkResultFilterTone = "all" | "generated" | "safe" | "attention";
+
+const BULK_RESULT_FILTERS: {
+  id: BulkResultFilterId;
+  label: string;
+  tone: BulkResultFilterTone;
+  match: (item: BulkResultItem) => boolean;
+}[] = [
+  { id: "all", label: "All", tone: "all", match: () => true },
+  {
+    id: "generated",
+    label: "Generated / Ready",
+    tone: "generated",
+    match: (item) => item.outcome === "generated",
+  },
+  {
+    id: "no_safe_rewrites",
+    label: "Safe / no rewrite",
+    tone: "safe",
+    match: (item) => item.outcome === "no_safe_rewrites",
+  },
+  {
+    id: "attention",
+    label: "Failed / attention",
+    tone: "attention",
+    match: (item) => item.outcome === "failed" || item.status === "needs_attention",
+  },
+];
+
+/** Large Bulk generation results workspace. Presentation only. */
+export function BulkResultsDialog({
+  bulk,
+  onClose,
+  onRerun,
+}: {
+  bulk: PlanningWorklistState["bulkSuggestions"];
+  onClose: () => void;
+  onRerun: (scope: "selected" | "eligible", jobIdentities: string[]) => void;
+}) {
+  const titleId = useId();
+  const descriptionId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [query, setQuery] = useState("");
+  const [filterId, setFilterId] = useState<BulkResultFilterId>("all");
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const items = useMemo(
+    () => (Array.isArray(bulk.resultItems) ? bulk.resultItems : []),
+    [bulk.resultItems],
+  );
+  const datasetKey = `${bulk.resultPipelineRunId || ""}|${items.length}|${bulk.latestRunId || ""}`;
+  // Selection survives harmless re-renders; it resets only when the pipeline or
+  // the result dataset materially changes.
+  useEffect(() => {
+    setSelected([]);
+    setQuery("");
+    setFilterId("all");
+  }, [datasetKey]);
+
+  useEffect(() => {
+    const focusTarget = panelRef.current?.querySelector<HTMLElement>("[data-autofocus]");
+    (focusTarget || panelRef.current)?.focus();
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !panelRef.current) return;
+      const focusables = Array.from(
+        panelRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), [href], select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((node) => node.offsetParent !== null || node === document.activeElement);
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [onClose]);
+
+  const searched = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return items;
+    return items.filter((item) => {
+      const title = String(item.job_title || item.job_label || "").toLowerCase();
+      const company = String(item.job_company || "").toLowerCase();
+      return title.includes(needle) || company.includes(needle);
+    });
+  }, [items, query]);
+
+  const activeFilter = BULK_RESULT_FILTERS.find((entry) => entry.id === filterId) || BULK_RESULT_FILTERS[0];
+  const visible = useMemo(() => searched.filter(activeFilter.match), [searched, activeFilter]);
+  const visibleEligible = useMemo(() => visible.filter((item) => item.rerunnable), [visible]);
+  const allEligible = useMemo(() => items.filter((item) => item.rerunnable), [items]);
+
+  const generatedCount = items.filter((item) => item.outcome === "generated").length;
+  const attentionCount = items.filter(
+    (item) => item.outcome === "failed" || item.status === "needs_attention",
+  ).length;
+
+  const selectedSet = new Set(selected);
+  const selectedVisibleEligible = visibleEligible.filter((item) => selectedSet.has(item.job_identity));
+  const allVisibleEligibleSelected =
+    visibleEligible.length > 0 && selectedVisibleEligible.length === visibleEligible.length;
+
+  const toggleRow = (identity: string) => {
+    setSelected((current) =>
+      current.includes(identity) ? current.filter((value) => value !== identity) : [...current, identity],
+    );
+  };
+
+  const toggleAllEligible = () => {
+    if (allVisibleEligibleSelected) {
+      const visibleIds = new Set(visibleEligible.map((item) => item.job_identity));
+      setSelected((current) => current.filter((value) => !visibleIds.has(value)));
+      return;
+    }
+    setSelected((current) => {
+      const merged = new Set(current);
+      visibleEligible.forEach((item) => merged.add(item.job_identity));
+      return Array.from(merged);
+    });
+  };
+
+  const pipelineLabel = String(bulk.resultPipelineRunId || bulk.currentPipelineRunId || "");
+  const shortPipeline = pipelineLabel.length > 18 ? `${pipelineLabel.slice(0, 17)}…` : pipelineLabel;
+
+  return (
+    <div className="planning-bulk-results__backdrop" role="presentation">
+      <div
+        className="planning-bulk-results"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        ref={panelRef}
+        tabIndex={-1}
+      >
+        <header className="planning-bulk-results__head">
+          <span className="planning-bulk-results__head-icon" aria-hidden="true">
+            <Sparkles size={18} strokeWidth={2} />
+          </span>
+          <div className="planning-bulk-results__head-text">
+            <h2 id={titleId}>Bulk generation results</h2>
+            <p id={descriptionId}>
+              Review completed jobs, search the current job set, and choose what to re-run.
+            </p>
+          </div>
+          <div className="planning-bulk-results__head-meta">
+            <span>{`Last run ${formatBulkTimestamp(bulk.lastFinishedAt)}`}</span>
+            {pipelineLabel ? (
+              <span title={pipelineLabel}>{`Live Pipeline: ${shortPipeline}`}</span>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="planning-bulk-results__close"
+            aria-label="Close bulk generation results"
+            onClick={onClose}
+          >
+            <X size={22} strokeWidth={2} aria-hidden="true" />
+          </button>
+        </header>
+
+        <section className="planning-bulk-results__cards" aria-label="Bulk generation summary">
+          <article className="planning-bulk-results__card is-success">
+            <span className="planning-bulk-results__card-icon" aria-hidden="true">
+              <CheckCircle2 size={18} strokeWidth={2.2} />
+            </span>
+            <div className="planning-bulk-results__card-body">
+              <p className="planning-bulk-results__card-metric">
+                <strong>{generatedCount}</strong>
+                <span className="planning-bulk-results__card-label">Generated</span>
+              </p>
+              <small>Jobs with ready rewrites</small>
+            </div>
+          </article>
+          <article className="planning-bulk-results__card is-attention">
+            <span className="planning-bulk-results__card-icon" aria-hidden="true">
+              <AlertCircle size={18} strokeWidth={2.2} />
+            </span>
+            <div className="planning-bulk-results__card-body">
+              <p className="planning-bulk-results__card-metric">
+                <strong>{attentionCount}</strong>
+                <span className="planning-bulk-results__card-label">Failed</span>
+              </p>
+              <small>Could not generate suggestions</small>
+            </div>
+          </article>
+          <article className="planning-bulk-results__card is-rerun">
+            <span className="planning-bulk-results__card-icon" aria-hidden="true">
+              <RotateCcw size={18} strokeWidth={2.2} />
+            </span>
+            <div className="planning-bulk-results__card-body">
+              <p className="planning-bulk-results__card-metric">
+                <strong>{allEligible.length}</strong>
+                <span className="planning-bulk-results__card-label">Eligible to re-run</span>
+              </p>
+              <small>Can be re-run with current settings</small>
+            </div>
+          </article>
+        </section>
+
+        <section className="planning-bulk-results__controls">
+          <label className="planning-bulk-results__search">
+            <Search size={14} strokeWidth={2} aria-hidden="true" />
+            <input
+              type="search"
+              className="planning-bulk-results__search-input"
+              data-autofocus
+              value={query}
+              placeholder="Search jobs or companies…"
+              aria-label="Search jobs or companies"
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          <div className="planning-bulk-results__pills" role="group" aria-label="Filter results">
+            {BULK_RESULT_FILTERS.map((entry) => {
+              const count = searched.filter(entry.match).length;
+              return (
+                <button
+                  key={entry.id}
+                  type="button"
+                  className={`planning-bulk-results__pill is-tone-${entry.tone}${entry.id === filterId ? " is-active" : ""}`}
+                  aria-pressed={entry.id === filterId}
+                  onClick={() => setFilterId(entry.id)}
+                >
+                  {entry.label}
+                  <small>{count}</small>
+                </button>
+              );
+            })}
+          </div>
+          <label className="planning-bulk-results__select-all">
+            <input
+              type="checkbox"
+              className="planning-bulk-results__checkbox"
+              checked={allVisibleEligibleSelected}
+              disabled={visibleEligible.length === 0}
+              onChange={toggleAllEligible}
+            />
+            <span>Select all eligible</span>
+          </label>
+        </section>
+
+        <div className="planning-bulk-results__table-wrap">
+          <table className="planning-bulk-results__table">
+            <thead>
+              <tr>
+                <th scope="col" className="planning-bulk-results__col-check">
+                  <span className="sr-only">Select</span>
+                </th>
+                <th scope="col">Job</th>
+                <th scope="col">Company</th>
+                <th scope="col">Status</th>
+                <th scope="col">Last generated</th>
+                <th scope="col">Resume / Match</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="planning-bulk-results__empty">
+                    No jobs match the current search or filter.
+                  </td>
+                </tr>
+              ) : (
+                visible.map((item) => {
+                  const presentation = bulkResultPresentation(item);
+                  const isSelected = selectedSet.has(item.job_identity);
+                  const canRerun = Boolean(item.rerunnable);
+                  const score = formatBulkMatchScore(item);
+                  const resume = String(item.selected_resume || "").trim();
+                  const company = String(item.job_company || "").trim();
+                  return (
+                    <tr
+                      key={item.job_identity}
+                      className={`planning-bulk-results__row${isSelected ? " is-selected" : ""}`}
+                    >
+                      <td className="planning-bulk-results__col-check">
+                        <input
+                          type="checkbox"
+                          className="planning-bulk-results__checkbox"
+                          checked={isSelected}
+                          disabled={!canRerun}
+                          aria-label={`Select ${item.job_title || item.job_label || item.job_identity}`}
+                          title={canRerun ? undefined : "This job is not eligible to re-run."}
+                          onChange={() => toggleRow(item.job_identity)}
+                        />
+                      </td>
+                      <td>
+                        <span className="planning-bulk-results__job">
+                          {item.job_title || item.job_label || item.job_identity}
+                        </span>
+                        {item.job_location ? <small>{item.job_location}</small> : null}
+                      </td>
+                      <td>
+                        <span className="planning-bulk-results__company">
+                          <CompanyLogo
+                            company={company}
+                            domain={item.company_domain}
+                            clientId={bulk.brandfetchClientId}
+                          />
+                          <span>{company || "—"}</span>
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`planning-bulk-results__badge is-${presentation.tone}`}>
+                          {presentation.label}
+                        </span>
+                      </td>
+                      <td>{formatBulkTimestamp(item.finished_at)}</td>
+                      <td>
+                        <span className="planning-bulk-results__resume">
+                          <FileText size={13} strokeWidth={2} aria-hidden="true" />
+                          <span
+                            className="planning-bulk-results__resume-name"
+                            title={resume || undefined}
+                          >
+                            {resume || "—"}
+                          </span>
+                          <span aria-hidden="true">·</span>
+                          <span className="planning-bulk-results__resume-score">{score}</span>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <footer className="planning-bulk-results__footer">
+          <div className="planning-bulk-results__footer-meta">
+            <strong>{`${selected.length} job${selected.length === 1 ? "" : "s"} selected`}</strong>
+            <span>{`${items.length} job${items.length === 1 ? "" : "s"} total`}</span>
+            <span className="planning-bulk-results__divider" aria-hidden="true" />
+            <button
+              type="button"
+              className="planning-bulk-results__clear"
+              disabled={selected.length === 0}
+              onClick={() => setSelected([])}
+            >
+              Clear selection
+            </button>
+          </div>
+          <div className="planning-bulk-results__footer-actions">
+            <button
+              type="button"
+              className="planning-bulk-results__secondary"
+              disabled={allEligible.length === 0}
+              onClick={() => onRerun("eligible", allEligible.map((item) => item.job_identity))}
+            >
+              <RotateCcw size={14} strokeWidth={2} aria-hidden="true" />
+              {`Re-run all eligible (${allEligible.length})`}
+            </button>
+            <button
+              type="button"
+              className="planning-bulk-results__primary"
+              disabled={selected.length === 0}
+              onClick={() => onRerun("selected", selected)}
+            >
+              <Sparkles size={14} strokeWidth={2} aria-hidden="true" />
+              {`Re-run selected (${selected.length})`}
+            </button>
+          </div>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 /**
  * One Planning Bulk control. Idle it starts a batch; while a run is active the
  * same control morphs into a progress button that opens the anchored details
@@ -183,12 +768,17 @@ function PlanningBulkGenerateControl({
   bulk,
   onStart,
   onStop,
+  onViewResults,
+  onRerun,
 }: {
   bulk: PlanningWorklistState["bulkSuggestions"];
   onStart: () => void;
   onStop: () => void;
+  onViewResults: () => void;
+  onRerun: (scope: "selected" | "eligible", jobIdentities: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [resultsOpen, setResultsOpen] = useState(false);
   const [hintVisible, setHintVisible] = useState(false);
   const [attentionOnly, setAttentionOnly] = useState(false);
   const rootRef = useRef<HTMLSpanElement>(null);
@@ -196,10 +786,30 @@ function PlanningBulkGenerateControl({
   const panelId = useId();
   const hintId = useId();
   const running = Boolean(bulk.isRunning);
+  // A terminal result only governs this control while it belongs to the SAME
+  // Live Pipeline job set. A new pipeline run reverts to the fresh state
+  // without deleting any persisted history.
+  const currentPipelineRunId = String(bulk.currentPipelineRunId || "").trim();
+  const resultPipelineRunId = String(bulk.resultPipelineRunId || "").trim();
+  const resultsMatchPipeline =
+    Boolean(bulk.hasResults) &&
+    currentPipelineRunId.length > 0 &&
+    currentPipelineRunId === resultPipelineRunId;
+  const showResults = !running && resultsMatchPipeline;
+  const processedCount = Number(bulk.processedCount || 0);
 
   useEffect(() => {
     if (!running && open) setOpen(false);
   }, [running, open]);
+
+  // Close a stale results workspace the moment its pipeline stops matching.
+  useEffect(() => {
+    if (!resultsMatchPipeline && resultsOpen) setResultsOpen(false);
+  }, [resultsMatchPipeline, resultsOpen]);
+
+  useEffect(() => {
+    if (running && resultsOpen) setResultsOpen(false);
+  }, [running, resultsOpen]);
 
   useEffect(() => {
     if (!open) return;
@@ -238,6 +848,7 @@ function PlanningBulkGenerateControl({
     ? items.filter((item) => item.status === "needs_attention")
     : items;
 
+  const resultsTitle = `Review the completed Bulk Generate run for this Live Pipeline (${processedCount} processed).`;
   const idleTitle = bulk.eligibleCount > 0
     ? `Generate suggestions for ${bulk.eligibleCount} eligible Planning job${bulk.eligibleCount === 1 ? "" : "s"}.`
     : "No Planning jobs currently need suggestions.";
@@ -254,8 +865,8 @@ function PlanningBulkGenerateControl({
         ref={triggerRef}
         type="button"
         className={`planning-react-bulk-generate${running ? " is-running" : ""}`}
-        disabled={!running && bulk.eligibleCount <= 0}
-        title={running ? undefined : idleTitle}
+        disabled={!running && !showResults && bulk.eligibleCount <= 0}
+        title={running ? undefined : showResults ? resultsTitle : idleTitle}
         aria-describedby={running ? hintId : undefined}
         aria-expanded={running ? open : undefined}
         aria-controls={running && open ? panelId : undefined}
@@ -265,16 +876,35 @@ function PlanningBulkGenerateControl({
         onBlur={running ? () => setHintVisible(false) : undefined}
         onClick={() => {
           if (running) setOpen((value) => !value);
-          else onStart();
+          else if (showResults) {
+            setResultsOpen(true);
+            onViewResults();
+          } else onStart();
         }}
       >
         <span className="planning-react-bulk-generate__icon" aria-hidden="true">
-          {running ? <span className="planning-bulk-spinner" /> : <Sparkles size={15} strokeWidth={2} />}
+          {running ? (
+            <span className="planning-bulk-spinner" />
+          ) : showResults ? (
+            <ClipboardList size={15} strokeWidth={2} />
+          ) : (
+            <Sparkles size={15} strokeWidth={2} />
+          )}
         </span>
         <span className="planning-react-bulk-generate__label">
-          {running ? "Bulk suggestions generating…" : "Bulk generate suggestions"}
+          {running
+            ? "Bulk suggestions generating…"
+            : showResults
+            ? "View bulk results"
+            : "Bulk generate suggestions"}
         </span>
-        <small>{running ? `${completed} / ${total}` : `${bulk.eligibleCount} eligible`}</small>
+        <small>
+          {running
+            ? `${completed} / ${total}`
+            : showResults
+            ? `${processedCount} processed`
+            : `${bulk.eligibleCount} eligible`}
+        </small>
         {running ? (
           <span
             className="planning-bulk-progress"
@@ -296,6 +926,20 @@ function PlanningBulkGenerateControl({
         >
           {PLANNING_BULK_RUN_TOOLTIP}
         </span>
+      ) : null}
+      {resultsOpen && showResults ? (
+        <BulkResultsDialog
+          bulk={bulk}
+          onClose={() => {
+            setResultsOpen(false);
+            triggerRef.current?.focus();
+          }}
+          onRerun={(scope, jobIdentities) => {
+            setResultsOpen(false);
+            triggerRef.current?.focus();
+            onRerun(scope, jobIdentities);
+          }}
+        />
       ) : null}
       {running && open ? (
         <div
@@ -945,6 +1589,10 @@ export function PlanningWorklist({ state }: { state: PlanningWorklistState }) {
           bulk={state.bulkSuggestions}
           onStart={() => publishPlanningAction({ type: "bulk_generate_suggestions" })}
           onStop={() => publishPlanningAction({ type: "bulk_stop_after_current" })}
+          onViewResults={() => publishPlanningAction({ type: "bulk_view_results" })}
+          onRerun={(scope, jobIdentities) =>
+            publishPlanningAction({ type: "bulk_rerun", scope, jobIdentities })
+          }
         />
       )}
       table={table}

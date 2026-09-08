@@ -702,3 +702,313 @@ def test_worker_sequential_and_stop_after_current_semantics_still_hold(monkeypat
     # is recorded as succeeded (not needs_attention) - stop semantics and
     # classification are independent, unchanged concerns.
     assert state["items"][0]["status"] == "succeeded"
+
+
+# --- Bulk results + re-run center: owner-scoped read-only history -------------
+
+
+def _result_row(
+    job_identity,
+    *,
+    run_id="bulk-1",
+    sequence=1,
+    outcome="no_safe_rewrites",
+    status="succeeded",
+    selected_resume="Resume_A.pdf",
+    finished_at="2026-09-07T21:54:09+00:00",
+    attempt_count=1,
+    **extra,
+):
+    row = {
+        "run_id": run_id,
+        "sequence": sequence,
+        "job_identity": job_identity,
+        "job_doc_id": f"doc-{job_identity}",
+        "queue_rank": str(sequence),
+        "selected_resume": selected_resume,
+        "job_label": f"acme · {job_identity}",
+        "status": status,
+        "outcome": outcome,
+        "error_category": "",
+        "error_message": "",
+        "started_at": "2026-09-07T21:28:16+00:00",
+        "finished_at": finished_at,
+        "attempt_count": attempt_count,
+        "run_status": "completed",
+    }
+    row.update(extra)
+    return row
+
+
+def _install_results_store(monkeypatch, items, *, found=True, latest_run=None, run_count=1):
+    seen = {}
+
+    def fake(**kwargs):
+        seen.update(kwargs)
+        return {
+            "ok": True,
+            "found": found,
+            "pipeline_run_id": kwargs["pipeline_run_id"],
+            "run_count": run_count,
+            "latest_run": latest_run
+            or {
+                "run_id": "bulk-2",
+                "status": "completed",
+                "started_at": "2026-09-08T01:00:00+00:00",
+                "finished_at": "2026-09-08T01:20:00+00:00",
+            },
+            "items": items,
+        }
+
+    monkeypatch.setattr(store, "get_bulk_generation_pipeline_results_postgres_payload", fake)
+    return seen
+
+
+def test_results_query_is_owner_and_pipeline_scoped():
+    result = store.get_bulk_generation_pipeline_results_postgres_payload(
+        owner_user_id="owner-a", pipeline_run_id="pipeline-a", print_only=True
+    )
+    sql = result["sql"]
+    assert "bulk_generation_runs" in sql and "bulk_generation_items" in sql
+    assert "owner_user_id = 'owner-a'" in sql
+    assert "pipeline_run_id = 'pipeline-a'" in sql
+    # Read-only: the query itself carries no write verbs. Generated without the
+    # shared schema prefix so the assertion covers the statement, not the DDL.
+    query_only = store.get_bulk_generation_pipeline_results_postgres_payload(
+        owner_user_id="owner-a",
+        pipeline_run_id="pipeline-a",
+        print_only=True,
+        ensure_schema=False,
+    )["sql"]
+    for verb in ("INSERT", "UPDATE ", "DELETE", "CREATE TABLE", "DROP "):
+        assert verb not in query_only.upper()
+    assert query_only.upper().lstrip().startswith("WITH")
+
+
+def test_results_latest_attempt_ranking_is_deterministic():
+    sql = store.get_bulk_generation_pipeline_results_postgres_payload(
+        owner_user_id="owner-a", pipeline_run_id="pipeline-a", print_only=True
+    )["sql"]
+    assert "PARTITION BY a.job_identity" in sql
+    # Fully tie-broken so "latest attempt" can never depend on row order.
+    for tiebreak in (
+        "a.finished_at DESC NULLS LAST",
+        "a.started_at DESC NULLS LAST",
+        "a.run_started_at DESC NULLS LAST",
+        "a.run_id DESC",
+        "a.sequence DESC",
+    ):
+        assert tiebreak in sql
+    assert "attempt_rank = 1" in sql
+
+
+def test_results_service_is_owner_scoped_and_passes_owner_through(monkeypatch):
+    seen = _install_results_store(monkeypatch, [_result_row("job-1")])
+    payload = bulk.get_bulk_generation_pipeline_results(
+        owner_user_id="owner-a", pipeline_run_id="pipeline-a"
+    )
+    assert seen["owner_user_id"] == "owner-a"
+    assert seen["pipeline_run_id"] == "pipeline-a"
+    assert payload["pipeline_run_id"] == "pipeline-a"
+
+
+def test_results_require_authentication_and_pipeline(monkeypatch):
+    with pytest.raises(bulk.BulkGenerationError) as missing_owner:
+        bulk.get_bulk_generation_pipeline_results(owner_user_id="", pipeline_run_id="pipeline-a")
+    assert missing_owner.value.status_code == 401
+
+    with pytest.raises(bulk.BulkGenerationError) as missing_pipeline:
+        bulk.get_bulk_generation_pipeline_results(owner_user_id="owner-a", pipeline_run_id="")
+    assert missing_pipeline.value.status_code == 400
+
+
+def test_results_pipeline_a_cannot_leak_pipeline_b(monkeypatch):
+    seen = _install_results_store(monkeypatch, [], found=False, run_count=0)
+    payload = bulk.get_bulk_generation_pipeline_results(
+        owner_user_id="owner-a", pipeline_run_id="pipeline-b"
+    )
+    assert seen["pipeline_run_id"] == "pipeline-b"
+    assert payload["found"] is False
+    assert payload["items"] == []
+    assert payload["processed_count"] == 0
+
+
+def test_results_keep_full_pipeline_set_after_subset_rerun(monkeypatch):
+    # 64-job initial run, then a 5-job subset re-run: the view must still carry
+    # all 64 jobs, with only the re-run five showing the newer attempt.
+    initial = [
+        _result_row(f"job-{index}", run_id="bulk-1", sequence=index)
+        for index in range(1, 65)
+    ]
+    rerun_identities = {"job-1", "job-2", "job-3", "job-4", "job-5"}
+    latest = [
+        _result_row(
+            row["job_identity"],
+            run_id="bulk-2",
+            sequence=row["sequence"],
+            outcome="generated",
+            finished_at="2026-09-08T01:19:00+00:00",
+            attempt_count=2,
+        )
+        if row["job_identity"] in rerun_identities
+        else row
+        for row in initial
+    ]
+    _install_results_store(monkeypatch, latest, run_count=2)
+
+    payload = bulk.get_bulk_generation_pipeline_results(
+        owner_user_id="owner-a", pipeline_run_id="pipeline-a"
+    )
+    assert payload["processed_count"] == 64
+    assert payload["generated_count"] == 5
+
+    by_identity = {row["job_identity"]: row for row in payload["items"]}
+    # Re-run jobs show the newer attempt...
+    assert by_identity["job-1"]["run_id"] == "bulk-2"
+    assert by_identity["job-1"]["outcome"] == "generated"
+    assert by_identity["job-1"]["attempt_count"] == 2
+    # ...and the other 59 are not forgotten.
+    assert by_identity["job-64"]["run_id"] == "bulk-1"
+    assert by_identity["job-64"]["outcome"] == "no_safe_rewrites"
+
+
+def test_results_expose_selected_resume_and_finished_at(monkeypatch):
+    _install_results_store(
+        monkeypatch,
+        [_result_row("job-1", selected_resume="Resume_B.pdf", finished_at="2026-09-07T23:08:00+00:00")],
+    )
+    row = bulk.get_bulk_generation_pipeline_results(
+        owner_user_id="owner-a", pipeline_run_id="pipeline-a"
+    )["items"][0]
+    assert row["selected_resume"] == "Resume_B.pdf"
+    assert row["finished_at"] == "2026-09-07T23:08:00+00:00"
+    assert row["job_doc_id"] == "doc-job-1"
+    assert row["queue_rank"] == "1"
+
+
+def test_results_bound_failed_item_error_messages(monkeypatch):
+    _install_results_store(
+        monkeypatch,
+        [
+            _result_row(
+                "job-1",
+                status="needs_attention",
+                outcome="failed",
+                error_category="provider_failure",
+                error_message="x" * 4000,
+            )
+        ],
+    )
+    row = bulk.get_bulk_generation_pipeline_results(
+        owner_user_id="owner-a", pipeline_run_id="pipeline-a"
+    )["items"][0]
+    assert len(row["error_message"]) == 500
+    assert row["error_category"] == "provider_failure"
+
+
+def test_results_outcome_vocabulary_is_not_collapsed(monkeypatch):
+    _install_results_store(
+        monkeypatch,
+        [
+            _result_row("job-1", outcome="generated"),
+            _result_row("job-2", outcome="no_safe_rewrites"),
+            _result_row("job-3", outcome="empty"),
+            _result_row("job-4", status="needs_attention", outcome="failed"),
+        ],
+    )
+    payload = bulk.get_bulk_generation_pipeline_results(
+        owner_user_id="owner-a", pipeline_run_id="pipeline-a"
+    )
+    outcomes = {row["job_identity"]: row["outcome"] for row in payload["items"]}
+    # no_safe_rewrites must never be reported as generated.
+    assert outcomes == {
+        "job-1": "generated",
+        "job-2": "no_safe_rewrites",
+        "job-3": "empty",
+        "job-4": "failed",
+    }
+    assert payload["generated_count"] == 1
+    assert payload["needs_attention_count"] == 1
+    rerunnable = {row["job_identity"]: row["rerunnable"] for row in payload["items"]}
+    assert rerunnable == {"job-1": False, "job-2": True, "job-3": True, "job-4": True}
+    assert payload["rerunnable_count"] == 3
+
+
+def test_results_endpoint_is_owner_scoped_and_read_only(monkeypatch):
+    monkeypatch.setattr(api, "auth_guard_response", lambda request: None)
+    monkeypatch.setattr(api, "_auth_owner_user_id", lambda request: "owner-a")
+    seen = _install_results_store(monkeypatch, [_result_row("job-1")])
+
+    response = TestClient(api.app).get(
+        "/planning/bulk-generation/results", params={"pipeline_run_id": "pipeline-a"}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["pipeline_run_id"] == "pipeline-a"
+    assert seen["owner_user_id"] == "owner-a"
+    assert body["items"][0]["job_identity"] == "job-1"
+
+
+def test_results_endpoint_is_a_safe_get_for_the_active_bulk_guard():
+    assert "/planning/bulk-generation/results" in api._BULK_SAFE_GET_PATHS
+    assert "/planning/bulk-generation/status" in api._BULK_SAFE_GET_PATHS
+
+
+def test_results_do_not_alter_existing_status_payload(monkeypatch):
+    monkeypatch.setattr(store, "get_bulk_generation_run_postgres_payload", lambda **kwargs: {
+        "found": False, "run": {}, "items": [],
+    })
+    status = bulk.get_bulk_generation_status(owner_user_id="owner-a")
+    assert status == {"ok": True, "active": False, "terminal": False, "status": "none", "items": []}
+
+
+def test_results_pipeline_runs_cte_projects_every_column_latest_run_consumes():
+    """Regression: latest_run selects FROM the pipeline_runs CTE, not the base
+    table, so any column it consumes must survive that CTE's projection.
+
+    The first implementation projected only run_id/status/started_at/finished_at
+    and PostgreSQL rejected the statement with
+    `column "total_count" does not exist`, which surfaced as an opaque HTTP 503.
+    """
+    import re
+
+    sql = store.get_bulk_generation_pipeline_results_postgres_payload(
+        owner_user_id="owner-a",
+        pipeline_run_id="pipeline-a",
+        print_only=True,
+        ensure_schema=False,
+    )["sql"]
+
+    def cte_body(name: str, terminator: str) -> str:
+        start = sql.index(f"{name} AS (")
+        return sql[start:sql.index(terminator, start)]
+
+    pipeline_runs = cte_body("WITH pipeline_runs", "), attempts AS (")
+    latest_run = cte_body("), latest_run", "\n)\nSELECT json_build_object")
+
+    # latest_run must read from the CTE (that is what makes the projection matter).
+    assert "FROM pipeline_runs" in latest_run
+
+    projected = {
+        column.strip()
+        for column in re.search(
+            r"SELECT\s+(.*?)\s+FROM bulk_generation_runs", pipeline_runs, re.S
+        ).group(1).replace("\n", " ").split(",")
+    }
+    consumed = {
+        column.strip()
+        for column in re.search(
+            r"SELECT\s+(.*?)\s+FROM pipeline_runs", latest_run, re.S
+        ).group(1).replace("\n", " ").split(",")
+    }
+    missing = consumed - projected
+    assert not missing, f"pipeline_runs CTE drops columns latest_run needs: {sorted(missing)}"
+
+    # The four columns the original defect dropped are explicitly pinned.
+    for column in (
+        "total_count",
+        "completed_count",
+        "succeeded_count",
+        "needs_attention_count",
+    ):
+        assert column in projected

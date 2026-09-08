@@ -1,7 +1,11 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
+  CompanyLogo,
   PLANNING_ACTION_EVENT,
+  bulkResultMatchScore,
+  formatBulkMatchScore,
+  type BulkResultItem,
   PLANNING_COLUMN_WIDTH_STORAGE_KEY,
   PlanningFiltersToolbar,
   PlanningSummary,
@@ -737,4 +741,512 @@ it("falls back conservatively when older rows omit the review fields", () => {
   // A historical row carrying only action=APPLY is genuinely resolved.
   expect(resumeSelectionLabel({ winner_resume: "Sriram_AI1.pdf", action: "APPLY" })).toBe("Sriram AI1");
   expect(resumeSelectionLabel({})).toBe("Not selected");
+});
+
+// --- Bulk generation results + re-run center --------------------------------
+
+const resultItems = [
+  {
+    job_identity: "job-1",
+    job_doc_id: "doc-1",
+    queue_rank: "1",
+    job_label: "Example AI · Senior Applied AI Engineer",
+    job_title: "Senior Applied AI Engineer",
+    job_company: "Example AI",
+    job_location: "New York City",
+    selected_resume: "Resume_A.pdf",
+    winner_resume: "/saved/resumes/Resume_A.pdf",
+    winner_score: 0.91,
+    status: "succeeded",
+    outcome: "generated",
+    finished_at: "2026-09-07T23:42:00Z",
+    rerunnable: false,
+    match_score: 0.91,
+  },
+  {
+    job_identity: "job-2",
+    job_doc_id: "doc-2",
+    queue_rank: "2",
+    job_label: "Northwind · Staff Data Scientist",
+    job_title: "Staff Data Scientist",
+    job_company: "Northwind",
+    selected_resume: "Resume_B.pdf",
+    winner_resume: "Resume_A.pdf",
+    winner_score: 0.88,
+    runner_up_resume: "C:\\saved\\Resume_B.pdf",
+    runner_up_score: 0.764,
+    status: "succeeded",
+    outcome: "no_safe_rewrites",
+    finished_at: "2026-09-07T23:08:00Z",
+    rerunnable: true,
+    match_score: 0.76,
+  },
+  {
+    job_identity: "job-3",
+    job_doc_id: "doc-3",
+    queue_rank: "3",
+    job_label: "Northwind · ML Platform Engineer",
+    job_title: "ML Platform Engineer",
+    job_company: "Northwind",
+    selected_resume: "Resume_C.pdf",
+    winner_resume: "Resume_A.pdf",
+    winner_score: 0.9,
+    runner_up_resume: "Resume_B.pdf",
+    runner_up_score: 0.8,
+    status: "needs_attention",
+    outcome: "failed",
+    error_category: "provider_failure",
+    finished_at: "2026-09-07T23:20:00Z",
+    rerunnable: true,
+    match_score: null,
+  },
+];
+
+const terminalBulk: PlanningWorklistState["bulkSuggestions"] = {
+  eligibleCount: 0,
+  available: false,
+  isRunning: false,
+  hasResults: true,
+  currentPipelineRunId: "pipeline-a",
+  resultPipelineRunId: "pipeline-a",
+  latestRunId: "bulk-2",
+  latestStatus: "completed",
+  lastFinishedAt: "2026-09-07T23:42:00Z",
+  processedCount: 3,
+  rerunnableCount: 2,
+  resultLoadStatus: "ready" as const,
+  resultItems,
+};
+
+function openResults(bulk: PlanningWorklistState["bulkSuggestions"] = terminalBulk) {
+  render(<PlanningWorklist state={planningState({ bulkSuggestions: bulk })} />);
+  const trigger = screen.getByRole("button", { name: /view bulk results/i });
+  fireEvent.click(trigger);
+  return { trigger, dialog: screen.getByRole("dialog", { name: /bulk generation results/i }) };
+}
+
+it("keeps the fresh bulk control when no terminal run matches the current pipeline", () => {
+  render(<PlanningWorklist state={planningState({
+    bulkSuggestions: { eligibleCount: 12, available: true, isRunning: false, currentPipelineRunId: "pipeline-a" },
+  })} />);
+  const action = screen.getByRole("button", { name: /bulk generate suggestions.*12 eligible/i });
+  expect(action).toHaveTextContent("Bulk generate suggestions");
+  expect(screen.queryByRole("button", { name: /view bulk results/i })).toBeNull();
+});
+
+it("keeps the running state unchanged even when a terminal result exists", () => {
+  render(<PlanningWorklist state={planningState({
+    bulkSuggestions: { ...terminalBulk, ...runningBulk, isRunning: true },
+  })} />);
+  expect(screen.getByRole("button", { name: /bulk suggestions generating/i })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /view bulk results/i })).toBeNull();
+});
+
+it("morphs to View bulk results and stays enabled with zero fresh eligible jobs", () => {
+  render(<PlanningWorklist state={planningState({ bulkSuggestions: terminalBulk })} />);
+  const control = screen.getByRole("button", { name: /view bulk results/i });
+  expect(control).toHaveTextContent("View bulk results");
+  expect(control).toHaveTextContent("3 processed");
+  expect(control).not.toBeDisabled();
+});
+
+it("reverts to the fresh control when the Live Pipeline run changes", () => {
+  render(<PlanningWorklist state={planningState({
+    bulkSuggestions: { ...terminalBulk, currentPipelineRunId: "pipeline-b", eligibleCount: 9 },
+  })} />);
+  expect(screen.queryByRole("button", { name: /view bulk results/i })).toBeNull();
+  expect(screen.getByRole("button", { name: /bulk generate suggestions.*9 eligible/i })).toBeTruthy();
+});
+
+it("opens the results dialog with three summary cards and publishes the view action", () => {
+  const listener = listenForActions();
+  const { dialog } = openResults();
+  expect(dialog.getAttribute("aria-modal")).toEqual("true");
+  // Each card puts its number and its primary label on ONE metric line.
+  const metrics = Array.from(
+    dialog.querySelectorAll(".planning-bulk-results__card-metric"),
+  ).map((node) => node.textContent);
+  expect(metrics).toEqual(["1Generated", "1Failed", "2Eligible to re-run"]);
+  dialog.querySelectorAll(".planning-bulk-results__card-metric").forEach((metric) => {
+    expect(metric.querySelector("strong")).not.toBeNull();
+    expect(metric.querySelector(".planning-bulk-results__card-label")).not.toBeNull();
+  });
+  expect(lastAction(listener.actions)).toEqual({ type: "bulk_view_results" });
+  listener.stop();
+});
+
+it("does not mislabel a safe/no-rewrite result as ready", () => {
+  const { dialog } = openResults();
+  const badgeFor = (title: string) => {
+    const row = within(dialog).getByText(title).closest("tr") as HTMLElement;
+    return row.querySelector(".planning-bulk-results__badge")?.textContent;
+  };
+  expect(badgeFor("Senior Applied AI Engineer")).toEqual("Ready rewrites");
+  // no_safe_rewrites must never be relabelled as ready.
+  expect(badgeFor("Staff Data Scientist")).toEqual("Safe / no rewrite");
+  expect(
+    within(dialog).getByText("Staff Data Scientist").closest("tr")
+      ?.querySelector(".planning-bulk-results__badge")?.className,
+  ).toContain("is-neutral");
+  expect(badgeFor("ML Platform Engineer")).toEqual("Failed");
+});
+
+it("searches by job title and by company", () => {
+  const { dialog } = openResults();
+  const search = within(dialog).getByRole("searchbox", { name: /search jobs or companies/i });
+  fireEvent.change(search, { target: { value: "northwind" } });
+  expect(within(dialog).queryByText("Senior Applied AI Engineer")).toBeNull();
+  expect(within(dialog).getByText("Staff Data Scientist")).toBeTruthy();
+  fireEvent.change(search, { target: { value: "senior applied" } });
+  expect(within(dialog).getByText("Senior Applied AI Engineer")).toBeTruthy();
+  expect(within(dialog).queryByText("Staff Data Scientist")).toBeNull();
+});
+
+it("filters by status pill", () => {
+  const { dialog } = openResults();
+  fireEvent.click(within(dialog).getByRole("button", { name: /failed \/ attention/i }));
+  expect(within(dialog).getByText("ML Platform Engineer")).toBeTruthy();
+  expect(within(dialog).queryByText("Senior Applied AI Engineer")).toBeNull();
+});
+
+it("selects only eligible rows and keeps non-rerunnable checkboxes disabled", () => {
+  const { dialog } = openResults();
+  const generatedRow = within(dialog).getByRole("checkbox", { name: /select senior applied ai engineer/i });
+  expect(generatedRow).toBeDisabled();
+  fireEvent.click(within(dialog).getByRole("checkbox", { name: /select all eligible/i }));
+  expect(within(dialog).getByText("2 jobs selected")).toBeTruthy();
+  expect(generatedRow).not.toBeChecked();
+});
+
+it("updates the selected count and clears the selection", () => {
+  const { dialog } = openResults();
+  const checkbox = within(dialog).getByRole("checkbox", { name: /select staff data scientist/i });
+  const clearSelection = within(dialog).getByRole("button", { name: /clear selection/i });
+  expect(clearSelection.tagName).toBe("BUTTON");
+  expect(clearSelection.className).toContain("planning-bulk-results__clear");
+  const row = checkbox.closest("tr") as HTMLElement;
+  expect(row.className).not.toContain("is-selected");
+  fireEvent.click(checkbox);
+  expect(checkbox).toBeChecked();
+  expect(row.className).toContain("is-selected");
+  expect(within(dialog).getByText("1 job selected")).toBeTruthy();
+  fireEvent.click(clearSelection);
+  expect(checkbox).not.toBeChecked();
+  expect(row.className).not.toContain("is-selected");
+  expect(within(dialog).getByText("0 jobs selected")).toBeTruthy();
+});
+
+it("re-run selected publishes the exact stable job identities", () => {
+  const listener = listenForActions();
+  const { dialog } = openResults();
+  fireEvent.click(within(dialog).getByRole("checkbox", { name: /select staff data scientist/i }));
+  fireEvent.click(within(dialog).getByRole("button", { name: /re-run selected \(1\)/i }));
+  expect(lastAction(listener.actions)).toEqual({
+    type: "bulk_rerun",
+    scope: "selected",
+    jobIdentities: ["job-2"],
+  });
+  listener.stop();
+});
+
+it("re-run all eligible publishes the full eligible scope and stays enabled at zero selection", () => {
+  const listener = listenForActions();
+  const { dialog } = openResults();
+  const runAll = within(dialog).getByRole("button", { name: /re-run all eligible \(2\)/i });
+  expect(runAll).not.toBeDisabled();
+  expect(within(dialog).getByRole("button", { name: /re-run selected \(0\)/i })).toBeDisabled();
+  fireEvent.click(runAll);
+  expect(lastAction(listener.actions)).toEqual({
+    type: "bulk_rerun",
+    scope: "eligible",
+    jobIdentities: ["job-2", "job-3"],
+  });
+  listener.stop();
+});
+
+it("closes on Escape and returns focus to the trigger", () => {
+  const { trigger } = openResults();
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(screen.queryByRole("dialog", { name: /bulk generation results/i })).toBeNull();
+  expect(document.activeElement).toEqual(trigger);
+});
+
+it("closes from the close button and returns focus to the trigger", () => {
+  const { trigger, dialog } = openResults();
+  fireEvent.click(within(dialog).getByRole("button", { name: /close bulk generation results/i }));
+  expect(screen.queryByRole("dialog", { name: /bulk generation results/i })).toBeNull();
+  expect(document.activeElement).toEqual(trigger);
+});
+
+it("shows the winner score when Bulk selected the winner resume", () => {
+  const { dialog } = openResults();
+  const row = within(dialog).getByText("Resume_A.pdf").closest("tr") as HTMLElement;
+  expect(within(row).getByText("91.00%")).toBeTruthy();
+});
+
+it("shows the runner-up score when Bulk selected the runner-up resume", () => {
+  const { dialog } = openResults();
+  const row = within(dialog).getByText("Resume_B.pdf").closest("tr") as HTMLElement;
+  expect(within(row).getByText("76.40%")).toBeTruthy();
+});
+
+it("shows a dash for an unknown selected resume even when candidate scores exist", () => {
+  const { dialog } = openResults();
+  const failedRow = within(dialog).getByText("ML Platform Engineer").closest("tr") as HTMLElement;
+  expect(within(failedRow).getByText("—")).toBeTruthy();
+});
+
+it("shows a dash when the selected candidate has no numeric score", () => {
+  const { dialog } = openResults({
+    ...terminalBulk,
+    resultItems: [{
+      ...resultItems[0],
+      selected_resume: "Resume_A.pdf",
+      winner_resume: "Resume_A.pdf",
+      winner_score: "not-scored",
+      match_score: 0.99,
+    }],
+  });
+  const row = within(dialog).getByText("Resume_A.pdf").closest("tr") as HTMLElement;
+  expect(within(row).getByText("—")).toBeTruthy();
+});
+
+// --- Brandfetch company logos (presentation only, never a network call) -----
+
+it("renders the local lettermark and no image when no logo domain is resolved", () => {
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+  const { container } = render(<CompanyLogo company="Northwind" clientId="client-123" />);
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(container.querySelector("img")).toBeNull();
+  expect(container.querySelector(".planning-bulk-results__lettermark")?.textContent).toEqual("NO");
+});
+
+it("makes no request and shows no image when no client id is configured", () => {
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+  const { container } = render(<CompanyLogo company="Northwind" domain="northwind.com" />);
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(container.querySelector("img")).toBeNull();
+});
+
+it("renders the Brandfetch CDN icon for a resolved domain without any request", () => {
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+  const { container } = render(
+    <CompanyLogo company="Northwind" domain="northwind.com" clientId="client-123" />,
+  );
+  expect(fetchMock).not.toHaveBeenCalled();
+  const img = container.querySelector("img") as HTMLImageElement;
+  expect(img.getAttribute("loading")).toEqual("lazy");
+  expect(img.getAttribute("width")).toEqual("32");
+  // Explicit documented Logo API domain route.
+  expect(img.getAttribute("src")).toContain("cdn.brandfetch.io/domain/northwind.com");
+  expect(img.getAttribute("src")).toContain("type/icon");
+  expect(img.getAttribute("src")).toContain("w/64/h/64");
+  expect(img.getAttribute("src")).toContain("fallback/lettermark");
+});
+
+it("falls back to the lettermark when the Brandfetch image fails to load", () => {
+  vi.stubGlobal("fetch", vi.fn());
+  const { container } = render(
+    <CompanyLogo company="Northwind" domain="northwind.com" clientId="client-123" />,
+  );
+  fireEvent.error(container.querySelector("img") as HTMLImageElement);
+  expect(container.querySelector("img")).toBeNull();
+  expect(container.querySelector(".planning-bulk-results__lettermark")?.textContent).toEqual("NO");
+});
+
+it("renders logos inside the results table without any network call", () => {
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+  const { dialog } = openResults({
+    ...terminalBulk,
+    brandfetchClientId: "client-123",
+    resultItems: resultItems.map((item) => ({ ...item, company_domain: "northwind.com" })),
+  });
+  expect(dialog.querySelectorAll(".planning-bulk-results__logo").length).toEqual(3);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+// --- Visual/structural contracts for the approved dark workspace ------------
+
+it("uses a theme-neutral modal root so the page theme can select its palette", () => {
+  const { dialog } = openResults();
+  expect(dialog.className).toEqual("planning-bulk-results");
+});
+
+it("exposes exactly one search control shell with no nested duplicate shell", () => {
+  const { dialog } = openResults();
+  const shells = dialog.querySelectorAll(".planning-bulk-results__search");
+  expect(shells).toHaveLength(1);
+  const inputs = shells[0].querySelectorAll("input");
+  expect(inputs).toHaveLength(1);
+  // The input carries the opt-out class so the global `input { ... !important }`
+  // page skin cannot repaint it with a second border.
+  expect(inputs[0].className).toContain("planning-bulk-results__search-input");
+  expect(shells[0].querySelectorAll(".planning-bulk-results__search")).toHaveLength(0);
+});
+
+it("gives the close control an accessible label and a visible glyph", () => {
+  const { dialog } = openResults();
+  const close = within(dialog).getByRole("button", { name: /close bulk generation results/i });
+  expect(close.className).toContain("planning-bulk-results__close");
+  expect(close.querySelector("svg")).not.toBeNull();
+});
+
+it("marks every modal checkbox so the global input skin cannot repaint it", () => {
+  const { dialog } = openResults();
+  const boxes = dialog.querySelectorAll('input[type="checkbox"]');
+  expect(boxes.length).toBeGreaterThan(1);
+  boxes.forEach((box) => expect(box.className).toContain("planning-bulk-results__checkbox"));
+});
+
+it("truncates a long resume filename and keeps the full value on hover", () => {
+  const longName = "Sriram_Neelakantan_AIML_resume_no_syn_v2_extended_variant.pdf";
+  const { dialog } = openResults({
+    ...terminalBulk,
+    resultItems: [{ ...resultItems[0], selected_resume: longName }],
+  });
+  const name = dialog.querySelector(".planning-bulk-results__resume-name") as HTMLElement;
+  expect(name.textContent).toEqual(longName);
+  expect(name.getAttribute("title")).toEqual(longName);
+});
+
+// --- Selected-filter state + toolbar structure ------------------------------
+
+it("marks exactly one filter active via aria-pressed and .is-active", () => {
+  const { dialog } = openResults();
+  const pills = Array.from(
+    dialog.querySelectorAll(".planning-bulk-results__pill"),
+  ) as HTMLElement[];
+  expect(pills.length).toEqual(4);
+
+  const active = () => pills.filter((p) => p.className.includes("is-active"));
+  const pressed = () => pills.filter((p) => p.getAttribute("aria-pressed") === "true");
+  expect(active()).toHaveLength(1);
+  expect(pressed()).toHaveLength(1);
+  expect(active()[0].textContent).toContain("All");
+
+  fireEvent.click(within(dialog).getByRole("button", { name: /failed \/ attention/i }));
+  expect(active()).toHaveLength(1);
+  expect(pressed()).toHaveLength(1);
+  expect(active()[0].textContent).toContain("Failed / attention");
+});
+
+it("keeps every filter pill and its count in one toolbar row", () => {
+  const { dialog } = openResults();
+  const toolbar = dialog.querySelector(".planning-bulk-results__controls") as HTMLElement;
+  expect(toolbar.querySelectorAll(".planning-bulk-results__search")).toHaveLength(1);
+  const pills = Array.from(toolbar.querySelectorAll(".planning-bulk-results__pill"));
+  expect(pills).toHaveLength(4);
+  expect(pills.map((pill) => pill.textContent)).toEqual([
+    "All3",
+    "Generated / Ready1",
+    "Safe / no rewrite1",
+    "Failed / attention1",
+  ]);
+  expect(toolbar.querySelectorAll(".planning-bulk-results__select-all")).toHaveLength(1);
+  pills.forEach((pill) => {
+    expect(pill.querySelector("small")).not.toBeNull();
+  });
+});
+
+it("omits only the redundant Eligible filter and preserves eligible bulk actions", () => {
+  const { dialog } = openResults();
+  const filterGroup = within(dialog).getByRole("group", { name: /filter results/i });
+  expect(within(filterGroup).queryByRole("button", { name: /^eligible/i })).toBeNull();
+  expect(within(dialog).getByRole("checkbox", { name: /select all eligible/i })).toBeTruthy();
+  expect(within(dialog).getByRole("button", { name: /re-run all eligible \(2\)/i })).toBeTruthy();
+});
+
+it("keeps the footer secondary and primary actions structurally distinct", () => {
+  const { dialog } = openResults();
+  const secondary = within(dialog).getByRole("button", { name: /re-run all eligible/i });
+  const primary = within(dialog).getByRole("button", { name: /re-run selected/i });
+  expect(secondary.className).toContain("planning-bulk-results__secondary");
+  expect(primary.className).toContain("planning-bulk-results__primary");
+  expect(primary).toBeDisabled();
+  expect(secondary).not.toBeDisabled();
+});
+
+// --- Filter semantic tones + truthful match score ---------------------------
+
+const scoreItem = (over: Partial<BulkResultItem> = {}): BulkResultItem => ({
+  job_identity: "j",
+  selected_resume: "Sriram_Analytics.pdf",
+  winner_resume: "Sriram_Analytics.pdf",
+  winner_score: "0.856725",
+  runner_up_resume: "Sriram_Quantitative.pdf",
+  runner_up_score: "0.824291",
+  ...over,
+});
+
+it("gives every filter its own semantic tone class", () => {
+  const { dialog } = openResults();
+  const tones = Array.from(dialog.querySelectorAll(".planning-bulk-results__pill")).map(
+    (pill) => Array.from(pill.classList).find((c) => c.startsWith("is-tone-")),
+  );
+  expect(tones).toEqual(["is-tone-all", "is-tone-generated", "is-tone-safe", "is-tone-attention"]);
+});
+
+it("keeps the semantic tone class when a filter becomes active", () => {
+  const { dialog } = openResults();
+  const safe = within(dialog).getByRole("button", { name: /safe \/ no rewrite/i });
+  expect(safe.classList.contains("is-tone-safe")).toBe(true);
+  expect(safe.classList.contains("is-active")).toBe(false);
+
+  fireEvent.click(safe);
+  // Tone survives selection; selection only adds .is-active.
+  expect(safe.classList.contains("is-tone-safe")).toBe(true);
+  expect(safe.classList.contains("is-active")).toBe(true);
+
+  const all = within(dialog).getByRole("button", { name: /^All/ });
+  expect(all.classList.contains("is-tone-all")).toBe(true);
+  expect(all.classList.contains("is-active")).toBe(false);
+});
+
+it("pairs the winner resume with the winner score", () => {
+  expect(bulkResultMatchScore(scoreItem())).toBeCloseTo(0.856725);
+  expect(formatBulkMatchScore(scoreItem())).toEqual("85.67%");
+});
+
+it("pairs the runner-up resume with the runner-up score", () => {
+  const item = scoreItem({ selected_resume: "Sriram_Quantitative.pdf" });
+  expect(bulkResultMatchScore(item)).toBeCloseTo(0.824291);
+  expect(formatBulkMatchScore(item)).toEqual("82.43%");
+});
+
+it("normalizes path and separator differences when pairing the resume", () => {
+  const item = scoreItem({ selected_resume: "outputs\\resumes/Sriram_Analytics.pdf  " });
+  expect(formatBulkMatchScore(item)).toEqual("85.67%");
+});
+
+it("shows an em dash when the selected resume matches no candidate", () => {
+  expect(formatBulkMatchScore(scoreItem({ selected_resume: "SomeoneElse.pdf" }))).toEqual("—");
+});
+
+it("shows an em dash when the paired score is missing or non-numeric", () => {
+  expect(formatBulkMatchScore(scoreItem({ winner_score: "" }))).toEqual("—");
+  expect(formatBulkMatchScore(scoreItem({ winner_score: "n/a" }))).toEqual("—");
+  expect(formatBulkMatchScore(scoreItem({ winner_score: null }))).toEqual("—");
+});
+
+it("keeps the score visible beside a truncated long resume name", () => {
+  const longName = "Sriram_Neelakantan_AIML_resume_no_syn_v2_extended_variant.pdf";
+  const { dialog } = openResults({
+    ...terminalBulk,
+    resultItems: [
+      {
+        ...resultItems[0],
+        selected_resume: longName,
+        winner_resume: longName,
+        winner_score: "0.5125",
+      },
+    ],
+  });
+  const name = dialog.querySelector(".planning-bulk-results__resume-name") as HTMLElement;
+  const score = dialog.querySelector(".planning-bulk-results__resume-score") as HTMLElement;
+  expect(name.getAttribute("title")).toEqual(longName);
+  expect(score.textContent).toEqual("51.25%");
 });

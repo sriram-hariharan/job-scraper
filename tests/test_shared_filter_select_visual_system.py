@@ -214,11 +214,16 @@ def test_search_header_is_one_integrated_eucalyptus_owned_control() -> None:
 def test_important_legacy_input_visuals_exclude_search_input() -> None:
     exclusion = ":not(.shared-filter-select__search-input)"
     for stylesheet in (LEGACY_CSS, REDESIGN_CSS):
-        assert f"input{exclusion}," in stylesheet
-        assert f"input{exclusion}::placeholder," in stylesheet
-        assert f"input{exclusion}:focus," in stylesheet
-    assert f"input{exclusion}:focus-visible," in LEGACY_CSS
-    assert f'html[data-theme="light"] input{exclusion},' in LEGACY_CSS
+        prefix = f"input{exclusion}"
+        assert prefix in stylesheet
+        assert f"{prefix}:where(:not(.planning-bulk-results__search-input, .planning-bulk-results__checkbox))," in stylesheet
+        assert f"{prefix}:where(:not(.planning-bulk-results__search-input, .planning-bulk-results__checkbox))::placeholder," in stylesheet
+        assert f"input{exclusion}:focus:where(:not(.planning-bulk-results__search-input, .planning-bulk-results__checkbox))," in stylesheet
+    assert f"input{exclusion}:focus-visible:where(:not(.planning-bulk-results__search-input, .planning-bulk-results__checkbox))," in LEGACY_CSS
+    assert (
+        f'html[data-theme="light"] input{exclusion}'
+        ':where(:not(.planning-bulk-results__search-input, .planning-bulk-results__checkbox)),'
+    ) in LEGACY_CSS
 
 
 def test_source_contract_is_present_in_built_assets() -> None:

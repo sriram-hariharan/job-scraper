@@ -1184,11 +1184,20 @@ def test_selector_direct_lanes_require_meaningful_displayed_score_lift():
     meaningful_plan = build_final_replacement_plan([meaningful_ready], [])
     tiny_optional_plan = build_final_replacement_plan([tiny_optional], [])
 
+    # app_ready still requires a meaningful displayed lift: a zero-point delta
+    # never reaches it, however tiny and positive the raw float is.
     assert tiny_ready_plan["app_ready_replacements"] == []
-    assert tiny_optional_plan["direct_apply_optional_replacements"] == []
     assert meaningful_plan["app_ready_replacements"][0][
         "replacement_candidate_id"
     ] == "meaningful_ready"
+    # P3S3. The optional lane does accept this candidate. A raw delta that
+    # rounds to zero points is exactly how production assigns
+    # "export_safe_no_score_lift", so this pairing is production-shaped and the
+    # lane its allowlist advertises must be reachable.
+    assert tiny_optional_plan["direct_apply_optional_replacements"][0][
+        "replacement_candidate_id"
+    ] == "tiny_optional"
+    assert tiny_optional_plan["app_ready_replacements"] == []
 
 
 def test_selector_keeps_tiny_negative_non_actionable_despite_zero_display_points():
@@ -1220,30 +1229,56 @@ def test_selector_qualified_neutral_outweighs_unqualified_tiny_positive_noise():
     assert plan["direction_only_replacements"] == []
 
 
-def test_selector_keeps_direct_lanes_positive_score_only():
+def test_selector_keeps_app_ready_positive_score_only():
+    """P3S3. app_ready stays positive-lift only; the optional lane accepts a
+    zero-point rewrite only when it carries the allowlisted export-safe status.
+
+    The previous fixture paired delta=0.02 with "export_safe_no_score_lift",
+    a combination production cannot emit -- that status is only ever assigned
+    to zero-point deltas -- so it proved nothing about the optional lane.
+    """
     positive_ready = _candidate("positive_ready", delta=0.02)
     neutral_ready = _candidate("neutral_ready", delta=0.0)
-    positive_optional = _candidate("positive_optional", bullet_id="bullet_2", delta=0.02)
     neutral_optional = _candidate("neutral_optional", bullet_id="bullet_3", delta=0.0)
-    positive_optional["materiality_validation_status"] = "export_safe_no_score_lift"
     neutral_optional["materiality_validation_status"] = "export_safe_no_score_lift"
+    neutral_not_allowlisted = _candidate(
+        "neutral_not_allowlisted", bullet_id="bullet_4", delta=0.0
+    )
+    neutral_not_allowlisted["materiality_validation_status"] = (
+        "scorer_neutral_no_evidence_change"
+    )
+    negative_optional = _candidate(
+        "negative_optional", bullet_id="bullet_5", delta=-0.02
+    )
+    negative_optional["materiality_validation_status"] = "export_safe_no_score_lift"
 
     positive_ready_plan = build_final_replacement_plan([positive_ready], [])
     neutral_ready_plan = build_final_replacement_plan([neutral_ready], [])
     optional_plan = build_final_replacement_plan(
-        [positive_optional, neutral_optional], []
+        [neutral_optional, neutral_not_allowlisted, negative_optional], []
     )
 
+    # Positive safe candidates keep their existing app-ready lane.
     assert positive_ready_plan["app_ready_replacements"][0][
         "replacement_candidate_id"
     ] == "positive_ready"
+    # A neutral rewrite never becomes app-ready, whatever its status.
     assert neutral_ready_plan["app_ready_replacements"] == []
-    assert optional_plan["direct_apply_optional_replacements"][0][
-        "replacement_candidate_id"
-    ] == "positive_optional"
-    assert all(
-        row["replacement_candidate_id"] != "neutral_optional"
+    assert optional_plan["app_ready_replacements"] == []
+
+    optional_ids = [
+        row["replacement_candidate_id"]
         for row in optional_plan["direct_apply_optional_replacements"]
+    ]
+    # Only the allowlisted export-safe neutral candidate reaches the lane.
+    assert optional_ids == ["neutral_optional"]
+    # A neutral delta without the permitted status is not a zero-score bypass.
+    assert "neutral_not_allowlisted" not in optional_ids
+    # Negative deltas stay rejected from every actionable lane.
+    assert "negative_optional" not in optional_ids
+    assert all(
+        row["replacement_candidate_id"] != "negative_optional"
+        for row in optional_plan["ai_optimize_optional_replacements"]
     )
 
 

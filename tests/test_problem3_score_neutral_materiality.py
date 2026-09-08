@@ -17,7 +17,12 @@ from typing import Any, Dict, Tuple
 import pytest
 
 from src.tailoring import rendering
-from src.tailoring.replacement_selector import _is_direct_apply_ready
+from src.tailoring.replacement_selector import (
+    _is_ai_optimize_optional,
+    _is_direct_apply_optional,
+    _is_direct_apply_ready,
+    build_final_replacement_plan,
+)
 from src.tailoring.score_utils import score_delta_to_points
 
 
@@ -413,3 +418,125 @@ def test_genuine_positive_lift_remains_app_ready_and_visible():
     assert issue["projected_score_delta_points"] > 0
     assert issue["is_visible_in_review"] is True
     assert _is_direct_apply_ready(row) is True
+
+
+# --- Case 8: zero-point export-safe reachability -----------------------------
+#
+# P3S3. The optional lane's materiality allowlist contains
+# "export_safe_no_score_lift", but that status is only ever assigned to
+# zero-point rewrites, so requiring a meaningful positive lift made the
+# allowlist unsatisfiable and every production candidate fell to
+# direction_only. These tests drive the real materiality policy and the real
+# selector so the status/delta pair is produced by production logic rather
+# than hand-assembled.
+
+
+def _scored_neutral_candidate(run_materiality, method="deterministic_front_supported_phrase"):
+    """Real materiality output for a grounded zero-point rewrite."""
+    result = run_materiality(_candidate(method), 0.0)
+    # Mirror the counterfactual pass, which stamps the same scored delta the
+    # materiality policy just observed onto the field the selector reads.
+    result["projected_overall_delta"] = 0.0
+    result["source_bullet_id"] = "experience:0:entry:b1:bullet"
+    result["original_text"] = "original bullet"
+    result["current_evidence"] = "original bullet"
+    return result
+
+
+def test_zero_point_export_safe_rewrite_has_a_reachable_actionable_lane(run_materiality):
+    candidate = _scored_neutral_candidate(run_materiality)
+
+    # Produced by the real materiality policy, not hand-set.
+    assert candidate["materiality_validation_status"] == "export_safe_no_score_lift"
+    assert candidate["proposal_status"] == "patch_ready"
+    assert score_delta_to_points(candidate["projected_overall_delta"]) == 0
+
+    assert _is_direct_apply_optional(candidate) is True
+    assert _is_direct_apply_ready(candidate) is False
+
+    plan = build_final_replacement_plan([candidate], [])
+    summary = plan["summary"]
+    actionable_count = (
+        summary["direct_apply_ready_count"]
+        + summary["direct_apply_optional_count"]
+        + summary["ai_optimize_optional_count"]
+    )
+
+    assert plan["direct_apply_optional_replacements"][0][
+        "replacement_candidate_id"
+    ] == "replacement_1"
+    assert plan["app_ready_replacements"] == []
+    assert summary["direct_apply_optional_count"] == 1
+    assert actionable_count > 0
+
+
+def test_zero_point_export_safe_requires_sufficient_confidence(run_materiality):
+    candidate = _scored_neutral_candidate(run_materiality)
+    candidate["confidence"] = "low"
+
+    assert candidate["materiality_validation_status"] == "export_safe_no_score_lift"
+    assert _is_direct_apply_optional(candidate) is False
+
+
+def test_neutral_delta_without_allowlisted_status_is_not_actionable(run_materiality):
+    """The optional lane must not become a generic zero-score bypass."""
+    candidate = _scored_neutral_candidate(run_materiality)
+    candidate["materiality_validation_status"] = "scorer_neutral_no_evidence_change"
+
+    assert _is_direct_apply_optional(candidate) is False
+    assert _is_direct_apply_ready(candidate) is False
+    assert _is_ai_optimize_optional(candidate) is False
+
+
+def test_missing_projected_delta_is_never_optional(run_materiality):
+    candidate = _scored_neutral_candidate(run_materiality)
+    candidate["projected_overall_delta"] = None
+
+    assert candidate["materiality_validation_status"] == "export_safe_no_score_lift"
+    assert _is_direct_apply_optional(candidate) is False
+
+
+@pytest.mark.parametrize("delta", [-0.000043, -0.01])
+def test_negative_delta_is_never_actionable_in_any_lane(run_materiality, delta):
+    candidate = _scored_neutral_candidate(run_materiality)
+    candidate["projected_overall_delta"] = delta
+    candidate["llm_refinement_used"] = True
+
+    assert _is_direct_apply_ready(candidate) is False
+    assert _is_direct_apply_optional(candidate) is False
+    assert _is_ai_optimize_optional(candidate) is False
+
+
+def test_unsupported_risk_signals_block_the_optional_lane(run_materiality):
+    candidate = _scored_neutral_candidate(run_materiality)
+    candidate["unsupported_risk_signals"] = ["fabricated kubernetes ownership"]
+
+    assert candidate["materiality_validation_status"] == "export_safe_no_score_lift"
+    assert _is_direct_apply_optional(candidate) is False
+
+
+def test_cosmetic_only_patch_is_never_optional(run_materiality):
+    cosmetic = run_materiality(
+        _candidate("deterministic_clarity_preserving_compression"), 0.0
+    )
+    cosmetic["projected_overall_delta"] = 0.0
+
+    assert cosmetic["proposal_status"] == "direction_only"
+    assert _is_direct_apply_optional(cosmetic) is False
+    assert _is_direct_apply_ready(cosmetic) is False
+
+
+def test_evidence_regression_is_never_optional(run_materiality):
+    regressed = run_materiality(
+        _candidate("live_llm_concrete_patch_candidate"),
+        0.0,
+        evidence_delta={"explicit_skills": {"added": [], "removed": ["python"]}},
+    )
+    regressed["projected_overall_delta"] = 0.0
+
+    assert regressed["materiality_validation_status"] == (
+        "scorer_neutral_evidence_regression"
+    )
+    assert regressed["proposal_status"] == "direction_only"
+    assert _is_direct_apply_optional(regressed) is False
+    assert _is_ai_optimize_optional(regressed) is False

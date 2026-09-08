@@ -195,11 +195,23 @@ def _is_direct_apply_ready(candidate: Dict[str, Any]) -> bool:
 def _is_direct_apply_optional(candidate: Dict[str, Any]) -> bool:
     if not _passes_direct_apply_safety(candidate):
         return False
-    if not _has_meaningful_positive_projected_delta(candidate):
-        return False
 
     materiality_status = _text(candidate.get("materiality_validation_status", ""))
     if materiality_status not in _DIRECT_APPLY_OPTIONAL_MATERIALITY_STATUSES:
+        return False
+
+    # A meaningful positive lift qualifies exactly as before. In addition, the
+    # statuses on this allowlist are only ever assigned to grounded, export-safe
+    # rewrites that the frozen scorer reports as zero-point, so requiring a
+    # positive lift here made the allowlist unsatisfiable in production.
+    # An effectively score-neutral delta is therefore accepted for allowlisted
+    # statuses only. It is never accepted for a missing delta, a negative delta
+    # (is_effectively_score_neutral rejects both), or a non-allowlisted status,
+    # and _is_direct_apply_ready is deliberately left positive-lift only.
+    if not (
+        _has_meaningful_positive_projected_delta(candidate)
+        or is_effectively_score_neutral(candidate.get("projected_overall_delta", None))
+    ):
         return False
 
     return _candidate_confidence_rank(candidate) >= 2

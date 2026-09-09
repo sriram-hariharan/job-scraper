@@ -2284,7 +2284,7 @@ def test_bulk_rerun_reuses_the_existing_settings_overlay_and_start_path():
     """Re-run is the same settings step and the same executor, only scoped."""
     planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
     rerun_source = planning[
-        planning.index("function openBulkGenerateSuggestionsRerun") :
+        planning.index("async function startBulkGenerateSuggestionsRerun") :
         planning.index("function updateBulkGenerateSuggestionsConfiguration")
     ]
     selection_source = planning[
@@ -2292,20 +2292,26 @@ def test_bulk_rerun_reuses_the_existing_settings_overlay_and_start_path():
         planning.index("function buildPlanningWorklistBridgeState")
     ]
 
-    # Reuses the existing overlay + existing confirm render. No second dialog.
-    assert 'renderBulkGenerateSuggestionsOverlay("confirm", getPlanningBulkSuggestionSelection())' in rerun_source
-    assert "resetBulkGenerateSuggestionsConfiguration(" in rerun_source
-    assert "getBulkGenerateSuggestionsOverlay()" in rerun_source
-    # No parallel executor: re-run never posts or starts on its own.
-    for forbidden in ("postJson", "fetch(", "/planning/bulk-generation/start", "executeBulkGenerateSuggestions"):
-        assert forbidden not in rerun_source
+    # Superseded: the Results Center re-run now starts DIRECTLY and must not
+    # reopen the first-run configuration overlay.
+    assert 'renderBulkGenerateSuggestionsOverlay("confirm"' not in rerun_source
+    assert "resetBulkGenerateSuggestionsConfiguration(" not in rerun_source
+    assert "getBulkGenerateSuggestionsOverlay()" in rerun_source  # admission guard only
+    # No parallel executor: it delegates to the one existing executor.
+    assert "await executeBulkGenerateSuggestions()" in rerun_source
+    code_only = "\n".join(
+        line for line in rerun_source.splitlines()
+        if not line.strip().startswith(("*", "/*", "//"))
+    )
+    for forbidden in ("postJson", "fetch(", "/planning/bulk-generation/start"):
+        assert forbidden not in code_only
     # Existing admission guards are still respected before opening.
     assert "bulkGenerateSuggestionsState.isRunning" in rerun_source
     assert "generateSuggestionsState.isRunning" in rerun_source
     # Selected jobs are the MAXIMUM scope; filters can only narrow it.
     assert 'String(config.mode || "initial") === "rerun"' in selection_source
     assert "rerunScope" in selection_source
-    assert "generatable.filter((row) =>" in selection_source
+    assert "scopeRows.filter(" in selection_source
 
 
 def test_planning_exposes_only_the_public_brandfetch_client_id():
@@ -2776,3 +2782,247 @@ def test_primary_rerun_action_does_not_reuse_the_filter_count_colour():
     for selector in (".planning-bulk-results {", 'html[data-theme="light"] .planning-bulk-results {'):
         variables = _bulk_theme_vars(css, selector)
         assert _contrast(variables["--bulk-primary-text"], variables["--bulk-primary-bg"]) >= 4.5
+
+
+def _selection_source():
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    return planning[
+        planning.index("function getPlanningBulkSuggestionSelection") :
+        planning.index("function buildPlanningWorklistBridgeState")
+    ]
+
+
+def test_initial_bulk_lane_still_uses_the_first_time_generate_gate():
+    """A row that already has tailoring artifacts resolves to open_workspace and
+    must stay out of a FRESH Bulk Generate. Unchanged behaviour."""
+    source = _selection_source()
+    assert 'resolvePlanningWorklistAction(row).kind === "generate_suggestions"' in source
+    # The first-time gate is the non-rerun branch of the lane split.
+    initial_branch = source[source.index(": scopeRows.filter("):]
+    assert 'resolvePlanningWorklistAction(row).kind === "generate_suggestions"' in initial_branch
+
+    resolver = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    # The artifact gate itself is untouched.
+    assert "const canGenerateSuggestions = !hasArtifacts && canGenerateSuggestionsForRow(row);" in resolver
+
+
+def test_rerun_lane_admits_supplied_identities_that_already_have_artifacts():
+    """Re-running a job whose previous attempt produced artifacts is the point
+    of the Results Center, so artifact presence must not disqualify it."""
+    source = _selection_source()
+    rerun_branch = source[source.index("const eligibleRows = rerunScope"):source.index(": scopeRows.filter(")]
+    # The rerun lane validates identity + resume, and never consults artifacts.
+    assert "canGenerateSuggestionsForRow(row)" in rerun_branch
+    assert "planningRowIdentityKeys(row).some((key) => rerunScope.has(key))" in rerun_branch
+    for forbidden in ("hasTailoringWorkspaceArtifacts", "resolvePlanningWorklistAction", "open_workspace"):
+        assert forbidden not in rerun_branch, f"rerun lane must not gate on {forbidden}"
+
+
+def test_rerun_scope_can_only_narrow_never_expand():
+    """Identities come from the Results Center; filters may reduce that set."""
+    source = _selection_source()
+    # Every rerun candidate must intersect the supplied identity set.
+    assert "rerunScope.has(key)" in source
+    # Filters are applied AFTER the scope intersection, so they only narrow.
+    scope_at = source.index("const eligibleRows = rerunScope")
+    filter_at = source.index("const filteredRows = eligibleRows.filter(")
+    assert scope_at < filter_at
+    assert "eligibleRows.filter(" in source
+    # requestedCount can only shrink the final candidate list.
+    assert "Math.min(requestedCount, filteredRows.length)" in source
+
+
+def test_rerun_with_stale_or_missing_identities_fails_visibly_not_silently():
+    """A genuinely empty rerun scope must surface through the existing app error
+    surface rather than closing the workspace with no feedback."""
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    rerun_source = planning[
+        planning.index("async function startBulkGenerateSuggestionsRerun") :
+        planning.index("function updateBulkGenerateSuggestionsConfiguration")
+    ]
+    assert "if (!scoped.selectedCount) {" in rerun_source
+    assert "showAppError(" in rerun_source
+    assert "Bulk re-run unavailable" in rerun_source
+    # Mode is reset so a failed re-run cannot leak into the next initial run.
+    assert 'bulkGenerateSuggestionsState.mode = "initial";' in rerun_source
+    assert "bulkGenerateSuggestionsState.rerunIdentities = [];" in rerun_source
+    # No new notification architecture: reuses the existing helper.
+    assert "function showAppError(" in planning
+
+
+def test_rerun_preserves_winner_runner_up_resume_validation():
+    """canGenerateSuggestionsForRow still demands a job reference and a resume
+    drawn from the current winner/runner-up allowlist."""
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    can_generate = planning[
+        planning.index("function canGenerateSuggestionsForRow") :
+        planning.index("function buildGenerateSuggestionsPayload")
+    ]
+    assert "row?.job_doc_id || row?.queue_rank" in can_generate
+    assert "resolveGenerateSuggestionsSelectedResume(row)" in can_generate
+
+    allowed = planning[
+        planning.index("function resolveGenerateSuggestionsAllowedResume") :
+        planning.index("function resolveGenerateSuggestionsSelectedResume")
+    ]
+    assert "row?.winner_resume" in allowed
+    assert "row?.runner_up_resume" in allowed
+    assert "allowedResumes.includes(candidate)" in allowed
+
+
+def test_rerun_start_path_keeps_backend_stale_candidate_validation():
+    """The fix is frontend admission only: backend safety is untouched."""
+    service = Path("src/app/bulk_generation_service.py").read_text(encoding="utf-8")
+    validate = service[
+        service.index("def validate_bulk_generation_candidates") :
+        service.index("def _launch_worker")
+    ]
+    assert '"stale_candidate"' in validate
+    assert '"duplicate_candidate"' in validate
+    assert "winner_resume" in validate and "runner_up_resume" in validate
+    # The worker still regenerates through the authoritative services path.
+    assert "services.regenerate_selected_resume_tailoring_payload" in service
+    assert "refresh_llm_tailoring=False" in service
+
+
+def _rerun_source():
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    return planning[
+        planning.index("async function startBulkGenerateSuggestionsRerun") :
+        planning.index("function updateBulkGenerateSuggestionsConfiguration")
+    ]
+
+
+def _executor_source():
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    return planning[
+        planning.index("async function executeBulkGenerateSuggestions") :
+        planning.index("async function stopBulkGenerateSuggestionsAfterCurrent")
+    ]
+
+
+def test_results_rerun_starts_directly_and_never_opens_the_settings_overlay():
+    """Re-run selected / Re-run all eligible must bypass the first-run
+    configuration overlay entirely."""
+    rerun = _rerun_source()
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+
+    assert "resetBulkGenerateSuggestionsState(scoped.candidateRows)" in rerun
+    assert "await executeBulkGenerateSuggestions()" in rerun
+    # No configuration UI is opened or reconfigured on this path.
+    for forbidden in (
+        'renderBulkGenerateSuggestionsOverlay("confirm"',
+        "resetBulkGenerateSuggestionsConfiguration(",
+        "renderBulkGenerateSuggestionsPreferenceOptions()",
+    ):
+        assert forbidden not in rerun, f"re-run must not call {forbidden}"
+    # The action handler delegates to the direct starter.
+    assert "await startBulkGenerateSuggestionsRerun(action.scope, action.jobIdentities)" in planning
+    assert "function openBulkGenerateSuggestionsRerun" not in planning
+
+
+def test_rerun_requested_count_equals_the_explicit_scope_and_cannot_truncate():
+    """A 10-job first-run default must never truncate an 18- or 64-job re-run."""
+    rerun = _rerun_source()
+    assert "bulkGenerateSuggestionsState.requestedCount = identities.length;" in rerun
+    # selectedCount = min(requestedCount, filteredRows.length); with
+    # requestedCount == |identities| the scope is never clipped.
+    selection = _selection_source()
+    assert "Math.min(requestedCount, filteredRows.length)" in selection
+    assert "candidateRows: filteredRows.slice(0, selectedCount)" in selection
+    # The start body sends the actual row count, not the UI number.
+    executor = _executor_source()
+    assert "requested_count: rows.length" in executor
+
+
+def test_rerun_neutralizes_first_run_filters():
+    """Review readiness / Match strength / Preferences are first-run controls;
+    they are recorded metadata only and must not scope a re-run."""
+    rerun = _rerun_source()
+    for field in ("reviewAction", "winnerBucket", "preferenceId"):
+        assert f'bulkGenerateSuggestionsState.{field} = "";' in rerun
+
+    executor = _executor_source()
+    assert 'review_filter: isRerun ? "" : bulkGenerateSuggestionsState.reviewAction' in executor
+    assert 'match_filter: isRerun ? "" : bulkGenerateSuggestionsState.winnerBucket' in executor
+    assert 'preference_filter: isRerun ? "" : bulkGenerateSuggestionsState.preferenceId' in executor
+
+    # Backend proof that these fields are metadata, not generation semantics.
+    service = Path("src/app/bulk_generation_service.py").read_text(encoding="utf-8")
+    start = service[service.index("def start_bulk_generation") : service.index("def request_bulk_generation_stop")]
+    for field in ("review_filter", "match_filter", "preference_filter"):
+        # Present only inside the recorded config payload.
+        assert f'"{field}": _clean(' in start
+    worker = Path("src/app/bulk_generation_worker.py").read_text(encoding="utf-8")
+    for field in ("review_filter", "match_filter", "preference_filter"):
+        assert field not in worker, f"{field} must have no worker semantics"
+
+
+def test_rerun_reuses_the_single_existing_start_and_progress_path():
+    """One executor, one endpoint, one canonical status/progress mechanism."""
+    executor = _executor_source()
+    assert 'postJson("/planning/bulk-generation/start"' in executor
+    assert "window.ApplyLensBulkGeneration?.refresh?.()" in executor
+    assert "publishPlanningWorklistState()" in executor
+
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    # Exactly one start call site and one executor in the whole bridge.
+    assert planning.count('postJson("/planning/bulk-generation/start"') == 1
+    assert planning.count("async function executeBulkGenerateSuggestions(") == 1
+    # Stop-after-current still routes through the shared canonical controller.
+    assert "window.ApplyLensBulkGeneration?.stop?.()" in planning
+
+
+def test_rerun_defers_running_state_until_the_start_is_accepted():
+    """Results must not be dismissed by an optimistic running state that a
+    rejected start would then revoke."""
+    executor = _executor_source()
+    assert 'const isRerun = String(bulkGenerateSuggestionsState.mode || "initial") === "rerun";' in executor
+    assert "if (!isRerun) publishPlanningWorklistState();" in executor
+    assert "if (isRerun) publishPlanningWorklistState();" in executor
+    # A rejected re-run reverts running, resets mode, and shows the existing
+    # error surface instead of falling into the first-run overlay.
+    failure = executor[executor.index("} catch (err) {"):]
+    assert "bulkGenerateSuggestionsState.isRunning = false;" in failure
+    assert 'bulkGenerateSuggestionsState.mode = "initial";' in failure
+    assert 'showAppError("Bulk Generate could not start", err)' in failure
+    assert 'renderBulkGenerateSuggestionsOverlay("confirm"' in failure  # initial lane only
+    assert "} else {" in failure
+
+
+def test_first_run_bulk_still_opens_the_configuration_overlay():
+    """Fresh Bulk Generate keeps its settings step unchanged."""
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    confirm = planning[
+        planning.index("function openBulkGenerateSuggestionsConfirmation") :
+        planning.index("async function startBulkGenerateSuggestionsRerun")
+    ]
+    assert 'bulkGenerateSuggestionsState.mode = "initial";' in confirm
+    assert "resetBulkGenerateSuggestionsConfiguration(scopeSummary.eligibleCount)" in confirm
+    assert "renderBulkGenerateSuggestionsPreferenceOptions()" in confirm
+    assert 'renderBulkGenerateSuggestionsOverlay("confirm", getPlanningBulkSuggestionSelection())' in confirm
+    # The action still routes fresh Bulk through the configuration step.
+    assert 'action.type === "bulk_generate_suggestions"' in planning
+    assert "openBulkGenerateSuggestionsConfirmation();" in planning
+    # And the overlay still carries the four first-run controls.
+    ui = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    for control in (
+        "bulkGenerateSuggestionsNumber",
+        "bulkGenerateSuggestionsReviewFilter",
+        "bulkGenerateSuggestionsMatchFilter",
+        "bulkGenerateSuggestionsPreferenceFilter",
+    ):
+        assert control in ui
+
+
+def test_rerun_keeps_every_admission_guard():
+    """The direct start does not weaken any existing guard."""
+    rerun = _rerun_source()
+    assert "bulkGenerateSuggestionsState.isRunning || generateSuggestionsState.isRunning" in rerun
+    assert "if (overlay && !overlay.classList.contains(\"hidden\")) return;" in rerun
+    assert "if (!identities.length) return;" in rerun
+    # Scope + resume validation still comes from the shared selection helper.
+    assert "getPlanningBulkSuggestionSelection(" in rerun
+    selection = _selection_source()
+    assert "canGenerateSuggestionsForRow(row)" in selection
+    assert "rerunScope.has(key)" in selection

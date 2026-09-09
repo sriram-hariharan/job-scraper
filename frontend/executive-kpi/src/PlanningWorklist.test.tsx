@@ -1250,3 +1250,53 @@ it("keeps the score visible beside a truncated long resume name", () => {
   expect(name.getAttribute("title")).toEqual(longName);
   expect(score.textContent).toEqual("51.25%");
 });
+
+// --- Direct re-run: Results must not close before the start is accepted -----
+
+it("keeps the Results workspace open when a re-run is dispatched", () => {
+  const listener = listenForActions();
+  const { dialog } = openResults();
+  fireEvent.click(within(dialog).getByRole("button", { name: /re-run all eligible \(2\)/i }));
+
+  // The bridge starts the run directly; Results stays open until the canonical
+  // running state arrives, so a rejected start cannot silently discard it.
+  expect(screen.queryByRole("dialog", { name: /bulk generation results/i })).not.toBeNull();
+  expect(lastAction(listener.actions)).toEqual({
+    type: "bulk_rerun",
+    scope: "eligible",
+    jobIdentities: ["job-2", "job-3"],
+  });
+  listener.stop();
+});
+
+it("closes the Results workspace once the canonical running state arrives", () => {
+  const { rerender } = render(
+    <PlanningWorklist state={planningState({ bulkSuggestions: terminalBulk })} />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: /view bulk results/i }));
+  expect(screen.queryByRole("dialog", { name: /bulk generation results/i })).not.toBeNull();
+
+  // Accepted start -> canonical running state -> existing running control.
+  rerender(
+    <PlanningWorklist
+      state={planningState({ bulkSuggestions: { ...terminalBulk, ...runningBulk, isRunning: true } })}
+    />,
+  );
+  expect(screen.queryByRole("dialog", { name: /bulk generation results/i })).toBeNull();
+  const control = screen.getByRole("button", { name: /bulk suggestions generating/i });
+  expect(control).toHaveTextContent("Bulk suggestions generating…");
+});
+
+it("opens the existing small progress popover from the running control", () => {
+  render(
+    <PlanningWorklist
+      state={planningState({ bulkSuggestions: { ...terminalBulk, ...runningBulk, isRunning: true } })}
+    />,
+  );
+  const control = screen.getByRole("button", { name: /bulk suggestions generating/i });
+  // Not auto-opened; available on click, exactly as for a first-time run.
+  expect(screen.queryByRole("dialog", { name: "Bulk Generate progress" })).toBeNull();
+  fireEvent.click(control);
+  const panel = screen.getByRole("dialog", { name: "Bulk Generate progress" });
+  expect(within(panel).getByRole("button", { name: /stop after current/i })).toBeTruthy();
+});

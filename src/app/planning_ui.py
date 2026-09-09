@@ -709,9 +709,20 @@ def scan_workspace_route(
     packet_json: str = "",
     saved_scan_id: str = "",
     output_dir: str = "",
+    pipeline_run_id: str = "",
 ) -> str:
+    auth_user = _auth_user_from_request(request)
+    resolved_pipeline_run_id = str(pipeline_run_id or "").strip()
+    if not resolved_pipeline_run_id and output_dir:
+        try:
+            resolved_pipeline_run_id = services.resolve_user_pipeline_run_id_from_planning_output_dir(
+                owner_user_id=_admin_owner_user_id(auth_user),
+                output_dir=output_dir,
+            )
+        except Exception:
+            resolved_pipeline_run_id = ""
     return scan_workspace(
-        auth_user=_auth_user_from_request(request),
+        auth_user=auth_user,
         company=company,
         title=title,
         resume=resume,
@@ -723,6 +734,7 @@ def scan_workspace_route(
         packet_json=packet_json,
         saved_scan_id=saved_scan_id,
         output_dir=output_dir,
+        pipeline_run_id=resolved_pipeline_run_id,
     )
 
 @router.get("/tailoring-workspace", response_class=HTMLResponse)
@@ -775,6 +787,7 @@ def tailoring_workspace(
             "tailoring_llm_json": tailoring_llm_json or "",
             "packet_json": packet_json or "",
             "output_dir": output_dir or "",
+            "pipeline_run_id": pipeline_run_id or "",
         }
     )
     scan_href_safe = escape(f"/scan-workspace?{scan_query}", quote=True)
@@ -1389,6 +1402,7 @@ def scan_workspace(
     packet_json: str = "",
     saved_scan_id: str = "",
     output_dir: str = "",
+    pipeline_run_id: str = "",
 ) -> str:
     company_safe = escape(company or "-")
     title_safe = escape(title or "-")
@@ -1413,6 +1427,7 @@ def scan_workspace(
     packet_json_key_safe = escape(packet_json or "")
     saved_scan_id_safe = escape(saved_scan_id or "")
     output_dir_safe = escape(output_dir or "")
+    pipeline_run_id_safe = escape(pipeline_run_id or "")
 
     loaded_job_context = services.scan_workspace_job_context_payload(
         output_dir=Path(output_dir) if output_dir else services.DEFAULT_OUTPUT_DIR,
@@ -1449,6 +1464,7 @@ def scan_workspace(
             "tailoring_llm_json": tailoring_llm_json or "",
             "packet_json": packet_json or "",
             "output_dir": output_dir or "",
+            "pipeline_run_id": pipeline_run_id or "",
         }
     )
     back_href_safe = escape(f"/tailoring-workspace?{back_query}", quote=True)
@@ -1486,6 +1502,7 @@ def scan_workspace(
             "packet_json": packet_json or "",
             "saved_scan_id": saved_scan_id or "",
             "output_dir": output_dir or "",
+            "pipeline_run_id": pipeline_run_id or "",
         }
     )
     scan_diagnostics_href_safe = escape(f"/advanced-diagnostics?{scan_diagnostics_query}", quote=True)
@@ -1534,7 +1551,7 @@ def scan_workspace(
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=eucalyptus_action_cascade_r2" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
-  <link rel="stylesheet" href="/static/scan_workspace_premium.css?v=scan_workspace_premium_r1&ui=truthful_scan_r1&ready=summary_r1" />
+  <link rel="stylesheet" href="/static/scan_workspace_premium.css?v=scan_workspace_premium_r1&ui=truthful_scan_r1&ready=summary_r1&persistence=hydration_tooltip_r2" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1554,6 +1571,7 @@ def scan_workspace(
     data-packet-json-key="{packet_json_key_safe}"
     data-saved-scan-id="{saved_scan_id_safe}"
     data-planning-output-dir="{output_dir_safe}"
+    data-pipeline-run-id="{pipeline_run_id_safe}"
     data-scan-initial-mode="{scan_initial_mode_safe}"
     data-scan-mode=""
   >
@@ -2081,8 +2099,7 @@ def scan_workspace(
 
               <span
                 class="scan-workspace-disabled-action-wrap"
-                data-scan-disabled-help="No changes made"
-                title="No changes made"
+                data-scan-help="No changes made"
               >
                 <button
                   type="button"
@@ -2091,7 +2108,6 @@ def scan_workspace(
                   id="scanWorkspaceCompareBtn"
                   aria-disabled="true"
                   disabled
-                  title="No changes made"
                 >
                   Compare
                 </button>
@@ -2099,8 +2115,7 @@ def scan_workspace(
 
               <span
                 class="scan-workspace-disabled-action-wrap"
-                data-scan-disabled-help="No changes made"
-                title="No changes made"
+                data-scan-help="No changes made"
               >
                 <button
                   type="button"
@@ -2108,9 +2123,8 @@ def scan_workspace(
                   id="scanWorkspaceSaveBtn"
                   aria-disabled="true"
                   disabled
-                  title="No changes made"
                 >
-                  <span data-scan-action-label>Continue</span>
+                  <span data-scan-action-label>Save</span>
                 </button>
               </span>
 
@@ -2455,8 +2469,8 @@ def scan_workspace(
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
-  <script src="/static/planning.js?v=planning_ui_20260518_scan_replacement_markers"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_rescan6_popover_phrase_scroll&ui=truthful_scan_r1&llm=default_on_r1&ready=summary_r1"></script>
+  <script src="/static/planning.js?v=planning_ui_20260518_scan_replacement_markers&persistence=hydration_tooltip_r2"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_rescan6_popover_phrase_scroll&ui=truthful_scan_r1&llm=default_on_r1&ready=summary_r1&persistence=hydration_tooltip_r2"></script>
 </body>
 </html>
     """.strip()

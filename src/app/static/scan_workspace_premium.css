@@ -1427,6 +1427,18 @@ body.scan-workspace-resizing .scan-workspace-divider::after {
 .scan-workspace-issue-row.is-missing .scan-workspace-issue-status { background: var(--scan-warning); }
 .scan-workspace-issue-row.is-predicted .scan-workspace-issue-status { background: var(--scan-primary); }
 .scan-workspace-issue-row.is-other-keyword .scan-workspace-issue-status { background: var(--scan-muted); }
+.scan-workspace-issue-row.is-excluded .scan-workspace-issue-status { background: var(--scan-muted); }
+
+#scanWorkspacePage .scan-workspace-issue-row.is-excluded {
+  border-style: dashed !important;
+  color: var(--scan-text-2) !important;
+  background: var(--scan-surface-2) !important;
+}
+
+.scan-workspace-issue-row.is-excluded .scan-workspace-issue-title,
+.scan-workspace-issue-row.is-excluded .scan-workspace-issue-signals {
+  opacity: 0.72;
+}
 
 .scan-workspace-issue-main {
   display: grid;
@@ -1541,6 +1553,14 @@ body.scan-workspace-resizing .scan-workspace-divider::after {
 
 .scan-workspace-issue-exclude-btn:hover {
   color: var(--scan-danger);
+}
+
+.scan-workspace-issue-reinclude-btn {
+  color: var(--scan-primary);
+}
+
+.scan-workspace-issue-reinclude-btn:hover {
+  color: var(--scan-primary-strong);
 }
 
 /* 8. Personal details and safety callouts */
@@ -1839,7 +1859,7 @@ html[data-theme="dark"] #scanWorkspacePage .scan-workspace-diagnostics-icon-btn 
   display: inline-flex;
 }
 
-.scan-workspace-disabled-action-wrap::after {
+.scan-workspace-disabled-action-wrap[data-scan-help]:not([data-scan-help=""])::after {
   position: absolute;
   top: calc(100% + 7px);
   right: 0;
@@ -1849,14 +1869,14 @@ html[data-theme="dark"] #scanWorkspacePage .scan-workspace-diagnostics-icon-btn 
   min-width: max-content;
   padding: 5px 7px;
   border-radius: 5px;
-  color: var(--scan-surface);
-  background: var(--scan-text);
+  color: #ffffff;
+  background: #111827;
   font-size: 9px;
-  content: attr(data-scan-disabled-help);
+  content: attr(data-scan-help);
 }
 
-.scan-workspace-disabled-action-wrap:focus-within::after,
-.scan-workspace-disabled-action-wrap:hover::after {
+.scan-workspace-disabled-action-wrap[data-scan-help]:not([data-scan-help=""]):focus-within::after,
+.scan-workspace-disabled-action-wrap[data-scan-help]:not([data-scan-help=""]):hover::after {
   display: block;
 }
 

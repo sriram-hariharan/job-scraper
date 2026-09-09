@@ -113,6 +113,7 @@ const scanWorkspacePersistenceState = {
   lastError: "",
   hydratedSignature: "",
   manualBulletEdits: {},
+  hydrationTrace: [],
 };
 
 const scanWorkspacePhraseState = {
@@ -1717,11 +1718,18 @@ function getScanWorkspaceContext() {
     packetJsonPath: String(root.dataset.packetJsonPath || "").trim(),
     packetJsonKey: String(root.dataset.packetJsonKey || "").trim(),
     planningOutputDir: String(root.dataset.planningOutputDir || "").trim(),
+    pipelineRunId: String(root.dataset.pipelineRunId || "").trim(),
   };
 }
 
 function getScanWorkspaceArtifactKey(context) {
-  return String(context?.tailoringJsonKey || context?.tailoringJsonPath || "").trim();
+  return String(
+    context?.tailoringJsonKey ||
+    context?.tailoringJsonPath ||
+    context?.packetJsonKey ||
+    context?.packetJsonPath ||
+    ""
+  ).trim();
 }
 
 function getScanWorkspaceBasePacketKey(context) {
@@ -2724,6 +2732,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   }
 
   scanWorkspaceState.preloadPayload = payload;
+  captureScanWorkspacePersistenceCheckpoint("A: immediately after preload assignment");
   const root = getScanWorkspacePageRoot();
   if (root) {
     const company = firstNonEmptyScanWorkspaceText(
@@ -2834,7 +2843,6 @@ function applyNewScanWorkspaceReviewPayload(payload) {
     }
   }, 0);
 
-  loadScanWorkspaceDraftState();
 }
 
 async function loadSavedScanWorkspaceReviewPayload() {
@@ -2876,6 +2884,7 @@ async function loadSavedScanWorkspaceReviewPayload() {
           }
         : null
     );
+    await loadScanWorkspaceDraftState();
     return true;
   } catch (err) {
     const summary = document.getElementById("scanWorkspaceInteractiveSummary");
@@ -2902,8 +2911,9 @@ function bindScanWorkspaceProcessingShell() {
   const okBtn = getScanWorkspaceInput("scanWorkspaceProcessingOkBtn");
   if (okBtn && okBtn.dataset.bound !== "true") {
     okBtn.dataset.bound = "true";
-    okBtn.addEventListener("click", () => {
+    okBtn.addEventListener("click", async () => {
       applyNewScanWorkspaceReviewPayload(scanWorkspaceProcessingState.pendingReviewPayload);
+      await loadScanWorkspaceDraftState();
     });
   }
 }
@@ -3197,6 +3207,9 @@ function getEffectiveAcceptedCompareCandidateIds() {
   if (scanWorkspaceAnnotationState.markers.length > 0) {
     return liveIds;
   }
+  if (typeof getScanWorkspaceSelectedCandidateIds === "function") {
+    return getScanWorkspaceSelectedCandidateIds();
+  }
   return getSavedSelectedPatchCandidateIds();
 }
 
@@ -3215,6 +3228,12 @@ function setScanWorkspaceMarkerDecision(markerId, decision) {
 
 function buildScanWorkspaceRewriteReviewDecisionsPayload() {
   const decisionMap = {};
+
+  if (!scanWorkspaceAnnotationState.markers.length) {
+    return typeof getScanWorkspaceCurrentReviewDecisionMap === "function"
+      ? getScanWorkspaceCurrentReviewDecisionMap()
+      : decisionMap;
+  }
 
   scanWorkspaceAnnotationState.markers.forEach((marker) => {
     const decision = normalizeScanWorkspaceAnnotationDecision(marker?.decision);
@@ -3260,6 +3279,7 @@ function buildScanWorkspacePersistencePayload() {
   return {
     tailoring_json_path: getScanWorkspaceArtifactKey(context),
     selected_resume: context.resumeName,
+    pipeline_run_id: context.pipelineRunId,
     selected_patch_candidate_ids: getEffectiveAcceptedCompareCandidateIds(),
     manual_bullet_edits: getScanWorkspaceManualBulletEdits(),
     rewrite_review_decisions: buildScanWorkspaceRewriteReviewDecisionsPayload(),
@@ -3467,6 +3487,168 @@ function getSavedScanWorkspacePersistenceSignature() {
   );
 }
 
+function getScanWorkspacePersistenceFieldSnapshot(payload = {}) {
+  const signature = buildScanWorkspacePersistenceSignature(
+    payload.selected_patch_candidate_ids || [],
+    payload.rewrite_review_decisions || {},
+    payload.manual_bullet_edits || {},
+    payload.excluded_scan_issue_ids || [],
+    payload.personal_details || {}
+  );
+  try {
+    return JSON.parse(signature);
+  } catch {
+    return {};
+  }
+}
+
+function captureScanWorkspacePersistenceCheckpoint(checkpoint) {
+  const label = String(checkpoint || "").trim();
+  if (label.startsWith("A:")) {
+    scanWorkspacePersistenceState.hydrationTrace = [];
+  }
+
+  const currentPayload = buildScanWorkspacePersistencePayload() || {};
+  const savedPayload = scanWorkspacePersistenceState.loadResponse?.draft || {};
+  const currentFields = getScanWorkspacePersistenceFieldSnapshot(currentPayload);
+  const savedFields = getScanWorkspacePersistenceFieldSnapshot(savedPayload);
+  const fieldNames = [
+    "selected_patch_candidate_ids",
+    "rewrite_review_decisions",
+    "manual_bullet_edits",
+    "excluded_scan_issue_ids",
+    "personal_details",
+  ];
+  const differences = {};
+  fieldNames.forEach((field) => {
+    if (JSON.stringify(currentFields[field]) !== JSON.stringify(savedFields[field])) {
+      differences[field] = {
+        current: currentFields[field],
+        saved: savedFields[field],
+      };
+    }
+  });
+
+  const context = getScanWorkspaceContext();
+  const savedScanId = String(getScanWorkspacePageRoot()?.dataset?.savedScanId || "").trim();
+  const canPersist = Boolean(
+    savedScanId || (getScanWorkspaceArtifactKey(context) && context?.resumeName)
+  );
+  const currentSignature = getCurrentScanWorkspacePersistenceSignature();
+  const hydratedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
+  scanWorkspacePersistenceState.hydrationTrace.push({
+    checkpoint: label,
+    current_payload: currentPayload,
+    saved_payload: savedPayload,
+    current_signature: currentSignature,
+    hydrated_signature: hydratedSignature,
+    differences,
+    can_persist: canPersist,
+    is_dirty: Boolean(canPersist && currentSignature !== hydratedSignature),
+  });
+}
+
+function hydrateScanWorkspacePersistenceStateFromDraft(
+  draftPayload = {},
+  { captureTrace = true } = {}
+) {
+  const rawDraft = draftPayload && typeof draftPayload === "object" ? draftPayload : {};
+  scanWorkspacePersistenceState.loadResponse = {
+    ...(scanWorkspacePersistenceState.loadResponse || {}),
+    draft: rawDraft,
+  };
+  if (captureTrace) captureScanWorkspacePersistenceCheckpoint("B: after saved draft load");
+
+  if (typeof setScanWorkspaceExcludedIssueIds === "function") {
+    setScanWorkspaceExcludedIssueIds(rawDraft.excluded_scan_issue_ids || []);
+  }
+  if (captureTrace) captureScanWorkspacePersistenceCheckpoint("C: after excluded issue IDs hydration");
+
+  const sourcePersonalDetails = getSourceScanWorkspacePersonalDetails();
+  const savedPersonalDetails = normalizeScanWorkspacePersistencePersonalDetails(
+    rawDraft.personal_details || {}
+  );
+  const hydratedPersonalDetails = mergeScanWorkspacePersonalDetails(
+    sourcePersonalDetails,
+    savedPersonalDetails
+  );
+  if (typeof setScanWorkspacePersonalDetails === "function") {
+    setScanWorkspacePersonalDetails(hydratedPersonalDetails);
+  }
+  if (captureTrace) captureScanWorkspacePersistenceCheckpoint("D: after personal details hydration");
+
+  if (typeof normalizeTailoringWorkspaceReviewDecisionMap === "function") {
+    scanWorkspaceState.rewriteReviewDecisions = normalizeTailoringWorkspaceReviewDecisionMap(
+      rawDraft.rewrite_review_decisions || {}
+    );
+  }
+  if (captureTrace) captureScanWorkspacePersistenceCheckpoint("E: after rewrite decisions hydration");
+
+  scanWorkspacePersistenceState.manualBulletEdits = {
+    ...(rawDraft.manual_bullet_edits && typeof rawDraft.manual_bullet_edits === "object"
+      ? rawDraft.manual_bullet_edits
+      : {}),
+  };
+  if (captureTrace) captureScanWorkspacePersistenceCheckpoint("F: after manual bullet edits hydration");
+
+  if (
+    typeof normalizeScanWorkspaceSelectedCandidateIds === "function" &&
+    scanWorkspaceState.preloadPayload
+  ) {
+    scanWorkspaceState.selectedCandidateIds = normalizeScanWorkspaceSelectedCandidateIds(
+      scanWorkspaceState.preloadPayload,
+      rawDraft.selected_patch_candidate_ids || []
+    );
+  }
+  if (captureTrace) captureScanWorkspacePersistenceCheckpoint("G: after selected candidate IDs hydration");
+
+  const canonicalDraft = {
+    ...rawDraft,
+    selected_patch_candidate_ids:
+      typeof getScanWorkspaceSelectedCandidateIds === "function"
+        ? getScanWorkspaceSelectedCandidateIds()
+        : rawDraft.selected_patch_candidate_ids || [],
+    rewrite_review_decisions:
+      typeof getScanWorkspaceCurrentReviewDecisionMap === "function"
+        ? getScanWorkspaceCurrentReviewDecisionMap()
+        : rawDraft.rewrite_review_decisions || {},
+    manual_bullet_edits: { ...scanWorkspacePersistenceState.manualBulletEdits },
+    excluded_scan_issue_ids: getCurrentScanWorkspaceExcludedIssueIds(),
+    personal_details: getCurrentScanWorkspacePersonalDetails(),
+  };
+  scanWorkspacePersistenceState.loadResponse = {
+    ...(scanWorkspacePersistenceState.loadResponse || {}),
+    draft: canonicalDraft,
+  };
+  applySavedDraftStateToScanMarkers();
+  scanWorkspacePersistenceState.hydratedSignature = getSavedScanWorkspacePersistenceSignature();
+  if (captureTrace) captureScanWorkspacePersistenceCheckpoint("H: when hydrated signature is assigned");
+}
+
+function assertScanWorkspacePersistenceResponseMatchesRequest(response, requestPayload) {
+  if (!response || response.ok !== true || response.has_saved_draft !== true) {
+    throw new Error("Scan decisions were not confirmed as persisted.");
+  }
+  if (!response.draft || typeof response.draft !== "object") {
+    throw new Error("Saved scan response did not include the persisted draft.");
+  }
+
+  const requestedFields = getScanWorkspacePersistenceFieldSnapshot(requestPayload || {});
+  const persistedFields = getScanWorkspacePersistenceFieldSnapshot(response.draft);
+  const mismatchedFields = [
+    "selected_patch_candidate_ids",
+    "rewrite_review_decisions",
+    "manual_bullet_edits",
+    "excluded_scan_issue_ids",
+    "personal_details",
+  ].filter(
+    (field) => JSON.stringify(requestedFields[field]) !== JSON.stringify(persistedFields[field])
+  );
+  if (mismatchedFields.length) {
+    throw new Error(`Saved scan response did not verify: ${mismatchedFields.join(", ")}.`);
+  }
+}
+
 function applySavedDraftStateToScanMarkers() {
   const draft = scanWorkspacePersistenceState.loadResponse?.draft || {};
   const selectedSet = new Set(
@@ -3548,18 +3730,23 @@ function renderScanWorkspacePersistenceStatus() {
   const isSavedNewScan = Boolean(savedScanId && entrySource === "scan_workspace_new_scan");
   const currentSignature = getCurrentScanWorkspacePersistenceSignature();
   const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
-  const canPersist = hasContext || isSavedNewScan;
+  const canPersist = hasContext || Boolean(savedScanId);
   const isDirty = Boolean(canPersist && currentSignature !== savedSignature);
   const noChangesLabel = "No changes made";
   const syncDisabledHelp = (button, disabled, enabledLabel) => {
     if (!button) return;
     const wrapper = button.closest(".scan-workspace-disabled-action-wrap");
     button.setAttribute("aria-disabled", disabled ? "true" : "false");
-    button.title = disabled ? noChangesLabel : enabledLabel;
+    const helpLabel = disabled ? noChangesLabel : enabledLabel;
+    // The wrapper pseudo-tooltip is the single visual help surface in both
+    // states. Native title text would create a second browser tooltip.
+    button.removeAttribute("title");
+    button.setAttribute("aria-label", helpLabel);
     button.dataset.disabledReason = disabled ? noChangesLabel : "";
     if (wrapper) {
-      wrapper.title = disabled ? noChangesLabel : "";
-      wrapper.setAttribute("aria-label", disabled ? noChangesLabel : enabledLabel);
+      wrapper.removeAttribute("title");
+      wrapper.setAttribute("aria-label", helpLabel);
+      wrapper.setAttribute("data-scan-help", helpLabel);
       if (disabled) {
         wrapper.setAttribute("tabindex", "0");
       } else {
@@ -3622,10 +3809,10 @@ function renderScanWorkspacePersistenceStatus() {
     syncScanWorkspacePremiumActionState(saveBtn, {
       disabled: isSaveDisabled,
       loading: isSaveLoading,
-      idleLabel: "Continue",
+      idleLabel: "Save",
       loadingLabel: "Saving...",
     });
-    syncDisabledHelp(saveBtn, isSaveDisabled, "Continue");
+    syncDisabledHelp(saveBtn, isSaveDisabled, "Save changes");
     saveBtn.classList.toggle("has-unsaved-changes", isDirty);
   }
 
@@ -3690,8 +3877,6 @@ function updateScanWorkspaceDecisionSummaryUi() {
   const redoBtn = getScanWorkspaceInput("scanWorkspaceRedoBtn");
   const aiSuggestionStepLabel = getScanWorkspaceInput("scanWorkspaceAiSuggestionStepLabel");
   const editStep = getScanWorkspaceInput("scanWorkspaceEditStep");
-  const scoreValue = getScanWorkspaceInput("scanWorkspaceScoreValue");
-
   const hasMarkers = scanWorkspaceAnnotationState.markers.length > 0;
   const savedAcceptedIds = getSavedSelectedPatchCandidateIds();
 
@@ -3766,17 +3951,6 @@ function updateScanWorkspaceDecisionSummaryUi() {
     editStep.title = hasGuidance
       ? "Open an orange guidance item to edit the surfaced bullet and preview the score."
       : "Edit unlocks when manual guidance rows are available.";
-  }
-
-  if (scoreValue) {
-    const scoreSource = String(scoreValue.dataset.scanScoreSource || "").trim();
-    if (scoreSource !== "backend" && counts.actionableTotal > 0) {
-      scoreValue.textContent = String(Math.round((counts.accepted / counts.actionableTotal) * 100));
-      scoreValue.setAttribute(
-        "aria-label",
-        `${counts.accepted} of ${counts.actionableTotal} replacement suggestions accepted`
-      );
-    }
   }
 
   renderScanWorkspacePersistenceStatus();
@@ -3859,6 +4033,8 @@ function getCurrentScanWorkspaceExclusionAdjustedScore() {
 }
 
 function coerceScanWorkspaceScore100(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && !value.trim()) return null;
   const score = Number(value);
   if (!Number.isFinite(score)) return null;
   const displayScore = score >= 0 && score <= 1 ? score * 100 : score;
@@ -3867,6 +4043,10 @@ function coerceScanWorkspaceScore100(value) {
 
 function getScanWorkspaceLoadedScanScorePoints() {
   const preload = getScanWorkspacePreloadPayloadForSurface() || {};
+  if (typeof resolveScanWorkspaceBaselineScorePoints === "function") {
+    return resolveScanWorkspaceBaselineScorePoints(preload);
+  }
+
   const scanScore = preload?.scan_score && typeof preload.scan_score === "object"
     ? preload.scan_score
     : {};
@@ -4744,13 +4924,9 @@ async function loadScanWorkspaceDraftState() {
       draft,
       score_preview: scanWorkspaceState.preloadPayload?.score_preview || {},
     };
-    scanWorkspacePersistenceState.manualBulletEdits = {
-      ...(draft?.manual_bullet_edits && typeof draft.manual_bullet_edits === "object"
-        ? draft.manual_bullet_edits
-        : {}),
-    };
-    scanWorkspacePersistenceState.hydratedSignature = getSavedScanWorkspacePersistenceSignature();
+    hydrateScanWorkspacePersistenceStateFromDraft(draft);
     renderScanWorkspacePersistenceStatus();
+    captureScanWorkspacePersistenceCheckpoint("I: after final initial persistence render");
     return;
   }
 
@@ -4771,6 +4947,7 @@ async function loadScanWorkspaceDraftState() {
             {
               tailoring_json_path: payload.tailoring_json_key || payload.tailoring_json_path,
               selected_resume: payload.selected_resume,
+              pipeline_run_id: payload.pipeline_run_id,
             },
             15000
           )
@@ -4780,6 +4957,7 @@ async function loadScanWorkspaceDraftState() {
             body: JSON.stringify({
               tailoring_json_path: payload.tailoring_json_key || payload.tailoring_json_path,
               selected_resume: payload.selected_resume,
+              pipeline_run_id: payload.pipeline_run_id,
             }),
           }).then(async (res) => {
             if (!res.ok) {
@@ -4807,27 +4985,7 @@ async function loadScanWorkspaceDraftState() {
         },
       };
     }
-    scanWorkspacePersistenceState.manualBulletEdits = {
-      ...(
-        response?.draft?.manual_bullet_edits &&
-        typeof response.draft.manual_bullet_edits === "object"
-          ? response.draft.manual_bullet_edits
-          : {}
-      ),
-    };
-    scanWorkspacePersistenceState.hydratedSignature = getSavedScanWorkspacePersistenceSignature();
-
-    if (typeof setScanWorkspaceExcludedIssueIds === "function") {
-      setScanWorkspaceExcludedIssueIds(response?.draft?.excluded_scan_issue_ids || []);
-    }
-    const savedPersonalDetails = response?.draft?.personal_details || {};
-    if (
-      typeof setScanWorkspacePersonalDetails === "function" &&
-      hasScanWorkspacePersonalDetailsValue(savedPersonalDetails)
-    ) {
-      setScanWorkspacePersonalDetails(savedPersonalDetails);
-    }
-    applySavedDraftStateToScanMarkers();
+    hydrateScanWorkspacePersistenceStateFromDraft(response?.draft || {});
 
     scanWorkspacePreviewState.documentPreviewPayload = null;
     scanWorkspacePreviewState.scorePreviewPayload = response?.score_preview || null;
@@ -4850,6 +5008,7 @@ async function loadScanWorkspaceDraftState() {
   } finally {
     scanWorkspacePersistenceState.isLoading = false;
     renderScanWorkspacePersistenceStatus();
+    captureScanWorkspacePersistenceCheckpoint("I: after final initial persistence render");
   }
 }
 
@@ -4918,6 +5077,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
           workflow_readiness_artifact_id: getScanWorkspaceWorkflowReadinessArtifactId(),
         }
       : payload;
+
     const response =
       typeof postJsonWithTimeout === "function"
         ? await postJsonWithTimeout(saveUrl, requestPayload, 20000)
@@ -4939,6 +5099,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
             return res.json();
           });
 
+    assertScanWorkspacePersistenceResponseMatchesRequest(response, requestPayload);
     scanWorkspacePersistenceState.loadResponse = response;
     renderScanWorkspaceTailoringLlmReadback(response);
     renderScanWorkspaceExactChangeLlmReadback(response);
@@ -4954,26 +5115,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
     renderScanWorkspaceWorkflowReadinessCheckpointReadback(response);
     renderScanWorkspaceAgenticWorkflowIntegrationReadback(response);
     renderScanWorkspaceProductionReadinessCheckpoint(response);
-    scanWorkspacePersistenceState.manualBulletEdits = {
-      ...getScanWorkspaceManualBulletEdits(),
-      ...(
-        response?.draft?.manual_bullet_edits &&
-        typeof response.draft.manual_bullet_edits === "object"
-          ? response.draft.manual_bullet_edits
-          : {}
-      ),
-    };
-    if (typeof setScanWorkspaceExcludedIssueIds === "function") {
-      setScanWorkspaceExcludedIssueIds(response?.draft?.excluded_scan_issue_ids || []);
-    }
-    const savedPersonalDetails = response?.draft?.personal_details || {};
-    if (
-      typeof setScanWorkspacePersonalDetails === "function" &&
-      hasScanWorkspacePersonalDetailsValue(savedPersonalDetails)
-    ) {
-      setScanWorkspacePersonalDetails(savedPersonalDetails);
-    }
-    scanWorkspacePersistenceState.hydratedSignature = getCurrentScanWorkspacePersistenceSignature();
+    hydrateScanWorkspacePersistenceStateFromDraft(response.draft, { captureTrace: false });
     scanWorkspacePersistenceState.lastError = "";
     renderScanWorkspacePersistenceStatus();
 
@@ -5044,7 +5186,7 @@ async function exportScanWorkspaceDraft(format = "pdf") {
 
   try {
     if (isDirty) {
-      scanWorkspacePersistenceState.lastError = "Click Continue to save scan decisions before exporting.";
+      scanWorkspacePersistenceState.lastError = "Click Save to save scan decisions before exporting.";
       renderScanWorkspacePersistenceStatus();
       return false;
     }
@@ -6786,7 +6928,7 @@ function bindScanWorkspacePersistenceControls() {
   if (saveBtn && saveBtn.dataset.bound !== "true") {
     saveBtn.dataset.bound = "true";
     saveBtn.addEventListener("click", async () => {
-      await continueScanWorkspaceAfterReview();
+      await saveScanWorkspaceDraftState();
     });
   }
 
@@ -6865,9 +7007,10 @@ function bindScanWorkspacePersistenceControls() {
 function maybeWarnBeforeUnload(event) {
   const context = getScanWorkspaceContext();
   const hasContext = Boolean(getScanWorkspaceArtifactKey(context) && context?.resumeName);
+  const savedScanId = String(getScanWorkspacePageRoot()?.dataset?.savedScanId || "").trim();
   const currentSignature = getCurrentScanWorkspacePersistenceSignature();
   const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
-  const isDirty = Boolean(hasContext && currentSignature !== savedSignature);
+  const isDirty = Boolean((hasContext || savedScanId) && currentSignature !== savedSignature);
 
   if (!isDirty || scanWorkspacePersistenceState.isSaving) {
     return;
@@ -6923,9 +7066,13 @@ function bindScanWorkspaceGlobalShortcuts() {
   window.addEventListener("beforeunload", maybeWarnBeforeUnload);
 }
 
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
   const root = getScanWorkspacePageRoot();
   if (!root) return;
+
+  if (window.scanWorkspacePlanningInitialization) {
+    await window.scanWorkspacePlanningInitialization;
+  }
 
   bindScanWorkspaceModeButtons();
   bindScanWorkspaceIntakeForm();
@@ -6936,10 +7083,6 @@ window.addEventListener("DOMContentLoaded", () => {
   bindScanWorkspaceGlobalShortcuts();
   updateScanWorkspaceProcessingView();
   loadScanWorkspaceSavedResumes();
-
-  setScanWorkspaceMode(getScanWorkspaceInitialMode());
-  loadSavedScanWorkspaceReviewPayload();
-  loadScanWorkspaceDraftState();
 
   window.scanWorkspacePhase1 = {
     setMode: setScanWorkspaceMode,
@@ -6969,6 +7112,8 @@ window.addEventListener("DOMContentLoaded", () => {
     getCurrentExcludedIssueIds: () => getScanWorkspacePersistenceExcludedIssueIds(),
     getSavedExcludedIssueIds: () => getSavedScanWorkspaceExcludedIssueIds(),
     getSavedPersonalDetails: () => getSavedScanWorkspacePersonalDetails(),
+    getPersistenceTrace: () =>
+      scanWorkspacePersistenceState.hydrationTrace.map((entry) => ({ ...entry })),
     getAnnotationState: () => ({
       markers: scanWorkspaceAnnotationState.markers.map((marker) => ({ ...marker })),
       activeMarkerId: scanWorkspaceAnnotationState.activeMarkerId,
@@ -6976,6 +7121,15 @@ window.addEventListener("DOMContentLoaded", () => {
       acceptedCandidateIds: getEffectiveAcceptedCompareCandidateIds(),
     }),
   };
+
+  if (scanWorkspaceState.preloadPayload && typeof syncScanWorkspaceAnnotationMarkers === "function") {
+    syncScanWorkspaceAnnotationMarkers(scanWorkspaceState.preloadPayload);
+  }
+  setScanWorkspaceMode(getScanWorkspaceInitialMode());
+  const restoredSavedScan = await loadSavedScanWorkspaceReviewPayload();
+  if (!restoredSavedScan) {
+    await loadScanWorkspaceDraftState();
+  }
 });
 
 

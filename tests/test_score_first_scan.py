@@ -3190,6 +3190,184 @@ def test_keyword_contract_uses_summary_and_resume_evidence_for_matched_missing_r
     assert rows["sql"]["row_action_label"] == "Phrase"
 
 
+def test_keyword_contract_preserves_authoritative_atomic_skill_identities():
+    kwargs = {
+        "trusted_ready": [],
+        "trusted_optional": [],
+        "ai_optimize_optional": [],
+        "directional_guidance": [],
+        "resume_evidence": _resume_evidence(
+            skills=["Python", "Tableau"],
+            bullets=["Built Python workflows and Tableau dashboards."],
+        ),
+        "tailoring_summary": {
+            "matched_required": ["Python", "Tableau"],
+            "missing_required": ["Statistical analysis"],
+        },
+    }
+
+    first = _build_tailoring_scan_issue_contract(**kwargs)
+    second = _build_tailoring_scan_issue_contract(**kwargs)
+    expected_terms = {"python", "tableau", "statistical analysis"}
+    first_rows = {
+        issue["canonical_term"]: issue
+        for issue in first["issues"]
+        if issue.get("group_id") == "skills"
+        and issue.get("canonical_term") in expected_terms
+    }
+    second_ids = {
+        issue["canonical_term"]: issue["issue_id"]
+        for issue in second["issues"]
+        if issue.get("group_id") == "skills"
+        and issue.get("canonical_term") in expected_terms
+    }
+
+    assert set(first_rows) == expected_terms
+    assert first_rows["python"]["bucket"] == "matched"
+    assert first_rows["tableau"]["bucket"] == "matched"
+    assert first_rows["statistical analysis"]["bucket"] == "missing"
+    assert {term: row["issue_id"] for term, row in first_rows.items()} == second_ids
+    assert len(set(second_ids.values())) == 3
+
+
+def test_replacement_presentation_title_cannot_create_grouped_missing_skill():
+    source_bullet = (
+        "Identified cardiovascular biomarkers using Python statistical analysis "
+        "and Tableau visualizations, supporting improved healthcare product assessments"
+    )
+    contract = _build_tailoring_scan_issue_contract(
+        trusted_ready=[],
+        trusted_optional=[],
+        ai_optimize_optional=[],
+        directional_guidance=[
+            {
+                "replacement_candidate_id": "replacement_3",
+                "source_bullet_id": "bullet_3",
+                "original_text": source_bullet,
+                "rewrite_direction": "Lead with python in this opening clause.",
+                "likely_impacted_dimensions": [
+                    "required_skills_alignment",
+                    "tooling_alignment",
+                ],
+                "replacement_source": "deterministic",
+            }
+        ],
+        resume_evidence=_resume_evidence(
+            skills=["Python", "Tableau"],
+            bullets=[source_bullet],
+        ),
+        tailoring_summary={
+            "matched_required": ["Python"],
+            "missing_required": ["Matlab", "Statistical modeling", "C++"],
+        },
+    )
+
+    skill_rows = [
+        issue for issue in contract["issues"]
+        if issue.get("group_id") == "skills"
+    ]
+    python_rows = [
+        issue for issue in skill_rows
+        if issue.get("canonical_term") == "python"
+    ]
+
+    assert all(
+        issue.get("canonical_term") != "python, tableau, statistical analysis"
+        for issue in skill_rows
+    )
+    assert len(python_rows) == 1
+    assert python_rows[0]["bucket"] == "matched"
+    assert python_rows[0]["row_action_type"] == "matched"
+    assert "replacement_3" in python_rows[0]["linked_candidate_ids"]
+
+
+@pytest.mark.parametrize(
+    ("resume_skills", "matched_terms", "missing_terms", "expected_term", "expected_bucket"),
+    [
+        (["Python"], ["Python"], ["R", "Python or R"], "python", "matched"),
+        (["R"], ["R"], ["Python", "Python or R"], "r", "matched"),
+        (["Python", "R"], ["Python", "R"], ["Python or R"], "python", "matched"),
+        ([], [], ["Python", "R", "Python or R"], "python or r", "missing"),
+    ],
+)
+def test_scan_or_requirement_is_one_atomic_scoring_identity(
+    resume_skills,
+    matched_terms,
+    missing_terms,
+    expected_term,
+    expected_bucket,
+):
+    jd_terms = ["Python", "Python or R", "R"]
+    contract = _build_tailoring_scan_issue_contract(
+        trusted_ready=[],
+        trusted_optional=[],
+        ai_optimize_optional=[],
+        directional_guidance=[],
+        resume_evidence=_resume_evidence(
+            skills=resume_skills,
+            bullets=[f"Used {' and '.join(resume_skills)} in production."]
+            if resume_skills
+            else [],
+        ),
+        tailoring_summary={
+            "matched_required": matched_terms,
+            "matched_terms": matched_terms,
+            "missing_required": missing_terms,
+            "missing_terms": missing_terms,
+        },
+        jd_record={
+            "required_skills": jd_terms,
+            "all_skills": jd_terms,
+        },
+    )
+
+    or_group_rows = [
+        issue
+        for issue in contract["issues"]
+        if issue.get("group_id") == "skills"
+        and issue.get("canonical_term") in {"python", "r", "python or r"}
+        and issue.get("row_action_type") not in {"predicted_skill", "other_keyword"}
+    ]
+
+    assert [(row["canonical_term"], row["bucket"]) for row in or_group_rows] == [
+        (expected_term, expected_bucket)
+    ]
+    assert or_group_rows[0]["required_count"] == 1
+    assert or_group_rows[0]["score_priority_weight"] > 0
+    assert not any(
+        row.get("canonical_term") == "python" and row.get("bucket") == "missing"
+        for row in contract["issues"]
+    )
+
+
+def test_scan_or_normalization_does_not_parse_unstructured_prose_or_change_atomic_missing():
+    contract = _build_tailoring_scan_issue_contract(
+        trusted_ready=[],
+        trusted_optional=[],
+        ai_optimize_optional=[],
+        directional_guidance=[],
+        resume_evidence=_resume_evidence(),
+        tailoring_summary={
+            "matched_required": [],
+            "missing_required": ["Research or development", "Kubernetes"],
+        },
+        jd_record={
+            "required_skills": ["Research or development", "Kubernetes"],
+            "all_skills": ["Research or development", "Kubernetes"],
+        },
+    )
+    rows = {
+        issue["canonical_term"]: issue
+        for issue in contract["issues"]
+        if issue.get("group_id") == "skills"
+    }
+
+    assert rows["research or development"]["bucket"] == "missing"
+    assert rows["kubernetes"]["bucket"] == "missing"
+    assert "research" not in rows
+    assert "development" not in rows
+
+
 def test_keyword_contract_selects_highest_positive_candidate_for_duplicate_term():
     contract = _build_tailoring_scan_issue_contract(
         trusted_ready=[],
@@ -3612,6 +3790,79 @@ def test_workspace_draft_persists_excluded_scan_issue_ids():
             "scan_issue:skills:keyword:beam",
             "scan_issue:skills:keyword:flink",
         ]
+
+
+def test_packet_backed_workspace_draft_persists_exclude_and_reinclude():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        output_dir = Path(tmp_dir) / "planning"
+        packet_dir = output_dir / "job_packets"
+        packet_dir.mkdir(parents=True, exist_ok=True)
+        packet_path = packet_dir / "example__data_scientist__resume.json"
+        packet_path.write_text(
+            """
+{
+  "job": {"company": "Example", "title": "Data Scientist"},
+  "selection": {"selected_resume": "resume.pdf"},
+  "selected_patch_candidate_ids": []
+}
+""".strip(),
+            encoding="utf-8",
+        )
+        packet_key = packet_path.relative_to(output_dir).as_posix()
+        issue_id = "scan_issue:skills:keyword:causal_inference"
+
+        saved = save_tailoring_workspace_draft_payload(
+            output_dir=output_dir,
+            tailoring_json_path=packet_key,
+            selected_resume="resume.pdf",
+            selected_patch_candidate_ids=[],
+            manual_bullet_edits={},
+            rewrite_review_decisions={},
+            excluded_scan_issue_ids=[issue_id],
+            personal_details={},
+            note="packet exclusion",
+        )
+        draft_path = Path(saved["draft_json_path"])
+
+        assert saved["ok"] is True
+        assert draft_path.exists()
+        assert draft_path.resolve() == packet_path.with_name(
+            "example__data_scientist__resume__tailoring_workspace_draft.json"
+        ).resolve()
+        assert json.loads(draft_path.read_text(encoding="utf-8"))[
+            "excluded_scan_issue_ids"
+        ] == [issue_id]
+
+        loaded = load_tailoring_workspace_draft_payload(
+            output_dir=output_dir,
+            tailoring_json_path=packet_key,
+            selected_resume="resume.pdf",
+        )
+        assert loaded["has_saved_draft"] is True
+        assert loaded["draft"]["excluded_scan_issue_ids"] == [issue_id]
+
+        restored = save_tailoring_workspace_draft_payload(
+            output_dir=output_dir,
+            tailoring_json_path=packet_key,
+            selected_resume="resume.pdf",
+            selected_patch_candidate_ids=[],
+            manual_bullet_edits={},
+            rewrite_review_decisions={},
+            excluded_scan_issue_ids=[],
+            personal_details={},
+            note="packet re-included",
+        )
+        assert restored["draft"]["excluded_scan_issue_ids"] == []
+        assert json.loads(draft_path.read_text(encoding="utf-8"))[
+            "excluded_scan_issue_ids"
+        ] == []
+
+        reloaded = load_tailoring_workspace_draft_payload(
+            output_dir=output_dir,
+            tailoring_json_path=packet_key,
+            selected_resume="resume.pdf",
+        )
+        assert reloaded["draft"]["excluded_scan_issue_ids"] == []
 
 
 def test_scan_extracts_resume_personal_details_from_header():

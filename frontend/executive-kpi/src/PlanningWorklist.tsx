@@ -935,8 +935,9 @@ function PlanningBulkGenerateControl({
             triggerRef.current?.focus();
           }}
           onRerun={(scope, jobIdentities) => {
-            setResultsOpen(false);
-            triggerRef.current?.focus();
+            // Do NOT close here: the bridge starts the run directly and the
+            // canonical running state closes this workspace once the start is
+            // accepted. A rejected start leaves Results open behind the error.
             onRerun(scope, jobIdentities);
           }}
         />

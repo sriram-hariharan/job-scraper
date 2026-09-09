@@ -5287,6 +5287,164 @@ def _new_scan_job_record(
     }
 
 
+_SCAN_DISJUNCTION_PATTERN = re.compile(r"\s+or\s+", re.IGNORECASE)
+
+
+def _scan_requirement_alternatives(term: Any) -> List[str]:
+    """Split a disjunctive requirement such as "Python or R" into alternatives.
+
+    Deliberately narrow: only an " or " separator is recognised, every
+    alternative must be non-empty, and the caller additionally requires each
+    alternative to be a term the JD itself already uses.  Free prose such as
+    "research or development" therefore stays a single requirement unless the
+    JD lists both sides as skills in their own right.
+    """
+    text = _clean_text(term)
+    if not text:
+        return []
+    parts = [_clean_text(part) for part in _SCAN_DISJUNCTION_PATTERN.split(text)]
+    parts = [part for part in parts if part]
+    return parts if len(parts) >= 2 else []
+
+
+def _scan_requirement_is_satisfied_disjunction(
+    term: Any,
+    *,
+    matched_keys: set[str],
+    known_keys: set[str],
+) -> bool:
+    """True when an OR requirement has at least one supported alternative.
+
+    An OR group is one requirement: it is satisfied by any single alternative,
+    it is never worth double credit, and it is never split into several rows.
+    """
+    alternatives = _scan_requirement_alternatives(term)
+    if not alternatives:
+        return False
+    alternative_keys = [_scan_issue_canonical_term(part) for part in alternatives]
+    if not all(alternative_keys):
+        return False
+    # Every alternative must be a term the JD itself recognises, so ordinary
+    # prose containing the word "or" is never treated as a disjunction.
+    if not all(key in known_keys for key in alternative_keys):
+        return False
+    return any(key in matched_keys for key in alternative_keys)
+
+
+def _normalize_scan_tailoring_summary_disjunctions(
+    summary: Dict[str, Any] | None,
+    *,
+    required_terms: Any = None,
+) -> Dict[str, Any]:
+    """Collapse one JD OR requirement to one Scan matched/missing identity.
+
+    The extractor can retain both atomic alternatives and their source phrase
+    (``python``, ``r``, ``python or r``).  Scan must not turn those parser
+    projections into three independently scored requirements.  A composite is
+    recognised only when every alternative also exists in the JD's structured
+    requirement terms.  If one or more alternatives matched, the first matched
+    alternative is retained so its real resume evidence remains available; if
+    none matched, the composite remains as one missing requirement.
+    """
+    normalized = dict(summary or {})
+    matched_fields = (
+        "matched_required",
+        "matched_preferred",
+        "matched_terms",
+        "matched_any",
+    )
+    missing_fields = (
+        "missing_required",
+        "missing_preferred",
+        "missing_terms",
+        "missing_requirements",
+    )
+    structured_fields = (
+        "required_terms",
+        "required_skills",
+        "preferred_terms",
+        "preferred_skills",
+        "all_terms",
+        "all_skills",
+    )
+
+    structured_terms = _unique_scan_terms(
+        list(required_terms or [])
+        + [
+            term
+            for field in structured_fields
+            for term in list(normalized.get(field, []) or [])
+        ]
+        + [
+            term
+            for field in matched_fields + missing_fields
+            for term in list(normalized.get(field, []) or [])
+        ]
+    )
+    known_keys = {
+        _scan_issue_canonical_term(term)
+        for term in structured_terms
+        if _scan_issue_canonical_term(term)
+    }
+    matched_keys = {
+        _scan_issue_canonical_term(term)
+        for field in matched_fields
+        for term in list(normalized.get(field, []) or [])
+        if _scan_issue_canonical_term(term)
+    }
+
+    disjunctions: List[Tuple[str, List[str], List[str]]] = []
+    for term in structured_terms:
+        alternatives = _scan_requirement_alternatives(term)
+        alternative_keys = [
+            _scan_issue_canonical_term(alternative)
+            for alternative in alternatives
+        ]
+        if not alternatives or not all(alternative_keys):
+            continue
+        if not all(key in known_keys for key in alternative_keys):
+            continue
+        disjunctions.append((_clean_text(term), alternatives, alternative_keys))
+
+    for composite, alternatives, alternative_keys in disjunctions:
+        composite_key = _scan_issue_canonical_term(composite)
+        group_keys = {composite_key, *alternative_keys}
+        satisfied = _scan_requirement_is_satisfied_disjunction(
+            composite,
+            matched_keys=matched_keys,
+            known_keys=known_keys,
+        )
+        retained_term = next(
+            (
+                alternative
+                for alternative, key in zip(alternatives, alternative_keys)
+                if key in matched_keys
+            ),
+            "",
+        )
+
+        for field in matched_fields + missing_fields:
+            if field not in normalized:
+                continue
+            normalized[field] = [
+                term
+                for term in list(normalized.get(field, []) or [])
+                if _scan_issue_canonical_term(term) not in group_keys
+            ]
+
+        target_field = "matched_required" if satisfied else "missing_required"
+        target_term = retained_term if satisfied else composite
+        normalized[target_field] = _unique_scan_terms(
+            list(normalized.get(target_field, []) or []) + [target_term]
+        )
+        mirror_field = "matched_terms" if satisfied else "missing_terms"
+        normalized[mirror_field] = _unique_scan_terms(
+            list(normalized.get(mirror_field, []) or []) + [target_term]
+        )
+
+    return normalized
+
+
 def _new_scan_tailoring_summary(
     *,
     job_evidence: Any,
@@ -5316,7 +5474,7 @@ def _new_scan_tailoring_summary(
         ]
     matched_terms = _unique_scan_terms(matched_required + matched_preferred + matched_any)
 
-    return {
+    summary = {
         "target_job_title": _clean_text(getattr(job_evidence, "title", "")),
         "job_title": _clean_text(getattr(job_evidence, "title", "")),
         "matched_required": matched_required,
@@ -5336,6 +5494,10 @@ def _new_scan_tailoring_summary(
         "missing_terms": missing_required,
         "match_bucket": _clean_text(getattr(match_result, "match_bucket", "")),
     }
+    return _normalize_scan_tailoring_summary_disjunctions(
+        summary,
+        required_terms=required_terms + preferred_terms + all_terms,
+    )
 
 
 def _new_scan_structured_resume_targets(resume_evidence: Any) -> Dict[str, Any]:
@@ -6371,6 +6533,15 @@ def save_saved_scan_state_payload(
         draft=draft,
         owner_user_id=owner_user_id,
     )
+    if not payload.get("ok"):
+        raise ValueError("Saved scan state could not be persisted.")
+    persisted_draft = payload.get("draft")
+    if isinstance(persisted_draft, dict):
+        persisted_excluded_ids = _normalize_workspace_excluded_scan_issue_ids(
+            persisted_draft.get("excluded_scan_issue_ids", [])
+        )
+        if persisted_excluded_ids != draft["excluded_scan_issue_ids"]:
+            raise ValueError("Saved scan exclusion state could not be verified.")
     live_tailoring_readback = _planning_workspace_live_tailoring_suggestion_payload(
         scan_id=safe_scan_id,
         owner_user_id=owner_user_id,
@@ -8414,6 +8585,39 @@ def resolve_user_pipeline_run_planning_paths(
             "Review the run details or run the pipeline again."
         )
     return output_dir, job_corpus
+
+
+def resolve_user_pipeline_run_id_from_planning_output_dir(
+    *,
+    owner_user_id: str,
+    output_dir: str,
+) -> str:
+    """Resolve an owner run by exact match with its recorded planning root."""
+    owner = _clean_text(owner_user_id)
+    requested_output_dir = _clean_text(output_dir)
+    if not owner or not requested_output_dir:
+        return ""
+
+    requested_path = Path(requested_output_dir).expanduser().resolve()
+    payload = get_user_pipeline_runs_postgres_payload(
+        owner_user_id=owner,
+        limit=200,
+        status="succeeded",
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    for run in list(payload.get("rows", []) or []):
+        run_record = dict(run or {})
+        run_id = _clean_text(run_record.get("run_id"))
+        recorded_output_dir = _pipeline_run_output_dir_from_record(run_record)
+        if not run_id or not recorded_output_dir:
+            continue
+        if Path(recorded_output_dir).expanduser().resolve() == requested_path:
+            return run_id
+    return ""
 
 
 def _pipeline_run_log_path_from_record(run: Dict[str, Any]) -> str:
@@ -12354,6 +12558,7 @@ def _scan_keyword_rows_from_replacement_issues(
 
     matched_keys = {_scan_issue_canonical_term(term) for term in matched_terms if _scan_issue_canonical_term(term)}
     missing_keys = {_scan_issue_canonical_term(term) for term in missing_terms if _scan_issue_canonical_term(term)}
+    authoritative_summary_keys = matched_keys | missing_keys
 
     grouped: Dict[str, List[Dict[str, Any]]] = {}
     display_by_key: Dict[str, str] = {}
@@ -12362,9 +12567,21 @@ def _scan_keyword_rows_from_replacement_issues(
         if _clean_text(issue.get("group_id")) != "skills":
             continue
 
-        terms = _scan_issue_display_terms(dict(issue.get("raw", {}) or issue)) or _scan_issue_display_terms(issue)
-        if not terms:
-            terms = [_clean_text(issue.get("title"))]
+        raw_issue = dict(issue.get("raw", {}) or issue)
+        terms = _scan_issue_display_terms(raw_issue)
+        if not terms and authoritative_summary_keys:
+            # A replacement row can lack structured JD signals while its source
+            # resume bullet contains several unrelated skills.  The presentation
+            # title may summarize those terms with commas, but it is not an
+            # authoritative skill identity.  Link only atomic terms that the
+            # scorer already classified in its matched/missing summary.
+            terms = [
+                term
+                for term in _scan_issue_text_signal_terms(raw_issue)
+                if _scan_issue_canonical_term(term) in authoritative_summary_keys
+            ]
+        if not terms and not authoritative_summary_keys:
+            terms = _scan_issue_display_terms(issue) or [_clean_text(issue.get("title"))]
 
         for term in terms:
             canonical = _scan_issue_canonical_term(term)
@@ -13905,6 +14122,15 @@ def _build_tailoring_scan_issue_contract(
     env: Dict[str, str] | None = None,
     critic_trace_module: Any = None,
 ) -> Dict[str, Any]:
+    jd_requirement_terms = [
+        term
+        for field in ("required_skills", "preferred_skills", "all_skills")
+        for term in list((jd_record or {}).get(field, []) or [])
+    ]
+    normalized_tailoring_summary = _normalize_scan_tailoring_summary_disjunctions(
+        tailoring_summary,
+        required_terms=jd_requirement_terms,
+    )
     replacement_issues: List[Dict[str, Any]] = []
 
     lane_specs = [
@@ -13964,7 +14190,7 @@ def _build_tailoring_scan_issue_contract(
     deterministic_issues = (
         _build_searchability_scan_issues(
             resume_evidence,
-            tailoring_summary=tailoring_summary,
+            tailoring_summary=normalized_tailoring_summary,
         )
         + _build_formatting_scan_issues(resume_evidence)
         + _build_recruiter_tip_scan_issues(resume_evidence)
@@ -13973,7 +14199,7 @@ def _build_tailoring_scan_issue_contract(
         _scan_keyword_rows_from_replacement_issues(
             replacement_issues,
             resume_evidence=resume_evidence,
-            tailoring_summary=tailoring_summary,
+            tailoring_summary=normalized_tailoring_summary,
             jd_record=jd_record,
         )
         + _scan_keyword_rows_from_non_skill_replacement_issues(replacement_issues)
@@ -13983,7 +14209,7 @@ def _build_tailoring_scan_issue_contract(
         _build_predicted_skill_scan_rows(
             existing_issues=issues,
             resume_evidence=resume_evidence,
-            tailoring_summary=tailoring_summary,
+            tailoring_summary=normalized_tailoring_summary,
             jd_record=jd_record,
         )
     )
@@ -14022,7 +14248,7 @@ def _build_tailoring_scan_issue_contract(
 
     critic_advisory = _attach_critic_advisory_to_scan_issues(
         issues,
-        tailoring_summary=tailoring_summary,
+        tailoring_summary=normalized_tailoring_summary,
         env=env,
         trace_module=critic_trace_module,
     )
@@ -33919,7 +34145,6 @@ def save_tailoring_workspace_draft_payload(
         json.dumps(draft_payload, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
-
     return {
         "ok": True,
         "draft_status": "saved",

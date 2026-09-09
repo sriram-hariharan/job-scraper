@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 
 OWNER_A = "owner-a"
@@ -104,6 +105,44 @@ def test_resolver_ignores_caller_supplied_output_dir(owner_runs):
     assert resolved == owner_runs[(OWNER_A, RUN_A)]
     assert OWNER_B not in str(resolved)
     assert str(resolved).endswith(f"{OWNER_A}/{RUN_A}/application_planning")
+
+
+def test_recorded_output_dir_resolves_owner_run_without_path_parsing(owner_runs, monkeypatch):
+    from types import SimpleNamespace
+
+    from src.app import planning_ui, services
+
+    rows = [
+        {
+            "run_id": RUN_A,
+            "status": "succeeded",
+            "config_json": {"output_dir": str(owner_runs[(OWNER_A, RUN_A)])},
+        }
+    ]
+    monkeypatch.setattr(
+        services,
+        "get_user_pipeline_runs_postgres_payload",
+        lambda **_kwargs: {"rows": rows},
+    )
+
+    assert services.resolve_user_pipeline_run_id_from_planning_output_dir(
+        owner_user_id=OWNER_A,
+        output_dir=str(owner_runs[(OWNER_A, RUN_A)]),
+    ) == RUN_A
+    assert services.resolve_user_pipeline_run_id_from_planning_output_dir(
+        owner_user_id=OWNER_B,
+        output_dir=str(owner_runs[(OWNER_B, RUN_B)]),
+    ) == ""
+
+    request = SimpleNamespace(
+        state=SimpleNamespace(auth_user={"user_id": OWNER_A})
+    )
+    html = planning_ui.scan_workspace_route(
+        request,
+        resume="resume.pdf",
+        output_dir=str(owner_runs[(OWNER_A, RUN_A)]),
+    )
+    assert f'data-pipeline-run-id="{RUN_A}"' in html
 
 
 # --- select-patches ------------------------------------------------------------
@@ -314,6 +353,67 @@ def test_draft_load_cannot_read_another_owner_run(owner_runs, monkeypatch):
     assert exc.value.status_code == 400
 
 
+def test_artifact_draft_http_round_trip_requires_run_identity(owner_runs, monkeypatch):
+    from src.app import api as app_api
+
+    output_dir = owner_runs[(OWNER_A, RUN_A)]
+    packet_dir = output_dir / "job_packets"
+    packet_dir.mkdir(exist_ok=True)
+    artifact = packet_dir / "reddit__staff_data_scientist__resume__tailoring.json"
+    artifact.write_text(
+        '{"job":{"company":"reddit","title":"Staff Data Scientist"},'
+        '"selection":{"selected_resume":"resume.pdf"},'
+        '"selected_patch_candidate_ids":[]}',
+        encoding="utf-8",
+    )
+
+    def auth_guard(request):
+        request.state.auth_user = {"user_id": OWNER_A}
+        return None
+
+    monkeypatch.setattr(app_api, "auth_guard_response", auth_guard)
+    monkeypatch.setattr(app_api, "_require_auth_owner_user_id", lambda _request: OWNER_A)
+    monkeypatch.setattr(
+        app_api.bulk_generation_service,
+        "active_bulk_generation_guard_state",
+        lambda **_kwargs: {},
+    )
+    client = TestClient(app_api.app)
+    issue_id = "scan_issue:skills:keyword:python_or_r"
+    request_body = {
+        "pipeline_run_id": RUN_A,
+        "tailoring_json_path": artifact.relative_to(output_dir).as_posix(),
+        "selected_resume": "resume.pdf",
+        "selected_patch_candidate_ids": [],
+        "manual_bullet_edits": {},
+        "rewrite_review_decisions": {},
+        "excluded_scan_issue_ids": [issue_id],
+        "personal_details": {},
+    }
+
+    saved = client.post("/planning/save-workspace-draft", json=request_body)
+    assert saved.status_code == 200
+    assert saved.json()["draft"]["excluded_scan_issue_ids"] == [issue_id]
+
+    read_back = client.post(
+        "/planning/load-workspace-draft",
+        json={
+            "pipeline_run_id": RUN_A,
+            "tailoring_json_path": request_body["tailoring_json_path"],
+            "selected_resume": "resume.pdf",
+        },
+    )
+    assert read_back.status_code == 200
+    assert read_back.json()["draft"]["excluded_scan_issue_ids"] == [issue_id]
+
+    reinclude = client.post(
+        "/planning/save-workspace-draft",
+        json={**request_body, "excluded_scan_issue_ids": []},
+    )
+    assert reinclude.status_code == 200
+    assert reinclude.json()["draft"]["excluded_scan_issue_ids"] == []
+
+
 # --- preview (read-only, still owner scoped) -----------------------------------
 
 def test_preview_selected_patches_rejects_unauthenticated(owner_runs, monkeypatch):
@@ -359,13 +459,19 @@ def test_preview_uses_owner_run_root(owner_runs, monkeypatch):
 # --- frontend run-identity threading -------------------------------------------
 
 def test_workspace_page_renders_pipeline_run_id():
-    from src.app.planning_ui import tailoring_workspace
+    from src.app.planning_ui import scan_workspace, tailoring_workspace
 
     html = tailoring_workspace(
         company="C", title="T", job_doc_id="J", output_dir="/tmp/x",
         pipeline_run_id=RUN_A,
     )
     assert f'data-pipeline-run-id="{RUN_A}"' in html
+
+    scan_html = scan_workspace(
+        company="C", title="T", resume="resume.pdf", output_dir="/tmp/x",
+        pipeline_run_id=RUN_A,
+    )
+    assert f'data-pipeline-run-id="{RUN_A}"' in scan_html
 
 
 def test_planning_js_threads_run_identity():
@@ -375,6 +481,14 @@ def test_planning_js_threads_run_identity():
     # Context exposes it and both draft paths send it.
     assert "pipelineRunId: String(page.dataset.pipelineRunId" in js
     assert js.count('pipeline_run_id: context.pipelineRunId || ""') >= 3
+
+    scan_js = Path("src/app/static/scan_workspace.js").read_text(encoding="utf-8")
+    assert "pipelineRunId: String(root.dataset.pipelineRunId" in scan_js
+    assert "pipeline_run_id: context.pipelineRunId" in scan_js
+    load_draft = scan_js.split("async function loadScanWorkspaceDraftState()", 1)[1].split(
+        "async function saveScanWorkspaceDraftState", 1
+    )[0]
+    assert load_draft.count("pipeline_run_id: payload.pipeline_run_id") == 2
 
 
 # --- preservation ---------------------------------------------------------------

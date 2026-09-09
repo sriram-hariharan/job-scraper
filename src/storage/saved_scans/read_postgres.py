@@ -316,34 +316,56 @@ def save_saved_scan_draft_postgres_payload(
     draft_json = json.dumps(safe_draft, sort_keys=True).replace("'", "''")
     owner_and = _owner_visibility_clause(owner_user_id, prefix="AND")
     sql = f"""
-UPDATE saved_scans
-SET payload_json = jsonb_set(
-        jsonb_set(
-            payload_json,
-            '{{scan_review_payload,draft}}',
-            '{draft_json}'::jsonb,
+WITH updated AS (
+    UPDATE saved_scans
+    SET payload_json = jsonb_set(
+            jsonb_set(
+                payload_json,
+                '{{scan_review_payload,draft}}',
+                '{draft_json}'::jsonb,
+                true
+            ),
+            '{{scan_review_payload,personal_details,saved}}',
+            '{json.dumps(safe_draft.get("personal_details", {}), sort_keys=True).replace("'", "''")}'::jsonb,
             true
         ),
-        '{{scan_review_payload,personal_details,saved}}',
-        '{json.dumps(safe_draft.get("personal_details", {}), sort_keys=True).replace("'", "''")}'::jsonb,
-        true
+        note = 'Saved scan state updated from AI Optimize scan.'
+    WHERE scan_id = {_sql_quote_text(safe_scan_id)}
+    {owner_and}
+    RETURNING scan_id, payload_json #> '{{scan_review_payload,draft}}' AS draft
+)
+SELECT COALESCE(
+    (
+        SELECT json_build_object('scan_id', scan_id, 'draft', draft)
+        FROM updated
+        LIMIT 1
     ),
-    note = 'Saved scan state updated from AI Optimize scan.'
-WHERE scan_id = {_sql_quote_text(safe_scan_id)}
-{owner_and};
+    '{{}}'::json
+);
 """.strip()
-    schema_sql = saved_scans_schema_sql_text() + "\n\n" if ensure_schema else ""
-    payload = _run_psql_command(
-        sql=schema_sql + sql,
+    schema_payload: Dict[str, Any] = {}
+    if ensure_schema:
+        schema_payload = _run_psql_command(
+            sql=saved_scans_schema_sql_text(),
+            database_url=database_url,
+            database_url_env=database_url_env,
+            psql_bin=psql_bin,
+            print_only=print_only,
+        )
+    payload = _run_psql_json_query(
+        sql=sql,
         database_url=database_url,
         database_url_env=database_url_env,
         psql_bin=psql_bin,
         print_only=print_only,
     )
+    row = dict(payload.get("data", {}) or {})
     return {
-        "ok": True,
+        "ok": bool(row.get("scan_id")),
         "scan_id": safe_scan_id,
-        "draft": safe_draft,
+        "draft": dict(row.get("draft", {}) or {}),
+        "schema_command": schema_payload.get("command", []),
+        "schema_command_text": schema_payload.get("command_text", ""),
         "command": payload.get("command", []),
         "command_text": payload.get("command_text", ""),
     }

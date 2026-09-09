@@ -30465,8 +30465,7 @@ function UB({ bulk: e, onStart: t, onStop: n, onViewResults: r, onRerun: i }) {
 					c(!1), (e = m.current) == null || e.focus();
 				},
 				onRerun: (e, t) => {
-					var n;
-					c(!1), (n = m.current) == null || n.focus(), i(e, t);
+					i(e, t);
 				}
 			}) : null,
 			_ && a ? /* @__PURE__ */ (0, q.jsxs)("div", {

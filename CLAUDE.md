@@ -111,8 +111,7 @@ Guidance for Claude Code when working in this repository.
 
 # Git workflow
 - Confirm branch and worktree state before editing.
-- Current branch: item4-planning-tailoring-options-review.
-- Current approved checkpoint: ddf02cb2af56f061087d9ff56c17de9541fd98fd.
+- Do not rely on branch or checkpoint values stored in documentation; verify Git state directly at task start.
 - Do not commit or push unless explicitly requested.
 - Before commit, verify there are no numbered duplicate generated assets.
 - Stage only exact approved files.
@@ -131,8 +130,9 @@ Guidance for Claude Code when working in this repository.
 - Never invent outputs, logs, test counts, or runtime behavior.
 - Clearly state anything unverified.
 
-# Current checkpoint
-- The following facts were manually verified and approved by the user:
+# Historical Item 4 checkpoint
+- Historical context only; do not treat this section as current branch, HEAD, or roadmap state.
+- The following facts were manually verified and approved by the user at the Item 4 checkpoint:
   - Item 4 Planning & Tailoring Options Review is complete.
   - Approved feature checkpoint commit: ddf02cb2af56f061087d9ff56c17de9541fd98fd.
   - Planning patch-selection writes now persist the authenticated owner and fail closed on blank ownership.
@@ -141,8 +141,6 @@ Guidance for Claude Code when working in this repository.
   - Request `output_dir` values no longer provide authorization authority on the hardened planning routes.
   - `generate_llm_tailoring=false` remains the passive deterministic default; LLM tailoring is triggered only by explicit user actions.
   - `review_decision`, `draft_status`, and derived tailoring readiness remain intentionally separate state concepts.
-  - Item 4 focused, compatibility, governance, and closure verification is complete; repository-wide full-suite testing remains deferred until all planned items are complete.
-- Application safety remains preserved: no auto-apply, ATS submission, recruiter messaging, or automatic mark-applied behavior was introduced.
-- Operational classic-script isolation and existing page request ownership boundaries remain preserved.
-- Next planned checkpoint: Item 5 — Deployment.
-- Update this Current checkpoint section after every approved checkpoint commit.
+  - At Item 4 closure, focused, compatibility, governance, and closure verification was complete; repository-wide full-suite testing was deferred.
+- At that checkpoint, application safety was preserved: no auto-apply, ATS submission, recruiter messaging, or automatic mark-applied behavior was introduced.
+- At that checkpoint, operational classic-script isolation and existing page request ownership boundaries were preserved.

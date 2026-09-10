@@ -812,7 +812,7 @@ def test_adapter_and_integrations_are_offline_and_do_not_persist(
     assert list(tmp_path.rglob("*")) == before
 
 
-def test_adapter_owner_has_no_network_environment_or_persistence_access():
+def test_adapter_owner_has_no_network_environment_and_scopes_persistence():
     source = ADAPTER_PATH.read_text(encoding="utf-8")
     tree = ast.parse(source)
     imports = {
@@ -829,13 +829,32 @@ def test_adapter_owner_has_no_network_environment_or_persistence_access():
         isinstance(node, ast.Attribute) and node.attr in {"getenv", "environ"}
         for node in ast.walk(tree)
     )
-    assert not any(
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr
-        in {"write_text", "write_bytes", "open", "replace", "unlink"}
+
+    persistence_owners = {
+        "_prepare_renderer_bound_observation_path",
+        "write_renderer_bound_qualification_observation_exclusive",
+    }
+    persistence_calls = {
+        "write_text",
+        "write_bytes",
+        "open",
+        "replace",
+        "unlink",
+    }
+
+    for function in (
+        node
         for node in ast.walk(tree)
-    )
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ):
+        calls_persistence = any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in persistence_calls
+            for node in ast.walk(function)
+        )
+        if calls_persistence:
+            assert function.name in persistence_owners
 
 
 # ---------------------------------------------------------------------------

@@ -56,19 +56,28 @@ The project can run locally for development, or as a Dockerized web service with
 
 ### 1. Job Discovery and Collection
 
-The pipeline discovers companies and job boards, then scrapes jobs from supported ATS providers. It handles common ATS-specific differences through dedicated scraper modules.
+Company and job-board discovery is a separate manual or scheduled workflow. The main processing pipeline acquires jobs from configured scraper adapters or, in authenticated projection mode, from the shared PostgreSQL job corpus.
 
 High-level flow:
 
 ```text
-Company discovery
-  -> ATS-specific scraping
-  -> job normalization
-  -> location/title/freshness filtering
-  -> deduplication
-  -> seen-job filtering
-  -> job corpus export
-  -> application planning
+Standalone discovery
+  run_agent_discovery.py
+    -> company / career-page discovery
+    -> persisted discovery state
+
+Main processing pipeline
+  scraper acquisition or shared PostgreSQL corpus
+    -> location / title / freshness filtering
+    -> deduplication
+    -> ranking
+    -> seen-job filtering
+    -> detail enrichment
+    -> JD intelligence + AI-evaluation eligibility
+    -> AI job evaluation when applicable
+    -> final application-priority scoring
+    -> RAG / seen-state / metrics persistence
+    -> optional application planning
 ```
 
 ### 2. Application Planning
@@ -113,6 +122,7 @@ The web app uses a shared navigation shell with these main pages:
 | Scheduler | `/scheduler` | Scheduler health, command previews, launchd configuration, and run history. |
 | Profile | `/profile` | Saved resumes, pipeline runs, saved scans, and account/admin tools. |
 | Saved Scans | `/profile/saved-scans` | Review previously generated AI Optimize Scan records. |
+| App Guide | `/guide` | Normal-user guide to ApplyLens workflows, terminology, review states, and next actions. |
 | Login/Register | `/login`, `/register` | Local authentication and optional registration approval workflow. |
 
 ---
@@ -143,7 +153,7 @@ It supports:
 - Resume-to-job matching.
 - Skill extraction and enrichment.
 - Best-resume selection.
-- Application priority scoring.
+- Consumption of upstream application-priority scores.
 - Manual review queues.
 - Patch candidate generation.
 - Tailoring packet generation.
@@ -402,16 +412,17 @@ pip install -r requirements.txt
 
 ### 3. Create environment configuration
 
-Create a `.env` file in the repo root. At minimum, configure the LLM provider keys you plan to use.
+Create a `.env` file in the repo root for infrastructure and any ownerless/CLI AI paths you intend to use. Authenticated web AI features use owner-scoped credentials configured from Profile → AI Settings and qualified per-workload routing.
 
 Common options:
 
 ```bash
+# Optional ownerless/CLI LLM defaults
 LLM_PROVIDER=groq
 LLM_MODEL=llama-3.1-8b-instant
 GROQ_API_KEY=...
 
-# Optional OpenAI quality lane/fallback
+# Optional ownerless/general fallback
 OPENAI_API_KEY=...
 LLM_FALLBACK_ENABLED=false
 LLM_FALLBACK_PROVIDER=openai
@@ -447,7 +458,8 @@ python run_api.py --reload
 The Executive Dashboard KPI cards are a scoped React island. Its deterministic
 production bundle is checked in under `src/app/static/build/executive-kpi` so the
 normal Python runtime does not require Node or a frontend development server.
-Rebuild that bundle after changing `frontend/executive-kpi`:
+Rebuilding `frontend/executive-kpi` locally requires Node >=22.12.0, as declared
+by that workspace's package metadata. Rebuild the bundle after changing it:
 
 ```bash
 cd frontend/executive-kpi
@@ -542,17 +554,19 @@ The project supports many optional settings. The most commonly useful ones are b
 
 | Variable | Purpose |
 | --- | --- |
-| `LLM_PROVIDER` | Default provider for general LLM calls. |
-| `LLM_MODEL` | Default model for general LLM calls. |
-| `GROQ_API_KEY` | Groq API key. |
-| `OPENAI_API_KEY` | OpenAI API key. |
-| `LLM_FALLBACK_ENABLED` | Enables provider fallback. |
+| `LLM_PROVIDER` | Default provider for ownerless/general LLM calls; it does not override authenticated workload routing. |
+| `LLM_MODEL` | Default model for ownerless/general LLM calls; it does not override authenticated workload routing. |
+| `GROQ_API_KEY` | Environment credential for Groq-backed ownerless/CLI paths. |
+| `OPENAI_API_KEY` | Environment credential for OpenAI-backed ownerless/CLI paths. |
+| `LLM_FALLBACK_ENABLED` | Controls generic provider fallback where supported; authenticated user runtime disables provider fallback. |
 | `SKILL_EXTRACTION_BACKEND` | Skill extraction backend selection. |
 | `EVAL_MODE` | Job-fit evaluation mode. |
 | `LLM_TAILOR_PROVIDER` | Provider for tailoring generation. |
 | `LLM_TAILOR_MODEL` | Model for tailoring generation. |
 | `SCAN_PHRASE_PROVIDER` | Provider for scan phrase generation. |
 | `SCAN_PHRASE_MODEL` | Model for scan phrase generation. |
+
+Authenticated web workloads resolve their effective provider/model through the qualified routing policy. A saved preferred provider does not override a workload-specific qualified route, and an explicit task selection is effective only while that exact provider/model remains qualified.
 
 ### Persistence
 
@@ -735,11 +749,11 @@ cp deploy/env.production.example .env.production
 docker compose -f docker-compose.prod.yml up --build
 ```
 
-The compose file starts:
+The production container build uses a Node 22 frontend build stage and a Python 3.12 backend image. The compose stack starts:
 
-- PostgreSQL
-- Redis
-- FastAPI web app
+- PostgreSQL 18
+- Redis 7 Alpine
+- FastAPI web app on the Python 3.12 image
 
 The web service is exposed on:
 

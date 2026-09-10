@@ -3,9 +3,7 @@
 > Canonical implementation-oriented map for humans and coding agents working in this repository.
 >
 > Repository: `sriram-hariharan/job-scraper`
-> Audited branch: `fix-live-pipeline-ai-evaluation-reliability`
-> Code baseline: `ca09b2bcd22c1eb650defb9f98d93bfea98dff5c`
-> Last synchronized against the local worktree: 2026-09-09
+> Snapshot discipline: verify the active branch, HEAD, and worktree before relying on commit-specific state.
 
 This is a living architecture and product reference, not a changelog. Current production code is authoritative. Tests describe enforced contracts. Runtime acceptance evidence can confirm UI behavior. `README.md`, `docs/`, and checkpoint artifacts are supporting material and must not override the implementation.
 
@@ -451,6 +449,7 @@ The manual guarded APIs under `/api/manual-*` implement previews, request record
 | `/profile/preferences` | Preference settings |
 | `/profile/ai-settings` | Provider/model settings |
 | `/profile/saved-scans` | Saved scans |
+| `/guide` | Normal-user ApplyLens App Guide |
 | `/profile/pipeline-runs/{run_id}/agentic-review` | Run-scoped agentic review |
 | `/onboarding` | Onboarding |
 | `/login`, `/register` | Authentication |
@@ -482,6 +481,12 @@ The visible primary shell navigation is narrower: Overview, Planning, Decisions,
 Onboarding completion requires at least one selected role family and one profile resume. Preferences include role families, seniority rules, locations/fallback, preferred skills, and exclusions. Profile manages PDF resumes, role mappings, pipeline runs/artifacts, saved scans, and AI settings.
 
 Authenticated web pipeline launch requires a profile resume. It reserves an active run in PostgreSQL, optionally takes a Redis admission lock when enabled/configured, validates process identity/liveness, bounds argv/environment size, uses a canonical owner/run scratch tree, persists status/artifact references, and reconciles stale/terminal runs.
+
+---
+
+## 11.1 App Guide ownership
+
+`src/app/guide_ui.py` owns the normal-user `/guide` page and its guide content. `src/app/api.py` registers that router. `src/app/ui_shell.py` owns the single global Guide toolbar control and places it immediately before Notifications. Guide-specific presentation and interaction belong to `src/app/static/app_guide.css` and `src/app/static/app_guide.js`; shared shell-control styling remains owned by `src/app/static/app_redesign.css`.
 
 ---
 

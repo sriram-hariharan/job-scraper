@@ -120,7 +120,7 @@ def completed_evidence(controlled_inputs):
         transport=transport,
         execution_time_source=lambda: FIXED_EXECUTION_TIME,
     )
-    assert len(transport.calls) == 44
+    assert len(transport.calls) == 45
     return evidence
 
 
@@ -247,7 +247,7 @@ def _iter_keys(value):
             yield from _iter_keys(item)
 
 
-def test_empty_registry_derives_exact_44_pending_cells(controlled_inputs):
+def test_empty_registry_derives_exact_45_pending_cells(controlled_inputs):
     payload = registry.build_provider_qualification_registry(
         plan=controlled_inputs[0]
     )
@@ -256,20 +256,20 @@ def test_empty_registry_derives_exact_44_pending_cells(controlled_inputs):
         key = f"{cell['provider']}/{cell['model']}"
         counts[key] = counts.get(key, 0) + 1
 
-    assert len(payload["cells"]) == 44
+    assert len(payload["cells"]) == 45
     assert {cell["status"] for cell in payload["cells"]} == {"pending"}
     assert counts == {
         "groq/openai/gpt-oss-20b": 12,
-        "groq/openai/gpt-oss-120b": 10,
+        "groq/openai/gpt-oss-120b": 11,
         "openai/gpt-5-mini": 12,
         "openai/gpt-5.1": 10,
     }
-    assert not any(
+    assert sum(
         cell["workload_id"] == "skill_extraction"
         and cell["provider"] == "groq"
         and cell["model"] == "openai/gpt-oss-120b"
         for cell in payload["cells"]
-    )
+    ) == 1
 
 
 def test_new_readback_fingerprint_alone_leaves_ambiguous_cells_pending(
@@ -881,14 +881,14 @@ def test_registry_order_serialization_and_digest_are_deterministic(
 
     assert second == first
     assert [row["execution_order"] for row in first["cells"]] == list(
-        range(1, 45)
+        range(1, 46)
     )
     assert len(
         {
             (row["workload_id"], row["provider"], row["model"])
             for row in first["cells"]
         }
-    ) == 44
+    ) == 45
     assert registry.serialize_provider_qualification_registry(
         first,
         plan=controlled_inputs[0],
@@ -1120,16 +1120,16 @@ def test_registry_construction_never_reaches_network(
     payload = registry.build_provider_qualification_registry(
         plan=controlled_inputs[0]
     )
-    assert len(payload["cells"]) == 44
+    assert len(payload["cells"]) == 45
 
 
-def test_44_cell_plan_and_live_default_off_remain_unchanged(controlled_inputs):
+def test_45_cell_plan_and_live_default_off_remain_unchanged(controlled_inputs):
     plan = controlled_inputs[0]
 
-    assert plan["request_counts"]["maximum_total_requests"] == 44
+    assert plan["request_counts"]["maximum_total_requests"] == 45
     assert plan["request_counts"]["maximum_requests_per_model"] == {
         "groq/openai/gpt-oss-20b": 12,
-        "groq/openai/gpt-oss-120b": 10,
+        "groq/openai/gpt-oss-120b": 11,
         "openai/gpt-5-mini": 12,
         "openai/gpt-5.1": 10,
     }
@@ -1492,13 +1492,13 @@ def test_stage2a_binding_moves_when_workload_semantics_change():
 
 
 STAGE4K_FUTURE_CORPUS_SHA256 = (
-    "1f11a262af93ec2b1a6eb7fee337e5802cf9f15719618c072b6691613a37d071"
+    "34a583f29750fe3e1fdc7c951db2c37b39d7561219c0031ac328ae5b0d45f9f2"
 )
 STAGE4K_FUTURE_PLAN_SHA256 = (
-    "f074eaa9f4db1e4d58b0f1530503217c76142477548c07a15fc1f2d9fc4e7fae"
+    "ba7adfa64766afc938a2c5aea0215d4a2e42e2c7d0667025ee24cc75010862bc"
 )
 STAGE4K_FUTURE_SKILL_SEMANTICS = (
-    "3e1c457b9636d5ec648b6e24a823df006bad790641b1f831d3bebb34b2ddc362"
+    "8f81e825876bf2bf3f81cd05be53dcc7ab2f203af8d133ccbf53ad18f07efe91"
 )
 STAGE4K_SKILL_TASK_CONTRACT = (
     "73784a99de4913b95e2d2a1e8a1b10a9eee1665fd83a179be34a4fe31b82fa4c"
@@ -2185,7 +2185,7 @@ def test_stage5g_current_skill_winner_pin_preserves_qualified_alternative():
         ),
         evaluated_at_utc="2026-08-31T05:43:16.000000Z",
         expected_binding_sha256=(
-            "dfe7c0c77150f9a7bfb25f00a5b37ae67f121948f4a63140e9de67e2f515c1df"
+            "598e7c21db170a1bcb5fab0d925781bdceac5c17c877012ab60bed910862aea5"
         ),
     )
     current_120b = _stage5g_current_skill_cell(
@@ -2198,7 +2198,7 @@ def test_stage5g_current_skill_winner_pin_preserves_qualified_alternative():
         ),
         evaluated_at_utc="2026-08-31T05:58:34.000000Z",
         expected_binding_sha256=(
-            "1b4d7b73c3063fbd5e65b1293223202dfb0c4c01ec6fe28eb141f2eeb83e57a4"
+            "08e769ef2e73ceab4b61ee322f2801d907157b70984a780f94b8e1aa885f7991"
         ),
     )
     source = _stage2a_on_disk_registry()

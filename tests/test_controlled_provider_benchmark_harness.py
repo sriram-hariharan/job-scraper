@@ -44,7 +44,7 @@ STEP8M_SHA256 = (
     "e798f7d10f67c65c5d02f7531b54c3ce1b18ad0a6db5ec98505b4f1847f23ddd"
 )
 STEP8PA_PLAN_SHA256 = (
-    "f2dcf5345442009915819432a9c1fc9342de40561eb6824c1518dcd31e99d3bf"
+    "bacc7eaa4524199ba293e2d50232f5a8c6cf61014ad8dc89c3dd30d334654162"
 )
 
 
@@ -455,7 +455,7 @@ def test_pricing_failures_leave_transport_unentered(
     assert transport.calls == []
 
 
-def test_exact_44_key_schedule_is_deterministic_and_unique():
+def test_exact_45_key_schedule_is_deterministic_and_unique():
     plan = _plan()
     authorization = _authorization(plan, _pricing())
     first = harness.build_execution_schedule(
@@ -468,14 +468,14 @@ def test_exact_44_key_schedule_is_deterministic_and_unique():
     )
 
     assert first == second
-    assert len(first) == 44
-    assert len({row["schedule_key"] for row in first}) == 44
+    assert len(first) == 45
+    assert len({row["schedule_key"] for row in first}) == 45
     assert len(
         {
             (row["case_alias"], row["provider"], row["model"])
             for row in first
         }
-    ) == 44
+    ) == 45
 
 
 def test_schedule_model_counts_are_exact_and_include_gpt_5_1():
@@ -494,7 +494,7 @@ def test_schedule_model_counts_are_exact_and_include_gpt_5_1():
 
     assert counts == {
         ("groq", "openai/gpt-oss-20b"): 12,
-        ("groq", "openai/gpt-oss-120b"): 10,
+        ("groq", "openai/gpt-oss-120b"): 11,
         ("openai", "gpt-5-mini"): 12,
         ("openai", "gpt-5.1"): 10,
     }
@@ -556,7 +556,7 @@ def test_dry_run_validates_but_makes_zero_transport_calls():
     transport = FakeGoldenTransport()
     summary = _dry_run(transport=transport)
 
-    assert summary["schedule_count"] == 44
+    assert summary["schedule_count"] == 45
     assert summary["transport_calls"] == 0
     assert summary["live_execution"] is False
     assert summary["winner_selected"] is False
@@ -589,11 +589,11 @@ def test_fake_transport_executes_full_matrix_once_per_key_and_serially():
     transport = FakeGoldenTransport(plan)
     result = _execute(plan=plan, transport=transport)
 
-    assert result["transport_calls"] == 44
-    assert len(transport.calls) == 44
-    assert len(set(transport.calls)) == 44
+    assert result["transport_calls"] == 45
+    assert len(transport.calls) == 45
+    assert len(set(transport.calls)) == 45
     assert transport.maximum_active == 1
-    assert len(result["checkpoint"]["completed_schedule_keys"]) == 44
+    assert len(result["checkpoint"]["completed_schedule_keys"]) == 45
     assert result["checkpoint"]["stop_reason"] is None
 
 
@@ -743,7 +743,7 @@ def test_provider_model_mismatch_stops_before_grading():
 def test_request_budget_never_exceeds_exact_authorized_matrix():
     result = _execute()
 
-    assert result["transport_calls"] == 44
+    assert result["transport_calls"] == 45
     assert result["transport_calls"] == _authorization()[
         "maximum_request_count"
     ]
@@ -872,7 +872,7 @@ def test_every_workload_is_graded_by_full_fake_matrix():
     summaries = result["checkpoint"]["grading_summaries"]
 
     assert {row["workload_id"] for row in summaries} == set(WORKLOAD_ORDER)
-    assert len(summaries) == 44
+    assert len(summaries) == 45
     assert all(row["quality_gate_passed"] for row in summaries)
 
 
@@ -1528,7 +1528,7 @@ def test_fake_matrix_authority_counts_remain_bounded_and_non_authoritative():
     result = _execute()
     authority = result["checkpoint"]["authority_invariants"]
 
-    assert authority["provider_call_count"] == 44
+    assert authority["provider_call_count"] == 45
     assert all(
         row["provider_call_count"] == 1
         for row in result["checkpoint"]["grading_summaries"]
@@ -1545,14 +1545,14 @@ def test_current_contract_corpus_engine_and_plan_digests_are_bound():
     contract = harness.build_controlled_benchmark_harness_contract()
 
     assert provider_benchmark_contract_sha256() == (
-        "817e3620b9ceefce15cf6991617116c1d1ee0a585e4f1dd17a60f614f473fd25"
+        "f9c4c9affb7d2138222dc31af7d78cb7ce929eb2541b4c0d34303adf37bc43bb"
     )
     assert provider_client_compatibility_sha256() == STEP8M_SHA256
     assert step8o.provider_fixture_benchmark_sha256() == (
-        "bda29d76f679a60cc6650e485fb85b318665b6857f93ffd976160980ed6a95d1"
+        "294456f152b5208af1d08e7bf3b7809281fa0f475d52f8a920eb36772457c929"
     )
     assert step8o.fixture_case_corpus_sha256() == (
-        "b4dea8bfccf39da87221755777d88f35427b1f4b772f3730fcd48cbdb5842b5f"
+        "59180e4064dd74759c6ecd8630478225b191f942b68fb1880e172fe07ee80aec"
     )
     assert controlled_provider_benchmark_plan_sha256() == (
         STEP8PA_PLAN_SHA256

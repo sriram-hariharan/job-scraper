@@ -263,7 +263,7 @@ def legacy_context(plan):
         transport=transport,
         execution_time_source=lambda: "2026-07-25T00:00:00Z",
     )
-    assert len(transport.calls) == 44
+    assert len(transport.calls) == 45
     return authorization, pricing, evidence
 
 
@@ -786,8 +786,8 @@ def test_manual_preview_is_contract_eligible_without_granting_execution(plan):
     preview = [
         row for row in universe if row["workload_id"] == "manual_provider_preview"
     ]
-    assert len(universe) == 44
-    assert sum(row["live_qualification_eligible"] for row in universe) == 44
+    assert len(universe) == 45
+    assert sum(row["live_qualification_eligible"] for row in universe) == 45
     assert blocked == []
     assert len(preview) == 4
     assert all(row["production_task_contract_sha256"] for row in preview)
@@ -1075,7 +1075,7 @@ def test_stage2b_execution_contract_binds_workload_local_semantics(plan):
 
     corpus = load_fixture_case_corpus()
     universe = live.build_renderer_bound_live_qualification_universe(plan)
-    assert len(universe) == 44
+    assert len(universe) == 45
 
     skill = parity.workload_qualification_semantics_sha256(
         "skill_extraction", plan=plan, corpus=corpus
@@ -1191,13 +1191,13 @@ def test_stage2b_v1_authority_invariants_hold(plan):
 
 
 STAGE4F_FUTURE_CORPUS_SHA256 = (
-    "1f11a262af93ec2b1a6eb7fee337e5802cf9f15719618c072b6691613a37d071"
+    "34a583f29750fe3e1fdc7c951db2c37b39d7561219c0031ac328ae5b0d45f9f2"
 )
 STAGE4F_FUTURE_PLAN_SHA256 = (
-    "c2a1b03e834e8707fbd4647bff53a537e00c65e4cf135d71bd15cf660a2d3ec1"
+    "ba7adfa64766afc938a2c5aea0215d4a2e42e2c7d0667025ee24cc75010862bc"
 )
 STAGE4F_FUTURE_SKILL_SEMANTICS = (
-    "2cb1da2c7cbfab3ed3a296e5e1c2ade48c0ffc7b608da984fce5668d29551aa9"
+    "8f81e825876bf2bf3f81cd05be53dcc7ab2f203af8d133ccbf53ad18f07efe91"
 )
 STAGE4F_SKILL_TASK_CONTRACT = (
     "73784a99de4913b95e2d2a1e8a1b10a9eee1665fd83a179be34a4fe31b82fa4c"

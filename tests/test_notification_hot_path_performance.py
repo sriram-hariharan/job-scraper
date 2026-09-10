@@ -275,4 +275,3 @@ def test_delete_distinguishes_missing_source_from_owner_tombstone(monkeypatch):
         assert str(exc) == f"Notification not found: {NOTIFICATION_ID}"
     else:
         raise AssertionError("missing source must retain the not-found failure")
-

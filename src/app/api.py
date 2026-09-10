@@ -65,6 +65,7 @@ from src.app.application_hub_ui import router as application_hub_ui_router
 from src.app.profile_ui import router as profile_ui_router
 from src.app.auth_ui import router as auth_ui_router
 from src.app.onboarding_ui import router as onboarding_ui_router
+from src.app.guide_ui import router as guide_ui_router
 import threading
 
 from contextlib import asynccontextmanager
@@ -1820,6 +1821,7 @@ app.include_router(application_hub_ui_router)
 app.include_router(profile_ui_router)
 app.include_router(auth_ui_router)
 app.include_router(onboarding_ui_router)
+app.include_router(guide_ui_router)
 
 @app.get("/health")
 def health():

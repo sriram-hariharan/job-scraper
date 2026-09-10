@@ -44,6 +44,7 @@ HTML_NAVIGATION_PATHS = {
     "/onboarding",
     "/scan-workspace",
     "/tailoring-workspace",
+    "/guide",
 }
 
 

@@ -10625,6 +10625,68 @@ html[data-theme="light"] .profile-dropdown-danger-btn:focus-visible {
   flex: 0 0 20px;
 }
 
+/* Global App Guide control: final shared-toolbar owner. */
+.app-shell-guide-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 82px;
+  min-height: 42px;
+  padding: 0 12px;
+  gap: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 11px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #dbe5f4;
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.app-shell-guide-link-icon,
+.app-shell-guide-link-icon .app-shell-icon {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+
+.app-shell-guide-link:hover,
+.app-shell-guide-link:focus-visible,
+.app-shell-guide-link.active,
+.app-shell-guide-link[aria-current="page"] {
+  border-color: rgba(143, 200, 185, 0.48);
+  background: rgba(30, 55, 53, 0.96);
+  color: #d9f3eb;
+  text-decoration: none;
+  box-shadow: none;
+  transform: none;
+}
+
+.app-shell-guide-link:focus-visible {
+  outline: 3px solid rgba(143, 200, 185, 0.22);
+  outline-offset: 2px;
+}
+
+html[data-theme="light"] .app-shell-guide-link {
+  border-color: rgba(100, 116, 139, 0.2);
+  background: rgba(255, 255, 255, 0.96);
+  color: #334155;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+html[data-theme="light"] .app-shell-guide-link:hover,
+html[data-theme="light"] .app-shell-guide-link:focus-visible,
+html[data-theme="light"] .app-shell-guide-link.active,
+html[data-theme="light"] .app-shell-guide-link[aria-current="page"] {
+  border-color: rgba(53, 107, 94, 0.34);
+  background: #eef6f3;
+  color: #285d50;
+}
+
 @media (max-width: 680px) {
   .app-shell-top-right:not(.app-shell-top-right--flow) {
     gap: 6px !important;
@@ -10634,6 +10696,7 @@ html[data-theme="light"] .profile-dropdown-danger-btn:focus-visible {
   .app-shell-top-right:not(.app-shell-top-right--flow) .notification-btn,
   .app-shell-top-right:not(.app-shell-top-right--flow) .theme-toggle-btn,
   .app-shell-top-right:not(.app-shell-top-right--flow) .profile-avatar-btn,
+  .app-shell-top-right:not(.app-shell-top-right--flow) .app-shell-guide-link,
   .app-shell-top-right:not(.app-shell-top-right--flow) .app-shell-primary-link {
     width: 40px !important;
     min-width: 40px !important;
@@ -10645,6 +10708,10 @@ html[data-theme="light"] .profile-dropdown-danger-btn:focus-visible {
   .app-shell-top-right:not(.app-shell-top-right--flow) .app-shell-primary-link,
   .app-shell-top-right:not(.app-shell-top-right--flow) .profile-menu-shell {
     margin-left: 2px !important;
+  }
+
+  .app-shell-guide-link-label {
+    display: none;
   }
 
   .profile-dropdown {

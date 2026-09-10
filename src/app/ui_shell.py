@@ -84,6 +84,11 @@ _ICON_PATHS = {
         '<path d="M9 10h.01"/><path d="M15 10h.01"/>'
         '<path d="M9.5 14.5a4 4 0 0 0 5 0"/>'
     ),
+    "guide": (
+        '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>'
+        '<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/>'
+        '<path d="M9 7h6"/><path d="M9 11h5"/>'
+    ),
     "menu": (
         '<line x1="4" x2="20" y1="6" y2="6"/>'
         '<line x1="4" x2="20" y1="12" y2="12"/>'
@@ -119,6 +124,8 @@ def render_top_shell(active_href: str) -> str:
     toolbar_classes = "app-shell-top-right"
     if active_href in {"/onboarding", "/profile/preferences"}:
         toolbar_classes += " app-shell-top-right--flow"
+    guide_active_class = " active" if active_href == "/guide" else ""
+    guide_current = ' aria-current="page"' if active_href == "/guide" else ""
 
     groups_html = []
     for group_label, items in NAV_GROUPS:
@@ -205,6 +212,17 @@ def render_top_shell(active_href: str) -> str:
     Checking Bulk Generate status…
   </span>
   <div class="bulk-generation-guard-tooltip hidden" id="bulkGenerationGuardTooltip" role="tooltip"></div>
+
+  <a
+    class="app-shell-guide-link{guide_active_class}"
+    href="/guide"
+    aria-label="App Guide"
+    title="App Guide"
+    {guide_current}
+  >
+    <span class="app-shell-guide-link-icon" aria-hidden="true">{_icon_svg("guide")}</span>
+    <span class="app-shell-guide-link-label">Guide</span>
+  </a>
 
   <div class="notification-shell" id="notificationShell">
     <button
@@ -387,6 +405,7 @@ def render_top_shell(active_href: str) -> str:
               </span>
               <span class="profile-dropdown-nav-title">My Profile</span>
             </a>
+
           </nav>
         </section>
 

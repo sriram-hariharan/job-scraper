@@ -2,12 +2,11 @@ import json
 from typing import Any, Dict, List, Optional, Set
 import re
 
-from src.ai.llm_client import run_chat_completion_with_metadata, get_default_model
+from src.ai.llm_client import run_chat_completion_with_metadata
 from src.rag.query_engine import search_jobs
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 ANSWER_LLM_TIMEOUT_SECONDS = 25
-MODEL = get_default_model()
 MAX_SOURCE_CHARS = 2500
 GROUNDED_RAG_TASK_CONTRACT_VERSION = "v1"
 GROUNDED_RAG_TEMPERATURE = 0
@@ -421,6 +420,19 @@ def resolve_effective_user_provider_route(
     )
 
 
+def resolve_recommended_user_provider_route(
+    workload_id: str,
+) -> Dict[str, Any]:
+    from importlib import import_module
+
+    routing_service = import_module(
+        "src.app.provider_model_" "routing_service"
+    )
+    return routing_service.resolve_recommended_user_provider_route(
+        workload_id,
+    )
+
+
 def run_user_chat_completion_with_metadata(**kwargs: Any) -> Dict[str, Any]:
     from src.ai.user_provider_runtime import (
         run_user_chat_completion_with_metadata as execute,
@@ -435,7 +447,7 @@ def _run_chat_completion_with_timeout(
 ) -> Dict[str, Any]:
     owner = str(owner_user_id or "").strip()
     provider = ""
-    model = MODEL
+    model = ""
     if owner:
         try:
             route = resolve_effective_user_provider_route(
@@ -449,6 +461,19 @@ def _run_chat_completion_with_timeout(
         except (Exception, SystemExit):
             raise RuntimeError(
                 "grounded_rag_owner_route_unavailable"
+            ) from None
+    else:
+        try:
+            route = resolve_recommended_user_provider_route(
+                "grounded_rag_answer",
+            )
+            provider = str(route.get("provider") or "").strip()
+            model = str(route.get("model") or "").strip()
+            if not provider or not model:
+                raise ValueError("invalid recommended route")
+        except (Exception, SystemExit):
+            raise RuntimeError(
+                "grounded_rag_recommended_route_unavailable"
             ) from None
 
     executor = ThreadPoolExecutor(max_workers=1)
@@ -465,9 +490,12 @@ def _run_chat_completion_with_timeout(
     else:
         future = executor.submit(
             run_chat_completion_with_metadata,
-            model=MODEL,
+            provider=provider,
+            model=model,
             temperature=GROUNDED_RAG_TEMPERATURE,
             max_tokens=GROUNDED_RAG_MAX_TOKENS,
+            fallback_enabled=False,
+            workload_id="grounded_rag_answer",
             messages=messages,
         )
     try:

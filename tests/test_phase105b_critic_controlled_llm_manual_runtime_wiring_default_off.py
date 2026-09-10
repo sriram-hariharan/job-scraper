@@ -218,6 +218,13 @@ def test_gate_on_routes_through_critic_helper_and_injects_service_provider(monke
         assert kwargs["guardrail_adapter"] is fake_live_adapter
         return _artifact()
 
+    # P4S11: the built-in adapter is only injected when a qualified critic route
+    # exists. Supply one so this test still covers the helper wiring itself.
+    monkeypatch.setattr(
+        services,
+        "_resolve_manual_critic_route",
+        lambda: {"provider": "routed-provider", "model": "routed-model"},
+    )
     monkeypatch.setattr(services, "_live_critic_guardrail_provider_adapter", fake_live_adapter)
     monkeypatch.setattr(
         services.critic_agent,
@@ -398,11 +405,25 @@ def test_no_collector_api_ui_or_static_changes_for_phase105b():
         "src/pipeline/collector.py",
         "tests/test_phase108a_collector_langgraph_evidence_chain_execution_default_off.py",
     }
+    lr2_reliability_guard_closure_surface = legacy_guard_allowlist(
+        "live_pipeline_ai_evaluation_reliability_lr2b_lr2c"
+    ) | {
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_phase105b_critic_controlled_llm_manual_runtime_wiring_default_off.py",
+        "tests/test_phase16b_lean_deterministic_production_orchestration_closure.py",
+        "tests/test_phase17a_lean_cache_first_jd_intelligence_activation.py",
+        "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
+        "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
+        "tests/test_queue_ui_metadata_contract.py",
+    }
     unexpected_collector_change = {
         path for path in changed if path == "src/pipeline/collector.py"
     } - phase108a_collector_surface
     assert not unexpected_collector_change
-    if "src/pipeline/collector.py" in changed:
+    if (
+        "src/pipeline/collector.py" in changed
+        and changed != lr2_reliability_guard_closure_surface
+    ):
         assert phase108a_collector_surface <= changed
     unexpected_api_change = {
         path for path in changed if path == "src/app/api.py"

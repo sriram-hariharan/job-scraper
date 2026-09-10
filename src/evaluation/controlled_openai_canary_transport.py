@@ -63,6 +63,16 @@ _CONTRACT_FIELDS = {
 class UnknownProviderOutcome(RuntimeError):
     """A bounded unknown provider outcome requiring immediate stop."""
 
+    def __init__(
+        self,
+        *args: Any,
+        status_code: int | None = None,
+        provider_error: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(*args)
+        self.status_code = None if status_code is None else int(status_code)
+        self.provider_error = dict(provider_error) if provider_error else None
+
 
 def _require(condition: bool, message: str) -> None:
     if not condition:
@@ -340,13 +350,71 @@ def classify_sdk_exception(exc: BaseException) -> str:
     return "unknown_provider_outcome"
 
 
+def _safe_sdk_status_code(exc: BaseException) -> int | None:
+    """Return only the SDK's declared integer status attribute, or None."""
+
+    status_code = getattr(exc, "status_code", None)
+    if isinstance(status_code, bool):
+        return None
+    try:
+        return int(status_code)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_sdk_provider_error(exc: BaseException) -> Dict[str, Any]:
+    """Project the SDK error envelope onto bounded categorical metadata."""
+
+    from src.ai.llm_client import (
+        _SAFE_PROVIDER_ERROR_CODES,
+        _SAFE_PROVIDER_ERROR_PARAMS,
+        _SAFE_PROVIDER_ERROR_TYPES,
+        _allowlisted_provider_error_token,
+    )
+
+    empty = {
+        "provider_error_type": None,
+        "provider_error_code": None,
+        "provider_error_param": None,
+        "has_failed_generation": False,
+    }
+    body = getattr(exc, "body", None)
+    if not isinstance(body, Mapping):
+        return empty
+    error = body.get("error")
+    error = error if isinstance(error, Mapping) else body
+    return {
+        "provider_error_type": _allowlisted_provider_error_token(
+            error.get("type"), _SAFE_PROVIDER_ERROR_TYPES
+        )
+        or None,
+        "provider_error_code": _allowlisted_provider_error_token(
+            error.get("code"), _SAFE_PROVIDER_ERROR_CODES
+        )
+        or None,
+        "provider_error_param": _allowlisted_provider_error_token(
+            error.get("param"), _SAFE_PROVIDER_ERROR_PARAMS
+        )
+        or None,
+        "has_failed_generation": bool(
+            "failed_generation" in error or "failed_generation" in body
+        ),
+    }
+
+
 def _raise_bounded_sdk_failure(exc: BaseException) -> None:
     category = classify_sdk_exception(exc)
+    status_code = _safe_sdk_status_code(exc)
+    provider_error = _safe_sdk_provider_error(exc)
     if category == "ambiguous_timeout":
         raise AmbiguousTransportTimeout("ambiguous_timeout") from None
     if category.startswith("definitive_"):
         raise DefinitiveTransportFailure(category) from None
-    raise UnknownProviderOutcome("unknown_provider_outcome") from None
+    raise UnknownProviderOutcome(
+        "unknown_provider_outcome",
+        status_code=status_code,
+        provider_error=provider_error,
+    ) from None
 
 
 def create_live_openai_client(
@@ -494,6 +562,7 @@ def build_openai_production_parity_chat_completion_arguments(
     parity_request: Dict[str, Any],
     scheduled: Mapping[str, Any],
     plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Adapt a validated production-parity request without prompt ownership."""
 
@@ -506,7 +575,11 @@ def build_openai_production_parity_chat_completion_arguments(
         if plan is None
         else deepcopy(plan)
     )
-    validate_production_parity_request(parity_request, plan=controlled_plan)
+    validate_production_parity_request(
+        parity_request,
+        plan=controlled_plan,
+        corpus=corpus,
+    )
     _require(
         scheduled.get("provider") == parity_request.get("provider") == "openai"
         and scheduled.get("model") == parity_request.get("model")
@@ -528,7 +601,8 @@ def build_openai_production_parity_chat_completion_arguments(
         "max_completion_tokens": parity_request["task_parameters"]["max_tokens"],
     }
     response_contract = parity_request["response_contract"]
-    if response_contract["mode"] == "structured_json":
+    response_mode = response_contract["mode"]
+    if response_mode == "structured_json":
         arguments["response_format"] = {
             "type": "json_schema",
             "json_schema": {
@@ -537,6 +611,13 @@ def build_openai_production_parity_chat_completion_arguments(
                 "schema": deepcopy(response_contract["schema"]),
             },
         }
+    elif response_mode == "json_object":
+        arguments["response_format"] = {"type": "json_object"}
+    else:
+        _require(
+            response_mode in {"json_text", "plain_text"},
+            "unsupported production-parity OpenAI response mode",
+        )
     if _is_gpt_5_mini(scheduled["model"]):
         arguments["reasoning_effort"] = "minimal"
     else:
@@ -546,6 +627,7 @@ def build_openai_production_parity_chat_completion_arguments(
         parity_request=parity_request,
         scheduled=scheduled,
         plan=controlled_plan,
+        corpus=corpus,
     )
     return deepcopy(arguments)
 
@@ -556,6 +638,7 @@ def validate_openai_production_parity_chat_completion_arguments(
     parity_request: Dict[str, Any],
     scheduled: Mapping[str, Any],
     plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> bool:
     from src.evaluation.controlled_production_parity_benchmark import (
         validate_production_parity_request,
@@ -566,10 +649,20 @@ def validate_openai_production_parity_chat_completion_arguments(
         if plan is None
         else deepcopy(plan)
     )
-    validate_production_parity_request(parity_request, plan=controlled_plan)
+    validate_production_parity_request(
+        parity_request,
+        plan=controlled_plan,
+        corpus=corpus,
+    )
     response_contract = parity_request["response_contract"]
+    response_mode = response_contract["mode"]
+    _require(
+        response_mode
+        in {"structured_json", "json_object", "json_text", "plain_text"},
+        "unsupported production-parity OpenAI response mode",
+    )
     expected_fields = {"model", "messages", "max_completion_tokens"}
-    if response_contract["mode"] == "structured_json":
+    if response_mode in {"structured_json", "json_object"}:
         expected_fields.add("response_format")
     if _is_gpt_5_mini(scheduled["model"]):
         expected_fields.add("reasoning_effort")
@@ -603,7 +696,7 @@ def validate_openai_production_parity_chat_completion_arguments(
             and "reasoning_effort" not in arguments,
             "production-parity OpenAI temperature compatibility changed",
         )
-    if response_contract["mode"] == "structured_json":
+    if response_mode == "structured_json":
         _require(
             arguments.get("response_format")
             == {
@@ -615,6 +708,17 @@ def validate_openai_production_parity_chat_completion_arguments(
                 },
             },
             "production-parity OpenAI structured schema mismatch",
+        )
+    elif response_mode == "json_object":
+        _require(
+            arguments.get("response_format") == {"type": "json_object"},
+            "production-parity OpenAI JSON object mode mismatch",
+        )
+        _require(
+            response_contract.get("schema") is None
+            and response_contract.get("schema_name") is None
+            and response_contract.get("strict") is False,
+            "JSON object mode must not transmit a provider schema",
         )
     else:
         _require(
@@ -855,6 +959,7 @@ def execute_openai_production_parity_chat_completion_once(
     monotonic_clock: Callable[[], float],
     sdk_module: Any | None = None,
     plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Execute one explicit OpenAI parity call and discard its raw envelope."""
 
@@ -869,6 +974,7 @@ def execute_openai_production_parity_chat_completion_once(
         parity_request=parity_request,
         scheduled=scheduled,
         plan=controlled_plan,
+        corpus=corpus,
     )
     client = create_live_openai_client(api_key=api_key, sdk_module=sdk_module)
     try:

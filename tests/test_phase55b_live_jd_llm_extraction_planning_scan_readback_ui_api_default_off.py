@@ -70,40 +70,53 @@ def _client(monkeypatch):
     monkeypatch.setattr(api, "auth_guard_response", lambda request: None)
     monkeypatch.setattr(api, "_auth_owner_user_id", lambda request: "test-owner")
     monkeypatch.setattr(api, "_auth_owner_email", lambda request: "owner@example.test")
+    monkeypatch.setattr(
+        services,
+        "resolve_effective_user_provider_route",
+        lambda owner_user_id, workload_id: {
+            "workload_id": workload_id,
+            "provider": "fake-provider",
+            "model": "fake-model",
+            "effective_selection_source": "applylens_recommended",
+        },
+    )
     return TestClient(api.app)
 
 
-def test_default_off_api_readback_does_not_call_live_llm(monkeypatch):
+def test_default_on_api_readback_calls_configured_llm(monkeypatch):
     calls = []
     monkeypatch.setattr(
         services,
-        "_live_jd_intelligence_provider_adapter",
-        lambda request: calls.append(request) or _valid_provider_payload(),
+        "_configured_planning_scan_jd_provider_adapter",
+        lambda *, adapter_input, **_kwargs: calls.append(adapter_input)
+        or _valid_provider_payload(),
     )
 
     response = _client(monkeypatch).post("/planning/start-scan", json=_request_payload())
 
     assert response.status_code == 200
-    assert calls == []
+    assert calls
     payload = response.json()
     readback = payload["jd_llm_extraction_readback"]
     assert readback == payload["scan_review_payload"]["jd_llm_extraction_readback"]
-    assert readback["llm_enabled"] is False
-    assert readback["llm_call_attempted"] is False
-    assert readback["llm_call_performed"] is False
-    assert readback["fallback_used"] is True
-    assert readback["validation_status"] == "disabled"
-    assert readback["structured_jd_signals"] == {}
+    assert readback["llm_enabled"] is True
+    assert readback["llm_call_attempted"] is True
+    assert readback["llm_call_performed"] is True
+    assert readback["fallback_used"] is False
+    assert readback["validation_status"] == "valid"
+    assert readback["structured_jd_signals"]["required_skills"] == ["Python", "SQL"]
 
 
 def test_explicit_enabled_api_readback_shows_observability_and_signals(monkeypatch):
     calls = []
 
-    def fake_provider(request):
-        calls.append(request)
+    def fake_provider(*, adapter_input, **_kwargs):
+        calls.append(adapter_input)
         return _valid_provider_payload()
 
-    monkeypatch.setattr(services, "_live_jd_intelligence_provider_adapter", fake_provider)
+    monkeypatch.setattr(
+        services, "_configured_planning_scan_jd_provider_adapter", fake_provider
+    )
 
     response = _client(monkeypatch).post(
         "/planning/start-scan",
@@ -131,8 +144,8 @@ def test_explicit_enabled_api_readback_shows_observability_and_signals(monkeypat
 def test_provider_invalid_json_shows_fallback_readback_safely(monkeypatch):
     monkeypatch.setattr(
         services,
-        "_live_jd_intelligence_provider_adapter",
-        lambda _request: {"raw_response": "{bad json"},
+        "_configured_planning_scan_jd_provider_adapter",
+        lambda **_kwargs: {"raw_response": "{bad json"},
     )
 
     response = _client(monkeypatch).post(
@@ -150,10 +163,12 @@ def test_provider_invalid_json_shows_fallback_readback_safely(monkeypatch):
 
 
 def test_provider_exception_shows_fallback_readback_safely(monkeypatch):
-    def failing_provider(_request):
+    def failing_provider(**_kwargs):
         raise RuntimeError("provider unavailable")
 
-    monkeypatch.setattr(services, "_live_jd_intelligence_provider_adapter", failing_provider)
+    monkeypatch.setattr(
+        services, "_configured_planning_scan_jd_provider_adapter", failing_provider
+    )
 
     response = _client(monkeypatch).post(
         "/planning/start-scan",
@@ -186,7 +201,7 @@ def test_saved_scan_readback_materializes_from_stored_metadata_without_provider_
     )
     monkeypatch.setattr(
         services,
-        "_live_jd_intelligence_provider_adapter",
+        "_configured_planning_scan_jd_provider_adapter",
         lambda request: (_ for _ in ()).throw(AssertionError("readback called provider")),
     )
 
@@ -228,8 +243,8 @@ def test_ui_readback_surface_is_passive_and_does_not_enable_provider_calls():
 def test_no_scoring_formula_weight_or_mutation_side_effects(monkeypatch):
     monkeypatch.setattr(
         services,
-        "_live_jd_intelligence_provider_adapter",
-        lambda _request: _valid_provider_payload(),
+        "_configured_planning_scan_jd_provider_adapter",
+        lambda **_kwargs: _valid_provider_payload(),
     )
     response = _client(monkeypatch).post(
         "/planning/start-scan",

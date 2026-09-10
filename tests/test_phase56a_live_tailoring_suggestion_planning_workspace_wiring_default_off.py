@@ -12,6 +12,7 @@ from tests.support.phase_guard_registry import assert_protected_hashes
 from fastapi.testclient import TestClient
 
 from src.app import api, services
+from src.storage.saved_scans import read_postgres as saved_scans_postgres
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -214,9 +215,62 @@ def test_valid_fake_provider_response_appears_in_workspace_readback_metadata(
     assert readback["patch_ready_suggestion_count"] == 1
     assert readback["suggestion_ids"] == ["live_tailoring_001"]
     assert readback["suggestions_preview"][0]["source_bullet_id"] == "bullet-1"
+    assert readback["suggestions_preview"][0]["suggested_text"] == "Built Python pipelines."
+    assert readback["suggestions_preview"][0]["reason"] == "Evidence supports Python alignment."
+    assert readback["suggestions_preview"][0]["jd_signal_links"] == [
+        {"field": "required_skills", "signal": "Python"}
+    ]
+    assert readback["suggestions_preview"][0]["evidence_spans"] == [
+        "Built Python pipelines."
+    ]
     assert readback["token_usage"] == {"total_token_count": 42}
     assert readback["cost"] == {"estimated_cost": 0.01, "cost_currency": "USD"}
     assert readback["latency_ms"] == 88
+
+
+def test_live_tailoring_human_review_preview_is_bounded_and_preserves_categories():
+    source = _valid_provider_payload()
+    source["patch_ready_suggestions"] = [
+        {
+            **source["patch_ready_suggestions"][0],
+            "suggestion_id": f"patch-{index:02d}",
+        }
+        for index in range(10)
+    ]
+    source["guidance_only_suggestions"] = [
+        {
+            **source["patch_ready_suggestions"][0],
+            "suggestion_id": "guidance-01",
+            "patch_ready": False,
+        }
+    ]
+    source["rejected_suggestions"] = [
+        {
+            **source["patch_ready_suggestions"][0],
+            "suggestion_id": "rejected-01",
+            "patch_ready": False,
+        }
+    ]
+    source["unsupported_claim_risks"] = [
+        {"field": "required_skills", "signal": "Python", "risk": "unsupported_claim"}
+    ]
+    source["patch_ready_suggestions"][0]["suggested_text"] = "x" * 2000
+
+    readback = services.build_planning_workspace_live_tailoring_suggestion_readback(
+        source,
+        enabled=True,
+    )
+
+    assert len(readback["suggestions_preview"]) <= 12
+    assert len(readback["suggestions_preview"][0]["suggested_text"]) == 1200
+    assert {row["suggestion_type"] for row in readback["suggestions_preview"]} == {
+        "patch_ready",
+        "guidance_only",
+        "rejected",
+    }
+    assert readback["unsupported_claim_risks"] == [
+        {"field": "required_skills", "signal": "Python", "risk": "unsupported_claim"}
+    ]
 
 
 def test_invalid_provider_response_falls_back_safely(monkeypatch):
@@ -312,6 +366,103 @@ def test_api_default_off_and_explicit_enable_flag(monkeypatch):
     ] == "valid"
 
 
+def test_saved_scan_state_http_write_and_readback_persist_exclusions(monkeypatch):
+    monkeypatch.setattr(api, "auth_guard_response", lambda request: None)
+    monkeypatch.setattr(api, "_auth_owner_user_id", lambda request: "owner-1")
+    stored = _stored_scan_payload()
+    stored["scan"]["owner_user_id"] = "owner-1"
+    stored["scan"]["payload_json"]["scan_review_payload"]["draft"][
+        "excluded_scan_issue_ids"
+    ] = []
+
+    def save_draft(**kwargs):
+        draft = deepcopy(kwargs["draft"])
+        stored["scan"]["payload_json"]["scan_review_payload"]["draft"] = draft
+        return {"ok": True, "draft": deepcopy(draft)}
+
+    monkeypatch.setattr(services, "save_saved_scan_draft_postgres_payload", save_draft)
+    monkeypatch.setattr(
+        services,
+        "get_saved_scan_postgres_payload",
+        lambda **_kwargs: deepcopy(stored),
+    )
+    client = TestClient(api.app)
+    issue_id = "scan_issue:skills:keyword:causal_inference"
+
+    saved = client.post(
+        "/planning/saved-scan/phase56a-scan/state",
+        json={**_state_request(), "excluded_scan_issue_ids": [issue_id]},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["draft"]["excluded_scan_issue_ids"] == [issue_id]
+
+    read_back = client.get("/planning/saved-scan/phase56a-scan")
+    assert read_back.status_code == 200
+    assert read_back.json()["scan_review_payload"]["draft"][
+        "excluded_scan_issue_ids"
+    ] == [issue_id]
+
+    restored = client.post(
+        "/planning/saved-scan/phase56a-scan/state",
+        json={**_state_request(), "excluded_scan_issue_ids": []},
+    )
+    assert restored.status_code == 200
+    assert restored.json()["draft"]["excluded_scan_issue_ids"] == []
+    restored_read_back = client.get("/planning/saved-scan/phase56a-scan")
+    assert restored_read_back.status_code == 200
+    assert restored_read_back.json()["scan_review_payload"]["draft"][
+        "excluded_scan_issue_ids"
+    ] == []
+
+
+def test_saved_scan_state_http_rejects_unverified_postgres_write(monkeypatch):
+    monkeypatch.setattr(api, "auth_guard_response", lambda request: None)
+    monkeypatch.setattr(api, "_auth_owner_user_id", lambda request: "owner-1")
+    monkeypatch.setattr(
+        services,
+        "save_saved_scan_draft_postgres_payload",
+        lambda **_kwargs: {"ok": False, "draft": {}},
+    )
+    client = TestClient(api.app)
+
+    response = client.post(
+        "/planning/saved-scan/phase56a-scan/state",
+        json=_state_request(),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Saved scan state could not be persisted."
+
+
+def test_saved_scan_postgres_write_reports_updated_row_and_draft(monkeypatch):
+    captured = {}
+    expected_draft = {
+        "excluded_scan_issue_ids": ["scan_issue:skills:keyword:causal_inference"],
+        "personal_details": {},
+    }
+
+    monkeypatch.setattr(
+        saved_scans_postgres,
+        "_run_psql_json_query",
+        lambda **kwargs: captured.update(kwargs) or {
+            "data": {"scan_id": "phase56a-scan", "draft": deepcopy(expected_draft)},
+            "command": ["psql", "<redacted>"],
+            "command_text": "psql <redacted>",
+        },
+    )
+
+    result = saved_scans_postgres.save_saved_scan_draft_postgres_payload(
+        scan_id="phase56a-scan",
+        draft=expected_draft,
+        ensure_schema=False,
+    )
+
+    assert result["ok"] is True
+    assert result["draft"] == expected_draft
+    assert "RETURNING scan_id" in captured["sql"]
+    assert "payload_json #> '{scan_review_payload,draft}' AS draft" in captured["sql"]
+
+
 def test_no_mutation_artifact_approved_plan_application_or_scoring_side_effects(
     monkeypatch,
 ):
@@ -381,20 +532,22 @@ def test_phase78a_scan_review_keeps_internal_workflow_in_advanced_diagnostics():
     ]
 
     # The internal workflow surface now lives in the React Advanced
-    # Diagnostics Command Center (frontend/executive-kpi/src/diagnostics/),
+    # Diagnostics workspace (frontend/executive-kpi/src/diagnostics/),
     # rendered only at the standalone /advanced-diagnostics route — it is no
     # longer inlined into src/app/planning_ui.py's scan-review markup.
-    assert "Advanced Diagnostics" in diagnostics
-    assert "These do not apply to jobs automatically." in diagnostics
-    assert "Selecting diagnostics does not run them." in diagnostics
-    assert "Diagnostics never apply to jobs automatically." in diagnostics
-    assert "Run selected diagnostics" in diagnostics
-    assert "Execution is not enabled yet. Selections are for admin review only." in diagnostics
-    assert "<details" not in diagnostics
+    assert "Scan Diagnostics" in diagnostics
+    assert "Manual control" in diagnostics
+    assert "Every action runs only when you choose it." in diagnostics
+    assert "does not automatically cross human review gates or submit applications" in diagnostics
+    assert "Run selected diagnostics" not in diagnostics
+    assert "Run tailoring analysis" in diagnostics
+    assert "Generate proposed changes" in diagnostics
+    assert "diagnostics_execution: true" in diagnostics
+    assert "<details" in diagnostics
     assert "scanWorkspaceAdvancedDiagnostics" not in html
     assert "admin-diagnostics-shell" not in html
 
-    for label in ("Undo", "Redo", "Accept All", "Export", "Compare", "Continue"):
+    for label in ("Undo", "Redo", "Accept All", "Export", "Compare", "Save"):
         assert label in normal_actions
     for label in (
         "Personal Details",
@@ -421,7 +574,6 @@ def test_phase78a_scan_review_keeps_internal_workflow_in_advanced_diagnostics():
         "scanWorkspaceLiveTailoringSuggestionToggle",
         "scanWorkspaceLiveExactChangeProposalToggle",
         "scanWorkspaceManualExactChangeAcceptanceToggle",
-        "scanWorkspaceAcceptedExactChangeProposalIds",
         "scanWorkspaceGuardedResumeCopyArtifactToggle",
         "scanWorkspaceApprovedChangePlanId",
         "scanWorkspaceGuardedResumeCopyArtifactVerificationToggle",
@@ -471,6 +623,9 @@ def test_phase78a_scan_review_keeps_internal_workflow_in_advanced_diagnostics():
         "scanWorkspaceProductionReadinessCheckpointReadback",
     ):
         assert internal_id in diagnostics
+    # Item 7.1C replaces the opaque accepted-ID text field with exact proposal
+    # checkboxes sourced from the persisted provider readback.
+    assert "scanWorkspaceAcceptedExactChangeProposalIds" not in diagnostics
 
 
 def test_phase78b_scan_review_summary_drops_resume_name_and_keeps_metrics():
@@ -526,7 +681,7 @@ def test_phase78b_scan_personal_details_hydrates_blank_saved_fields_from_source(
     assert "savedDraft.personal_details ||\n        payload?.personal_details?.current" not in scan_script
 
 
-def test_phase78b_compare_and_continue_disable_when_no_changes():
+def test_phase78b_compare_and_save_disable_when_no_changes():
     html = (ROOT / "src/app/planning_ui.py").read_text(encoding="utf-8")
     script = (ROOT / "src/app/static/scan_workspace.js").read_text(encoding="utf-8")
 
@@ -537,8 +692,8 @@ def test_phase78b_compare_and_continue_disable_when_no_changes():
 
     assert 'id="scanWorkspaceCompareBtn"' in actions
     assert 'id="scanWorkspaceSaveBtn"' in actions
-    assert actions.count('data-scan-disabled-help="No changes made"') == 2
-    assert actions.count('title="No changes made"') >= 2
+    assert actions.count('data-scan-help="No changes made"') == 2
+    assert 'title="No changes made"' not in actions
     assert "disabled" in actions
     assert 'const noChangesLabel = "No changes made";' in script
     assert "const compareBtn = getScanWorkspaceInput(\"scanWorkspaceCompareBtn\");" in script
@@ -547,7 +702,9 @@ def test_phase78b_compare_and_continue_disable_when_no_changes():
     assert "!isDirty" in script
     assert "syncDisabledHelp(compareBtn, compareBtn.disabled, \"Compare draft changes\")" in script
     assert "syncScanWorkspacePremiumActionState(saveBtn" in script
-    assert "syncDisabledHelp(saveBtn, isSaveDisabled, \"Continue\")" in script
+    assert "syncDisabledHelp(saveBtn, isSaveDisabled, \"Save changes\")" in script
+    assert 'wrapper.setAttribute("data-scan-help", helpLabel)' in script
+    assert 'button.removeAttribute("title")' in script
     assert 'button.classList.toggle("is-loading", Boolean(loading));' in script
 
 

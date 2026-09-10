@@ -502,10 +502,6 @@
       "expected_output": {
         "fit_score": 0.7,
         "required_match_score": 0.5,
-        "classification": "partial_fit",
-        "missing_requirements": [
-          "synthetic_skill_beta"
-        ],
         "reason_tokens": [
           "synthetic_skill_alpha",
           "synthetic_workflow_signal"
@@ -518,22 +514,24 @@
         "unsupported_claim_count": 0
       },
       "required_fields": [
-        "classification",
         "fit_score",
         "required_match_score",
-        "reason_tokens",
-        "missing_requirements"
+        "reason_tokens"
       ],
       "supported_evidence_tokens": [
+        "synthetic_workflow_role",
+        "synthetic_organization",
         "synthetic_skill_alpha",
         "synthetic_skill_beta",
+        "synthetic_skill_delta",
+        "synthetic_seniority",
         "synthetic_workflow_signal"
       ],
       "supported_evidence_ids": [],
       "prohibited_claims_or_terms": [
         "synthetic_unsupported_claim"
       ],
-      "comparison_type": "exact_golden",
+      "comparison_type": "invariant_only",
       "human_review_required": true,
       "deterministic_authority_required": true
     },

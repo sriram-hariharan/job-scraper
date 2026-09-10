@@ -74,10 +74,20 @@ _ICON_PATHS = {
         '<path d="M16.001 11.999a19.9 19.9 0 0 1 3.024 5.824c.444 1.369 2.26 1.676 2.603.278A13 13 0 0 0 20 8.069"/>'
         '<path d="M18.352 3.352a1.205 1.205 0 0 0-1.704 0l-5.296 5.296a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l5.296-5.296a1.205 1.205 0 0 0 0-1.704z"/>'
     ),
+    "agentic-operations": (
+        '<circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/>'
+        '<circle cx="19" cy="19" r="3"/><path d="M12 8v4"/>'
+        '<path d="M5 16v-4h14v4"/>'
+    ),
     "ai-settings": (
         '<path d="M12 2a4 4 0 0 0-4 4v1.1A4.5 4.5 0 0 0 5.5 15H7v1a5 5 0 0 0 10 0v-1h1.5A4.5 4.5 0 0 0 16 7.1V6a4 4 0 0 0-4-4Z"/>'
         '<path d="M9 10h.01"/><path d="M15 10h.01"/>'
         '<path d="M9.5 14.5a4 4 0 0 0 5 0"/>'
+    ),
+    "guide": (
+        '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>'
+        '<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/>'
+        '<path d="M9 7h6"/><path d="M9 11h5"/>'
     ),
     "menu": (
         '<line x1="4" x2="20" y1="6" y2="6"/>'
@@ -92,6 +102,10 @@ _ICON_PATHS = {
     "expand": (
         '<rect width="18" height="18" x="3" y="3" rx="2"/>'
         '<path d="M9 3v18"/><path d="m14 9 3 3-3 3"/>'
+    ),
+    "logout": (
+        '<path d="M10 17l5-5-5-5"/><path d="M15 12H3"/>'
+        '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>'
     ),
 }
 
@@ -110,6 +124,8 @@ def render_top_shell(active_href: str) -> str:
     toolbar_classes = "app-shell-top-right"
     if active_href in {"/onboarding", "/profile/preferences"}:
         toolbar_classes += " app-shell-top-right--flow"
+    guide_active_class = " active" if active_href == "/guide" else ""
+    guide_current = ' aria-current="page"' if active_href == "/guide" else ""
 
     groups_html = []
     for group_label, items in NAV_GROUPS:
@@ -161,7 +177,7 @@ def render_top_shell(active_href: str) -> str:
 <aside class="app-shell" id="appShell" aria-label="Primary">
   <div class="app-shell-brand-row">
     <a class="app-shell-brand" href="/" aria-label="ApplyLens AI home">
-      <img class="app-shell-brand-logo" src="/static/media/app-logo.svg" alt="ApplyLens AI" />
+      <img class="app-shell-brand-logo" src="/static/media/app-wordmark.svg?v=applylens_wordmark_r1" alt="ApplyLens AI" />
     </a>
 
     <button
@@ -191,7 +207,23 @@ def render_top_shell(active_href: str) -> str:
   </nav>
 </aside>
 
-<div class="{toolbar_classes}">
+<div class="{toolbar_classes}" role="group" aria-label="Workspace controls">
+  <span class="bulk-generation-guard-description" id="bulkGenerationGuardDescription">
+    Checking Bulk Generate status…
+  </span>
+  <div class="bulk-generation-guard-tooltip hidden" id="bulkGenerationGuardTooltip" role="tooltip"></div>
+
+  <a
+    class="app-shell-guide-link{guide_active_class}"
+    href="/guide"
+    aria-label="App Guide"
+    title="App Guide"
+    {guide_current}
+  >
+    <span class="app-shell-guide-link-icon" aria-hidden="true">{_icon_svg("guide")}</span>
+    <span class="app-shell-guide-link-label">Guide</span>
+  </a>
+
   <div class="notification-shell" id="notificationShell">
     <button
       type="button"
@@ -211,67 +243,90 @@ def render_top_shell(active_href: str) -> str:
       <span class="notification-badge hidden" id="notificationBadge">0</span>
     </button>
 
-    <div class="notification-dropdown hidden" id="notificationDropdown">
-      <div class="notification-dropdown-header">
-        <div>
-          <div class="notification-dropdown-title">Notifications</div>
-          <div class="subtext" id="notificationSubtitle">Recent scheduler activity</div>
+    <div class="notification-center hidden" id="notificationDropdown" role="dialog" aria-label="Notifications">
+      <header class="notification-center__head">
+        <div class="notification-center__identity">
+          <span class="notification-center__tile" aria-hidden="true">
+            <svg class="app-shell-icon" viewBox="0 0 24 24" width="17" height="17"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" focusable="false">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+          </span>
+          <div class="notification-center__heading">
+            <div class="notification-center__title">Notifications</div>
+            <div class="notification-center__subtitle" id="notificationSubtitle">Activity from your automated workflows</div>
+          </div>
+          <span class="notification-center__unread hidden" id="notificationUnreadPill">0 new</span>
         </div>
-
-        <div class="notification-header-actions">
-          <button
-            type="button"
-            class="ghost-btn notification-refresh-btn"
-            id="notificationRefreshBtn"
-          >
-            Refresh
+        <div class="notification-center__actions" aria-label="Notification actions">
+          <button type="button" class="notification-center__text-btn notification-center__refresh"
+                  id="notificationRefreshBtn"
+                  aria-label="Refresh notifications" title="Refresh notifications">
+            <svg class="app-shell-icon" viewBox="0 0 24 24" width="14" height="14"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" />
+            </svg>
+            <span>Refresh</span>
           </button>
-
-          <button
-            type="button"
-            class="ghost-btn notification-mark-all-btn"
-            id="notificationMarkAllReadBtn"
-          >
-            Mark all read
-          </button>
+          <button type="button" class="notification-center__text-btn" id="notificationMarkAllReadBtn"
+                  title="Mark all notifications read">Mark all read</button>
+          <button type="button" class="notification-center__text-btn notification-center__delete-all"
+                  id="notificationDeleteAllBtn" title="Delete all notifications">Delete all</button>
         </div>
+      </header>
+
+      <div class="notification-center__filters" role="tablist" aria-label="Notification filters">
+        <button type="button" class="notification-chip is-active" role="tab" aria-selected="true"
+                id="notificationFilterAll" data-notification-filter="all">All</button>
+        <button type="button" class="notification-chip" role="tab" aria-selected="false"
+                id="notificationUnreadOnly" data-notification-filter="unread">Unread</button>
+        <button type="button" class="notification-chip" role="tab" aria-selected="false"
+                data-notification-filter="pipeline">Pipeline</button>
+        <button type="button" class="notification-chip" role="tab" aria-selected="false"
+                data-notification-filter="discovery">Discovery</button>
       </div>
 
-      <div class="notification-toolbar">
-        <div
-          class="binary-toggle binary-toggle--compact notification-unread-toggle"
-          id="notificationUnreadToggle"
-          role="radiogroup"
-          aria-label="Notification filter"
-        >
-          <label class="binary-toggle-option">
-            <input
-              type="radio"
-              name="notificationUnreadFilter"
-              id="notificationShowAll"
-              value="all"
-              checked
-            />
-            <span>All</span>
-          </label>
-
-          <label class="binary-toggle-option">
-            <input
-              type="radio"
-              name="notificationUnreadFilter"
-              id="notificationUnreadOnly"
-              value="unread"
-            />
-            <span>Unread</span>
-          </label>
-        </div>
+      <div class="notification-center__feed" id="notificationList" tabindex="0">
+        <div class="notification-center__empty">Loading notifications...</div>
       </div>
 
-      <div class="notification-list" id="notificationList">
-        <div class="notification-empty">Loading notifications...</div>
-      </div>
+      <footer class="notification-center__foot">
+        <a class="notification-center__foot-link" href="/scheduler">View scheduler activity &#8594;</a>
+      </footer>
     </div>
   </div>
+
+  <section
+    class="modal-backdrop notification-delete-modal hidden"
+    id="notificationDeleteConfirmModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="notificationDeleteConfirmTitle"
+    aria-describedby="notificationDeleteConfirmBody"
+    aria-hidden="true"
+  >
+    <div class="modal-card notification-delete-modal__card" role="document">
+      <div class="notification-delete-modal__icon" aria-hidden="true">
+        <svg class="app-shell-icon" viewBox="0 0 24 24" width="18" height="18"
+             fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" focusable="false">
+          <path d="M3 6h18" /><path d="M8 6V4h8v2" />
+          <path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5" /><path d="M14 11v5" />
+        </svg>
+      </div>
+      <div class="notification-delete-modal__copy">
+        <h3 id="notificationDeleteConfirmTitle">Delete notification?</h3>
+        <p id="notificationDeleteConfirmBody">This removes it from Notifications. Scheduler history is not affected.</p>
+      </div>
+      <div class="modal-actions notification-delete-modal__actions">
+        <button type="button" class="notification-center__text-btn notification-delete-modal__cancel" id="notificationDeleteCancelBtn">Cancel</button>
+        <button type="button" class="notification-center__text-btn notification-delete-modal__confirm" id="notificationDeleteConfirmBtn">Delete</button>
+      </div>
+    </div>
+  </section>
 
   <button
     type="button"
@@ -281,9 +336,6 @@ def render_top_shell(active_href: str) -> str:
     aria-pressed="false"
     title="Switch to light theme"
   >
-    <span class="theme-toggle-track" aria-hidden="true">
-      <span class="theme-toggle-knob"></span>
-    </span>
     <img
       class="theme-toggle-icon"
       src="/static/media/dark_mode.svg"
@@ -314,12 +366,19 @@ def render_top_shell(active_href: str) -> str:
       id="profileMenuButton"
       aria-expanded="false"
       aria-haspopup="true"
+      aria-controls="profileDropdown"
+      aria-label="Account"
       title="{escape(DEFAULT_USER_NAME)}"
     >
       {escape(DEFAULT_USER_INITIAL)}
     </button>
 
-    <div class="profile-dropdown hidden" id="profileDropdown">
+    <div
+      class="profile-dropdown hidden"
+      id="profileDropdown"
+      aria-labelledby="profileMenuButton"
+      aria-hidden="true"
+    >
       <div class="profile-dropdown-identity">
         <span class="profile-dropdown-avatar" id="profileDropdownAvatar" aria-hidden="true">
           {escape(DEFAULT_USER_INITIAL)}
@@ -330,85 +389,97 @@ def render_top_shell(active_href: str) -> str:
         </span>
       </div>
       <div class="profile-dropdown-actions">
-        <a class="profile-dropdown-nav-btn" href="/profile/saved-scans">
-          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--scans" aria-hidden="true">
-            <img src="/static/media/scan_icon.svg" alt="" />
-          </span>
-          <span class="profile-dropdown-nav-copy">
-            <span class="profile-dropdown-nav-title">Saved Scans</span>
-            <span class="profile-dropdown-nav-subtitle">Resume scan history and match snapshots</span>
-          </span>
-          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
-        </a>
+        <section class="profile-dropdown-section" aria-labelledby="profileWorkspaceSectionLabel">
+          <div class="profile-dropdown-section-label" id="profileWorkspaceSectionLabel">Workspace</div>
+          <nav class="profile-dropdown-nav" aria-labelledby="profileWorkspaceSectionLabel">
+            <a class="profile-dropdown-nav-btn" href="/profile/saved-scans">
+              <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--scans" aria-hidden="true">
+                <img src="/static/media/scan_icon.svg" alt="" />
+              </span>
+              <span class="profile-dropdown-nav-title">Saved Scans</span>
+            </a>
 
-        <a class="profile-dropdown-nav-btn" href="/profile">
-          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--profile" aria-hidden="true">
-            <img src="/static/media/profile_icon.svg" alt="" />
-          </span>
-          <span class="profile-dropdown-nav-copy">
-            <span class="profile-dropdown-nav-title">My Profile</span>
-            <span class="profile-dropdown-nav-subtitle">Resumes and account tools</span>
-          </span>
-          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
-        </a>
+            <a class="profile-dropdown-nav-btn" href="/profile">
+              <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--profile" aria-hidden="true">
+                <img src="/static/media/profile_icon.svg" alt="" />
+              </span>
+              <span class="profile-dropdown-nav-title">My Profile</span>
+            </a>
 
-        <a class="profile-dropdown-nav-btn" href="/profile/preferences">
-          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--preferences" aria-hidden="true">
-            <img src="/static/media/preferences_icon.svg" alt="" />
-          </span>
-          <span class="profile-dropdown-nav-copy">
-            <span class="profile-dropdown-nav-title">Preferences</span>
-            <span class="profile-dropdown-nav-subtitle">Role focus, location, and matching signals</span>
-          </span>
-          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
-        </a>
+          </nav>
+        </section>
 
-        <a class="profile-dropdown-nav-btn" href="/profile/ai-settings">
-          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--ai-settings" aria-hidden="true">
-            {_icon_svg("ai-settings")}
-          </span>
-          <span class="profile-dropdown-nav-copy">
-            <span class="profile-dropdown-nav-title">AI Settings</span>
-            <span class="profile-dropdown-nav-subtitle">Providers, API keys, and model access</span>
-          </span>
-          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
-        </a>
+        <section class="profile-dropdown-section" aria-labelledby="profileSettingsSectionLabel">
+          <div class="profile-dropdown-section-label" id="profileSettingsSectionLabel">Settings</div>
+          <nav class="profile-dropdown-nav" aria-labelledby="profileSettingsSectionLabel">
+            <a class="profile-dropdown-nav-btn" href="/profile/preferences">
+              <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--preferences" aria-hidden="true">
+                <img src="/static/media/preferences_icon.svg" alt="" />
+              </span>
+              <span class="profile-dropdown-nav-title">Preferences</span>
+            </a>
 
-        <a
-          class="profile-dropdown-nav-btn hidden"
-          href="/advanced-diagnostics"
-          id="profileAdvancedDiagnosticsLink"
-          data-admin-only="true"
+            <a class="profile-dropdown-nav-btn" href="/profile/ai-settings">
+              <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--ai-settings" aria-hidden="true">
+                {_icon_svg("ai-settings")}
+              </span>
+              <span class="profile-dropdown-nav-title">AI Settings</span>
+            </a>
+          </nav>
+        </section>
+
+        <section
+          class="profile-dropdown-section hidden"
+          id="profileAdminToolsSection"
+          aria-labelledby="profileAdminToolsSectionLabel"
+          aria-hidden="true"
         >
-          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--diagnostics" aria-hidden="true">
-            {_icon_svg("diagnostics")}
-          </span>
-          <span class="profile-dropdown-nav-copy">
-            <span class="profile-dropdown-nav-title">Advanced Diagnostics</span>
-            <span class="profile-dropdown-nav-subtitle">Admin workflow diagnostics</span>
-          </span>
-          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
-        </a>
+          <div class="profile-dropdown-section-label" id="profileAdminToolsSectionLabel">Admin tools</div>
+          <nav class="profile-dropdown-nav" aria-labelledby="profileAdminToolsSectionLabel">
+            <a
+              class="profile-dropdown-nav-btn hidden"
+              href="/advanced-diagnostics"
+              id="profileAdvancedDiagnosticsLink"
+              data-admin-only="true"
+            >
+              <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--diagnostics" aria-hidden="true">
+                {_icon_svg("diagnostics")}
+              </span>
+              <span class="profile-dropdown-nav-title">Scan Diagnostics</span>
+            </a>
 
-        <a
-          class="profile-dropdown-nav-btn hidden"
-          href="/scheduler"
-          id="profileSchedulerHealthLink"
-          data-admin-only="true"
-        >
-          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--scheduler" aria-hidden="true">
-            {_icon_svg("scheduler")}
-          </span>
-          <span class="profile-dropdown-nav-copy">
-            <span class="profile-dropdown-nav-title">Scheduler Health</span>
-            <span class="profile-dropdown-nav-subtitle">Scheduled jobs, run outcomes, and persistence integrity</span>
-          </span>
-          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
-        </a>
+            <a
+              class="profile-dropdown-nav-btn hidden"
+              href="/agentic-operations"
+              id="profileAgenticOperationsLink"
+              data-admin-only="true"
+            >
+              <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--agentic-operations" aria-hidden="true">
+                {_icon_svg("agentic-operations")}
+              </span>
+              <span class="profile-dropdown-nav-title">Agentic Operations</span>
+            </a>
 
-        <button type="button" class="profile-dropdown-danger-btn" id="profileLogoutBtn">
-          Log out
-        </button>
+            <a
+              class="profile-dropdown-nav-btn hidden"
+              href="/scheduler"
+              id="profileSchedulerHealthLink"
+              data-admin-only="true"
+            >
+              <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--scheduler" aria-hidden="true">
+                {_icon_svg("scheduler")}
+              </span>
+              <span class="profile-dropdown-nav-title">Scheduler Health</span>
+            </a>
+          </nav>
+        </section>
+
+        <div class="profile-dropdown-footer">
+          <button type="button" class="profile-dropdown-danger-btn" id="profileLogoutBtn">
+            <span class="profile-dropdown-danger-icon" aria-hidden="true">{_icon_svg("logout")}</span>
+            <span>Log out</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

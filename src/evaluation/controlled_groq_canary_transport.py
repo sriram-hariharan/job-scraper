@@ -91,6 +91,16 @@ _CONTRACT_FIELDS = {
 class UnknownProviderOutcome(RuntimeError):
     """A bounded unknown provider outcome requiring immediate stop."""
 
+    def __init__(
+        self,
+        *args: Any,
+        status_code: int | None = None,
+        provider_error: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(*args)
+        self.status_code = None if status_code is None else int(status_code)
+        self.provider_error = dict(provider_error) if provider_error else None
+
 
 def _require(condition: bool, message: str) -> None:
     if not condition:
@@ -451,6 +461,7 @@ def build_groq_production_parity_chat_completion_arguments(
     parity_request: Dict[str, Any],
     scheduled: Mapping[str, Any],
     plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Adapt a validated production-parity request without prompt ownership."""
 
@@ -463,7 +474,11 @@ def build_groq_production_parity_chat_completion_arguments(
         if plan is None
         else deepcopy(plan)
     )
-    validate_production_parity_request(parity_request, plan=controlled_plan)
+    validate_production_parity_request(
+        parity_request,
+        plan=controlled_plan,
+        corpus=corpus,
+    )
     _require(
         scheduled.get("provider") == parity_request.get("provider") == "groq"
         and scheduled.get("model") == parity_request.get("model")
@@ -507,13 +522,25 @@ def build_groq_production_parity_chat_completion_arguments(
         # lowest sustained reasoning effort. Qualification must exercise the
         # same generation configuration.
         arguments["include_reasoning"] = False
-        if parity_request["task_parameters"].get("thinking_budget") == 0:
+        thinking_budget = parity_request["task_parameters"].get(
+            "thinking_budget"
+        )
+        if parity_request["workload_id"] == "job_fit_evaluation":
+            from src.evaluation.job_fit_candidate_local_qualification import (
+                job_fit_candidate_thinking_budget_for_request,
+            )
+
+            thinking_budget = job_fit_candidate_thinking_budget_for_request(
+                parity_request
+            )
+        if thinking_budget == 0:
             arguments["reasoning_effort"] = "low"
     validate_groq_production_parity_chat_completion_arguments(
         arguments,
         parity_request=parity_request,
         scheduled=scheduled,
         plan=controlled_plan,
+        corpus=corpus,
     )
     return deepcopy(arguments)
 
@@ -524,6 +551,7 @@ def validate_groq_production_parity_chat_completion_arguments(
     parity_request: Dict[str, Any],
     scheduled: Mapping[str, Any],
     plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> bool:
     from src.evaluation.controlled_production_parity_benchmark import (
         validate_production_parity_request,
@@ -534,7 +562,11 @@ def validate_groq_production_parity_chat_completion_arguments(
         if plan is None
         else deepcopy(plan)
     )
-    validate_production_parity_request(parity_request, plan=controlled_plan)
+    validate_production_parity_request(
+        parity_request,
+        plan=controlled_plan,
+        corpus=corpus,
+    )
     response_contract = parity_request["response_contract"]
     expected_fields = {
         "model",
@@ -551,7 +583,18 @@ def validate_groq_production_parity_chat_completion_arguments(
     )
     if gpt_oss_non_schema:
         expected_fields.add("include_reasoning")
-        if parity_request["task_parameters"].get("thinking_budget") == 0:
+        thinking_budget = parity_request["task_parameters"].get(
+            "thinking_budget"
+        )
+        if parity_request["workload_id"] == "job_fit_evaluation":
+            from src.evaluation.job_fit_candidate_local_qualification import (
+                job_fit_candidate_thinking_budget_for_request,
+            )
+
+            thinking_budget = job_fit_candidate_thinking_budget_for_request(
+                parity_request
+            )
+        if thinking_budget == 0:
             expected_fields.add("reasoning_effort")
     _require(
         isinstance(arguments, dict) and set(arguments) == expected_fields,
@@ -577,7 +620,7 @@ def validate_groq_production_parity_chat_completion_arguments(
             arguments.get("include_reasoning") is False,
             "production-parity Groq reasoning bounding mismatch",
         )
-        if parity_request["task_parameters"].get("thinking_budget") == 0:
+        if thinking_budget == 0:
             _require(
                 arguments.get("reasoning_effort") == "low",
                 "production-parity Groq reasoning effort mismatch",
@@ -762,13 +805,95 @@ def classify_sdk_exception(exc: BaseException) -> str:
     return "unknown_provider_outcome"
 
 
+def _safe_sdk_status_code(exc: BaseException) -> int | None:
+    """Return only the SDK's declared integer status attribute, or None.
+
+    Mirrors the coercion `classify_sdk_exception` already performs. Reads a
+    single declared attribute; never the response, body, message or args.
+    """
+
+    status_code = getattr(exc, "status_code", None)
+    if isinstance(status_code, bool):
+        return None
+    try:
+        return int(status_code)
+    except (TypeError, ValueError):
+        return None
+
+
+PROVIDER_ERROR_DIAGNOSTIC_FIELDS = (
+    "provider_error_type",
+    "provider_error_code",
+    "provider_error_param",
+    "has_failed_generation",
+)
+
+
+def _safe_sdk_provider_error(exc: BaseException) -> Dict[str, Any]:
+    """Project the SDK error envelope onto bounded, non-textual metadata.
+
+    Reuses the repository's established provider-error allowlists so only
+    categorical tokens already vetted elsewhere can survive; anything
+    unrecognized becomes None. `message`, `failed_generation` contents, and
+    `param` VALUES are never read for content -- `param` is a parameter *name*
+    drawn from a closed allowlist, and failed_generation is reduced to a
+    presence boolean.
+    """
+
+    from src.ai.llm_client import (
+        _SAFE_PROVIDER_ERROR_CODES,
+        _SAFE_PROVIDER_ERROR_PARAMS,
+        _SAFE_PROVIDER_ERROR_TYPES,
+        _allowlisted_provider_error_token,
+    )
+
+    empty = {
+        "provider_error_type": None,
+        "provider_error_code": None,
+        "provider_error_param": None,
+        "has_failed_generation": False,
+    }
+    body = getattr(exc, "body", None)
+    # body is `object | None`: the decoded JSON when parseable, otherwise the
+    # raw response. Only a mapping is inspected.
+    if not isinstance(body, Mapping):
+        return empty
+    error = body.get("error")
+    error = error if isinstance(error, Mapping) else body
+    return {
+        "provider_error_type": _allowlisted_provider_error_token(
+            error.get("type"), _SAFE_PROVIDER_ERROR_TYPES
+        )
+        or None,
+        "provider_error_code": _allowlisted_provider_error_token(
+            error.get("code"), _SAFE_PROVIDER_ERROR_CODES
+        )
+        or None,
+        "provider_error_param": _allowlisted_provider_error_token(
+            error.get("param"), _SAFE_PROVIDER_ERROR_PARAMS
+        )
+        or None,
+        "has_failed_generation": bool(
+            "failed_generation" in error or "failed_generation" in body
+        ),
+    }
+
+
 def _raise_bounded_sdk_failure(exc: BaseException) -> None:
     category = classify_sdk_exception(exc)
+    status_code = _safe_sdk_status_code(exc)
+    provider_error = _safe_sdk_provider_error(exc)
     if category == "ambiguous_timeout":
         raise AmbiguousTransportTimeout("ambiguous_timeout") from None
     if category.startswith("definitive_"):
-        raise DefinitiveTransportFailure(category) from None
-    raise UnknownProviderOutcome("unknown_provider_outcome") from None
+        raise DefinitiveTransportFailure(
+            category, status_code=status_code, provider_error=provider_error
+        ) from None
+    raise UnknownProviderOutcome(
+        "unknown_provider_outcome",
+        status_code=status_code,
+        provider_error=provider_error,
+    ) from None
 
 
 def reduce_groq_sdk_response(
@@ -880,6 +1005,7 @@ def execute_groq_production_parity_chat_completion_once(
     monotonic_clock: Callable[[], float],
     sdk_module: Any | None = None,
     plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Execute one explicit Groq parity call and discard its raw envelope."""
 
@@ -894,6 +1020,7 @@ def execute_groq_production_parity_chat_completion_once(
         parity_request=parity_request,
         scheduled=scheduled,
         plan=controlled_plan,
+        corpus=corpus,
     )
     client = create_live_groq_client(api_key=api_key, sdk_module=sdk_module)
     try:

@@ -121,11 +121,11 @@ def test_valid_fake_provider_proposed_changes_are_shown_in_readback_metadata(mon
     readback = payload["live_exact_resume_change_proposal_readback"]
 
     assert readback["proposed_change_count"] == 1
-    assert readback["proposed_change_ids"] == ["phase57-proposal-001"]
-    assert readback["stable_proposed_change_keys"] == ["phase57-proposal-001"]
+    assert readback["proposed_change_ids"] == ["phase42a-001"]
+    assert readback["stable_proposed_change_keys"] == ["phase42a-001"]
     assert readback["proposal_metadata"]["proposed_change_count"] == 1
     assert readback["proposal_metadata"]["stable_proposed_change_keys"] == [
-        "phase57-proposal-001"
+        "phase42a-001"
     ]
     assert readback["proposed_changes_preview"][0]["manual_review_required"] is True
     assert readback["proposed_changes_preview"][0]["requires_user_acceptance"] is True

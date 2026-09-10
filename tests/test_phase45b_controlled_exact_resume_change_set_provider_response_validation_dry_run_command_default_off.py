@@ -574,6 +574,7 @@ def test_protected_runtime_files_are_unchanged_by_hash():
         PROTECTED_HASHES,
         compatibility_profiles=(
             "phase1_ai_provider_model_routing_hash_maintenance",
+            "item71_manual_review_groq_diagnostics_fix",
         ),
     )
 

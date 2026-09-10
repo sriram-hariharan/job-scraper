@@ -8,7 +8,11 @@ from src.app import api, services
 
 def _request(owner_user_id="user_1"):
     return types.SimpleNamespace(
-        state=types.SimpleNamespace(auth_user={"user_id": owner_user_id} if owner_user_id else {})
+        state=types.SimpleNamespace(
+            auth_user={"user_id": owner_user_id, "is_admin": True}
+            if owner_user_id
+            else {}
+        )
     )
 
 

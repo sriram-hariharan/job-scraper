@@ -1751,7 +1751,13 @@ def reserve_user_pipeline_active_run_postgres_payload(
     safe_status_path = _clean_text(status_path)
     safe_metadata = metadata_json if isinstance(metadata_json, dict) else {}
 
-    sql = _schema_prefix(ensure_schema) + f"""
+    bulk_schema_prefix = ""
+    if ensure_schema:
+        bulk_schema_path = Path("src/storage/bulk_generation/schema.sql")
+        if bulk_schema_path.exists():
+            bulk_schema_prefix = bulk_schema_path.read_text(encoding="utf-8") + "\n\n"
+
+    sql = _schema_prefix(ensure_schema) + bulk_schema_prefix + f"""
 WITH lock AS (
     SELECT pg_advisory_xact_lock(927461337) AS locked
 ),
@@ -1770,6 +1776,13 @@ existing_owner AS (
     WHERE owner_user_id = {_sql_quote_text(owner)}
       AND status = 'running'
       AND expires_at >= now()
+    LIMIT 1
+),
+existing_bulk AS (
+    SELECT run_id, status
+    FROM bulk_generation_runs
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND status IN ('queued', 'running', 'stop_requested')
     LIMIT 1
 ),
 active_count AS (
@@ -1805,6 +1818,7 @@ inserted AS (
         {_sql_quote_text(safe_status_path)},
         {_sql_jsonb(safe_metadata)}
     WHERE NOT EXISTS (SELECT 1 FROM existing_owner)
+      AND NOT EXISTS (SELECT 1 FROM existing_bulk)
       AND (SELECT count FROM active_count) < {safe_max}
     ON CONFLICT (owner_user_id) DO NOTHING
     RETURNING
@@ -1826,6 +1840,7 @@ SELECT json_build_object(
         CASE
             WHEN EXISTS (SELECT 1 FROM inserted) THEN ''
             WHEN EXISTS (SELECT 1 FROM existing_owner) THEN 'owner_already_running'
+            WHEN EXISTS (SELECT 1 FROM existing_bulk) THEN 'bulk_generation_in_progress'
             WHEN (SELECT count FROM active_count) >= {safe_max} THEN 'capacity_full'
             ELSE 'reservation_conflict'
         END,
@@ -1861,6 +1876,7 @@ SELECT json_build_object(
         "existing_owner_run": dict(data.get("existing_owner_run", {}) or {}),
         "command": payload.get("command", []),
         "command_text": payload.get("command_text", ""),
+        "sql": payload.get("sql", ""),
         "table_name": "user_pipeline_active_runs",
     }
 

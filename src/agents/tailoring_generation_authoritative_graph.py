@@ -60,6 +60,12 @@ def _bounded_latency_ms(started_ns: int) -> int:
     return max(0, min(elapsed_ms, MAX_NODE_LATENCY_MS))
 
 
+from src.tailoring.llm import (
+    LIVE_LLM_DEFAULT_PARSE_RETRY_LIMIT,
+    normalize_live_llm_parse_retry_limit,
+)
+
+
 def _copy_mapping(value: Any, *, field_name: str) -> Dict[str, Any]:
     if not isinstance(value, Mapping):
         raise TypeError(f"{field_name}_must_be_mapping")
@@ -85,12 +91,14 @@ def build_authoritative_tailoring_generation_graph(
     output_llm_json: str = "",
     refresh_llm_cache: bool = False,
     enable_safe_app_ready_rewrite_promotion: bool = False,
+    parse_retry_limit: int = LIVE_LLM_DEFAULT_PARSE_RETRY_LIMIT,
     result_holder: Dict[str, Any] | None = None,
 ) -> Any:
     from langgraph.graph import END, START, StateGraph
 
     if not callable(run_tailoring_func):
         raise TypeError("run_tailoring_func_must_be_callable")
+    parse_retry_limit = normalize_live_llm_parse_retry_limit(parse_retry_limit)
     holder = result_holder if result_holder is not None else {}
 
     def tailoring_generation_node(
@@ -113,6 +121,7 @@ def build_authoritative_tailoring_generation_graph(
             enable_safe_app_ready_rewrite_promotion=bool(
                 enable_safe_app_ready_rewrite_promotion
             ),
+            parse_retry_limit=parse_retry_limit,
         )
         if not isinstance(result, Mapping):
             raise TypeError(
@@ -181,6 +190,7 @@ def execute_authoritative_tailoring_generation_graph(
     output_llm_json: str = "",
     refresh_llm_cache: bool = False,
     enable_safe_app_ready_rewrite_promotion: bool = False,
+    parse_retry_limit: int = LIVE_LLM_DEFAULT_PARSE_RETRY_LIMIT,
     pipeline_run_id: str = "",
     owner_user_id: str = "",
     context_id: str = "",
@@ -242,6 +252,7 @@ def execute_authoritative_tailoring_generation_graph(
         enable_safe_app_ready_rewrite_promotion=(
             enable_safe_app_ready_rewrite_promotion
         ),
+        parse_retry_limit=parse_retry_limit,
         result_holder=result_holder,
     )
     if checkpointer is not None:

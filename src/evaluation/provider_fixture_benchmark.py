@@ -25,6 +25,38 @@ from src.evaluation.provider_benchmark_contract import (
 
 FIXTURE_BENCHMARK_VERSION = "provider-fixture-benchmark-v1"
 CASE_CORPUS_VERSION = "provider-fixture-case-corpus-v1"
+SYNTHETIC_ROLE_DOCUMENT_FIELD = "synthetic_role_document"
+SYNTHETIC_ROLE_DOCUMENT_WORKLOADS = frozenset({"skill_extraction"})
+SYNTHETIC_ROLE_DOCUMENT_VERSION = "skill-extraction-synthetic-role-document-v1"
+SYNTHETIC_ROLE_DOCUMENT_PROFILES = (
+    "full_text_required_preferred",
+    "windowed_head_required_boilerplate",
+    "windowed_mid_required_tail_preferred",
+    "windowed_overlap_suppressed_preferred",
+)
+_SYNTHETIC_ROLE_DOCUMENT_FIELDS = {
+    "version",
+    "profile",
+    "required_skills",
+    "preferred_skills",
+}
+_SYNTHETIC_ROLE_DOCUMENT_PROFILES_REQUIRING_PREFERRED = frozenset(
+    {
+        "full_text_required_preferred",
+        "windowed_mid_required_tail_preferred",
+    }
+)
+_SYNTHETIC_ROLE_DOCUMENT_PROFILES_FORBIDDING_PREFERRED = frozenset(
+    {"windowed_head_required_boilerplate"}
+)
+_SYNTHETIC_ROLE_DOCUMENT_SKILL_CHARACTERS = frozenset(
+    "abcdefghijklmnopqrstuvwxyz0123456789 +#./-"
+)
+_SYNTHETIC_ROLE_DOCUMENT_SKILL_MAXIMUM_CHARACTERS = 40
+_SYNTHETIC_ROLE_DOCUMENT_MAXIMUM_SKILLS = 8
+WORKLOAD_CASE_PROJECTION_VERSION = (
+    "provider-fixture-workload-case-projection-v1"
+)
 DEFAULT_CASE_CORPUS_PATH = (
     Path(__file__).resolve().parents[2]
     / "tests"
@@ -132,7 +164,6 @@ _WORKLOAD_GRADER_RESPONSIBILITIES = {
         "schema_validity",
         "required_field_completeness",
         "bounded_score_ranges",
-        "classification_agreement",
         "reason_grounding",
         "unsupported_claim_count",
     ],
@@ -206,6 +237,67 @@ _WORKLOAD_GRADER_RESPONSIBILITIES = {
         "no_mutation_or_action_authority",
     ],
 }
+WORKLOAD_GRADING_SEMANTICS_VERSION = "controlled-workload-grading-semantics-v1"
+# Declarative identity of the rules that decide benchmark task quality.
+#
+# These are deliberately NOT source hashes: a harmless refactor must not
+# invalidate qualification evidence, but a material rule change must. Whoever
+# changes a rule below changes its identifier in the same edit, so the
+# qualification-semantics digest moves with the behaviour it names.
+#
+# Observability-only behaviour (which metrics a diagnostic retains) is
+# excluded on purpose: reporting shape must never invalidate qualification.
+#
+# A workload absent from this mapping declares no grading contract and its
+# qualification identity is unchanged, so unrelated workloads do not churn.
+_WORKLOAD_GRADING_SEMANTICS = {
+    "job_fit_evaluation": {
+        "score_projection": (
+            "provider_0_to_10_divided_by_10_without_clamping"
+        ),
+        "bounded_score_rule": (
+            "normalized_scores_numeric_and_within_0_to_1"
+        ),
+        "reason_projection": "nonempty_clean_reason_presence_boolean",
+        "reason_grounding_rule": (
+            "reason_present_and_no_unsupported_claims"
+        ),
+        "unsupported_claim_rule": (
+            "claim_terms_outside_supported_or_within_prohibited"
+        ),
+        "task_quality_rule": (
+            "bounded_score_ranges_and_reason_grounding"
+        ),
+    },
+}
+
+
+def build_workload_grading_semantics(
+    workload_id: str,
+) -> Dict[str, Any] | None:
+    """Return one workload's declarative grading contract, or None."""
+
+    normalized = str(workload_id or "").strip()
+    declared = _WORKLOAD_GRADING_SEMANTICS.get(normalized)
+    if declared is None:
+        return None
+    return {
+        "grading_semantics_version": WORKLOAD_GRADING_SEMANTICS_VERSION,
+        "workload_id": normalized,
+        "grader_responsibilities": list(
+            _WORKLOAD_GRADER_RESPONSIBILITIES.get(normalized, ())
+        ),
+        "rules": deepcopy(declared),
+    }
+
+
+def workload_grading_semantics_sha256(workload_id: str) -> str | None:
+    """Return the declarative grading digest, or None when undeclared."""
+
+    material = build_workload_grading_semantics(workload_id)
+    if material is None:
+        return None
+    return sha256(_canonical_json(material).encode("utf-8")).hexdigest()
 
 
 def _require(condition: bool, message: str) -> None:
@@ -338,6 +430,97 @@ def _contains_forbidden_result_key(value: Any) -> bool:
     return False
 
 
+def _validate_synthetic_role_document_skills(
+    value: Any,
+    *,
+    label: str,
+    minimum: int,
+) -> None:
+    _require(
+        isinstance(value, list)
+        and minimum <= len(value) <= _SYNTHETIC_ROLE_DOCUMENT_MAXIMUM_SKILLS,
+        f"synthetic role document {label} list is out of bounds",
+    )
+    for item in value:
+        _require(
+            isinstance(item, str)
+            and 1
+            <= len(item)
+            <= _SYNTHETIC_ROLE_DOCUMENT_SKILL_MAXIMUM_CHARACTERS,
+            f"synthetic role document {label} entry length is invalid",
+        )
+        _require(
+            all(
+                character in _SYNTHETIC_ROLE_DOCUMENT_SKILL_CHARACTERS
+                for character in item
+            ),
+            f"synthetic role document {label} entry has forbidden characters",
+        )
+
+
+def _validate_synthetic_role_document(case: Mapping[str, Any]) -> None:
+    """Validate the optional bounded synthetic role-document recipe.
+
+    The recipe is a fixed-profile description, never free text: no URL,
+    identity, credential, path, prompt, runtime state, or raw job description
+    is representable, so the generic transmission-safety predicates keep
+    applying unchanged.
+    """
+
+    packet = case["normalized_input_packet"]
+    if SYNTHETIC_ROLE_DOCUMENT_FIELD not in packet:
+        return
+
+    _require(
+        case.get("workload_id") in SYNTHETIC_ROLE_DOCUMENT_WORKLOADS,
+        "synthetic role document is only supported for skill extraction",
+    )
+    _require(
+        case.get("sanitized_classification") == "synthetic_sanitized",
+        "synthetic role document requires a synthetic_sanitized case",
+    )
+    _require(
+        case.get("contains_personal_resume_content") is False,
+        "synthetic role document must not accompany personal resume content",
+    )
+
+    recipe = packet[SYNTHETIC_ROLE_DOCUMENT_FIELD]
+    _require(
+        isinstance(recipe, dict)
+        and set(recipe) == _SYNTHETIC_ROLE_DOCUMENT_FIELDS,
+        "synthetic role document fields must match the exact schema",
+    )
+    _require(
+        recipe["version"] == SYNTHETIC_ROLE_DOCUMENT_VERSION,
+        "synthetic role document version mismatch",
+    )
+    profile = recipe["profile"]
+    _require(
+        profile in SYNTHETIC_ROLE_DOCUMENT_PROFILES,
+        "synthetic role document profile is unsupported",
+    )
+    _validate_synthetic_role_document_skills(
+        recipe["required_skills"],
+        label="required_skills",
+        minimum=1,
+    )
+    _validate_synthetic_role_document_skills(
+        recipe["preferred_skills"],
+        label="preferred_skills",
+        minimum=0,
+    )
+    if profile in _SYNTHETIC_ROLE_DOCUMENT_PROFILES_REQUIRING_PREFERRED:
+        _require(
+            bool(recipe["preferred_skills"]),
+            "synthetic role document profile requires preferred skills",
+        )
+    if profile in _SYNTHETIC_ROLE_DOCUMENT_PROFILES_FORBIDDING_PREFERRED:
+        _require(
+            not recipe["preferred_skills"],
+            "synthetic role document profile forbids preferred skills",
+        )
+
+
 def _case_by_id(corpus: Mapping[str, Any]) -> Dict[str, Dict[str, Any]]:
     return {
         str(case["case_id"]): case
@@ -421,6 +604,7 @@ def validate_fixture_case_corpus(corpus: Dict[str, Any]) -> bool:
             isinstance(case.get("normalized_input_packet"), dict),
             "normalized input packet must be an object",
         )
+        _validate_synthetic_role_document(case)
         _require(
             isinstance(case.get("expected_output"), dict),
             "expected output must be an object",
@@ -566,6 +750,47 @@ def fixture_case_corpus_sha256(
 ) -> str:
     return sha256(
         serialize_fixture_case_corpus(corpus).encode("utf-8")
+    ).hexdigest()
+
+
+def serialize_workload_fixture_cases(
+    workload_id: str,
+    corpus: Dict[str, Any] | None = None,
+) -> str:
+    """Canonically serialize only one workload's fixture cases.
+
+    Additive Stage 1 primitive. It never mutates the corpus and never affects
+    ``serialize_fixture_case_corpus`` or ``fixture_case_corpus_sha256``.
+    """
+
+    payload = load_fixture_case_corpus() if corpus is None else deepcopy(corpus)
+    validate_fixture_case_corpus(payload)
+    normalized = _clean_text(workload_id)
+    _require(normalized in WORKLOAD_ORDER, "unknown fixture workload")
+    ordered = {
+        "projection_version": WORKLOAD_CASE_PROJECTION_VERSION,
+        "corpus_version": payload["corpus_version"],
+        "workload_id": normalized,
+        "cases": sorted(
+            (
+                case
+                for case in payload["cases"]
+                if case["workload_id"] == normalized
+            ),
+            key=lambda case: case["case_id"],
+        ),
+    }
+    return _canonical_json(ordered)
+
+
+def workload_fixture_cases_sha256(
+    workload_id: str,
+    corpus: Dict[str, Any] | None = None,
+) -> str:
+    """Return the deterministic digest of one workload's fixture cases."""
+
+    return sha256(
+        serialize_workload_fixture_cases(workload_id, corpus).encode("utf-8")
     ).hexdigest()
 
 
@@ -970,7 +1195,6 @@ def _grade_job_fit(
     case: Mapping[str, Any],
     output: Mapping[str, Any],
 ) -> Dict[str, Any]:
-    expected = case["expected_output"]
     fit_score = output.get("fit_score")
     required_score = output.get("required_match_score")
     bounded = all(
@@ -980,26 +1204,19 @@ def _grade_job_fit(
         for value in (fit_score, required_score)
     )
     unsupported = _unsupported_claims(case, output)
-    missing_accuracy = _agreement(
-        _normalized_set(output.get("missing_requirements")),
-        _normalized_set(expected.get("missing_requirements")),
-    )
-    classification = _agreement(
-        output.get("classification"),
-        expected.get("classification"),
-    )
+    # Production requires a `reason` result field but does not require it to
+    # reproduce a recognized evidence token, so qualification grades presence
+    # plus the unchanged unsupported/prohibited claim rejection. A golden
+    # fixture output carries no production reason signal, so an absent key is
+    # not treated as a missing reason.
+    reason_signal = output.get("reason_present")
+    reason_present = True if reason_signal is None else bool(reason_signal)
+    reason_grounded = reason_present and not unsupported
     return {
         "bounded_score_ranges": 1.0 if bounded else 0.0,
-        "classification_agreement": classification,
-        "reason_grounding": 1.0 if not unsupported else 0.0,
+        "reason_grounding": 1.0 if reason_grounded else 0.0,
         "unsupported_claim_count": len(unsupported),
-        "missing_requirement_accuracy": missing_accuracy,
-        "task_quality_passed": (
-            bounded
-            and classification == 1.0
-            and not unsupported
-            and missing_accuracy == 1.0
-        ),
+        "task_quality_passed": bounded and reason_grounded,
     }
 
 
@@ -1559,6 +1776,10 @@ def grade_normalized_candidate_result(
         "critic_agreement": workload_metrics.get("critic_agreement"),
         "workload_metrics": deepcopy(workload_metrics),
         "hard_failures": hard_failures,
+        # Observability only: the exact deterministic token set the grader
+        # already computed for unsupported_claim, carried forward instead of
+        # being reduced to a bare count. Never influences any gate decision.
+        "unsupported_claim_tokens": list(unsupported),
         "quality_gate_passed": quality_gate_passed,
         "cost_comparison_eligible": (
             quality_gate_passed

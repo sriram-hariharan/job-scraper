@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REVIEW_JS_PATH = ROOT / "src/app/static/agentic_review.js"
 PROFILE_UI_PATH = ROOT / "src/app/profile_ui.py"
 CSS_PATH = ROOT / "src/app/static/app_redesign.css"
+REVIEW_CSS_PATH = ROOT / "src/app/static/agentic_review.css"
 
 
 def _review_js() -> str:
@@ -81,17 +82,25 @@ const hooks = vm.runInContext(`({{
     return json.loads(completed.stdout)
 
 
-def test_action_is_in_existing_tailoring_workspace_and_modal_is_explicit():
+def test_action_is_in_selected_job_inspector_and_modal_is_explicit():
     source = _review_js()
     profile = PROFILE_UI_PATH.read_text(encoding="utf-8")
     css = CSS_PATH.read_text(encoding="utf-8")
+    review_css = REVIEW_CSS_PATH.read_text(encoding="utf-8")
     tailoring = source[
         source.index('"agenticReviewTailoringPanel"') :
         source.index('"agenticReviewOperatorPanel"')
     ]
+    next_step = _function(
+        source,
+        "renderAgenticReviewNextStep",
+        "renderAgenticReviewInspectorContext",
+    )
 
-    assert 'label: "AI preview", type: "manual_provider_preview_action"' in tailoring
+    assert 'label: "AI preview", type: "manual_provider_preview_action"' not in tailoring
+    assert "renderManualProviderPreviewAction(previewRow" in next_step
     assert "Generate AI Preview" in source
+    assert "data-manual-provider-preview-result" in next_step
     assert 'id="manualProviderPreviewConfirmModal"' in profile
     assert 'role="dialog"' in profile
     assert 'aria-modal="true"' in profile
@@ -100,6 +109,8 @@ def test_action_is_in_existing_tailoring_workspace_and_modal_is_explicit():
     assert "nothing is submitted to an employer" in profile
     assert ".manual-provider-preview-modal-card" in css
     assert ".manual-provider-preview-result" in css
+    assert ".agentic-review-next-step" in review_css
+    assert "#agenticReviewSelectedJobPanel .manual-provider-preview-action" in review_css
 
 
 def test_readiness_is_owner_routing_driven_and_page_load_never_posts():

@@ -6,12 +6,14 @@ import os
 import subprocess
 from datetime import datetime, timezone
 from threading import Lock
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 
 _init_lock = Lock()
 _db_initialized = False
 _db_write_lock = Lock()
+
+MAX_SCHEDULER_ARTIFACT_LIST_LIMIT = 500
 
 
 _SCHEDULER_ARTIFACTS_SCHEMA_SQL = """
@@ -240,3 +242,77 @@ SELECT json_build_object(
         return {}
 
     return dict(result.get("payload", {}) or {})
+
+
+def list_scheduler_artifacts_by_kind(
+    *,
+    artifact_kind: str,
+    limit: int = 100,
+    initialize: bool = False,
+) -> Dict[str, Any]:
+    """Read one bounded scheduler-artifact kind without mutating storage."""
+    if initialize:
+        init_scheduler_artifacts_store()
+
+    safe_kind = _clean_text(artifact_kind)
+    if not safe_kind:
+        raise ValueError("artifact_kind is required for scheduler artifact listing.")
+    try:
+        requested_limit = int(limit)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("limit must be an integer.") from exc
+    if requested_limit <= 0:
+        raise ValueError("limit must be > 0.")
+    bounded_limit = min(requested_limit, MAX_SCHEDULER_ARTIFACT_LIST_LIMIT)
+
+    sql = f"""
+WITH selected AS (
+    SELECT
+        artifact_id,
+        run_id,
+        job_name,
+        artifact_kind,
+        artifact_name,
+        payload_json,
+        created_at,
+        updated_at
+    FROM scheduler_artifacts
+    WHERE artifact_kind = {_sql_quote_text(safe_kind)}
+    ORDER BY
+        NULLIF(payload_json->>'created_at', '') DESC NULLS LAST,
+        created_at DESC,
+        artifact_id DESC
+    LIMIT {bounded_limit}
+)
+SELECT json_build_object(
+    'rows', COALESCE(
+        (
+            SELECT json_agg(
+                row_to_json(selected)
+                ORDER BY
+                    NULLIF(payload_json->>'created_at', '') DESC NULLS LAST,
+                    created_at DESC,
+                    artifact_id DESC
+            )
+            FROM selected
+        ),
+        '[]'::json
+    )
+);
+""".strip()
+
+    result = _run_psql_json_query(sql)
+    raw_rows = result.get("rows", [])
+    rows: List[Dict[str, Any]] = [
+        dict(row)
+        for row in raw_rows
+        if isinstance(row, dict)
+        and _clean_text(row.get("artifact_kind")) == safe_kind
+    ] if isinstance(raw_rows, list) else []
+    return {
+        "ok": True,
+        "artifact_kind": safe_kind,
+        "query_limit": bounded_limit,
+        "rows": rows,
+        "count": len(rows),
+    }

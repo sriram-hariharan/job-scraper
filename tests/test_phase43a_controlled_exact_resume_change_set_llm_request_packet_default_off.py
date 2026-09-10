@@ -233,6 +233,8 @@ def test_missing_change_proposals_blocks_with_missing_input_reason():
     assert payload["change_proposals_present"] is False
     assert "change_proposals" in payload["missing_inputs"]
     assert payload["request_packet_summary"]["request_blocked"] is True
+    assert payload["request_packet_summary"]["provider_dispatch_ready"] is False
+    assert payload["provider_dispatch_ready"] is False
 
 
 def test_proposal_result_with_change_proposals_is_accepted():
@@ -367,6 +369,13 @@ def test_messages_include_system_and_user_payload_and_required_prohibitions():
     assert messages[1]["role"] == "user"
     for marker in (
         "refine exact resume change proposals only",
+        "polished, natural, resume-ready",
+        "[emphasize: ...]",
+        "[align with jd term: ...]",
+        "internal instructions",
+        "do not force or manufacture a change",
+        "preserve candidate identity",
+        "manual user acceptance",
         "do not generate a full resume",
         "unsupported claims",
         "overwrite",
@@ -385,9 +394,18 @@ def test_schema_and_packet_include_required_contracts():
     )
     schema = payload["request_schema"]
     packet = payload["request_packet"]
-    proposal_props = schema["properties"]["refined_change_proposals"]["items"]["properties"]
+    proposal_array = schema["properties"]["refined_change_proposals"]
+    proposal_schema = proposal_array["items"]
+    proposal_props = proposal_schema["properties"]
 
     assert "refined_change_proposals" in schema["properties"]
+    assert "refined_change_proposals" in schema["required"]
+    assert schema["additionalProperties"] is False
+    assert proposal_array["type"] == "array"
+    assert "minItems" not in proposal_array
+    assert proposal_schema["type"] == "object"
+    assert proposal_schema["additionalProperties"] is False
+    assert set(proposal_schema["required"]) == set(proposal_props)
     for field in (
         "proposal_id",
         "change_type",
@@ -406,6 +424,7 @@ def test_schema_and_packet_include_required_contracts():
     assert schema["properties"]["resume_overwrite_performed"]["const"] is False
     assert schema["properties"]["resume_mutation_performed"]["const"] is False
     assert schema["properties"]["application_submission_performed"]["const"] is False
+    assert set(schema["required"]) == set(schema["properties"])
     assert packet["safety_constraints"]
     assert packet["evidence_constraints"]
     assert packet["output_constraints"]

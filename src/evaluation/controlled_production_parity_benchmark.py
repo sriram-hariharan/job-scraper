@@ -16,9 +16,12 @@ from types import SimpleNamespace
 from typing import Any, Dict, Mapping
 
 from src.evaluation.controlled_provider_benchmark_plan import (
+    _case_alias,
     build_controlled_provider_benchmark_plan,
+    stable_case_alias,
     validate_controlled_provider_benchmark_plan,
     validate_transmittable_request_packet,
+    workload_plan_projection_sha256,
 )
 from src.evaluation.production_task_contract_fingerprints import (
     FINGERPRINTED_PRODUCTION_WORKLOADS,
@@ -28,13 +31,134 @@ from src.evaluation.production_task_contract_fingerprints import (
 )
 from src.evaluation.provider_benchmark_contract import WORKLOAD_ORDER
 from src.evaluation.provider_fixture_benchmark import (
+    SYNTHETIC_ROLE_DOCUMENT_FIELD,
+    fixture_case_corpus_sha256,
     grade_normalized_candidate_result,
     load_fixture_case_corpus,
+    validate_fixture_case_corpus,
+    workload_grading_semantics_sha256,
 )
 
 
 PARITY_ADAPTER_VERSION = "controlled-production-parity-benchmark-v1"
 PARITY_RESULT_VERSION = "controlled-production-parity-result-v1"
+SYNTHETIC_ROLE_DOCUMENT_EXPANSION_VERSION = (
+    "skill-extraction-synthetic-role-document-expansion-v1"
+)
+_SYNTHETIC_ROLE_HEADING = "Role Overview"
+_SYNTHETIC_REQUIRED_HEADING = "Required qualifications:"
+_SYNTHETIC_PREFERRED_HEADING = "Preferred qualifications:"
+_SYNTHETIC_RESPONSIBILITIES_HEADING = "Responsibilities:"
+_SYNTHETIC_RESPONSIBILITY_LINES = (
+    "- Build and operate reliable ingestion workflows.",
+    "- Partner with analytics groups on data quality.",
+)
+_SYNTHETIC_FILLER_SENTENCE = (
+    "The team collaborates across partner groups to deliver measurable "
+    "outcomes and operational reliability. "
+)
+# Deterministic filler-block counts per fixed profile. Layout is a property of
+# the profile, never a caller-supplied parameter.
+_SYNTHETIC_ROLE_DOCUMENT_PROFILE_LAYOUT = {
+    "full_text_required_preferred": (24, 0, 24),
+    "windowed_head_required_boilerplate": (0, 0, 78),
+    "windowed_mid_required_tail_preferred": (31, 26, 11),
+    # The middle block places the preferred heading beyond the reach of the
+    # required window's text while still inside its overlap span, so the
+    # production window for it is rejected and its skills never reach the
+    # provider.
+    "windowed_overlap_suppressed_preferred": (29, 13, 53),
+}
+
+
+def _synthetic_filler(blocks: int) -> str:
+    return _SYNTHETIC_FILLER_SENTENCE * blocks
+
+
+def _synthetic_skill_block(heading: str, skills) -> str:
+    if not skills:
+        return ""
+    lines = "".join(f"- {skill}\n" for skill in skills)
+    return f"{heading}\n{lines}\n"
+
+
+def expand_synthetic_role_document(recipe) -> str:
+    """Deterministically expand one bounded recipe into synthetic long-form text.
+
+    Uses only fixed headings, one fixed filler sentence, the recipe's bounded
+    skill lists, and a profile-specific layout. Nothing outside the recipe
+    participates: no clock, no randomness, no ambient configuration, no
+    provider or network access, no external file, and no production or user
+    text.
+    """
+
+    profile = recipe["profile"]
+    leading, middle, trailing = _SYNTHETIC_ROLE_DOCUMENT_PROFILE_LAYOUT[profile]
+    required_block = _synthetic_skill_block(
+        _SYNTHETIC_REQUIRED_HEADING,
+        recipe["required_skills"],
+    )
+    preferred_block = _synthetic_skill_block(
+        _SYNTHETIC_PREFERRED_HEADING,
+        recipe["preferred_skills"],
+    )
+    header = f"{_SYNTHETIC_ROLE_HEADING}\n\n"
+
+    if profile == "full_text_required_preferred":
+        # Below the production full-text threshold; both sections present.
+        return (
+            header
+            + required_block
+            + _synthetic_filler(leading)
+            + "\n\n"
+            + preferred_block
+            + _synthetic_filler(trailing)
+        )
+    if profile == "windowed_head_required_boilerplate":
+        # Required in the head, no preferred section, dense trailing filler.
+        return (
+            header
+            + required_block
+            + _SYNTHETIC_RESPONSIBILITIES_HEADING
+            + "\n"
+            + "\n".join(_SYNTHETIC_RESPONSIBILITY_LINES)
+            + "\n\n"
+            + _synthetic_filler(trailing)
+        )
+    if profile == "windowed_mid_required_tail_preferred":
+        # Required mid-document and preferred near the tail, far enough apart
+        # that the production keyword windows do not overlap.
+        return (
+            header
+            + _synthetic_filler(leading)
+            + "\n\n"
+            + required_block
+            + _synthetic_filler(middle)
+            + "\n\n"
+            + preferred_block
+            + _synthetic_filler(trailing)
+        )
+    # windowed_overlap_suppressed_preferred: the preferred section sits close
+    # enough to the required section that the production window for it overlaps
+    # an already-claimed window and is suppressed before the provider sees it.
+    return (
+        header
+        + _synthetic_filler(leading)
+        + "\n\n"
+        + required_block
+        + _synthetic_filler(middle)
+        + "\n\n"
+        + preferred_block
+        + _synthetic_filler(trailing)
+    )
+
+
+RENDERED_PARITY_SEMANTICS_VERSION = (
+    "controlled-production-parity-rendered-semantics-v1"
+)
+WORKLOAD_QUALIFICATION_SEMANTICS_VERSION = (
+    "controlled-workload-qualification-semantics-renderer-bound-v1"
+)
 PRODUCTION_PARITY_RUNNABLE_WORKLOADS = FINGERPRINTED_PRODUCTION_WORKLOADS
 PRODUCTION_PARITY_BLOCKED_WORKLOADS = UNRESOLVED_PRODUCTION_WORKLOADS
 
@@ -65,6 +189,16 @@ _PROMPT_KEYS = {
     "manual_scan_phrase": ("system", "user_template"),
     "manual_provider_preview": ("system", "user_template"),
 }
+_JOB_FIT_RESULT_FIELDS = (
+    "id",
+    "ai_relevance",
+    "skill_match",
+    "seniority_match",
+    "learning_opportunity",
+    "overall_score",
+    "visa_sponsorship_signal",
+    "reason",
+)
 _PARITY_REQUEST_FIELDS = {
     "parity_adapter_version",
     "case_alias",
@@ -92,12 +226,16 @@ _PARITY_RESULT_FIELDS = {
     "production_task_contract_sha256",
     "production_contract_valid",
     "production_validation_errors",
+    "production_contract_failures",
     "production_normalized_output",
     "benchmark_projection",
     "benchmark_quality",
     "authority_invariants",
     "evidence_binding_sha256",
 }
+_JOB_FIT_CANDIDATE_SEMANTICS_FIELD = (
+    "candidate_transport_semantics_sha256"
+)
 
 
 class ProductionParityBlocked(ValueError):
@@ -196,23 +334,173 @@ def build_production_parity_runnability() -> Dict[str, Dict[str, Any]]:
     return deepcopy(mapping)
 
 
+def build_workload_rendered_parity_semantics(
+    workload_id: str,
+    corpus: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Return the canonical rendered parity semantics for one workload.
+
+    Additive Stage 1 primitive. It reuses the existing ``_synthetic_material``
+    renderer without altering it and without touching production requests, so
+    the digest moves when this workload's transmitted material changes and does
+    not move when an unrelated workload's renderer branch changes.
+    """
+
+    payload = load_fixture_case_corpus() if corpus is None else deepcopy(corpus)
+    validate_fixture_case_corpus(payload)
+    normalized = str(workload_id or "").strip()
+    _require(
+        normalized in PRODUCTION_PARITY_RUNNABLE_WORKLOADS
+        or normalized in PRODUCTION_PARITY_BLOCKED_WORKLOADS,
+        "unknown production-parity workload",
+    )
+
+    rendered = []
+    for case in sorted(
+        (
+            case
+            for case in payload["cases"]
+            if case["workload_id"] == normalized
+        ),
+        key=lambda case: case["case_id"],
+    ):
+        replacements, local_context = _synthetic_material(
+            normalized,
+            case["normalized_input_packet"],
+        )
+        rendered.append(
+            {
+                "stable_case_alias": stable_case_alias(
+                    normalized,
+                    case["case_id"],
+                ),
+                "replacements": deepcopy(replacements),
+                "local_validation_context": deepcopy(local_context),
+            }
+        )
+    return {
+        "rendered_semantics_version": RENDERED_PARITY_SEMANTICS_VERSION,
+        "workload_id": normalized,
+        "response_mode": _RESPONSE_MODES.get(normalized),
+        "rendered_cases": rendered,
+    }
+
+
+def workload_rendered_parity_semantics_sha256(
+    workload_id: str,
+    corpus: Dict[str, Any] | None = None,
+) -> str:
+    """Return the deterministic digest of one workload's rendered semantics."""
+
+    return sha256(
+        _canonical_json(
+            build_workload_rendered_parity_semantics(workload_id, corpus)
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def workload_qualification_semantics_sha256(
+    workload_id: str,
+    *,
+    plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
+) -> str:
+    """Return the renderer-bound workload qualification semantics digest.
+
+    Composed downstream of the plan owner so the existing
+    parity -> plan dependency direction is preserved.
+    """
+
+    normalized = str(workload_id or "").strip()
+    material = {
+        "semantics_version": WORKLOAD_QUALIFICATION_SEMANTICS_VERSION,
+        "workload_id": normalized,
+        "workload_plan_projection_sha256": workload_plan_projection_sha256(
+            normalized,
+            plan=plan,
+            corpus=corpus,
+        ),
+        "rendered_parity_semantics_sha256": (
+            workload_rendered_parity_semantics_sha256(normalized, corpus)
+        ),
+    }
+    grading_digest = workload_grading_semantics_sha256(normalized)
+    if grading_digest is not None:
+        # The rules that decide task quality are part of what "qualified"
+        # means, so evidence graded under different rules must not stay
+        # current. Only workloads that declare a grading contract bind one,
+        # which keeps unrelated workload identities stable.
+        material["workload_grading_semantics_sha256"] = grading_digest
+    return sha256(_canonical_json(material).encode("utf-8")).hexdigest()
+
+
+def _execution_corpus(
+    plan: Mapping[str, Any],
+    corpus: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    """Return the exact corpus that produced ``plan``.
+
+    A caller-supplied corpus is used only when its digest matches the plan's
+    recorded corpus digest; a mismatch fails closed and never falls back to the
+    on-disk corpus.
+    """
+
+    payload = load_fixture_case_corpus() if corpus is None else deepcopy(corpus)
+    validate_fixture_case_corpus(payload)
+    _require(
+        fixture_case_corpus_sha256(payload)
+        == plan["step8o_case_corpus_sha256"],
+        "execution corpus digest does not match the controlled plan",
+    )
+    return payload
+
+
 def _case_for_packet(
     packet: Mapping[str, Any],
     plan: Mapping[str, Any],
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    corpus = load_fixture_case_corpus()
-    for case, review in zip(corpus["cases"], plan["transmission_review"]):
-        if review["case_alias"] == packet["case_alias"]:
-            _require(
-                review["eligible_for_later_controlled_transmission"] is True,
-                "parity fixture is not transmission-safe",
-            )
-            _require(
-                case["workload_id"] == packet["workload_id"],
-                "parity fixture workload mismatch",
-            )
-            return deepcopy(case)
-    raise ValueError("parity fixture alias is unknown")
+    """Resolve one fixture case by alias against the plan's own corpus.
+
+    Resolution is alias-keyed rather than positional, so corpus ordering can
+    never associate a packet with the wrong case.
+    """
+
+    payload = _execution_corpus(plan, corpus)
+    corpus_digest = fixture_case_corpus_sha256(payload)
+
+    cases_by_alias: Dict[str, Dict[str, Any]] = {}
+    for case in payload["cases"]:
+        alias = _case_alias(case["case_id"], corpus_digest)
+        _require(
+            alias not in cases_by_alias,
+            "parity fixture alias is ambiguous",
+        )
+        cases_by_alias[alias] = case
+
+    reviews_by_alias: Dict[str, Mapping[str, Any]] = {}
+    for review in plan["transmission_review"]:
+        alias = review["case_alias"]
+        _require(
+            alias not in reviews_by_alias,
+            "parity transmission review alias is ambiguous",
+        )
+        reviews_by_alias[alias] = review
+
+    alias = packet["case_alias"]
+    case = cases_by_alias.get(alias)
+    _require(case is not None, "parity fixture alias is unknown")
+    review = reviews_by_alias.get(alias)
+    _require(review is not None, "parity transmission review is missing")
+    _require(
+        review["eligible_for_later_controlled_transmission"] is True,
+        "parity fixture is not transmission-safe",
+    )
+    _require(
+        case["workload_id"] == packet["workload_id"],
+        "parity fixture workload mismatch",
+    )
+    return deepcopy(case)
 
 
 def _synthetic_material(
@@ -242,13 +530,26 @@ def _synthetic_material(
     core_term = _first(original_claims or evidence, "synthetic_core_term")
 
     if workload_id == "skill_extraction":
-        description = (
-            f"Required qualifications: {', '.join(required)}. "
-            + "Synthetic role context. " * 14
-            + f"Preferred qualifications: {', '.join(preferred)}."
-        )
-        replacements = {"<job_description>": description}
-        context = {"job_description": description}
+        # A fixture may supply a bounded synthetic role-document recipe, which
+        # is expanded deterministically here. When absent, the legacy synthetic
+        # rendering is preserved exactly.
+        recipe = values.get(SYNTHETIC_ROLE_DOCUMENT_FIELD)
+        if isinstance(recipe, Mapping) and recipe:
+            description = expand_synthetic_role_document(recipe)
+        else:
+            description = (
+                f"Required qualifications: {', '.join(required)}. "
+                + "Synthetic role context. " * 14
+                + f"Preferred qualifications: {', '.join(preferred)}."
+            )
+        # Production sends the bounded extraction text, not the complete job
+        # document. Reuse that exact owner and retain the same shaped value for
+        # response filtering/rebucketing so provider and normalization
+        # visibility cannot diverge.
+        owner = import_module("src.ai.skill_llm_enricher")
+        extraction_text = owner._build_skill_extraction_text(description)
+        replacements = {"<job_description>": extraction_text}
+        context = {"job_description": extraction_text}
     elif workload_id == "job_fit_evaluation":
         replacements = {
             "<job_title>": _clean(values.get("role_category")) or "synthetic_workflow_role",
@@ -258,7 +559,11 @@ def _synthetic_material(
             "<seniority>": "synthetic_seniority",
             "<ai_signal>": _first(evidence, "synthetic_workflow_signal"),
         }
-        context = {"required_skills": required, "missing_skills": _strings(values.get("missing_skills"))}
+        context = {
+            "required_skills": required,
+            "missing_skills": _strings(values.get("missing_skills")),
+            "expected_batch_size": 1,
+        }
     elif workload_id == "jd_intelligence":
         workflow = _strings(values.get("workflow_context"))
         description = (
@@ -424,8 +729,19 @@ def _synthetic_material(
 def _response_contract(
     workload_id: str,
     production_contract: Mapping[str, Any],
+    *,
+    provider: str | None = None,
+    model: str | None = None,
 ) -> Dict[str, Any]:
+    from src.ai.llm_client import groq_workload_requires_json_object
+
     mode = _RESPONSE_MODES[workload_id]
+    # Qualification must benchmark the exact mode production will use, so the
+    # same workload-scoped compatibility authority decides both.
+    if mode == "structured_json" and groq_workload_requires_json_object(
+        provider, model, workload_id
+    ):
+        mode = "json_object"
     output = production_contract["output_contract"]
     schema = None
     schema_name = None
@@ -447,10 +763,15 @@ def build_production_parity_request(
     *,
     plan: Dict[str, Any] | None = None,
     expected_task_contract_sha256: str | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Build one transport-ready request from an approved synthetic packet."""
 
-    controlled_plan = build_controlled_provider_benchmark_plan() if plan is None else deepcopy(plan)
+    controlled_plan = (
+        build_controlled_provider_benchmark_plan(corpus=corpus)
+        if plan is None
+        else deepcopy(plan)
+    )
     validate_controlled_provider_benchmark_plan(controlled_plan)
     validate_transmittable_request_packet(packet, plan=controlled_plan)
     workload_id = packet["workload_id"]
@@ -504,7 +825,12 @@ def build_production_parity_request(
         "model": packet["model"],
         "production_task_contract_sha256": current_digest,
         "messages": messages,
-        "response_contract": _response_contract(workload_id, production_contract),
+        "response_contract": _response_contract(
+            workload_id,
+            production_contract,
+            provider=packet["provider"],
+            model=packet["model"],
+        ),
         "task_parameters": task_parameters,
         "local_validation_context": local_context,
         "fallback": False,
@@ -513,8 +839,22 @@ def build_production_parity_request(
         "live_execution_requested": False,
         "synthetic_data_only": True,
     }
-    validate_production_parity_request(request, plan=controlled_plan)
-    _case_for_packet(packet, controlled_plan)
+    if workload_id == "job_fit_evaluation":
+        from src.evaluation.job_fit_candidate_local_qualification import (
+            job_fit_candidate_transport_semantics_sha256,
+        )
+
+        request[_JOB_FIT_CANDIDATE_SEMANTICS_FIELD] = (
+            job_fit_candidate_transport_semantics_sha256(
+                packet["provider"], packet["model"]
+            )
+        )
+    validate_production_parity_request(
+        request,
+        plan=controlled_plan,
+        corpus=corpus,
+    )
+    _case_for_packet(packet, controlled_plan, corpus)
     return deepcopy(request)
 
 
@@ -522,11 +862,15 @@ def validate_production_parity_request(
     request: Dict[str, Any],
     *,
     plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> bool:
     controlled_plan = build_controlled_provider_benchmark_plan() if plan is None else deepcopy(plan)
     validate_controlled_provider_benchmark_plan(controlled_plan)
+    expected_request_fields = set(_PARITY_REQUEST_FIELDS)
+    if request.get("workload_id") == "job_fit_evaluation":
+        expected_request_fields.add(_JOB_FIT_CANDIDATE_SEMANTICS_FIELD)
     _require(
-        isinstance(request, dict) and set(request) == _PARITY_REQUEST_FIELDS,
+        isinstance(request, dict) and set(request) == expected_request_fields,
         "production-parity request fields are invalid",
     )
     _require(
@@ -538,6 +882,12 @@ def validate_production_parity_request(
         workload_id in PRODUCTION_PARITY_RUNNABLE_WORKLOADS,
         "production-parity workload is blocked",
     )
+    if workload_id == "job_fit_evaluation":
+        from src.evaluation.job_fit_candidate_local_qualification import (
+            job_fit_candidate_thinking_budget_for_request,
+        )
+
+        job_fit_candidate_thinking_budget_for_request(request)
     current_digest = production_task_contract_sha256(workload_id)
     _require(
         request.get("production_task_contract_sha256") == current_digest,
@@ -553,7 +903,7 @@ def validate_production_parity_request(
         ),
         "production-parity request is outside the 44-cell plan",
     )
-    fixture = _case_for_packet(request, controlled_plan)
+    fixture = _case_for_packet(request, controlled_plan, corpus)
     expected_replacements, expected_context = _synthetic_material(
         workload_id,
         fixture["normalized_input_packet"],
@@ -610,7 +960,12 @@ def validate_production_parity_request(
         "production-parity prompt contract mismatch",
     )
     response = request.get("response_contract")
-    expected_response = _response_contract(workload_id, production_contract)
+    expected_response = _response_contract(
+        workload_id,
+        production_contract,
+        provider=request.get("provider"),
+        model=request.get("model"),
+    )
     _require(
         isinstance(response, dict)
         and response == expected_response
@@ -644,12 +999,107 @@ def validate_production_parity_request(
     return True
 
 
+MAXIMUM_PRODUCTION_CONTRACT_FAILURES = 4
+_CONTRACT_FAILURE_FIELDS = {"code", "index", "count"}
+_GENERIC_CONTRACT_FAILURE_CODE = "production_contract_invalid"
+
+
+def _safe_contract_failure_projection(exc: BaseException) -> list[Dict[str, Any]]:
+    """Project a normalization failure onto bounded, non-sensitive metadata.
+
+    Reads only explicitly safe typed attributes. Anything untyped or carrying an
+    unrecognized code degrades to the existing generic code, so provider text
+    can never reach persisted evidence through this path.
+    """
+
+    from src.tailoring.llm import (
+        LIVE_LLM_CONTRACT_FAILURE_CODES,
+        LiveLlmContractError,
+    )
+
+    code = ""
+    index: int | None = None
+    count: int | None = None
+    if isinstance(exc, ProductionResponseParseError):
+        code = ProductionResponseParseError.code
+    elif isinstance(exc, LiveLlmContractError):
+        candidate = str(getattr(exc, "code", "") or "")
+        # Closed vocabulary: only codes this validator declares are emitted.
+        if candidate in LIVE_LLM_CONTRACT_FAILURE_CODES:
+            code = candidate
+            raw_index = getattr(exc, "index", None)
+            raw_count = getattr(exc, "count", None)
+            index = int(raw_index) if isinstance(raw_index, int) else None
+            count = int(raw_count) if isinstance(raw_count, int) else None
+    if not code:
+        code = _GENERIC_CONTRACT_FAILURE_CODE
+    return [{"code": code, "index": index, "count": count}][
+        :MAXIMUM_PRODUCTION_CONTRACT_FAILURES
+    ]
+
+
+class ProductionResponseParseError(ValueError):
+    """The response never parsed into a JSON object at the known parse stage.
+
+    Carries only a stable stage-owned code. The underlying parser message can
+    embed a raw provider preview, so the cause is deliberately suppressed and
+    the original text is never read, stored, or re-raised.
+    """
+
+    code = "json_parse_failed"
+
+
 def _parse_json_object(raw_response: Any, parser) -> Dict[str, Any]:
     if isinstance(raw_response, dict):
         return deepcopy(raw_response)
-    parsed = parser(str(raw_response or ""))
-    _require(isinstance(parsed, dict), "production response is not an object")
+    try:
+        parsed = parser(str(raw_response or ""))
+    except Exception:
+        raise ProductionResponseParseError(ProductionResponseParseError.code) from None
+    if not isinstance(parsed, dict):
+        raise ProductionResponseParseError(ProductionResponseParseError.code) from None
     return parsed
+
+
+def _validate_job_fit_results(
+    results: Any,
+    *,
+    expected_batch_size: Any,
+) -> list[Dict[str, Any]]:
+    _require(
+        type(expected_batch_size) is int and expected_batch_size > 0,
+        "job-fit expected batch size is invalid",
+    )
+    _require(isinstance(results, list), "job-fit results are missing")
+    _require(
+        len(results) == expected_batch_size,
+        "job-fit result count does not match the expected batch size",
+    )
+    expected_ids = set(range(expected_batch_size))
+    observed_ids: set[int] = set()
+    normalized = []
+    for item in results:
+        _require(isinstance(item, dict), "job-fit result is not an object")
+        _require(
+            all(field in item for field in _JOB_FIT_RESULT_FIELDS),
+            "job-fit result is missing required fields",
+        )
+        result_id = item["id"]
+        _require(type(result_id) is int, "job-fit result id is not an integer")
+        _require(result_id in expected_ids, "job-fit result id is out of range")
+        _require(result_id not in observed_ids, "job-fit result id is duplicated")
+        observed_ids.add(result_id)
+        normalized.append(
+            {
+                field: deepcopy(item[field])
+                for field in _JOB_FIT_RESULT_FIELDS
+            }
+        )
+    _require(
+        observed_ids == expected_ids,
+        "job-fit results do not contain every expected id",
+    )
+    return normalized
 
 
 def _tailoring_inputs(context: Mapping[str, Any]):
@@ -691,25 +1141,10 @@ def _normalize_production_response(
     if workload_id == "job_fit_evaluation":
         owner = import_module("src.ai.job_fit_evaluator")
         parsed = _parse_json_object(raw_response, owner.extract_json_from_response)
-        results = parsed.get("results")
-        _require(isinstance(results, list) and bool(results), "job-fit results are missing")
-        normalized = []
-        for item in results:
-            if not isinstance(item, dict):
-                continue
-            normalized.append(
-                {
-                    "id": item.get("id"),
-                    "ai_relevance": item.get("ai_relevance", 0),
-                    "skill_match": item.get("skill_match", 0),
-                    "seniority_match": item.get("seniority_match", 0),
-                    "learning_opportunity": item.get("learning_opportunity", 0),
-                    "overall_score": item.get("overall_score", 0),
-                    "visa_sponsorship_signal": item.get("visa_sponsorship_signal", "unknown"),
-                    "reason": item.get("reason", "No explanation"),
-                }
-            )
-        _require(bool(normalized), "job-fit results are invalid")
+        normalized = _validate_job_fit_results(
+            parsed.get("results"),
+            expected_batch_size=context.get("expected_batch_size"),
+        )
         return {"results": normalized}
 
     if workload_id == "jd_intelligence":
@@ -884,9 +1319,18 @@ def _number(value: Any) -> float:
         return 0.0
 
 
+def _separator_normalized_text(text: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "_", text.casefold()).strip("_")
+    return f"_{normalized}_"
+
+
 def _mentioned_tokens(text: str, candidates: list[str]) -> list[str]:
-    normalized = text.casefold()
-    return [item for item in candidates if item.casefold() in normalized]
+    normalized = _separator_normalized_text(text)
+    return [
+        item
+        for item in candidates
+        if _separator_normalized_text(item) in normalized
+    ]
 
 
 def _claim_tokens(text: str) -> list[str]:
@@ -899,9 +1343,81 @@ def _claim_tokens(text: str) -> list[str]:
     )
 
 
+def _job_fit_reason_tokens(
+    text: str,
+    case: Mapping[str, Any],
+) -> list[str]:
+    """Project only exact, separator-normalized Job Fit evidence claims."""
+
+    known_terms = _strings(case.get("supported_evidence_tokens")) + _strings(
+        case.get("prohibited_claims_or_terms")
+    )
+    hyphenated_synthetic_terms = [
+        match.replace("-", "_")
+        for match in re.findall(
+            r"\bsynthetic(?:-[a-z0-9]+)+\b",
+            text.casefold(),
+        )
+    ]
+    return _unique(
+        _mentioned_tokens(text, known_terms)
+        + _claim_tokens(text)
+        + hyphenated_synthetic_terms
+    )
+
+
+def _normalized_job_fit_score(value: Any) -> Any:
+    """Map valid production numeric material without making invalid data valid."""
+
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return value
+    return float(value) / 10.0
+
+
+def _benchmark_scaffold_claim_tokens(context: Mapping[str, Any]) -> set[str]:
+    """Benchmark-owned context tokens that assert nothing about the candidate.
+
+    Derived structurally: every claim token appearing in a synthetic replacement
+    value the benchmark injected into the prompt, minus the tokens that came
+    from the candidate's own evidence. So `<matched_required>`/`<evidence_text>`
+    values stay gradeable (they ARE evidence), while gap and context labels such
+    as the `<missing_required>` placeholder are recognized as scaffolding. A
+    fixture that deliberately used a synthetic token as candidate evidence would
+    appear in `evidence_tokens` and therefore remain gradeable.
+    """
+
+    replacements = context.get("replacements")
+    if not isinstance(replacements, Mapping):
+        return set()
+    evidence_tokens = set(
+        _claim_tokens(" ".join(_strings(context.get("evidence_tokens"))))
+    )
+    scaffold: set[str] = set()
+    for value in replacements.values():
+        if not isinstance(value, str):
+            continue
+        scaffold.update(_claim_tokens(value))
+    return scaffold - evidence_tokens
+
+
+def _evidence_bearing_claim_tokens(
+    text: str,
+    context: Mapping[str, Any],
+) -> list[str]:
+    """Claim tokens minus benchmark-owned scaffolding, grading otherwise intact."""
+
+    return [
+        token
+        for token in _claim_tokens(text)
+        if token not in _benchmark_scaffold_claim_tokens(context)
+    ]
+
+
 def _benchmark_projection(
     request: Mapping[str, Any],
     normalized: Mapping[str, Any],
+    *,
+    case: Mapping[str, Any],
 ) -> Dict[str, Any]:
     workload_id = request["workload_id"]
     context = request["local_validation_context"]
@@ -910,17 +1426,19 @@ def _benchmark_projection(
         return deepcopy(dict(normalized))
     if workload_id == "job_fit_evaluation":
         result = dict((normalized.get("results") or [{}])[0])
-        fit_score = max(0.0, min(1.0, _number(result.get("overall_score")) / 10.0))
-        required_match = max(0.0, min(1.0, _number(result.get("skill_match")) / 10.0))
         reason = _clean(result.get("reason"))
-        evidence = _strings(synthetic.get("evidence_tokens"))
-        missing = _strings(synthetic.get("missing_skills"))
         return {
-            "classification": "strong_fit" if fit_score >= 0.8 else "partial_fit" if fit_score >= 0.5 else "weak_fit",
-            "fit_score": fit_score,
-            "required_match_score": required_match,
-            "reason_tokens": _mentioned_tokens(reason, evidence),
-            "missing_requirements": _mentioned_tokens(reason, missing),
+            "fit_score": _normalized_job_fit_score(
+                result.get("overall_score")
+            ),
+            "required_match_score": _normalized_job_fit_score(
+                result.get("skill_match")
+            ),
+            # Production requires the `reason` field to exist but never
+            # instructs the model to repeat an evidence token, so only its
+            # presence is projected. The text itself is never carried.
+            "reason_present": bool(reason),
+            "reason_tokens": _job_fit_reason_tokens(reason, case),
         }
     if workload_id == "jd_intelligence":
         return {
@@ -980,7 +1498,7 @@ def _benchmark_projection(
                 {
                     "suggestion_id": "suggestion_alpha",
                     "source_bullet_id": context["source_bullet_id"],
-                    "claims": _claim_tokens(direction_text),
+                    "claims": _evidence_bearing_claim_tokens(direction_text, context),
                     "evidence_tokens": context["evidence_tokens"],
                 }
             ],
@@ -1055,6 +1573,7 @@ def _grade_projection(
     *,
     production_contract_valid: bool,
     plan: Mapping[str, Any],
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     case = _case_for_packet(
         {
@@ -1062,6 +1581,7 @@ def _grade_projection(
             "workload_id": request["workload_id"],
         },
         plan,
+        corpus,
     )
     required = case["required_fields"]
     schema_valid = production_contract_valid and all(
@@ -1088,7 +1608,7 @@ def _grade_projection(
         "output_token_count": 0,
         "estimated_cost": 0.0,
     }
-    grade = grade_normalized_candidate_result(candidate)
+    grade = grade_normalized_candidate_result(candidate, corpus=corpus)
     return deepcopy(grade)
 
 
@@ -1097,30 +1617,57 @@ def validate_and_grade_production_parity_response(
     raw_response: Any,
     *,
     plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Validate with production semantics, then grade the synthetic projection."""
 
-    controlled_plan = build_controlled_provider_benchmark_plan() if plan is None else deepcopy(plan)
-    validate_production_parity_request(request, plan=controlled_plan)
+    controlled_plan = (
+        build_controlled_provider_benchmark_plan(corpus=corpus)
+        if plan is None
+        else deepcopy(plan)
+    )
+    validate_production_parity_request(
+        request,
+        plan=controlled_plan,
+        corpus=corpus,
+    )
     current_digest = production_task_contract_sha256(request["workload_id"])
     _require(
         request["production_task_contract_sha256"] == current_digest,
         "production task-contract fingerprint is stale or mismatched",
     )
     errors: list[str] = []
+    contract_failures: list[Dict[str, Any]] = []
     try:
         normalized = _normalize_production_response(request, raw_response)
         production_valid = True
-    except Exception:
+    except Exception as exc:
         normalized = {}
         production_valid = False
+        # Generic code preserved for existing callers; structured detail is
+        # additive and read ONLY from explicitly safe typed attributes -- never
+        # from str(exc), repr(exc), exc.args, __cause__ or a traceback.
         errors = ["production_contract_invalid"]
-    benchmark_projection = _benchmark_projection(request, normalized) if production_valid else {}
+        contract_failures = _safe_contract_failure_projection(exc)
+    case = _case_for_packet(
+        {
+            "case_alias": request["case_alias"],
+            "workload_id": request["workload_id"],
+        },
+        controlled_plan,
+        corpus,
+    )
+    benchmark_projection = (
+        _benchmark_projection(request, normalized, case=case)
+        if production_valid
+        else {}
+    )
     benchmark_quality = _grade_projection(
         request,
         benchmark_projection,
         production_contract_valid=production_valid,
         plan=controlled_plan,
+        corpus=corpus,
     )
     result_without_binding = {
         "parity_result_version": PARITY_RESULT_VERSION,
@@ -1132,6 +1679,7 @@ def validate_and_grade_production_parity_response(
         "production_task_contract_sha256": current_digest,
         "production_contract_valid": production_valid,
         "production_validation_errors": errors,
+        "production_contract_failures": deepcopy(contract_failures),
         "production_normalized_output": deepcopy(normalized),
         "benchmark_projection": deepcopy(benchmark_projection),
         "benchmark_quality": benchmark_quality,
@@ -1149,13 +1697,22 @@ def validate_and_grade_production_parity_response(
             "user_task_override_created": False,
         },
     }
+    if request["workload_id"] == "job_fit_evaluation":
+        result_without_binding[_JOB_FIT_CANDIDATE_SEMANTICS_FIELD] = request[
+            _JOB_FIT_CANDIDATE_SEMANTICS_FIELD
+        ]
     result = {
         **result_without_binding,
         "evidence_binding_sha256": sha256(
             _canonical_json(result_without_binding).encode("utf-8")
         ).hexdigest(),
     }
-    validate_production_parity_result(result, request=request, plan=controlled_plan)
+    validate_production_parity_result(
+        result,
+        request=request,
+        plan=controlled_plan,
+        corpus=corpus,
+    )
     return deepcopy(result)
 
 
@@ -1164,11 +1721,23 @@ def validate_production_parity_result(
     *,
     request: Dict[str, Any],
     plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> bool:
-    controlled_plan = build_controlled_provider_benchmark_plan() if plan is None else deepcopy(plan)
-    validate_production_parity_request(request, plan=controlled_plan)
+    controlled_plan = (
+        build_controlled_provider_benchmark_plan(corpus=corpus)
+        if plan is None
+        else deepcopy(plan)
+    )
+    validate_production_parity_request(
+        request,
+        plan=controlled_plan,
+        corpus=corpus,
+    )
+    expected_result_fields = set(_PARITY_RESULT_FIELDS)
+    if request.get("workload_id") == "job_fit_evaluation":
+        expected_result_fields.add(_JOB_FIT_CANDIDATE_SEMANTICS_FIELD)
     _require(
-        isinstance(result, dict) and set(result) == _PARITY_RESULT_FIELDS,
+        isinstance(result, dict) and set(result) == expected_result_fields,
         "production-parity result fields are invalid",
     )
     _require(
@@ -1184,6 +1753,12 @@ def validate_production_parity_result(
         "production_task_contract_sha256",
     ):
         _require(result.get(field) == request.get(field), "parity result binding mismatch")
+    if request["workload_id"] == "job_fit_evaluation":
+        _require(
+            result[_JOB_FIT_CANDIDATE_SEMANTICS_FIELD]
+            == request[_JOB_FIT_CANDIDATE_SEMANTICS_FIELD],
+            "parity result candidate semantic binding mismatch",
+        )
     _require(
         result["production_task_contract_sha256"]
         == production_task_contract_sha256(result["workload_id"]),
@@ -1201,6 +1776,22 @@ def validate_production_parity_result(
         isinstance(result.get("production_contract_valid"), bool)
         and isinstance(result.get("production_validation_errors"), list),
         "production contract validity evidence is invalid",
+    )
+    failures = result.get("production_contract_failures")
+    _require(
+        isinstance(failures, list)
+        and len(failures) <= MAXIMUM_PRODUCTION_CONTRACT_FAILURES
+        and all(
+            isinstance(row, dict)
+            and set(row) == _CONTRACT_FAILURE_FIELDS
+            and isinstance(row["code"], str)
+            and bool(row["code"])
+            and (row["index"] is None or isinstance(row["index"], int))
+            and (row["count"] is None or isinstance(row["count"], int))
+            for row in failures
+        )
+        and (result["production_contract_valid"] is not True or not failures),
+        "production contract failure projection is invalid",
     )
     authority = result.get("authority_invariants")
     _require(

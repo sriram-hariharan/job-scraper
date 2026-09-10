@@ -1,4 +1,5 @@
 import json
+import os
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -87,6 +88,19 @@ def _safe_json_script(payload: dict) -> str:
     return encoded.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
 
+def _planning_public_config_script() -> str:
+    """Public, non-secret Planning browser configuration.
+
+    Only the Brandfetch *client* id is exposed. It is intended for the browser
+    CDN/Search request and is optional: when unset the Planning results modal
+    performs no Brandfetch call at all and renders local lettermarks instead.
+    No private Brandfetch API key is read or exposed here.
+    """
+    return _safe_json_script(
+        {"brandfetchClientId": os.getenv("BRANDFETCH_CLIENT_ID", "").strip()}
+    )
+
+
 _PLANNING_JSON_CONTEXT_SUFFIXES = ("__tailoring.json", "_tailoring.json", ".json")
 
 
@@ -120,10 +134,10 @@ def planning_dashboard() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Planning</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=planning_tailoring_workflow_polish_r1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/styles.css?v=eucalyptus_action_cascade_r2" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
   <link rel="stylesheet" href="/static/planning_dashboard.css?v=phase133g_s1_r1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=planning_tailoring_workflow_polish_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1" />
 </head>
 <body class="planning-dashboard-page">
 {render_top_shell("/planning")}
@@ -160,32 +174,34 @@ def planning_dashboard() -> str:
     </div>
   </main>
 
-  <section class="modal-backdrop hidden" id="applicationActionModal">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div>
-          <h3>Update application status</h3>
+  <section class="modal-backdrop hidden" id="applicationActionModal" role="dialog" aria-modal="true" aria-labelledby="applicationStatusDialogTitle" aria-describedby="applicationModalMeta">
+    <div class="modal-card application-status-dialog">
+      <div class="application-status-dialog__header">
+        <span class="application-status-dialog__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+        <div class="application-status-dialog__heading">
+          <h3 id="applicationStatusDialogTitle">Update application status</h3>
           <div class="subtext" id="applicationModalMeta">Choose what happened after opening the job.</div>
         </div>
-        <button class="ghost-btn modal-close-btn" id="closeApplicationModalBtn" type="button">Close</button>
+        <button class="ghost-btn modal-close-btn application-status-dialog__close" id="closeApplicationModalBtn" type="button" aria-label="Close application status dialog" title="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
       </div>
 
-      <div class="modal-body">
-        <div class="info-pair">
+      <div class="modal-body application-status-dialog__job" aria-label="Selected job">
+        <div class="application-status-dialog__job-field">
           <span class="label">Company</span>
           <span id="applicationModalCompany">-</span>
         </div>
-        <div class="info-pair">
-          <span class="label">Title</span>
+        <div class="application-status-dialog__job-field">
+          <span class="label">Role</span>
           <span id="applicationModalTitle">-</span>
         </div>
       </div>
 
-      <div class="modal-actions">
-        <button type="button" class="status-action-btn applied-action-btn" data-status-action="APPLIED">Applied</button>
-        <button type="button" class="status-action-btn saved-action-btn" data-status-action="SAVED">Save for later</button>
-        <button type="button" class="status-action-btn not-applied-action-btn" data-status-action="NOT_APPLIED">Not applied</button>
-        <button type="button" class="ghost-btn" data-status-action="DISMISSED">Dismiss</button>
+      <div class="application-status-dialog__prompt">Choose a status</div>
+      <div class="modal-actions application-status-dialog__actions">
+        <button type="button" class="status-action-btn applied-action-btn" data-status-action="APPLIED"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span>Applied</span></button>
+        <button type="button" class="status-action-btn saved-action-btn" data-status-action="SAVED"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>Save for later</span></button>
+        <button type="button" class="status-action-btn not-applied-action-btn" data-status-action="NOT_APPLIED"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg><span>Not applied</span></button>
+        <button type="button" class="ghost-btn application-status-dialog__dismiss" data-status-action="DISMISSED"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Dismiss</span></button>
       </div>
     </div>
   </section>
@@ -246,6 +262,92 @@ def planning_dashboard() -> str:
           >
             Cancel
           </button>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section
+    class="bulk-generate-suggestions-fullpage workflow-overlay workflow-overlay--tailoring hidden"
+    id="bulkGenerateSuggestionsOverlay"
+    aria-live="polite"
+    aria-modal="true"
+    aria-labelledby="bulkGenerateSuggestionsTitle"
+    aria-describedby="bulkGenerateSuggestionsText"
+    aria-busy="false"
+    role="dialog"
+  >
+    <div class="bulk-generate-suggestions-card workflow-overlay__panel">
+      <div class="workflow-overlay__header">
+        <div class="workflow-dialog-status-icon" id="bulkGenerateSuggestionsStatusIcon" aria-hidden="true"></div>
+        <div class="workflow-overlay__header-copy">
+          <div class="subtext workflow-overlay__eyebrow" id="bulkGenerateSuggestionsBadge">
+            Bulk suggestion generation
+          </div>
+          <h3 id="bulkGenerateSuggestionsTitle">Bulk generate suggestions</h3>
+        </div>
+      </div>
+
+      <div class="workflow-overlay__metrics">
+        <div class="subtext workflow-overlay__supporting" id="bulkGenerateSuggestionsText">
+          Choose which eligible Planning jobs should receive tailoring suggestions.
+        </div>
+      </div>
+
+      <div class="bulk-generate-suggestions-body workflow-overlay__body">
+        <div class="bulk-generate-suggestions-controls" id="bulkGenerateSuggestionsControls">
+          <label class="bulk-generate-suggestions-number" for="bulkGenerateSuggestionsNumber">
+            <span>Number of jobs</span>
+            <input
+              id="bulkGenerateSuggestionsNumber"
+              type="number"
+              min="1"
+              step="1"
+              inputmode="numeric"
+              aria-describedby="bulkGenerateSuggestionsNumberHelp bulkGenerateSuggestionsNumberError"
+            />
+            <small id="bulkGenerateSuggestionsNumberHelp">Processes the top eligible jobs in Planning priority order.</small>
+            <small class="bulk-generate-suggestions-error hidden" id="bulkGenerateSuggestionsNumberError" role="alert">Enter a positive whole number.</small>
+          </label>
+          <div class="bulk-generate-suggestions-filter-grid">
+            <label>
+              <span>Review readiness</span>
+              <select id="bulkGenerateSuggestionsReviewFilter">
+                <option value="">All</option>
+                <option value="APPLY">Ready for review</option>
+                <option value="APPLY_REVIEW_VARIANTS">Review resume choice</option>
+                <option value="MAYBE_TAILOR">Tailor first</option>
+                <option value="SKIP_FOR_NOW">Review later</option>
+              </select>
+            </label>
+            <label>
+              <span>Match strength</span>
+              <select id="bulkGenerateSuggestionsMatchFilter">
+                <option value="">All</option>
+                <option value="strong">Excellent match</option>
+                <option value="solid">Strong match</option>
+                <option value="moderate">Moderate match</option>
+                <option value="weak">Weak match</option>
+                <option value="filtered_out">No credible match</option>
+              </select>
+            </label>
+            <label>
+              <span>Preferences</span>
+              <select id="bulkGenerateSuggestionsPreferenceFilter">
+                <option value="">All preferences</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="bulk-generate-suggestions-summary" id="bulkGenerateSuggestionsSummary"></div>
+        <div class="bulk-generate-suggestions-current hidden" id="bulkGenerateSuggestionsCurrent"></div>
+        <div class="bulk-generate-suggestions-results hidden" id="bulkGenerateSuggestionsResults"></div>
+      </div>
+
+      <div class="modal-actions bulk-generate-suggestions-actions workflow-overlay__footer">
+        <p class="workflow-overlay__safety">Nothing will be submitted to employers.</p>
+        <div class="workflow-overlay__actions">
+          <button type="button" class="ghost-btn" id="bulkGenerateSuggestionsSecondaryBtn">Cancel</button>
+          <button type="button" class="workflow-primary-action" id="bulkGenerateSuggestionsPrimaryBtn">Generate suggestions</button>
         </div>
       </div>
     </div>
@@ -582,9 +684,12 @@ def planning_dashboard() -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
-  <script src="/static/planning.js?v=planning_tailoring_workflow_polish_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
+  <script>
+    window.__APPLYLENS_PLANNING_CONFIG__ = """ + _planning_public_config_script() + """;
+  </script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1"></script>
+  <script src="/static/planning.js?v=bulk_generate_results_r1"></script>
 </body>
 </html>
     """.strip()
@@ -604,9 +709,20 @@ def scan_workspace_route(
     packet_json: str = "",
     saved_scan_id: str = "",
     output_dir: str = "",
+    pipeline_run_id: str = "",
 ) -> str:
+    auth_user = _auth_user_from_request(request)
+    resolved_pipeline_run_id = str(pipeline_run_id or "").strip()
+    if not resolved_pipeline_run_id and output_dir:
+        try:
+            resolved_pipeline_run_id = services.resolve_user_pipeline_run_id_from_planning_output_dir(
+                owner_user_id=_admin_owner_user_id(auth_user),
+                output_dir=output_dir,
+            )
+        except Exception:
+            resolved_pipeline_run_id = ""
     return scan_workspace(
-        auth_user=_auth_user_from_request(request),
+        auth_user=auth_user,
         company=company,
         title=title,
         resume=resume,
@@ -618,6 +734,7 @@ def scan_workspace_route(
         packet_json=packet_json,
         saved_scan_id=saved_scan_id,
         output_dir=output_dir,
+        pipeline_run_id=resolved_pipeline_run_id,
     )
 
 @router.get("/tailoring-workspace", response_class=HTMLResponse)
@@ -670,6 +787,7 @@ def tailoring_workspace(
             "tailoring_llm_json": tailoring_llm_json or "",
             "packet_json": packet_json or "",
             "output_dir": output_dir or "",
+            "pipeline_run_id": pipeline_run_id or "",
         }
     )
     scan_href_safe = escape(f"/scan-workspace?{scan_query}", quote=True)
@@ -684,7 +802,7 @@ def tailoring_workspace(
   <title>Tailoring Workspace</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
   <link rel="stylesheet" href="/static/tailoring_workspace_premium.css?v=tailoring_workspace_finish_r3" />
 </head>
 <body>
@@ -1020,7 +1138,7 @@ def tailoring_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
   <section class="tailoring-workspace-export-modal hidden" id="tailoringWorkspaceExportModal">
     <div class="tailoring-workspace-export-modal-card" role="dialog" aria-modal="true" aria-labelledby="tailoringWorkspaceExportTitle">
       <div class="tailoring-workspace-export-header">
@@ -1134,6 +1252,27 @@ def advanced_diagnostics(
         resume = resume or str(selected_scan_context.get("resume") or "")
         status = status or str(selected_scan_context.get("status") or "")
 
+    diagnostic_state: dict = {}
+    if selected_scan_context:
+        try:
+            report_payload = services.saved_scan_report_payload(
+                selected_scan_id,
+                owner_user_id=owner_user_id,
+            )
+        except Exception:
+            report_payload = {}
+        diagnostic_state = dict(report_payload.get("diagnostic_state") or {})
+        ambient_readbacks = dict(diagnostic_state.get("ambient_readbacks") or {})
+        for readback_key in (
+            "jd_llm_extraction_readback",
+            "agentic_workflow_integration_readback",
+            "agentic_workflow_production_readiness_checkpoint",
+        ):
+            readback = report_payload.get(readback_key)
+            if isinstance(readback, dict):
+                ambient_readbacks[readback_key] = readback
+        diagnostic_state["ambient_readbacks"] = ambient_readbacks
+
     raw_resume_name = _resolve_workspace_route_resume_name(
         resume,
         packet_json=packet_json,
@@ -1216,6 +1355,7 @@ def advanced_diagnostics(
             "advancedDiagnostics": "/advanced-diagnostics",
             "scanWorkspace": "/scan-workspace",
         },
+        "diagnosticState": diagnostic_state,
     }
     initial_state_script = _safe_json_script(initial_state)
 
@@ -1225,26 +1365,26 @@ def advanced_diagnostics(
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Advanced Diagnostics</title>
+  <title>Scan Diagnostics</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
+  <link rel="stylesheet" href="/static/styles.css?v=shared_filter_fluid_select_r2" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1" />
 </head>
-<body>
+<body class="advanced-diagnostics-page">
 {render_top_shell("/advanced-diagnostics")}
   <main class="page scan-workspace-diagnostics-page">
     <div id="advancedDiagnosticsRoot" aria-live="polite">
-      <div class="advanced-diagnostics-server-fallback">Loading Advanced Diagnostics...</div>
+      <div class="advanced-diagnostics-server-fallback">Loading Scan Diagnostics...</div>
     </div>
   </main>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
   <script>
     window.__APPLYLENS_ADVANCED_DIAGNOSTICS_STATE__ = {initial_state_script};
   </script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1"></script>
 </body>
 </html>
     """.strip()
@@ -1262,6 +1402,7 @@ def scan_workspace(
     packet_json: str = "",
     saved_scan_id: str = "",
     output_dir: str = "",
+    pipeline_run_id: str = "",
 ) -> str:
     company_safe = escape(company or "-")
     title_safe = escape(title or "-")
@@ -1286,6 +1427,7 @@ def scan_workspace(
     packet_json_key_safe = escape(packet_json or "")
     saved_scan_id_safe = escape(saved_scan_id or "")
     output_dir_safe = escape(output_dir or "")
+    pipeline_run_id_safe = escape(pipeline_run_id or "")
 
     loaded_job_context = services.scan_workspace_job_context_payload(
         output_dir=Path(output_dir) if output_dir else services.DEFAULT_OUTPUT_DIR,
@@ -1322,6 +1464,7 @@ def scan_workspace(
             "tailoring_llm_json": tailoring_llm_json or "",
             "packet_json": packet_json or "",
             "output_dir": output_dir or "",
+            "pipeline_run_id": pipeline_run_id or "",
         }
     )
     back_href_safe = escape(f"/tailoring-workspace?{back_query}", quote=True)
@@ -1359,6 +1502,7 @@ def scan_workspace(
             "packet_json": packet_json or "",
             "saved_scan_id": saved_scan_id or "",
             "output_dir": output_dir or "",
+            "pipeline_run_id": pipeline_run_id or "",
         }
     )
     scan_diagnostics_href_safe = escape(f"/advanced-diagnostics?{scan_diagnostics_query}", quote=True)
@@ -1405,9 +1549,9 @@ def scan_workspace(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
-  <link rel="stylesheet" href="/static/scan_workspace_premium.css?v=scan_workspace_premium_r1" />
+  <link rel="stylesheet" href="/static/styles.css?v=eucalyptus_action_cascade_r2" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
+  <link rel="stylesheet" href="/static/scan_workspace_premium.css?v=scan_workspace_premium_r1&ui=truthful_scan_r1&ready=summary_r1&persistence=hydration_tooltip_r2" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1427,6 +1571,7 @@ def scan_workspace(
     data-packet-json-key="{packet_json_key_safe}"
     data-saved-scan-id="{saved_scan_id_safe}"
     data-planning-output-dir="{output_dir_safe}"
+    data-pipeline-run-id="{pipeline_run_id_safe}"
     data-scan-initial-mode="{scan_initial_mode_safe}"
     data-scan-mode=""
   >
@@ -1452,7 +1597,7 @@ def scan_workspace(
           <div>
             <h2>New scan</h2>
             <div class="scan-workspace-supporting-copy">
-              Choose a saved profile resume, paste a job description, and start an AI optimization scan.
+              Choose a saved profile resume and target job to generate an optimization review.
             </div>
           </div>
 
@@ -1480,6 +1625,7 @@ def scan_workspace(
               <select
                 id="scanWorkspaceResumeSelect"
                 class="scan-workspace-input"
+                data-bulk-safe="true"
                 data-initial-resume="{resume_display_safe if raw_resume_name else ''}"
               >
                 <option value="">Loading saved resumes...</option>
@@ -1494,7 +1640,7 @@ def scan_workspace(
 
           <section class="scan-workspace-intake-panel scan-workspace-intake-panel--job">
             <div class="scan-workspace-intake-panel-header">
-              <h3>Job Description</h3>
+              <h3>Target job</h3>
               <div class="scan-workspace-supporting-copy">
                 Paste the target job description to generate the optimization review.
               </div>
@@ -1506,6 +1652,7 @@ def scan_workspace(
                 type="text"
                 id="scanWorkspaceCompanyInput"
                 class="scan-workspace-input"
+                data-bulk-safe="true"
                 value="{loaded_company_safe if loaded_company else ''}"
                 placeholder="Company name"
               />
@@ -1518,6 +1665,7 @@ def scan_workspace(
                 type="text"
                 id="scanWorkspaceRoleInput"
                 class="scan-workspace-input"
+                data-bulk-safe="true"
                 value="{loaded_title_safe if loaded_title else ''}"
                 placeholder="Job title"
               />
@@ -1530,6 +1678,7 @@ def scan_workspace(
                 type="url"
                 id="scanWorkspaceJobUrlInput"
                 class="scan-workspace-input"
+                data-bulk-safe="true"
                 value="{loaded_job_url_safe if loaded_job_url else ''}"
                 placeholder="Posting URL"
               />
@@ -1544,9 +1693,10 @@ def scan_workspace(
               <textarea
                 id="scanWorkspaceJobDescriptionInput"
                 class="scan-workspace-textarea scan-workspace-textarea--jd"
+                data-bulk-safe="true"
                 placeholder="Paste the full job description here."
               >{loaded_job_description_safe}</textarea>
-              <span class="scan-workspace-field-error" id="scanWorkspaceJobDescriptionError"></span>
+              <span class="scan-workspace-textarea-meta"><span class="scan-workspace-field-error" id="scanWorkspaceJobDescriptionError"></span><span id="scanWorkspaceJobDescriptionCount">0 characters</span></span>
             </label>
           </section>
         </div>
@@ -1567,7 +1717,8 @@ def scan_workspace(
               class="scan-workspace-clear-btn"
               id="scanWorkspaceClearIntakeBtn"
             >
-              Clear
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+              <span>Clear</span>
             </button>
 
             <button
@@ -1629,9 +1780,22 @@ def scan_workspace(
           <div
             class="scan-workspace-processing-bar"
             id="scanWorkspaceProcessingBar"
-            aria-hidden="true"
+            role="progressbar"
+            aria-label="Scan progress"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            data-progress-state="idle"
           >
-            <div class="scan-workspace-processing-bar-fill"></div>
+            <div class="scan-workspace-processing-bar-fill" id="scanWorkspaceProcessingBarFill"></div>
+          </div>
+
+          <div
+            class="scan-workspace-processing-progress-label"
+            id="scanWorkspaceProcessingProgressLabel"
+            aria-live="polite"
+          >
+            Not started
           </div>
 
           <div
@@ -1643,7 +1807,7 @@ def scan_workspace(
             class="scan-workspace-processing-note"
             id="scanWorkspaceProcessingNote"
           >
-            Waiting for the real scan runner. This phase adds the processing shell and stage model only.
+            Ready to submit the scan request.
           </div>
 
           <div
@@ -1651,18 +1815,40 @@ def scan_workspace(
             id="scanWorkspaceProcessingComplete"
             hidden
           >
-            <div class="scan-workspace-processing-check" aria-hidden="true"></div>
-            <div>
-              <div class="scan-workspace-processing-complete-title">Scan complete</div>
-              <div class="scan-workspace-processing-complete-copy">The match report is ready to review.</div>
+            <div class="scan-workspace-processing-check" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg>
             </div>
-            <button
-              type="button"
-              class="scan-workspace-processing-ok-btn"
-              id="scanWorkspaceProcessingOkBtn"
-            >
-              OK
-            </button>
+            <div class="scan-workspace-processing-complete-copy-wrap">
+              <div
+                class="scan-workspace-processing-complete-title"
+                id="scanWorkspaceProcessingCompleteTitle"
+              >
+                Match report ready
+              </div>
+              <div
+                class="scan-workspace-processing-complete-copy"
+                id="scanWorkspaceProcessingCompleteCopy"
+              >
+                The match report is ready to review.
+              </div>
+            </div>
+            <div class="scan-workspace-processing-complete-actions">
+              <button
+                type="button"
+                class="scan-workspace-processing-ok-btn"
+                id="scanWorkspaceProcessingOkBtn"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                <span>View Report</span>
+              </button>
+              <a
+                class="scan-workspace-processing-saved-scans-link"
+                href="/profile/saved-scans"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13A2.5 2.5 0 0 1 17.5 21h-11A2.5 2.5 0 0 1 4 18.5v-13Z"/><path d="M8 3v7l4-2 4 2V3"/></svg>
+                <span>Go to Saved Scans</span>
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -1913,8 +2099,7 @@ def scan_workspace(
 
               <span
                 class="scan-workspace-disabled-action-wrap"
-                data-scan-disabled-help="No changes made"
-                title="No changes made"
+                data-scan-help="No changes made"
               >
                 <button
                   type="button"
@@ -1923,7 +2108,6 @@ def scan_workspace(
                   id="scanWorkspaceCompareBtn"
                   aria-disabled="true"
                   disabled
-                  title="No changes made"
                 >
                   Compare
                 </button>
@@ -1931,8 +2115,7 @@ def scan_workspace(
 
               <span
                 class="scan-workspace-disabled-action-wrap"
-                data-scan-disabled-help="No changes made"
-                title="No changes made"
+                data-scan-help="No changes made"
               >
                 <button
                   type="button"
@@ -1940,9 +2123,8 @@ def scan_workspace(
                   id="scanWorkspaceSaveBtn"
                   aria-disabled="true"
                   disabled
-                  title="No changes made"
                 >
-                  <span data-scan-action-label>Continue</span>
+                  <span data-scan-action-label>Save</span>
                 </button>
               </span>
 
@@ -2286,9 +2468,9 @@ def scan_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
-  <script src="/static/planning.js?v=planning_ui_20260518_scan_replacement_markers"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_rescan6_popover_phrase_scroll"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
+  <script src="/static/planning.js?v=planning_ui_20260518_scan_replacement_markers&persistence=hydration_tooltip_r2"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_rescan6_popover_phrase_scroll&ui=truthful_scan_r1&llm=default_on_r1&ready=summary_r1&persistence=hydration_tooltip_r2"></script>
 </body>
 </html>
     """.strip()

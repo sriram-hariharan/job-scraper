@@ -710,6 +710,8 @@ TOOLING_SIGNAL_PATTERNS = [
     "tableau",
     "looker",
     "power bi",
+    "powerpoint",
+    "erp",
     "airflow",
     "dbt",
     "snowflake",
@@ -1141,6 +1143,8 @@ _SKILL_ALIASES = {
     "vector databases": "vector db",
     "nlp": "natural language processing",
     "powerbi": "power bi",
+    "power point": "powerpoint",
+    "ms powerpoint": "powerpoint",
     "dashboard": "dashboard",
     "dashboards": "dashboard",
     "pipeline": "pipeline",
@@ -1753,6 +1757,7 @@ RESUME_OWNERSHIP_SIGNAL_PATTERNS = list(dict.fromkeys(
 ))
 
 _WORKFLOW_CANDIDATES = [
+    "process improvement",
     "a/b testing",
     "experimentation",
     "automation",
@@ -1784,6 +1789,9 @@ _WORKFLOW_CANDIDATES = [
 ]
 
 _BUSINESS_CONTEXT_CANDIDATES = [
+    "contract manufacturing",
+    "consumer products",
+    "procurement",
     "growth",
     "product-led growth",
     "plg",

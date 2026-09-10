@@ -843,11 +843,59 @@ def _project_entry_counterfactual_text(entry: ResumeProjectEntry) -> str:
     parts.extend(list(entry.bullets or []))
     return " ".join(part for part in parts if str(part or "").strip()).strip()
 
+# P1S32: bounded experience-entry skill morphology.
+#
+# Three inflection families occur in real professional-experience bullets whose
+# canonical skill already exists in COMMON_SKILL_PATTERNS, but which
+# _pattern_present cannot reach because it matches the canonical phrase literally
+# and performs no morphological folding ("Fine-tuned" never yields "fine-tuning").
+# This is deliberately a closed set of observed same-lexeme inflections, not a
+# stemmer, and it is applied ONLY to professional-experience entries: the
+# whole-document aggregate scan, project entries and the shared _SKILL_ALIASES
+# table are untouched, so no Skills-section, project or education evidence gains
+# authoritative status.
+_EXPERIENCE_SKILL_MORPHOLOGY: Tuple[Tuple[str, str], ...] = (
+    # "Fine-tuned a LLaMA-2 model ..."          -> fine-tuning
+    (r"fine[-\s]?tun(?:e|es|ed|ing)", "fine-tuning"),
+    # "Engineered SQL data models ..."          -> data modeling
+    (r"data[-\s]model(?:s|ing)?", "data modeling"),
+    # "... an LLM-based multi-agent framework"  -> multi-agent systems
+    (r"multi[-\s]agents?", "multi-agent systems"),
+)
+
+
+def _experience_skill_morphology_hits(entry_text: str) -> List[str]:
+    """Recover approved canonical skills from observed inflected experience forms.
+
+    Deterministic and side-effect free. Uses the same word-boundary discipline as
+    _pattern_present, and returns only canonical values that already exist in
+    COMMON_SKILL_PATTERNS, so it can never introduce an unapproved skill.
+    """
+
+    text_norm = _normalize(entry_text)
+    if not text_norm:
+        return []
+
+    approved = {_normalize(pattern) for pattern in COMMON_SKILL_PATTERNS}
+    hits: List[str] = []
+
+    for pattern, canonical in _EXPERIENCE_SKILL_MORPHOLOGY:
+        if canonical not in approved:
+            continue
+        if re.search(r"(?<![a-z0-9])" + pattern + r"(?![a-z0-9])", text_norm):
+            hits.append(canonical)
+
+    return _unique_preserve_order(hits)
+
+
 def _refresh_experience_entry_structured_fields(entry: ResumeExperienceEntry) -> None:
     entry_text = _experience_entry_counterfactual_text(entry)
 
     entry.normalized_titles = _extract_pattern_hits(entry_text, TITLE_PATTERNS)
-    entry.normalized_skills = _extract_pattern_hits(entry_text, COMMON_SKILL_PATTERNS)
+    entry.normalized_skills = _unique_preserve_order(
+        _extract_pattern_hits(entry_text, COMMON_SKILL_PATTERNS)
+        + _experience_skill_morphology_hits(entry_text)
+    )
     entry.normalized_methods = _extract_phrase_hits(entry_text, RESUME_METHOD_SIGNAL_PATTERNS)
     entry.normalized_tools = _extract_phrase_hits(entry_text, TOOLING_SIGNAL_PATTERNS)
     entry.normalized_workflows = _extract_phrase_hits(entry_text, RESUME_WORKFLOW_SIGNAL_PATTERNS)

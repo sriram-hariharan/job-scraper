@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from tqdm import tqdm
 from threading import Lock
 
-from src.ai.llm_client import run_chat_completion, get_default_model
+from src.ai.llm_client import run_chat_completion
 from src.utils.skill_normalizer import (
     EXTRACTED_SKILL_NORMALIZATION_CONTRACT_VERSION,
     normalize_extracted_skills,
@@ -28,13 +28,33 @@ load_dotenv()
 
 logger = get_logger("ai_eval_filter")
 
-MODEL = get_default_model()
 SKILL_EXTRACTION_MODE = os.getenv("SKILL_EXTRACTION_MODE", "cache_prefer_live").strip().lower()
 VALID_EXTRACTION_MODES = {"cache_prefer_live", "cache_only", "live_only"}
 
+SKILL_EXTRACTION_STATUS_SUCCESS_NONEMPTY = "success_nonempty"
+SKILL_EXTRACTION_STATUS_SUCCESS_EMPTY = "success_empty"
+SKILL_EXTRACTION_STATUS_FAILURE = "failure"
+SKILL_EXTRACTION_STATUSES = frozenset(
+    {
+        SKILL_EXTRACTION_STATUS_SUCCESS_NONEMPTY,
+        SKILL_EXTRACTION_STATUS_SUCCESS_EMPTY,
+        SKILL_EXTRACTION_STATUS_FAILURE,
+    }
+)
+SKILL_EXTRACTION_FAILURE_STAGES = frozenset(
+    {"cache", "execution", "input", "response", "route", "unknown"}
+)
+
 SKILL_EXTRACTION_PROMPT_VERSION = "v6_postfilter_cleanup"
+SKILL_CONTEXT_REASSIGNMENT_CONTRACT_VERSION = (
+    "section-bounded-context-v2"
+)
 SKILL_EXTRACTION_TEMPERATURE = 0
 SKILL_EXTRACTION_MAX_TOKENS = 500
+# Lowest-reasoning task intent. The shared transport owns the mapping to a
+# provider request field (Groq GPT-OSS: reasoning_effort="low"); this module
+# never constructs provider SDK reasoning parameters itself.
+SKILL_EXTRACTION_THINKING_BUDGET = 0
 SKILL_EXTRACTION_FULL_TEXT_LIMIT = 7000
 SKILL_EXTRACTION_HEAD_CHARS = 2500
 SKILL_EXTRACTION_TAIL_CHARS = 1800
@@ -194,6 +214,17 @@ def resolve_effective_user_provider_route(owner_user_id: str, workload_id: str):
     )
 
 
+def resolve_recommended_user_provider_route(workload_id: str):
+    from importlib import import_module
+
+    routing_service = import_module(
+        "src.app.provider_model_" "routing_service"
+    )
+    return routing_service.resolve_recommended_user_provider_route(
+        workload_id,
+    )
+
+
 def run_user_chat_completion_with_metadata(**kwargs):
     from src.ai.user_provider_runtime import (
         run_user_chat_completion_with_metadata as execute,
@@ -231,6 +262,9 @@ def build_skill_extraction_production_task_contract_material():
         },
         "deterministic_transformation_contract": {
             "normalizer": EXTRACTED_SKILL_NORMALIZATION_CONTRACT_VERSION,
+            "context_reassignment": (
+                SKILL_CONTEXT_REASSIGNMENT_CONTRACT_VERSION
+            ),
             "steps": [
                 "expand_skill_candidates",
                 "verbatim_job_text_filter",
@@ -242,6 +276,7 @@ def build_skill_extraction_production_task_contract_material():
         "task_parameters": {
             "temperature": SKILL_EXTRACTION_TEMPERATURE,
             "max_tokens": SKILL_EXTRACTION_MAX_TOKENS,
+            "thinking_budget": SKILL_EXTRACTION_THINKING_BUDGET,
         },
     }
 
@@ -440,7 +475,7 @@ def _inline_preferred_override(context: str) -> bool:
 
 def _context_bucket_for_skill(skill: str, job_text: str, window_chars: int = 220):
     skill_norm = _normalize_for_match(skill)
-    job_norm = _normalize_for_match(job_text)
+    job_norm = (job_text or "").lower()
 
     if not skill_norm or not job_norm:
         return None
@@ -457,25 +492,44 @@ def _context_bucket_for_skill(skill: str, job_text: str, window_chars: int = 220
     saw_preferred = False
 
     for candidate in candidates:
-        pattern = rf"(?<![a-z0-9]){re.escape(candidate)}(?![a-z0-9])"
+        candidate_pattern = re.escape(candidate).replace(r"\ ", r"\s+")
+        pattern = rf"(?<![a-z0-9]){candidate_pattern}(?![a-z0-9])"
         for match in re.finditer(pattern, job_norm):
-            start = max(0, match.start() - window_chars)
-            end = min(len(job_norm), match.end() + window_chars)
-            context = job_norm[start:end]
+            containing_span = next(
+                (
+                    (span_start, span_end, bucket)
+                    for span_start, span_end, bucket in spans
+                    if span_start <= match.start() < span_end
+                ),
+                None,
+            )
+
+            context_start = max(0, match.start() - window_chars)
+            context_end = min(len(job_norm), match.end() + window_chars)
+            if containing_span is not None:
+                span_start, span_end, _bucket = containing_span
+                context_start = max(context_start, span_start)
+                context_end = min(context_end, span_end)
+
+            line_start = job_norm.rfind("\n", context_start, match.start()) + 1
+            line_start = max(context_start, line_start)
+            line_end = job_norm.find("\n", match.end(), context_end)
+            if line_end == -1:
+                line_end = context_end
+            inline_context = job_norm[line_start:line_end]
 
             # Inline preferred language wins for that specific occurrence.
-            if _inline_preferred_override(context):
+            if _inline_preferred_override(inline_context):
                 saw_preferred = True
                 continue
 
             # Otherwise only use explicit section spans.
-            for span_start, span_end, bucket in spans:
-                if span_start <= match.start() < span_end:
-                    if bucket == "required":
-                        saw_required = True
-                    elif bucket == "preferred":
-                        saw_preferred = True
-                    break
+            if containing_span is not None:
+                _span_start, _span_end, bucket = containing_span
+                if bucket == "required":
+                    saw_required = True
+                elif bucket == "preferred":
+                    saw_preferred = True
 
     if saw_required and saw_preferred:
         return "required"
@@ -506,6 +560,29 @@ def _reassign_skills_by_context(required, preferred, job_text: str):
 
     pref = {s for s in pref if s not in req}
     return sorted(req), sorted(pref)
+
+
+def _correct_cached_skill_buckets(cached, job_text: str):
+    if not isinstance(cached, dict):
+        return cached
+
+    required = cached.get("required_skills")
+    preferred = cached.get("preferred_skills")
+    if (
+        not isinstance(required, list)
+        or not isinstance(preferred, list)
+        or not all(isinstance(skill, str) for skill in required + preferred)
+    ):
+        return cached
+
+    corrected_required, corrected_preferred = _reassign_skills_by_context(
+        required,
+        preferred,
+        job_text,
+    )
+    cached["required_skills"] = corrected_required
+    cached["preferred_skills"] = corrected_preferred
+    return cached
 
 def _drop_shadowed_generic_skills(required, preferred):
     req = set(required)
@@ -618,10 +695,124 @@ def build_skill_cache_key(job_text: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def get_empty_skill_result():
+_BOUNDED_LIVE_FAILURE_CATEGORIES = frozenset(
+    {
+        # Shared provider transport categories (src/ai/llm_client.py).
+        "timeout",
+        "connection",
+        "rate_limit",
+        "provider_5xx",
+        "authentication",
+        "authorization",
+        "configuration",
+        "invalid_request",
+        "provider_model_mismatch",
+        "unsupported_provider",
+        "schema_or_parse",
+        "refusal_or_empty_content",
+        "safety",
+        "unknown",
+        # User-scoped runtime configuration categories
+        # (src/ai/user_provider_runtime.py).
+        "invalid_owner",
+        "settings_unavailable",
+        "credential_unavailable",
+        "credential_not_configured",
+        "client_construction_failed",
+        "unsupported_provider_model",
+    }
+)
+SKILL_EXTRACTION_FAILURE_CATEGORIES = _BOUNDED_LIVE_FAILURE_CATEGORIES
+_BOUNDED_LIVE_FAILURE_ERROR_TYPE_LIMIT = 80
+_BOUNDED_LIVE_FAILURE_CATEGORY_PATTERN = re.compile(r"category=([a-z0-9_]+)")
+_BOUNDED_LIVE_FAILURE_STAGE_PATTERN = re.compile(r"stage=(primary|fallback)")
+
+
+def _bounded_live_failure_diagnostic(exc):
+    """Allowlisted, non-sensitive metadata about one live extraction failure.
+
+    Never returns the exception message, repr, traceback, credentials,
+    prompts, provider response content, job text, or owner identity.
+    """
+
+    error_type = str(type(exc).__name__ or "").strip()
+    error_type = error_type[:_BOUNDED_LIVE_FAILURE_ERROR_TYPE_LIMIT] or "unknown"
+
+    category = ""
+    for attribute in ("category", "error_category"):
+        value = getattr(exc, attribute, "")
+        if isinstance(value, str) and value.strip():
+            category = value.strip()
+            break
+
+    message = str(exc)
+
+    if not category:
+        category_match = _BOUNDED_LIVE_FAILURE_CATEGORY_PATTERN.search(message)
+        if category_match:
+            category = category_match.group(1)
+
+    if category not in _BOUNDED_LIVE_FAILURE_CATEGORIES:
+        category = "unknown"
+
+    stage_match = _BOUNDED_LIVE_FAILURE_STAGE_PATTERN.search(message)
+    stage = stage_match.group(1) if stage_match else "unknown"
+
+    return {
+        "error_type": error_type,
+        "category": category,
+        "stage": stage,
+    }
+
+
+def _successful_skill_result(result, *, invalid_stage: str = "response"):
+    if not isinstance(result, dict):
+        return get_empty_skill_result(
+            failure_category="schema_or_parse",
+            failure_stage=invalid_stage,
+        )
+
+    required = result.get("required_skills")
+    preferred = result.get("preferred_skills")
+    if (
+        not isinstance(required, list)
+        or not isinstance(preferred, list)
+        or not all(isinstance(skill, str) for skill in required + preferred)
+    ):
+        return get_empty_skill_result(
+            failure_category="schema_or_parse",
+            failure_stage=invalid_stage,
+        )
+
+    result["extraction_status"] = (
+        SKILL_EXTRACTION_STATUS_SUCCESS_NONEMPTY
+        if required or preferred
+        else SKILL_EXTRACTION_STATUS_SUCCESS_EMPTY
+    )
+    result["failure_category"] = ""
+    result["failure_stage"] = ""
+    return result
+
+
+def get_empty_skill_result(
+    *,
+    failure_category: str = "unknown",
+    failure_stage: str = "unknown",
+):
+    safe_category = str(failure_category or "").strip()
+    if safe_category not in _BOUNDED_LIVE_FAILURE_CATEGORIES:
+        safe_category = "unknown"
+
+    safe_stage = str(failure_stage or "").strip()
+    if safe_stage not in SKILL_EXTRACTION_FAILURE_STAGES:
+        safe_stage = "unknown"
+
     return {
         "required_skills": [],
-        "preferred_skills": []
+        "preferred_skills": [],
+        "extraction_status": SKILL_EXTRACTION_STATUS_FAILURE,
+        "failure_category": safe_category,
+        "failure_stage": safe_stage,
     }
 
 
@@ -750,7 +941,10 @@ def enrich_skills_with_llm(job_text, owner_user_id: str = ""):
         if cached is not None:
             increment_skill_cache_metric("cache_hits")
             logger.info("LLM skill cache hit")
-            return cached
+            return _successful_skill_result(
+                _correct_cached_skill_buckets(cached, job_text),
+                invalid_stage="cache",
+            )
 
         increment_skill_cache_metric("cache_misses")
         logger.info("LLM skill cache miss")
@@ -758,7 +952,10 @@ def enrich_skills_with_llm(job_text, owner_user_id: str = ""):
         if mode == "cache_only":
             increment_skill_cache_metric("cache_only_skips")
             logger.info("LLM live extraction skipped (cache_only mode)")
-            return get_empty_skill_result()
+            return get_empty_skill_result(
+                failure_category="configuration",
+                failure_stage="cache",
+            )
 
     elif mode == "live_only":
         logger.info("LLM cache bypassed (live_only mode)")
@@ -774,7 +971,7 @@ def enrich_skills_with_llm(job_text, owner_user_id: str = ""):
         os.environ.get("JOB_STACK_OWNER_USER_ID", "") or ""
     ).strip()
     active_provider = ""
-    active_model = MODEL
+    active_model = ""
     if owner:
         try:
             route = resolve_effective_user_provider_route(
@@ -785,10 +982,41 @@ def enrich_skills_with_llm(job_text, owner_user_id: str = ""):
             active_model = str(route.get("model") or "").strip()
             if not active_provider or not active_model:
                 raise ValueError("invalid effective route")
-        except (Exception, SystemExit):
+        except (Exception, SystemExit) as route_exc:
             increment_skill_cache_metric("live_failures")
-            logger.warning("LLM skill extraction owner route unavailable")
-            return get_empty_skill_result()
+            route_diagnostic = _bounded_live_failure_diagnostic(route_exc)
+            logger.warning(
+                "LLM skill extraction owner route unavailable | "
+                "error_type=%s category=%s",
+                route_diagnostic["error_type"],
+                route_diagnostic["category"],
+            )
+            return get_empty_skill_result(
+                failure_category=route_diagnostic["category"],
+                failure_stage="route",
+            )
+    else:
+        try:
+            route = resolve_recommended_user_provider_route(
+                "skill_extraction",
+            )
+            active_provider = str(route.get("provider") or "").strip()
+            active_model = str(route.get("model") or "").strip()
+            if not active_provider or not active_model:
+                raise ValueError("invalid recommended route")
+        except (Exception, SystemExit) as route_exc:
+            increment_skill_cache_metric("live_failures")
+            route_diagnostic = _bounded_live_failure_diagnostic(route_exc)
+            logger.warning(
+                "LLM skill extraction recommended route unavailable | "
+                "error_type=%s category=%s",
+                route_diagnostic["error_type"],
+                route_diagnostic["category"],
+            )
+            return get_empty_skill_result(
+                failure_category=route_diagnostic["category"],
+                failure_stage="route",
+            )
 
     def _call_live_llm(user_prompt: str):
         messages = [
@@ -802,13 +1030,17 @@ def enrich_skills_with_llm(job_text, owner_user_id: str = ""):
                 model=active_model,
                 temperature=SKILL_EXTRACTION_TEMPERATURE,
                 max_tokens=SKILL_EXTRACTION_MAX_TOKENS,
+                thinking_budget=SKILL_EXTRACTION_THINKING_BUDGET,
                 messages=messages,
             )
             return result.get("content", "")
         return run_chat_completion(
-            model=MODEL,
+            provider=active_provider,
+            model=active_model,
             temperature=SKILL_EXTRACTION_TEMPERATURE,
             max_tokens=SKILL_EXTRACTION_MAX_TOKENS,
+            fallback_enabled=False,
+            workload_id="skill_extraction",
             messages=messages,
         )
 
@@ -817,25 +1049,68 @@ def enrich_skills_with_llm(job_text, owner_user_id: str = ""):
 
     except Exception as exc:
         increment_skill_cache_metric("live_failures")
+        live_diagnostic = _bounded_live_failure_diagnostic(exc)
         if owner:
-            logger.warning("LLM skill extraction owner execution failed")
+            logger.warning(
+                "LLM skill extraction owner execution failed | "
+                "provider=%s model=%s error_type=%s category=%s stage=%s",
+                active_provider,
+                active_model,
+                live_diagnostic["error_type"],
+                live_diagnostic["category"],
+                live_diagnostic["stage"],
+            )
         else:
-            logger.warning(f"LLM skill extraction failed: {exc}")
-        return get_empty_skill_result()
-    except SystemExit:
+            logger.warning(
+                "LLM skill extraction failed | "
+                "provider=%s model=%s error_type=%s category=%s stage=%s",
+                active_provider or "default",
+                active_model,
+                live_diagnostic["error_type"],
+                live_diagnostic["category"],
+                live_diagnostic["stage"],
+            )
+        return get_empty_skill_result(
+            failure_category=live_diagnostic["category"],
+            failure_stage="execution",
+        )
+    except SystemExit as exit_exc:
         if not owner:
             raise
         increment_skill_cache_metric("live_failures")
-        logger.warning("LLM skill extraction owner execution failed")
-        return get_empty_skill_result()
+        exit_diagnostic = _bounded_live_failure_diagnostic(exit_exc)
+        logger.warning(
+            "LLM skill extraction owner execution failed | "
+            "provider=%s model=%s error_type=%s category=%s stage=%s",
+            active_provider,
+            active_model,
+            exit_diagnostic["error_type"],
+            exit_diagnostic["category"],
+            exit_diagnostic["stage"],
+        )
+        return get_empty_skill_result(
+            failure_category=exit_diagnostic["category"],
+            failure_stage="execution",
+        )
 
     def _finalize_skill_result(parsed_obj):
-        required = _filter_skill_candidates(parsed_obj.get("required_skills", []), job_text)
-        preferred = _filter_skill_candidates(parsed_obj.get("preferred_skills", []), job_text)
+        raw_required = parsed_obj.get("required_skills", [])
+        raw_preferred = parsed_obj.get("preferred_skills", [])
+        model_emitted_candidates = bool(raw_required) or bool(raw_preferred)
+
+        required = _filter_skill_candidates(raw_required, job_text)
+        preferred = _filter_skill_candidates(raw_preferred, job_text)
 
         preferred = [s for s in preferred if s not in required]
         required, preferred = _reassign_skills_by_context(required, preferred, job_text)
         required, preferred = _drop_shadowed_generic_skills(required, preferred)
+
+        if required or preferred:
+            logger.info("LLM skill extraction finalized nonempty")
+        elif model_emitted_candidates:
+            logger.info("LLM skill extraction finalized empty | source=postfilter")
+        else:
+            logger.info("LLM skill extraction finalized empty | source=model")
 
         result = {
             "required_skills": required,
@@ -852,17 +1127,18 @@ def enrich_skills_with_llm(job_text, owner_user_id: str = ""):
             increment_skill_cache_metric("cache_stores")
             logger.info("LLM skill cache stored")
 
-        return result
+        return _successful_skill_result(result)
 
     try:
         parsed = extract_json_from_response(response)
         return _finalize_skill_result(parsed)
 
     except Exception as json_error:
+        json_diagnostic = _bounded_live_failure_diagnostic(json_error)
         logger.warning(
-            "Failed JSON parse on first attempt: %s | response_preview=%s",
-            json_error,
-            _response_preview(response),
+            "Failed JSON parse on first attempt | error_type=%s "
+            "category=schema_or_parse",
+            json_diagnostic["error_type"],
         )
 
     try:
@@ -871,10 +1147,11 @@ def enrich_skills_with_llm(job_text, owner_user_id: str = ""):
         return _finalize_skill_result(parsed_sectioned)
 
     except Exception as section_error:
+        section_diagnostic = _bounded_live_failure_diagnostic(section_error)
         logger.warning(
-            "Failed section-parser on first attempt: %s | response_preview=%s",
-            section_error,
-            _response_preview(response),
+            "Failed section-parser on first attempt | error_type=%s "
+            "category=schema_or_parse",
+            section_diagnostic["error_type"],
         )
 
     retry_prompt = _build_skill_extraction_retry_prompt(prompt)
@@ -887,12 +1164,30 @@ def enrich_skills_with_llm(job_text, owner_user_id: str = ""):
         return _finalize_skill_result(parsed_retry)
 
     except Exception as retry_error:
+        retry_diagnostic = _bounded_live_failure_diagnostic(retry_error)
+        retry_category = retry_diagnostic["category"]
+        retry_stage = "execution"
+        if "retry_response" in locals():
+            retry_stage = "response"
+            if retry_category == "unknown":
+                retry_category = "schema_or_parse"
         if owner:
-            logger.warning("Failed to parse owner LLM skill output after retry")
+            logger.warning(
+                "Failed to parse owner LLM skill output after retry | "
+                "error_type=%s category=%s stage=%s",
+                retry_diagnostic["error_type"],
+                retry_category,
+                retry_stage,
+            )
         else:
             logger.warning(
-                "Failed to parse LLM skill output after retry: %s | retry_response_preview=%s",
-                retry_error,
-                _response_preview(retry_response if 'retry_response' in locals() else ""),
+                "Failed to parse LLM skill output after retry | "
+                "error_type=%s category=%s stage=%s",
+                retry_diagnostic["error_type"],
+                retry_category,
+                retry_stage,
             )
-        return get_empty_skill_result()
+        return get_empty_skill_result(
+            failure_category=retry_category,
+            failure_stage=retry_stage,
+        )

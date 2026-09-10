@@ -244,6 +244,7 @@ def run_user_chat_completion_with_metadata(
     database_url_env: str = "DATABASE_URL",
     psql_bin: str = "psql",
     ensure_schema: bool = True,
+    workload_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Execute one exact user-scoped request through the shared transport."""
 
@@ -273,6 +274,7 @@ def run_user_chat_completion_with_metadata(
         response_schema=response_schema,
         return_parsed=return_parsed,
         thinking_budget=thinking_budget,
+        workload_id=workload_id,
         fallback_enabled=False,
         provider_client=provider_client,
     )

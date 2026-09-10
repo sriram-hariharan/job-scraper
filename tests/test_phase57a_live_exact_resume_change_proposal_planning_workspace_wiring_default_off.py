@@ -43,14 +43,14 @@ def _valid_exact_provider_payload() -> dict:
     return {
         "refined_change_proposals": [
             {
-                "proposal_id": "phase57-proposal-001",
-                "change_type": "bullet",
-                "target_section": "experience",
-                "target_identifier": "bullet-1",
-                "current_text": "Built Python pipelines.",
-                "proposed_text": "Built Python pipelines emphasizing Airflow orchestration.",
-                "change_reason": "Align existing Python evidence with supplied JD Airflow signal.",
-                "jd_terms_supported": ["Python", "Airflow"],
+                "proposal_id": "phase42a-001",
+                "change_type": "skill",
+                "target_section": "skills",
+                "target_identifier": "skills",
+                "current_text": "",
+                "proposed_text": "Python",
+                "change_reason": "Surface supplied Python evidence in the skills target.",
+                "jd_terms_supported": ["Python"],
                 "resume_evidence_used": ["Built Python pipelines."],
                 "risk_flags": [],
                 "manual_review_required": True,
@@ -63,6 +63,52 @@ def _valid_exact_provider_payload() -> dict:
         "model_provider": "fake-exact-provider",
         "model_name": "fake-exact-model",
         "prompt_version": "fake-exact-prompt-v1",
+        "token_usage": {"total_token_count": 55},
+        "cost": {"estimated_cost": 0.02, "cost_currency": "USD"},
+        "latency_ms": 91,
+    }
+
+
+def _aws_scaffold_stored_scan_payload() -> dict:
+    payload = _stored_scan_payload()
+    review = payload["scan"]["payload_json"]["scan_review_payload"]
+    evidence = "Built data pipelines using AWS S3 and Databricks."
+    review["structured_resume_targets"] = {
+        "experience_bullets": [
+            {"source_bullet_id": "aws-bullet-1", "text": evidence}
+        ],
+        "skills": ["AWS"],
+        "projects": [],
+        "sections": [],
+    }
+    review["scan_issue_contract"]["matched_evidence"] = [
+        {
+            "candidate_id": "aws-candidate-1",
+            "bullet_id": "aws-bullet-1",
+            "signal": "AWS",
+            "evidence": evidence,
+        }
+    ]
+    review["jd_llm_extraction_readback"]["structured_jd_signals"] = {
+        "required_skills": ["AWS"],
+    }
+    return payload
+
+
+def _refined_aws_provider_payload(request: dict) -> dict:
+    candidate = deepcopy(request["included_change_proposals"][0])
+    candidate["proposed_text"] = "Built AWS S3 data pipelines with Databricks."
+    candidate["change_reason"] = (
+        "Surface the supplied AWS S3 relationship using only existing evidence."
+    )
+    return {
+        "refined_change_proposals": [candidate],
+        "resume_overwrite_performed": False,
+        "resume_mutation_performed": False,
+        "application_submission_performed": False,
+        "model_provider": "fake-exact-provider",
+        "model_name": "fake-exact-model",
+        "prompt_version": "fake-exact-prompt-v2",
         "token_usage": {"total_token_count": 55},
         "cost": {"estimated_cost": 0.02, "cost_currency": "USD"},
         "latency_ms": 91,
@@ -153,12 +199,83 @@ def test_valid_fake_provider_response_appears_in_workspace_readback_metadata(
 
     readback = payload["live_exact_resume_change_proposal_readback"]
     assert readback["proposed_change_count"] == 1
-    assert readback["proposed_change_ids"] == ["phase57-proposal-001"]
-    assert readback["stable_proposed_change_keys"] == ["phase57-proposal-001"]
-    assert readback["proposed_changes_preview"][0]["target_identifier"] == "bullet-1"
+    assert readback["proposed_change_ids"] == ["phase42a-001"]
+    assert readback["stable_proposed_change_keys"] == ["phase42a-001"]
+    assert readback["proposed_changes_preview"][0]["target_identifier"] == "skills"
     assert readback["token_usage"] == {"total_token_count": 55}
     assert readback["cost"] == {"estimated_cost": 0.02, "cost_currency": "USD"}
     assert readback["latency_ms"] == 91
+
+
+def test_provider_refines_phase42_scaffold_before_workspace_readback(monkeypatch):
+    calls = []
+    _patch_storage(
+        monkeypatch,
+        stored_payload=_aws_scaffold_stored_scan_payload(),
+    )
+
+    def refine(request):
+        calls.append(deepcopy(request))
+        return _refined_aws_provider_payload(request)
+
+    payload = services.save_saved_scan_state_payload(
+        scan_id="phase56a-scan",
+        **_state_request(),
+        enable_live_exact_resume_change_proposal=True,
+        live_exact_resume_change_proposal_adapter=refine,
+    )
+
+    phase42_candidate = calls[0]["included_change_proposals"][0]
+    assert phase42_candidate["proposal_id"] == "phase42a-001"
+    assert phase42_candidate["target_identifier"] == "aws-bullet-1"
+    assert phase42_candidate["proposed_text"].endswith("[Emphasize: AWS]")
+
+    readback = payload["live_exact_resume_change_proposal_readback"]
+    preview = readback["proposed_changes_preview"][0]
+    assert readback["validation_status"] == "valid"
+    assert preview["proposal_id"] == phase42_candidate["proposal_id"]
+    assert preview["target_section"] == phase42_candidate["target_section"]
+    assert preview["target_identifier"] == phase42_candidate["target_identifier"]
+    assert preview["current_text"] == phase42_candidate["current_text"]
+    assert preview["proposed_text"] == "Built AWS S3 data pipelines with Databricks."
+    assert "[Emphasize:" not in preview["proposed_text"]
+
+
+def test_provider_echoed_phase42_scaffold_is_validation_failure(monkeypatch):
+    _patch_storage(
+        monkeypatch,
+        stored_payload=_aws_scaffold_stored_scan_payload(),
+    )
+
+    def echo_scaffold(request):
+        return {
+            "refined_change_proposals": deepcopy(
+                request["included_change_proposals"]
+            ),
+            "resume_overwrite_performed": False,
+            "resume_mutation_performed": False,
+            "application_submission_performed": False,
+        }
+
+    payload = services.save_saved_scan_state_payload(
+        scan_id="phase56a-scan",
+        **_state_request(),
+        enable_live_exact_resume_change_proposal=True,
+        live_exact_resume_change_proposal_adapter=echo_scaffold,
+    )
+
+    readback = payload["live_exact_resume_change_proposal_readback"]
+    assert readback["validation_status"] == "fallback"
+    assert readback["fallback_reason"] == "provider_response_invalid"
+    assert readback["exact_change_llm_call_attempted"] is True
+    assert readback["exact_change_llm_call_performed"] is False
+    assert readback["proposed_change_count"] == 0
+    assert "invalid refined change proposals present" in readback[
+        "validation_errors"
+    ]
+    assert "refined proposal contains internal Phase 42 scaffolding" in readback[
+        "validation_errors"
+    ]
 
 
 def test_invalid_provider_response_falls_back_safely(monkeypatch):
@@ -268,7 +385,7 @@ def test_api_enabled_readback_exposes_exact_change_observability(monkeypatch):
     assert readback["exact_change_llm_call_attempted"] is True
     assert readback["exact_change_llm_call_performed"] is True
     assert readback["validation_status"] == "valid"
-    assert readback["proposed_change_ids"] == ["phase57-proposal-001"]
+    assert readback["proposed_change_ids"] == ["phase42a-001"]
 
 
 def test_ui_readback_display_is_passive_and_uses_existing_response_data():

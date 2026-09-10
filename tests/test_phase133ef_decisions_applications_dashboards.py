@@ -31,13 +31,10 @@ def test_routes_mount_separate_react_islands_and_preserve_manual_modals() -> Non
     assert 'data-status-action="SAVED"' in decisions
     assert 'data-status-action="NOT_APPLIED"' in decisions
     assert 'data-status-action="DISMISSED"' in decisions
-    # Bundle cache marker bumped to item2_phase3_shared_header_r1 when the
-    # Decisions/Applications headers were migrated onto the shared
-    # .app-page-header contract.
-    assert "/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" in decisions
-    assert "/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" in applications
-    assert "/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1" in decisions
-    assert "/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1" in applications
+    assert "/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1" in decisions
+    assert "/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1" in applications
+    assert "/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1" in decisions
+    assert "/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1" in applications
     assert "/static/decisions.js?v=phase133ef_r5" in decisions
     assert "/static/application_views.js?v=phase133ef_r5" in applications
 
@@ -138,7 +135,12 @@ def test_full_width_sticky_action_neutral_loading_and_action_hierarchy() -> None
     assert ".applications-tabs .applications-tab.is-active" in styles
     assert ".applications-tabs .applications-tab.is-inactive" in styles
     assert ".applications-tabs .applications-tab.is-inactive:hover" in styles
-    assert "linear-gradient(115deg, #2563eb, #6d3df2)" in styles
+    applications_active = styles.split(
+        ".applications-tabs .applications-tab.is-active {", 1
+    )[1].split("}", 1)[0]
+    assert "background: var(--app-action-primary, #56746d)" in applications_active
+    assert "background-image: none" in applications_active
+    assert "linear-gradient" not in applications_active
     assert ".applications-tabs .applications-tab {" in styles and "background-image: none" in styles
     assert ".operational-filter-actions .operational-secondary-action" in styles
     assert "background-image: none" in styles

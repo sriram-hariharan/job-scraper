@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from hashlib import sha256
 import json
+import re
 from typing import Any
 
 
@@ -64,6 +65,16 @@ FALSE_ACTION_KEYS = (
     "submission_performed",
     "auto_apply_performed",
     "auto_submit_performed",
+)
+INTERNAL_SCAFFOLD_PATTERNS = (
+    re.compile(r"\[Emphasize: [^\]\r\n]+\]"),
+    re.compile(r"\[Align with JD term: [^\]\r\n]+\]"),
+)
+IMMUTABLE_CANDIDATE_FIELDS = (
+    "change_type",
+    "target_section",
+    "target_identifier",
+    "current_text",
 )
 
 
@@ -164,25 +175,34 @@ def _parse_provider_response(value: Any) -> tuple[Any, str, str]:
     return deepcopy(value), "non_dict", "provider response must be a dictionary or JSON object string"
 
 
-def _known_proposal_ids(original_request_packet: Any) -> list[str]:
+def _original_proposals_by_id(
+    original_request_packet: Any,
+) -> dict[str, dict[str, Any]]:
     if not isinstance(original_request_packet, dict):
-        return []
+        return {}
     rows = original_request_packet.get("included_change_proposals")
     if not isinstance(rows, list):
         request_packet = original_request_packet.get("request_packet")
         if isinstance(request_packet, dict):
             rows = request_packet.get("included_change_proposals")
-    ids: list[str] = []
-    seen: set[str] = set()
+    proposals: dict[str, dict[str, Any]] = {}
     if isinstance(rows, list):
         for row in rows:
             if not isinstance(row, dict):
                 continue
             proposal_id = str(row.get("proposal_id") or "").strip()
-            if proposal_id and proposal_id not in seen:
-                seen.add(proposal_id)
-                ids.append(proposal_id)
-    return ids
+            if proposal_id and proposal_id not in proposals:
+                proposals[proposal_id] = deepcopy(row)
+    return proposals
+
+
+def _normalized_comparison_text(value: Any) -> str:
+    return " ".join(str(value or "").strip().lower().replace("_", " ").split())
+
+
+def _contains_internal_scaffolding(value: Any) -> bool:
+    text = str(value or "")
+    return any(pattern.search(text) is not None for pattern in INTERNAL_SCAFFOLD_PATTERNS)
 
 
 def _proposal_label(index: int, proposal: Any) -> str:
@@ -227,7 +247,8 @@ def build_controlled_exact_resume_change_set_provider_response_validation_defaul
     provider_response_present = response_value is not None
     provider_call_result_present = isinstance(provider_call_result, dict)
     original_request_packet_present = isinstance(original_request_packet, dict)
-    known_ids = _known_proposal_ids(original_request_packet)
+    original_proposals = _original_proposals_by_id(original_request_packet)
+    known_ids = list(original_proposals)
     known_id_set = set(known_ids)
     errors: list[str] = []
     warnings: list[str] = []
@@ -238,6 +259,9 @@ def build_controlled_exact_resume_change_set_provider_response_validation_defaul
     unknown_proposal_ids: list[str] = []
     refined_change_proposals: list[dict[str, Any]] = []
     invalid_refined_change_proposal_count = 0
+    ineffective_change_found = False
+    internal_scaffolding_found = False
+    candidate_identity_mismatch_found = False
 
     if not provider_response_present:
         missing_inputs.append("provider_response")
@@ -311,6 +335,27 @@ def build_controlled_exact_resume_change_set_provider_response_validation_defaul
                 if policy["require_known_proposal_ids"] and proposal_id and not known_id_set:
                     unknown_proposal_ids.append(proposal_id)
 
+                if all(isinstance(proposal.get(field), str) for field in TEXT_FIELDS):
+                    if _normalized_comparison_text(
+                        proposal.get("current_text")
+                    ) == _normalized_comparison_text(proposal.get("proposed_text")):
+                        missing_fields.append("proposed_text:effective_change")
+                        ineffective_change_found = True
+                    if _contains_internal_scaffolding(proposal.get("proposed_text")):
+                        missing_fields.append("proposed_text:internal_scaffolding")
+                        internal_scaffolding_found = True
+
+                original = original_proposals.get(proposal_id)
+                if isinstance(original, dict):
+                    for field in IMMUTABLE_CANDIDATE_FIELDS:
+                        if field not in original:
+                            continue
+                        if _normalized_comparison_text(
+                            proposal.get(field)
+                        ) != _normalized_comparison_text(original.get(field)):
+                            missing_fields.append(f"{field}:original_candidate")
+                            candidate_identity_mismatch_found = True
+
                 if missing_fields:
                     invalid_refined_change_proposal_count += 1
                     missing_required_fields_by_proposal[label] = list(missing_fields)
@@ -321,6 +366,12 @@ def build_controlled_exact_resume_change_set_provider_response_validation_defaul
 
     if invalid_refined_change_proposal_count:
         errors.append("invalid refined change proposals present")
+    if ineffective_change_found:
+        errors.append("refined proposal must represent an effective text change")
+    if internal_scaffolding_found:
+        errors.append("refined proposal contains internal Phase 42 scaffolding")
+    if candidate_identity_mismatch_found:
+        errors.append("refined proposal identity must match the original candidate")
     if unknown_proposal_ids and policy["require_known_proposal_ids"]:
         errors.append("unknown proposal ids present")
 

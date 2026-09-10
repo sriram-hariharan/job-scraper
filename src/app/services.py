@@ -1,8 +1,10 @@
 from collections import Counter
 from contextlib import ExitStack
 from copy import deepcopy
+from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
+from functools import wraps
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -21,6 +23,8 @@ import tempfile
 import shutil
 import signal
 
+from src.utils.file_lock import exclusive_file_lock
+
 from src.ai.user_provider_runtime import (
     UserProviderRuntimeConfigurationError,
     run_user_chat_completion_with_metadata,
@@ -32,6 +36,10 @@ from src.app.user_ai_settings_service import (
 resolve_effective_user_provider_route = getattr(
     importlib.import_module("src.app.provider_model_" "routing_service"),
     "resolve_effective_user_provider_route",
+)
+resolve_recommended_user_provider_route = getattr(
+    importlib.import_module("src.app.provider_model_" "routing_service"),
+    "resolve_recommended_user_provider_route",
 )
 run_effective_user_chat_completion_with_metadata = getattr(
     importlib.import_module("src.app.provider_model_" "routing_service"),
@@ -82,6 +90,7 @@ from src.agents import (
     tailoring_decision_agent,
     workflow_runner,
 )
+from src.agents.canonical_registry import list_canonical_agent_definitions
 from src.agents.trace import (
     build_agent_trace_evidence_pack,
     build_stage_trace_bundle_payload,
@@ -124,6 +133,7 @@ from src.storage.notification_state.store import (
     insert_notification_state_row_to_postgres,
 )
 from src.storage.notification_state.read_postgres import (
+    get_latest_notification_states_postgres_payload,
     get_notification_state_postgres_status_payload,
 )
 from src.storage.saved_scans.store import (
@@ -134,6 +144,7 @@ from src.storage.saved_scans.read_postgres import (
     delete_saved_scan_postgres_payload,
     get_saved_scan_postgres_payload,
     get_saved_scans_postgres_payload,
+    save_saved_scan_diagnostic_state_postgres_payload,
     save_saved_scan_draft_postgres_payload,
 )
 from src.storage.profile_resumes.store import (
@@ -224,7 +235,10 @@ from src.storage.scheduler.contract import (
 from src.storage.scheduler.read_postgres import (
     get_scheduler_postgres_status_payload,
 )
-from src.storage.scheduler_artifacts_store import get_scheduler_artifact_payload
+from src.storage.scheduler_artifacts_store import (
+    get_scheduler_artifact_payload,
+    list_scheduler_artifacts_by_kind,
+)
 from src.storage.scheduler.contract import (
     scheduler_contract_health_payload,
 )
@@ -278,6 +292,39 @@ class ManualProviderPreviewLiveError(RuntimeError):
 AGENT_FEEDBACK_LIST_MAX_LIMIT = 500
 AGENT_FEEDBACK_SUMMARY_MAX_LIMIT = 1000
 AGENT_FEEDBACK_EXPORT_MAX_LIMIT = 5000
+AGENTIC_OPERATIONS_RECENT_RUN_LIMIT = 10
+
+_AGENTIC_OPERATIONS_CURRENT_PIPELINE_FIELDS = (
+    "run_id",
+    "status",
+    "current_stage",
+    "completed_stages",
+    "stage_order",
+    "stage_started_at",
+    "stage_message",
+    "counts",
+    "config",
+    "final_job_count",
+    "return_code",
+    "error",
+    "started_at",
+    "finished_at",
+    "updated_at",
+    "updated_at_utc",
+    "status_path",
+)
+
+_AGENTIC_OPERATIONS_MUTATION_COUNT_FIELDS = (
+    ("score_mutation_capable_count", "score_mutation"),
+    ("rank_mutation_capable_count", "rank_mutation"),
+    ("queue_mutation_capable_count", "queue_mutation"),
+    ("resume_text_mutation_capable_count", "resume_text_mutation"),
+    (
+        "operator_state_persistence_capable_count",
+        "operator_state_persistence",
+    ),
+    ("application_action_capable_count", "application_action_capability"),
+)
 
 DEFAULT_OUTPUT_DIR = Path(
     os.environ.get("APPLICATION_PLANNING_OUTPUT_DIR", ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)
@@ -1190,6 +1237,195 @@ def _pipeline_run_public_row(run: Dict[str, Any]) -> Dict[str, Any]:
         "final_job_count": status_json.get("final_job_count"),
         "counts": counts,
         "config": config,
+    }
+
+
+def agentic_operations_current_pipeline_payload(
+    status_path: str | Path | None = None,
+) -> Dict[str, Any]:
+    raw_path = str(status_path or "").strip()
+    if not raw_path:
+        return {
+            "available": False,
+            "state": "not_configured",
+            "source_path": "",
+        }
+
+    resolved_path = Path(raw_path).expanduser()
+    source_path = str(resolved_path)
+    if not resolved_path.exists() or not resolved_path.is_file():
+        return {
+            "available": False,
+            "state": "not_found",
+            "source_path": source_path,
+        }
+
+    try:
+        raw_payload = json.loads(resolved_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {
+            "available": False,
+            "state": "malformed",
+            "source_path": source_path,
+        }
+    except OSError:
+        return {
+            "available": False,
+            "state": "unavailable",
+            "source_path": source_path,
+        }
+
+    if not isinstance(raw_payload, dict):
+        return {
+            "available": False,
+            "state": "malformed",
+            "source_path": source_path,
+        }
+
+    projection = {
+        field_name: deepcopy(raw_payload[field_name])
+        for field_name in _AGENTIC_OPERATIONS_CURRENT_PIPELINE_FIELDS
+        if field_name in raw_payload
+    }
+    return {
+        "available": True,
+        "state": "available",
+        "source_path": source_path,
+        **projection,
+    }
+
+
+def agentic_operations_recent_runs_payload(
+    *,
+    owner_user_id: str,
+    limit: int = AGENTIC_OPERATIONS_RECENT_RUN_LIMIT,
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+    safe_limit = max(
+        1,
+        min(
+            int(limit or AGENTIC_OPERATIONS_RECENT_RUN_LIMIT),
+            AGENTIC_OPERATIONS_RECENT_RUN_LIMIT,
+        ),
+    )
+
+    try:
+        payload = get_user_pipeline_runs_postgres_payload(
+            owner_user_id=owner,
+            limit=safe_limit,
+            offset=0,
+            status="",
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=False,
+        )
+    except (Exception, SystemExit) as exc:
+        logger.warning(
+            "Agentic Operations recent-runs readback unavailable for owner_user_id=%s: %s",
+            owner,
+            exc,
+        )
+        return {
+            "available": False,
+            "state": "unavailable",
+            "count": 0,
+            "bound": safe_limit,
+            "runs": [],
+        }
+
+    rows = list(payload.get("runs", payload.get("rows", [])) or [])[:safe_limit]
+    current_status_path = (
+        _pipeline_run_status_path_from_record(dict(rows[0] or {})) if rows else ""
+    )
+    runs = [_pipeline_run_public_row(dict(row or {})) for row in rows]
+    return {
+        "available": True,
+        "state": "available",
+        "count": len(runs),
+        "bound": safe_limit,
+        "runs": runs,
+        "_current_status_path": current_status_path,
+    }
+
+
+def agentic_operations_canonical_agents_payload() -> Dict[str, Any]:
+    definitions = list_canonical_agent_definitions()
+    agents = [asdict(definition) for definition in definitions]
+    safety_summary = {"canonical_agent_count": len(definitions)}
+    safety_summary.update(
+        {
+            output_field: sum(
+                1 for definition in definitions if bool(getattr(definition, source_field))
+            )
+            for output_field, source_field in _AGENTIC_OPERATIONS_MUTATION_COUNT_FIELDS
+        }
+    )
+    return {
+        "agents": agents,
+        "safety_summary": safety_summary,
+    }
+
+
+def _agentic_operations_safety_metadata() -> Dict[str, bool]:
+    return {
+        "read_only": True,
+        "admin_only": True,
+        "cross_user_access": False,
+        "database_write_performed": False,
+        "schema_write_performed": False,
+        "provider_call_performed": False,
+        "pipeline_execution_performed": False,
+        "scheduler_mutation_performed": False,
+        "scoring_changed": False,
+        "ranking_changed": False,
+        "queue_mutation_performed": False,
+        "resume_mutation_performed": False,
+        "application_execution_performed": False,
+        "ats_submission_performed": False,
+    }
+
+
+def agentic_operations_overview_payload(
+    *,
+    owner_user_id: str,
+    status_path: str | Path | None = None,
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+
+    recent_runs_payload = agentic_operations_recent_runs_payload(
+        owner_user_id=owner,
+        limit=AGENTIC_OPERATIONS_RECENT_RUN_LIMIT,
+    )
+    canonical_payload = agentic_operations_canonical_agents_payload()
+    current_status_path = (
+        status_path
+        if status_path is not None
+        else recent_runs_payload.get("_current_status_path", "")
+    )
+    recent_runs_state = {
+        key: deepcopy(value)
+        for key, value in recent_runs_payload.items()
+        if key not in {"runs", "_current_status_path"}
+    }
+    return {
+        "ok": True,
+        "read_only": True,
+        "admin_only": True,
+        "owner_user_id": owner,
+        "current_pipeline": agentic_operations_current_pipeline_payload(
+            current_status_path
+        ),
+        "recent_runs": deepcopy(recent_runs_payload.get("runs", [])),
+        "recent_runs_state": recent_runs_state,
+        "canonical_agents": deepcopy(canonical_payload["agents"]),
+        "safety_summary": deepcopy(canonical_payload["safety_summary"]),
+        "safety_metadata": _agentic_operations_safety_metadata(),
     }
 
 
@@ -5051,6 +5287,164 @@ def _new_scan_job_record(
     }
 
 
+_SCAN_DISJUNCTION_PATTERN = re.compile(r"\s+or\s+", re.IGNORECASE)
+
+
+def _scan_requirement_alternatives(term: Any) -> List[str]:
+    """Split a disjunctive requirement such as "Python or R" into alternatives.
+
+    Deliberately narrow: only an " or " separator is recognised, every
+    alternative must be non-empty, and the caller additionally requires each
+    alternative to be a term the JD itself already uses.  Free prose such as
+    "research or development" therefore stays a single requirement unless the
+    JD lists both sides as skills in their own right.
+    """
+    text = _clean_text(term)
+    if not text:
+        return []
+    parts = [_clean_text(part) for part in _SCAN_DISJUNCTION_PATTERN.split(text)]
+    parts = [part for part in parts if part]
+    return parts if len(parts) >= 2 else []
+
+
+def _scan_requirement_is_satisfied_disjunction(
+    term: Any,
+    *,
+    matched_keys: set[str],
+    known_keys: set[str],
+) -> bool:
+    """True when an OR requirement has at least one supported alternative.
+
+    An OR group is one requirement: it is satisfied by any single alternative,
+    it is never worth double credit, and it is never split into several rows.
+    """
+    alternatives = _scan_requirement_alternatives(term)
+    if not alternatives:
+        return False
+    alternative_keys = [_scan_issue_canonical_term(part) for part in alternatives]
+    if not all(alternative_keys):
+        return False
+    # Every alternative must be a term the JD itself recognises, so ordinary
+    # prose containing the word "or" is never treated as a disjunction.
+    if not all(key in known_keys for key in alternative_keys):
+        return False
+    return any(key in matched_keys for key in alternative_keys)
+
+
+def _normalize_scan_tailoring_summary_disjunctions(
+    summary: Dict[str, Any] | None,
+    *,
+    required_terms: Any = None,
+) -> Dict[str, Any]:
+    """Collapse one JD OR requirement to one Scan matched/missing identity.
+
+    The extractor can retain both atomic alternatives and their source phrase
+    (``python``, ``r``, ``python or r``).  Scan must not turn those parser
+    projections into three independently scored requirements.  A composite is
+    recognised only when every alternative also exists in the JD's structured
+    requirement terms.  If one or more alternatives matched, the first matched
+    alternative is retained so its real resume evidence remains available; if
+    none matched, the composite remains as one missing requirement.
+    """
+    normalized = dict(summary or {})
+    matched_fields = (
+        "matched_required",
+        "matched_preferred",
+        "matched_terms",
+        "matched_any",
+    )
+    missing_fields = (
+        "missing_required",
+        "missing_preferred",
+        "missing_terms",
+        "missing_requirements",
+    )
+    structured_fields = (
+        "required_terms",
+        "required_skills",
+        "preferred_terms",
+        "preferred_skills",
+        "all_terms",
+        "all_skills",
+    )
+
+    structured_terms = _unique_scan_terms(
+        list(required_terms or [])
+        + [
+            term
+            for field in structured_fields
+            for term in list(normalized.get(field, []) or [])
+        ]
+        + [
+            term
+            for field in matched_fields + missing_fields
+            for term in list(normalized.get(field, []) or [])
+        ]
+    )
+    known_keys = {
+        _scan_issue_canonical_term(term)
+        for term in structured_terms
+        if _scan_issue_canonical_term(term)
+    }
+    matched_keys = {
+        _scan_issue_canonical_term(term)
+        for field in matched_fields
+        for term in list(normalized.get(field, []) or [])
+        if _scan_issue_canonical_term(term)
+    }
+
+    disjunctions: List[Tuple[str, List[str], List[str]]] = []
+    for term in structured_terms:
+        alternatives = _scan_requirement_alternatives(term)
+        alternative_keys = [
+            _scan_issue_canonical_term(alternative)
+            for alternative in alternatives
+        ]
+        if not alternatives or not all(alternative_keys):
+            continue
+        if not all(key in known_keys for key in alternative_keys):
+            continue
+        disjunctions.append((_clean_text(term), alternatives, alternative_keys))
+
+    for composite, alternatives, alternative_keys in disjunctions:
+        composite_key = _scan_issue_canonical_term(composite)
+        group_keys = {composite_key, *alternative_keys}
+        satisfied = _scan_requirement_is_satisfied_disjunction(
+            composite,
+            matched_keys=matched_keys,
+            known_keys=known_keys,
+        )
+        retained_term = next(
+            (
+                alternative
+                for alternative, key in zip(alternatives, alternative_keys)
+                if key in matched_keys
+            ),
+            "",
+        )
+
+        for field in matched_fields + missing_fields:
+            if field not in normalized:
+                continue
+            normalized[field] = [
+                term
+                for term in list(normalized.get(field, []) or [])
+                if _scan_issue_canonical_term(term) not in group_keys
+            ]
+
+        target_field = "matched_required" if satisfied else "missing_required"
+        target_term = retained_term if satisfied else composite
+        normalized[target_field] = _unique_scan_terms(
+            list(normalized.get(target_field, []) or []) + [target_term]
+        )
+        mirror_field = "matched_terms" if satisfied else "missing_terms"
+        normalized[mirror_field] = _unique_scan_terms(
+            list(normalized.get(mirror_field, []) or []) + [target_term]
+        )
+
+    return normalized
+
+
 def _new_scan_tailoring_summary(
     *,
     job_evidence: Any,
@@ -5080,7 +5474,7 @@ def _new_scan_tailoring_summary(
         ]
     matched_terms = _unique_scan_terms(matched_required + matched_preferred + matched_any)
 
-    return {
+    summary = {
         "target_job_title": _clean_text(getattr(job_evidence, "title", "")),
         "job_title": _clean_text(getattr(job_evidence, "title", "")),
         "matched_required": matched_required,
@@ -5099,6 +5493,41 @@ def _new_scan_tailoring_summary(
         "all_terms": all_terms,
         "missing_terms": missing_required,
         "match_bucket": _clean_text(getattr(match_result, "match_bucket", "")),
+    }
+    return _normalize_scan_tailoring_summary_disjunctions(
+        summary,
+        required_terms=required_terms + preferred_terms + all_terms,
+    )
+
+
+def _new_scan_structured_resume_targets(resume_evidence: Any) -> Dict[str, Any]:
+    experience_bullets: List[Dict[str, str]] = []
+    for entry in list(getattr(resume_evidence, "experience_entries", []) or []):
+        source_entry_id = _clean_text(getattr(entry, "entry_id", ""))
+        bullets = list(getattr(entry, "bullets", []) or [])
+        bullet_ids = list(getattr(entry, "bullet_ids", []) or [])
+        for index, bullet in enumerate(bullets):
+            source_bullet_id = (
+                _clean_text(bullet_ids[index]) if index < len(bullet_ids) else ""
+            )
+            text = _clean_text(bullet)
+            if not source_entry_id or not source_bullet_id or not text:
+                continue
+            experience_bullets.append(
+                {
+                    "source_entry_id": source_entry_id,
+                    "source_bullet_id": source_bullet_id,
+                    "text": text,
+                }
+            )
+
+    return {
+        "version": "structured_resume_targets_v1",
+        "source": "resume_evidence",
+        "experience_bullets": experience_bullets,
+        "skills": _unique_scan_terms(
+            list(getattr(resume_evidence, "skills", []) or [])
+        ),
     }
 
 
@@ -5334,6 +5763,9 @@ def _build_new_scan_review_payload(
         },
         "ai_optimize_suggestions": [],
         "directional_guidance": [],
+        "structured_resume_targets": _new_scan_structured_resume_targets(
+            resume_evidence
+        ),
         "lane_counts": {
             "direct_apply_ready": 0,
             "direct_apply_optional": 0,
@@ -5383,6 +5815,34 @@ def _build_new_scan_review_payload(
             ],
         },
     }
+
+
+def _apply_grounded_planning_scan_jd_signals(
+    job_record: Dict[str, Any],
+    structured_signals: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    """Add only validated, source-grounded LLM signals to deterministic evidence input."""
+
+    enriched = deepcopy(job_record)
+    signals = deepcopy(structured_signals or {})
+    required_skills = _unique_scan_terms(list(signals.get("required_skills") or []))
+    preferred_skills = _unique_scan_terms(list(signals.get("preferred_skills") or []))
+    tools = _unique_scan_terms(list(signals.get("tools") or []))
+
+    enriched["required_skills"] = _unique_scan_terms(
+        list(enriched.get("required_skills") or []) + required_skills
+    )
+    enriched["preferred_skills"] = _unique_scan_terms(
+        list(enriched.get("preferred_skills") or []) + preferred_skills + tools
+    )
+    enriched["all_skills"] = _unique_scan_terms(
+        list(enriched.get("all_skills") or [])
+        + enriched["required_skills"]
+        + enriched["preferred_skills"]
+    )
+    enriched["jd_intelligence"] = signals
+    enriched["jd_intelligence_grounded"] = True
+    return enriched
 
 
 def create_saved_scan_payload(
@@ -5523,22 +5983,35 @@ def create_saved_scan_payload(
         }
     )
 
+    jd_llm_metadata = _build_planning_scan_jd_llm_extraction_metadata(
+        job_record=job_record,
+        enabled=bool(enable_jd_llm_extraction),
+        owner_user_id=owner_user_id,
+        adapter=jd_llm_provider_adapter,
+        extraction_policy=jd_llm_extraction_policy,
+    )
+    jd_llm_readback = build_planning_scan_jd_llm_extraction_readback(jd_llm_metadata)
+    llm_analysis_status = (
+        "disabled"
+        if not jd_llm_metadata.get("llm_enabled")
+        else "succeeded"
+        if jd_llm_metadata.get("validation_status") == "valid"
+        else "fallback"
+    )
+    scoring_job_record = _apply_grounded_planning_scan_jd_signals(
+        job_record,
+        jd_llm_metadata.get("structured_jd_signals"),
+    )
     review_payload = _build_new_scan_review_payload(
         scan_id=row["scan_id"],
         scan_timestamp=scan_timestamp,
         resume_name=resume_name or resume_filename or "New scan resume",
         resume_file_path=resume_processing_path or resume_file_path,
         resume_text=safe_resume_text,
-        job_record=job_record,
+        job_record=scoring_job_record,
         owner_user_id=owner_user_id,
     )
-    jd_llm_metadata = _build_planning_scan_jd_llm_extraction_metadata(
-        job_record=job_record,
-        enabled=bool(enable_jd_llm_extraction),
-        adapter=jd_llm_provider_adapter,
-        extraction_policy=jd_llm_extraction_policy,
-    )
-    jd_llm_readback = build_planning_scan_jd_llm_extraction_readback(jd_llm_metadata)
+    review_payload["llm_analysis_status"] = llm_analysis_status
     review_payload["jd_llm_extraction"] = jd_llm_metadata
     review_payload["jd_llm_extraction_readback"] = jd_llm_readback
     agentic_workflow_integration_readback = (
@@ -5564,10 +6037,17 @@ def create_saved_scan_payload(
             **row,
             "scan_status": "ready",
             "match_rate": scan_score,
-            "note": "Scan report generated from New Scan.",
+            "note": (
+                "AI-assisted scan report generated from New Scan."
+                if llm_analysis_status == "succeeded"
+                else "Scan report generated with deterministic fallback after AI analysis was unavailable."
+                if llm_analysis_status == "fallback"
+                else "Scan report generated with AI analysis explicitly disabled."
+            ),
             "payload_json": {
                 "version": "saved_scan_report_v1",
                 "scan_review_payload": review_payload,
+                "llm_analysis_status": llm_analysis_status,
                 "jd_llm_extraction": jd_llm_metadata,
                 "jd_llm_extraction_readback": jd_llm_readback,
                 "agentic_workflow_integration_readback": agentic_workflow_integration_readback,
@@ -5587,12 +6067,23 @@ def create_saved_scan_payload(
             "table_name": "saved_scans",
         }
     )
+    persisted = bool(postgres_write.get("ok", False))
+    response_row = row
+    if not persisted:
+        response_row = saved_scan_db_row(
+            {
+                **row,
+                "scan_status": "failed",
+                "note": "Scan report generated, but saved-scan persistence was not confirmed.",
+            }
+        )
 
     return {
-        "ok": bool(postgres_write.get("ok", False)),
-        "scan_status": row["scan_status"],
-        "scan": row,
+        "ok": persisted,
+        "scan_status": response_row["scan_status"],
+        "scan": response_row,
         "scan_review_payload": review_payload,
+        "llm_analysis_status": llm_analysis_status,
         "jd_llm_extraction_readback": jd_llm_readback,
         "agentic_workflow_integration_readback": agentic_workflow_integration_readback,
         "agentic_workflow_production_readiness_checkpoint": production_readiness_checkpoint,
@@ -5861,14 +6352,25 @@ def saved_scan_report_payload(
     refreshed_payload["agentic_workflow_production_readiness_checkpoint"] = (
         production_readiness_checkpoint
     )
+    llm_analysis_status = _clean_text(
+        refreshed_payload.get("llm_analysis_status")
+        or report_payload.get("llm_analysis_status")
+    )
+    diagnostic_state = (
+        deepcopy(refreshed_payload.get("diagnostic_state"))
+        if isinstance(refreshed_payload.get("diagnostic_state"), dict)
+        else {}
+    )
 
     return {
         "ok": True,
         "scan": row,
         "scan_review_payload": refreshed_payload,
+        "llm_analysis_status": llm_analysis_status,
         "jd_llm_extraction_readback": jd_llm_readback,
         "agentic_workflow_integration_readback": agentic_workflow_integration_readback,
         "agentic_workflow_production_readiness_checkpoint": production_readiness_checkpoint,
+        "diagnostic_state": diagnostic_state,
     }
 
 
@@ -6031,6 +6533,15 @@ def save_saved_scan_state_payload(
         draft=draft,
         owner_user_id=owner_user_id,
     )
+    if not payload.get("ok"):
+        raise ValueError("Saved scan state could not be persisted.")
+    persisted_draft = payload.get("draft")
+    if isinstance(persisted_draft, dict):
+        persisted_excluded_ids = _normalize_workspace_excluded_scan_issue_ids(
+            persisted_draft.get("excluded_scan_issue_ids", [])
+        )
+        if persisted_excluded_ids != draft["excluded_scan_issue_ids"]:
+            raise ValueError("Saved scan exclusion state could not be verified.")
     live_tailoring_readback = _planning_workspace_live_tailoring_suggestion_payload(
         scan_id=safe_scan_id,
         owner_user_id=owner_user_id,
@@ -6181,6 +6692,485 @@ def save_saved_scan_state_payload(
         "human_only_safety_boundary_summary_readback": human_only_safety_boundary_summary_readback,
         "human_only_workflow_readiness_checkpoint_readback": human_only_workflow_readiness_checkpoint_readback,
     }
+
+
+class SavedScanDiagnosticsNotFoundError(ValueError):
+    """Neutral owner-scoped saved-scan lookup/update failure."""
+
+
+_SAVED_SCAN_DIAGNOSTIC_STAGE_ORDER = (
+    "live_tailoring_suggestion",
+    "live_exact_resume_change_proposal",
+    "manual_exact_change_acceptance",
+    "guarded_resume_copy_artifact",
+    "guarded_resume_copy_artifact_verification",
+    "verified_artifact_operator_review_packet",
+    "verified_artifact_operator_decision",
+    "application_readiness_packet",
+    "manual_application_handoff_packet",
+    "handoff_audit_trail",
+    "safety_boundary_summary",
+    "workflow_readiness_checkpoint",
+)
+
+_SAVED_SCAN_DIAGNOSTIC_READBACK_KEYS = {
+    "live_tailoring_suggestion": "live_tailoring_suggestion_readback",
+    "live_exact_resume_change_proposal": "live_exact_resume_change_proposal_readback",
+    "manual_exact_change_acceptance": "manual_exact_change_acceptance_readback",
+    "guarded_resume_copy_artifact": "guarded_resume_copy_artifact_readback",
+    "guarded_resume_copy_artifact_verification": "guarded_resume_copy_artifact_verification_readback",
+    "verified_artifact_operator_review_packet": "verified_artifact_operator_review_packet_readback",
+    "verified_artifact_operator_decision": "verified_artifact_operator_decision_readback",
+    "application_readiness_packet": "operator_approved_artifact_application_readiness_packet_readback",
+    "manual_application_handoff_packet": "human_only_manual_application_handoff_packet_readback",
+    "handoff_audit_trail": "human_only_handoff_audit_trail_readback",
+    "safety_boundary_summary": "human_only_safety_boundary_summary_readback",
+    "workflow_readiness_checkpoint": "human_only_workflow_readiness_checkpoint_readback",
+}
+
+_LIVE_TAILORING_FAILURE_READBACK_FIELDS = (
+    "provider",
+    "model",
+    "failure_category",
+    "exception_class",
+    "http_status",
+    "provider_error_type",
+    "provider_error_code",
+    "provider_error_param",
+    "invalid_request_reason",
+    "schema_keyword",
+    "safe_error_summary",
+    "provider_call_attempted",
+    "retry_performed",
+    "provider_fallback_performed",
+)
+
+
+def _saved_scan_diagnostic_stages(values: Any) -> List[str]:
+    requested = {
+        _clean_text(value)
+        for value in list(values or [])
+        if _clean_text(value)
+    }
+    unknown = sorted(requested.difference(_SAVED_SCAN_DIAGNOSTIC_STAGE_ORDER))
+    if unknown:
+        raise ValueError(f"Unknown diagnostic stage: {unknown[0]}")
+    if not requested:
+        raise ValueError("At least one diagnostic stage is required.")
+    return [stage for stage in _SAVED_SCAN_DIAGNOSTIC_STAGE_ORDER if stage in requested]
+
+
+def _saved_scan_diagnostic_readback_is_valid(readback: Any) -> bool:
+    return (
+        isinstance(readback, dict)
+        and _clean_text(readback.get("validation_status")) == "valid"
+        and readback.get("fallback_used") is False
+    )
+
+
+def _saved_scan_diagnostic_persisted_readback(readback: Dict[str, Any]) -> Dict[str, Any]:
+    source = deepcopy(readback)
+    source.pop("stage_results", None)
+    if _saved_scan_diagnostic_readback_is_valid(source):
+        return source
+    return {
+        key: deepcopy(source.get(key))
+        for key in (
+            "phase",
+            "readback_phase",
+            "default_off",
+            "planning_workspace_action",
+            "validation_status",
+            "validation_errors",
+            "fallback_used",
+            "fallback_reason",
+            "fallback_error_class",
+            "source_resume_unchanged",
+            "source_resume_overwritten",
+            "safety",
+            *_LIVE_TAILORING_FAILURE_READBACK_FIELDS,
+        )
+        if key in source
+    }
+
+
+def _saved_scan_diagnostic_state_from_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    report = row.get("payload_json") if isinstance(row.get("payload_json"), dict) else {}
+    review = report.get("scan_review_payload") if isinstance(report.get("scan_review_payload"), dict) else {}
+    state = review.get("diagnostic_state") if isinstance(review.get("diagnostic_state"), dict) else {}
+    return deepcopy(state)
+
+
+def _saved_scan_diagnostic_review_payload(row: Dict[str, Any]) -> Dict[str, Any]:
+    report = row.get("payload_json") if isinstance(row.get("payload_json"), dict) else {}
+    review = report.get("scan_review_payload") if isinstance(report.get("scan_review_payload"), dict) else {}
+    return dict(review)
+
+
+def _saved_scan_diagnostic_ambient_readbacks(
+    review_payload: Dict[str, Any],
+) -> Dict[str, Dict[str, Any]]:
+    return {
+        key: deepcopy(review_payload.get(key))
+        for key in (
+            "jd_llm_extraction_readback",
+            "agentic_workflow_integration_readback",
+            "agentic_workflow_production_readiness_checkpoint",
+        )
+        if isinstance(review_payload.get(key), dict)
+    }
+
+
+def _fresh_saved_scan_diagnostic_state(
+    *,
+    scan_id: str,
+    review_payload: Dict[str, Any],
+    reset_performed: bool = False,
+) -> Dict[str, Any]:
+    now = _utc_now()
+    return {
+        "version": 1,
+        "scan_id": _clean_text(scan_id),
+        "updated_at": now,
+        "readbacks": {},
+        "validated_readbacks": {},
+        "ambient_readbacks": _saved_scan_diagnostic_ambient_readbacks(review_payload),
+        "human_inputs": {},
+        "last_execution": {
+            "requested_stages": [],
+            "stage_results": [],
+            "completed_at": now,
+            "provider_retry_performed": False,
+            "background_execution_performed": False,
+            "diagnostics_reset_performed": bool(reset_performed),
+        },
+    }
+
+
+def reset_saved_scan_diagnostics_payload(
+    *,
+    scan_id: str,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    safe_scan_id = _clean_text(scan_id)
+    safe_owner_user_id = _clean_text(owner_user_id)
+    if not safe_scan_id:
+        raise ValueError("scan_id is required.")
+    if not safe_owner_user_id:
+        raise SavedScanDiagnosticsNotFoundError("Saved scan was not found.")
+
+    stored = get_saved_scan_postgres_payload(
+        scan_id=safe_scan_id,
+        owner_user_id=safe_owner_user_id,
+    )
+    row = dict(stored.get("scan", {}) or {})
+    if not row:
+        raise SavedScanDiagnosticsNotFoundError("Saved scan was not found.")
+    review_payload = _saved_scan_diagnostic_review_payload(row)
+    if not review_payload:
+        raise SavedScanDiagnosticsNotFoundError("Saved scan was not found.")
+
+    diagnostic_state = _fresh_saved_scan_diagnostic_state(
+        scan_id=safe_scan_id,
+        review_payload=review_payload,
+        reset_performed=True,
+    )
+    persisted = save_saved_scan_diagnostic_state_postgres_payload(
+        scan_id=safe_scan_id,
+        diagnostic_state=diagnostic_state,
+        owner_user_id=safe_owner_user_id,
+    )
+    if not persisted.get("updated"):
+        raise SavedScanDiagnosticsNotFoundError("Saved scan was not found.")
+
+    return {
+        "ok": True,
+        "scan_id": safe_scan_id,
+        "diagnostics_reset": True,
+        "diagnostics_execution": False,
+        "ordinary_draft_updated": False,
+        "requested_stages": [],
+        "stage_results": [],
+        "diagnostic_state": diagnostic_state,
+    }
+
+
+def execute_saved_scan_diagnostics_payload(
+    *,
+    scan_id: str,
+    owner_user_id: str = "",
+    diagnostic_stages: Any = None,
+    accepted_exact_change_proposal_ids: Any = None,
+    approved_change_plan_id: str = "",
+    guarded_resume_copy_artifact_id: str = "",
+    verified_artifact_operator_review_artifact_id: str = "",
+    verified_artifact_operator_decision_packet_id: str = "",
+    verified_artifact_operator_decision_artifact_id: str = "",
+    verified_artifact_operator_decision_value: str = "",
+    application_readiness_operator_decision_id: str = "",
+    application_readiness_operator_review_packet_id: str = "",
+    application_readiness_artifact_id: str = "",
+    manual_handoff_application_readiness_packet_id: str = "",
+    manual_handoff_artifact_id: str = "",
+    handoff_audit_manual_handoff_packet_id: str = "",
+    handoff_audit_application_readiness_packet_id: str = "",
+    handoff_audit_artifact_id: str = "",
+    safety_boundary_handoff_audit_trail_id: str = "",
+    safety_boundary_manual_handoff_packet_id: str = "",
+    safety_boundary_application_readiness_packet_id: str = "",
+    safety_boundary_artifact_id: str = "",
+    workflow_readiness_safety_boundary_summary_id: str = "",
+    workflow_readiness_handoff_audit_trail_id: str = "",
+    workflow_readiness_manual_handoff_packet_id: str = "",
+    workflow_readiness_application_readiness_packet_id: str = "",
+    workflow_readiness_artifact_id: str = "",
+    live_tailoring_suggestion_adapter: Any = None,
+    live_exact_resume_change_proposal_adapter: Any = None,
+) -> Dict[str, Any]:
+    safe_scan_id = _clean_text(scan_id)
+    safe_owner_user_id = _clean_text(owner_user_id)
+    if not safe_scan_id:
+        raise ValueError("scan_id is required.")
+    if not safe_owner_user_id:
+        raise SavedScanDiagnosticsNotFoundError("Saved scan was not found.")
+    stages = _saved_scan_diagnostic_stages(diagnostic_stages)
+
+    stored = get_saved_scan_postgres_payload(
+        scan_id=safe_scan_id,
+        owner_user_id=safe_owner_user_id,
+    )
+    row = dict(stored.get("scan", {}) or {})
+    if not row:
+        raise SavedScanDiagnosticsNotFoundError("Saved scan was not found.")
+    review_payload = _saved_scan_diagnostic_review_payload(row)
+    if not review_payload:
+        raise SavedScanDiagnosticsNotFoundError("Saved scan was not found.")
+
+    previous_state = _saved_scan_diagnostic_state_from_row(row)
+    readbacks = dict(previous_state.get("readbacks", {}) or {})
+    validated = dict(previous_state.get("validated_readbacks", {}) or {})
+    draft = dict(review_payload.get("draft", {}) or {})
+    ambient = _saved_scan_diagnostic_ambient_readbacks(review_payload)
+    accepted_ids = [
+        _clean_text(value)
+        for value in list(accepted_exact_change_proposal_ids or [])
+        if _clean_text(value)
+    ]
+    requested_decision = _clean_text(verified_artifact_operator_decision_value)
+    stage_results: List[Dict[str, Any]] = []
+    failed_stages: set[str] = set()
+
+    def current(stage: str) -> Dict[str, Any]:
+        if stage in failed_stages:
+            return {}
+        value = validated.get(_SAVED_SCAN_DIAGNOSTIC_READBACK_KEYS[stage])
+        return dict(value or {}) if isinstance(value, dict) else {}
+
+    def upstream_id(stage: str, field: str, override: str = "") -> str:
+        return _clean_text(override) or _clean_text(current(stage).get(field))
+
+    def record(stage: str, value: Dict[str, Any]) -> None:
+        key = _SAVED_SCAN_DIAGNOSTIC_READBACK_KEYS[stage]
+        persisted = _saved_scan_diagnostic_persisted_readback(value)
+        readbacks[key] = persisted
+        valid = _saved_scan_diagnostic_readback_is_valid(value)
+        if valid:
+            validated[key] = persisted
+            if stage != "live_tailoring_suggestion":
+                stage_index = _SAVED_SCAN_DIAGNOSTIC_STAGE_ORDER.index(stage)
+                for downstream in _SAVED_SCAN_DIAGNOSTIC_STAGE_ORDER[stage_index + 1 :]:
+                    downstream_key = _SAVED_SCAN_DIAGNOSTIC_READBACK_KEYS[downstream]
+                    readbacks.pop(downstream_key, None)
+                    validated.pop(downstream_key, None)
+        else:
+            failed_stages.add(stage)
+        stage_results.append(
+            {
+                "stage": stage,
+                "readback_key": key,
+                "status": _clean_text(value.get("validation_status")) or "missing",
+                "valid": valid,
+                "validation_errors": list(value.get("validation_errors") or []),
+            }
+        )
+
+    for stage in stages:
+        value: Dict[str, Any]
+        if stage == "live_tailoring_suggestion":
+            value = _planning_workspace_live_tailoring_suggestion_payload(
+                scan_id=safe_scan_id,
+                owner_user_id=safe_owner_user_id,
+                enabled=True,
+                adapter=live_tailoring_suggestion_adapter,
+                draft=draft,
+            )
+        elif stage == "live_exact_resume_change_proposal":
+            value = _planning_workspace_live_exact_resume_change_proposal_payload(
+                scan_id=safe_scan_id,
+                owner_user_id=safe_owner_user_id,
+                enabled=True,
+                adapter=live_exact_resume_change_proposal_adapter,
+                draft=draft,
+            )
+        elif stage == "manual_exact_change_acceptance":
+            value = _planning_workspace_manual_exact_change_acceptance_payload(
+                live_exact_change_readback=current("live_exact_resume_change_proposal"),
+                enabled=True,
+                accepted_proposal_ids=accepted_ids,
+            )
+        elif stage == "guarded_resume_copy_artifact":
+            value = _planning_workspace_guarded_resume_copy_artifact_payload(
+                manual_acceptance_readback=current("manual_exact_change_acceptance"),
+                enabled=True,
+                approved_change_plan_id=upstream_id(
+                    "manual_exact_change_acceptance", "approved_change_plan_id", approved_change_plan_id
+                ),
+            )
+        elif stage == "guarded_resume_copy_artifact_verification":
+            value = _planning_workspace_guarded_resume_copy_artifact_verification_payload(
+                guarded_artifact_readback=current("guarded_resume_copy_artifact"),
+                enabled=True,
+                artifact_id=upstream_id(
+                    "guarded_resume_copy_artifact", "artifact_id", guarded_resume_copy_artifact_id
+                ),
+            )
+        elif stage == "verified_artifact_operator_review_packet":
+            value = _planning_workspace_verified_artifact_operator_review_packet_payload(
+                verification_readback=current("guarded_resume_copy_artifact_verification"),
+                enabled=True,
+                artifact_id=upstream_id(
+                    "guarded_resume_copy_artifact_verification",
+                    "artifact_id",
+                    verified_artifact_operator_review_artifact_id,
+                ),
+            )
+        elif stage == "verified_artifact_operator_decision":
+            value = _planning_workspace_verified_artifact_operator_decision_capture_payload(
+                operator_review_packet_readback=current("verified_artifact_operator_review_packet"),
+                enabled=True,
+                operator_review_packet_id=upstream_id(
+                    "verified_artifact_operator_review_packet",
+                    "operator_review_packet_id",
+                    verified_artifact_operator_decision_packet_id,
+                ),
+                artifact_id=upstream_id(
+                    "verified_artifact_operator_review_packet",
+                    "artifact_id",
+                    verified_artifact_operator_decision_artifact_id,
+                ),
+                decision_value=requested_decision,
+            )
+        elif stage == "application_readiness_packet":
+            decision_readback = current("verified_artifact_operator_decision")
+            value = _planning_workspace_operator_approved_artifact_application_readiness_packet_payload(
+                operator_decision_readback=decision_readback,
+                enabled=True,
+                operator_decision_id=_clean_text(application_readiness_operator_decision_id)
+                or _clean_text(decision_readback.get("operator_decision_id")),
+                operator_review_packet_id=_clean_text(application_readiness_operator_review_packet_id)
+                or _clean_text(decision_readback.get("operator_review_packet_id")),
+                artifact_id=_clean_text(application_readiness_artifact_id)
+                or _clean_text(decision_readback.get("artifact_id")),
+            )
+        elif stage == "manual_application_handoff_packet":
+            readiness = current("application_readiness_packet")
+            value = _planning_workspace_human_only_manual_application_handoff_packet_payload(
+                application_readiness_readback=readiness,
+                enabled=True,
+                application_readiness_packet_id=_clean_text(manual_handoff_application_readiness_packet_id)
+                or _clean_text(readiness.get("application_readiness_packet_id")),
+                artifact_id=_clean_text(manual_handoff_artifact_id)
+                or _clean_text(readiness.get("artifact_id")),
+            )
+        elif stage == "handoff_audit_trail":
+            handoff = current("manual_application_handoff_packet")
+            value = _planning_workspace_human_only_handoff_audit_trail_payload(
+                manual_handoff_readback=handoff,
+                enabled=True,
+                manual_handoff_packet_id=_clean_text(handoff_audit_manual_handoff_packet_id)
+                or _clean_text(handoff.get("manual_handoff_packet_id")),
+                application_readiness_packet_id=_clean_text(handoff_audit_application_readiness_packet_id)
+                or _clean_text(handoff.get("application_readiness_packet_id")),
+                artifact_id=_clean_text(handoff_audit_artifact_id)
+                or _clean_text(handoff.get("artifact_id")),
+            )
+        elif stage == "safety_boundary_summary":
+            audit = current("handoff_audit_trail")
+            value = _planning_workspace_human_only_safety_boundary_summary_payload(
+                handoff_audit_readback=audit,
+                enabled=True,
+                handoff_audit_trail_id=_clean_text(safety_boundary_handoff_audit_trail_id)
+                or _clean_text(audit.get("handoff_audit_trail_id")),
+                manual_handoff_packet_id=_clean_text(safety_boundary_manual_handoff_packet_id)
+                or _clean_text(audit.get("manual_handoff_packet_id")),
+                application_readiness_packet_id=_clean_text(safety_boundary_application_readiness_packet_id)
+                or _clean_text(audit.get("application_readiness_packet_id")),
+                artifact_id=_clean_text(safety_boundary_artifact_id)
+                or _clean_text(audit.get("artifact_id")),
+            )
+        else:
+            summary = current("safety_boundary_summary")
+            value = _planning_workspace_human_only_workflow_readiness_checkpoint_payload(
+                safety_boundary_summary_readback=summary,
+                enabled=True,
+                safety_boundary_summary_id=_clean_text(workflow_readiness_safety_boundary_summary_id)
+                or _clean_text(summary.get("safety_boundary_summary_id")),
+                handoff_audit_trail_id=_clean_text(workflow_readiness_handoff_audit_trail_id)
+                or _clean_text(summary.get("handoff_audit_trail_id")),
+                manual_handoff_packet_id=_clean_text(workflow_readiness_manual_handoff_packet_id)
+                or _clean_text(summary.get("manual_handoff_packet_id")),
+                application_readiness_packet_id=_clean_text(workflow_readiness_application_readiness_packet_id)
+                or _clean_text(summary.get("application_readiness_packet_id")),
+                artifact_id=_clean_text(workflow_readiness_artifact_id)
+                or _clean_text(summary.get("artifact_id")),
+            )
+        record(stage, value)
+
+    human_inputs = dict(previous_state.get("human_inputs", {}) or {})
+    successful_stages = {
+        result["stage"] for result in stage_results if result.get("valid") is True
+    }
+    if "manual_exact_change_acceptance" in successful_stages:
+        human_inputs["accepted_exact_change_proposal_ids"] = list(accepted_ids)
+    if "verified_artifact_operator_decision" in successful_stages:
+        human_inputs["verified_artifact_operator_decision_value"] = requested_decision
+
+    now = _utc_now()
+    diagnostic_state = {
+        "version": 1,
+        "scan_id": safe_scan_id,
+        "updated_at": now,
+        "readbacks": readbacks,
+        "validated_readbacks": validated,
+        "ambient_readbacks": ambient,
+        "human_inputs": human_inputs,
+        "last_execution": {
+            "requested_stages": stages,
+            "stage_results": stage_results,
+            "completed_at": now,
+            "provider_retry_performed": False,
+            "background_execution_performed": False,
+        },
+    }
+    persisted = save_saved_scan_diagnostic_state_postgres_payload(
+        scan_id=safe_scan_id,
+        diagnostic_state=diagnostic_state,
+        owner_user_id=safe_owner_user_id,
+    )
+    if not persisted.get("updated"):
+        raise SavedScanDiagnosticsNotFoundError("Saved scan was not found.")
+
+    response: Dict[str, Any] = {
+        "ok": True,
+        "scan_id": safe_scan_id,
+        "diagnostics_execution": True,
+        "ordinary_draft_updated": False,
+        "requested_stages": stages,
+        "stage_results": stage_results,
+        "diagnostic_state": diagnostic_state,
+    }
+    response.update(readbacks)
+    return response
 
 
 def _extract_scan_upload_text_from_pdf(path: Path) -> str:
@@ -7595,6 +8585,39 @@ def resolve_user_pipeline_run_planning_paths(
             "Review the run details or run the pipeline again."
         )
     return output_dir, job_corpus
+
+
+def resolve_user_pipeline_run_id_from_planning_output_dir(
+    *,
+    owner_user_id: str,
+    output_dir: str,
+) -> str:
+    """Resolve an owner run by exact match with its recorded planning root."""
+    owner = _clean_text(owner_user_id)
+    requested_output_dir = _clean_text(output_dir)
+    if not owner or not requested_output_dir:
+        return ""
+
+    requested_path = Path(requested_output_dir).expanduser().resolve()
+    payload = get_user_pipeline_runs_postgres_payload(
+        owner_user_id=owner,
+        limit=200,
+        status="succeeded",
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    for run in list(payload.get("rows", []) or []):
+        run_record = dict(run or {})
+        run_id = _clean_text(run_record.get("run_id"))
+        recorded_output_dir = _pipeline_run_output_dir_from_record(run_record)
+        if not run_id or not recorded_output_dir:
+            continue
+        if Path(recorded_output_dir).expanduser().resolve() == requested_path:
+            return run_id
+    return ""
 
 
 def _pipeline_run_log_path_from_record(run: Dict[str, Any]) -> str:
@@ -9136,6 +10159,123 @@ def _load_notification_rows(
     return rows
 
 
+class NotificationStorageUnavailableError(RuntimeError):
+    """Raised when authoritative notification storage cannot be read or written."""
+
+
+_SCHEDULER_NOTIFICATION_ARTIFACT_KIND = "post_run_notification"
+_SCHEDULER_NOTIFICATION_KIND = "scheduled_run_email_delivery"
+_SCHEDULER_NOTIFICATION_READ_LIMIT = 500
+_NOTIFICATION_DELETE_ALL_STATE_ID = "__all_notifications__"
+
+
+def _load_scheduler_notification_source_rows() -> List[Dict[str, Any]]:
+    try:
+        artifact_payload = list_scheduler_artifacts_by_kind(
+            artifact_kind=_SCHEDULER_NOTIFICATION_ARTIFACT_KIND,
+            limit=_SCHEDULER_NOTIFICATION_READ_LIMIT,
+            initialize=False,
+        )
+        candidate_rows: List[Dict[str, Any]] = []
+        for artifact_row in list(artifact_payload.get("rows", []) or []):
+            if not isinstance(artifact_row, dict):
+                continue
+            payload = artifact_row.get("payload_json")
+            if not isinstance(payload, dict):
+                continue
+            row = dict(payload)
+            if _clean_text(row.get("notification_kind")) != _SCHEDULER_NOTIFICATION_KIND:
+                continue
+            if not _clean_text(row.get("notification_id")):
+                continue
+            candidate_rows.append(row)
+
+        candidate_rows.sort(
+            key=lambda row: (
+                _clean_text(row.get("created_at")),
+                _clean_text(row.get("notification_id")),
+            ),
+            reverse=True,
+        )
+        deduplicated: List[Dict[str, Any]] = []
+        seen_notification_ids: set[str] = set()
+        for row in candidate_rows:
+            notification_id = _clean_text(row.get("notification_id"))
+            if notification_id in seen_notification_ids:
+                continue
+            seen_notification_ids.add(notification_id)
+            deduplicated.append(row)
+        return deduplicated
+    except (Exception, SystemExit) as exc:
+        if isinstance(exc, NotificationStorageUnavailableError):
+            raise
+        raise NotificationStorageUnavailableError(
+            "Notification storage is unavailable."
+        ) from exc
+
+
+def _load_scheduler_notification_source_row(
+    notification_id: str,
+) -> Dict[str, Any] | None:
+    clean_notification_id = _clean_text(notification_id)
+    parts = clean_notification_id.split("::")
+    if (
+        len(parts) != 3
+        or parts[0] != "scheduled_run_email"
+        or not parts[1]
+        or not parts[2]
+    ):
+        return None
+
+    try:
+        payload = get_scheduler_artifact_payload(
+            run_id=parts[1],
+            artifact_kind=_SCHEDULER_NOTIFICATION_ARTIFACT_KIND,
+            initialize=False,
+        )
+    except (Exception, SystemExit) as exc:
+        if isinstance(exc, NotificationStorageUnavailableError):
+            raise
+        raise NotificationStorageUnavailableError(
+            "Notification storage is unavailable."
+        ) from exc
+
+    if not isinstance(payload, dict):
+        return None
+    row = dict(payload)
+    if (
+        _clean_text(row.get("notification_id")) != clean_notification_id
+        or _clean_text(row.get("notification_kind")) != _SCHEDULER_NOTIFICATION_KIND
+        or _clean_text(row.get("run_id")) != parts[1]
+        or _clean_text(row.get("job_name")) != parts[2]
+    ):
+        return None
+    return row
+
+
+def _load_scheduler_notification_rows(
+    *,
+    owner_user_id: str = "",
+) -> List[Dict[str, Any]]:
+    rows = _load_scheduler_notification_source_rows()
+    if owner_user_id:
+        return _apply_notification_state_overlay(
+            rows,
+            owner_user_id=owner_user_id,
+        )
+    return _apply_notification_state_overlay(rows)
+
+
+def _visible_scheduler_notification_rows(
+    *,
+    scheduler_notifications_visible: bool,
+    owner_user_id: str = "",
+) -> List[Dict[str, Any]]:
+    if not scheduler_notifications_visible:
+        return []
+    return _load_scheduler_notification_rows(owner_user_id=owner_user_id)
+
+
 def _normalize_notification_read_flag(value: Any) -> bool:
     if isinstance(value, bool):
         return value
@@ -9160,24 +10300,52 @@ def _normalize_optional_notification_read_filter(value: Any) -> Any:
         return None
     return _normalize_notification_read_flag(raw)
 
-def _load_latest_notification_state_overlay() -> Dict[str, Dict[str, Any]]:
-    meta_payload = get_notification_state_postgres_status_payload(
-        limit=1,
-        database_url="",
-        database_url_env="DATABASE_URL",
-        psql_bin="psql",
-        print_only=False,
-    )
-    meta_block = dict(meta_payload.get("postgres", {}) or {})
-    query_limit = max(int(meta_block.get("latest_state_count", 0) or 0), 1)
+def _load_latest_notification_state_overlay(
+    *,
+    owner_user_id: str = "",
+    notification_ids: List[str] | None = None,
+) -> Dict[str, Dict[str, Any]]:
+    if owner_user_id and notification_ids is not None:
+        requested_ids = list(
+            dict.fromkeys(
+                [
+                    *(
+                        _clean_text(notification_id)
+                        for notification_id in notification_ids
+                        if _clean_text(notification_id)
+                    ),
+                    _NOTIFICATION_DELETE_ALL_STATE_ID,
+                ]
+            )
+        )
+        postgres_payload = get_latest_notification_states_postgres_payload(
+            notification_ids=requested_ids,
+            owner_user_id=owner_user_id,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+        )
+    else:
+        meta_payload = get_notification_state_postgres_status_payload(
+            limit=1,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            owner_user_id=owner_user_id,
+        )
+        meta_block = dict(meta_payload.get("postgres", {}) or {})
+        query_limit = max(int(meta_block.get("latest_state_count", 0) or 0), 1)
 
-    postgres_payload = get_notification_state_postgres_status_payload(
-        limit=query_limit,
-        database_url="",
-        database_url_env="DATABASE_URL",
-        psql_bin="psql",
-        print_only=False,
-    )
+        postgres_payload = get_notification_state_postgres_status_payload(
+            limit=query_limit,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            owner_user_id=owner_user_id,
+        )
     postgres_block = dict(postgres_payload.get("postgres", {}) or {})
     postgres_rows = list(postgres_block.get("latest_rows", []) or [])
 
@@ -9189,20 +10357,65 @@ def _load_latest_notification_state_overlay() -> Dict[str, Dict[str, Any]]:
 
         latest_overlay[notification_id] = {
             "is_read": bool(row.get("is_read", False)),
+            "is_deleted": bool(row.get("is_deleted", False)),
+            "owner_user_id": _clean_text(row.get("owner_user_id")),
             "state_timestamp": _clean_text(row.get("state_timestamp")),
         }
 
     return latest_overlay
 
+
+def _notification_timestamp_at_or_before(value: Any, cutoff: Any) -> bool:
+    raw_value = _clean_text(value)
+    raw_cutoff = _clean_text(cutoff)
+    if not raw_value:
+        return True
+    try:
+        parsed_value = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+        parsed_cutoff = datetime.fromisoformat(raw_cutoff.replace("Z", "+00:00"))
+        if parsed_value.tzinfo is None:
+            parsed_value = parsed_value.replace(tzinfo=timezone.utc)
+        if parsed_cutoff.tzinfo is None:
+            parsed_cutoff = parsed_cutoff.replace(tzinfo=timezone.utc)
+        return parsed_value <= parsed_cutoff
+    except (TypeError, ValueError):
+        return raw_value <= raw_cutoff
+
+
 def _apply_notification_state_overlay(
     rows: List[Dict[str, Any]],
+    *,
+    owner_user_id: str = "",
 ) -> List[Dict[str, Any]]:
-    latest_by_notification_id = _load_latest_notification_state_overlay()
+    if owner_user_id:
+        latest_by_notification_id = _load_latest_notification_state_overlay(
+            owner_user_id=owner_user_id,
+            notification_ids=[
+                _clean_text(row.get("notification_id"))
+                for row in rows
+                if _clean_text(row.get("notification_id"))
+            ],
+        )
+    else:
+        latest_by_notification_id = _load_latest_notification_state_overlay()
     overlaid_rows: List[Dict[str, Any]] = []
+    delete_all_state = latest_by_notification_id.get(
+        _NOTIFICATION_DELETE_ALL_STATE_ID,
+        {},
+    )
+    delete_all_timestamp = (
+        _clean_text(delete_all_state.get("state_timestamp"))
+        if bool(delete_all_state.get("is_deleted", False))
+        and _clean_text(delete_all_state.get("owner_user_id")) == _clean_text(owner_user_id)
+        else ""
+    )
 
     for row in rows:
         merged = dict(row)
-        merged["is_read"] = bool(merged.get("is_read", False))
+        # Content artifacts do not own read state. Without a transition, every
+        # scheduler notification is unread regardless of any payload default.
+        merged["is_read"] = False
+        merged["is_deleted"] = False
         merged["read_state_timestamp"] = ""
 
         notification_id = str(merged.get("notification_id", "") or "").strip()
@@ -9210,23 +10423,52 @@ def _apply_notification_state_overlay(
 
         if overlay:
             merged["is_read"] = bool(overlay.get("is_read", False))
+            merged["is_deleted"] = bool(overlay.get("is_deleted", False))
             merged["read_state_timestamp"] = str(overlay.get("state_timestamp", "") or "").strip()
 
-        overlaid_rows.append(merged)
+        if delete_all_timestamp and _notification_timestamp_at_or_before(
+            merged.get("created_at"),
+            delete_all_timestamp,
+        ):
+            merged["is_deleted"] = True
+
+        if not merged["is_deleted"]:
+            overlaid_rows.append(merged)
 
     return overlaid_rows
 
 
+def _visible_scheduler_notification_row(
+    notification_id: str,
+    *,
+    scheduler_notifications_visible: bool,
+    owner_user_id: str = "",
+) -> Dict[str, Any] | None:
+    if not scheduler_notifications_visible:
+        return None
+    source_row = _load_scheduler_notification_source_row(notification_id)
+    if source_row is None:
+        return None
+    visible_rows = _apply_notification_state_overlay(
+        [source_row],
+        owner_user_id=owner_user_id,
+    )
+    return dict(visible_rows[0]) if visible_rows else None
+
+
 def notifications_payload(
-    notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
     job_name: str = "",
     level: str = "",
     delivery_status: str = "",
     is_read: str = "",
     limit: int = 20,
+    *,
+    scheduler_notifications_visible: bool = False,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
-    rows = _apply_notification_state_overlay(
-        _load_notification_rows(notification_dir),
+    rows = _visible_scheduler_notification_rows(
+        scheduler_notifications_visible=scheduler_notifications_visible,
+        owner_user_id=owner_user_id,
     )
 
     normalized_job_name = _normalize_scheduler_filter_text(job_name)
@@ -9262,7 +10504,7 @@ def notifications_payload(
 
     return {
         "ok": True,
-        "notification_dir": str(notification_dir),
+        "notification_source": "scheduler_artifacts",
         "filters": {
             "job_name": job_name,
             "level": level,
@@ -9277,11 +10519,14 @@ def notifications_payload(
 
 
 def notifications_summary_payload(
-    notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
     limit: int = 10,
+    *,
+    scheduler_notifications_visible: bool = False,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
-    rows = _apply_notification_state_overlay(
-        _load_notification_rows(notification_dir),
+    rows = _visible_scheduler_notification_rows(
+        scheduler_notifications_visible=scheduler_notifications_visible,
+        owner_user_id=owner_user_id,
     )
     selected = rows[: max(int(limit), 0)]
 
@@ -9315,10 +10560,13 @@ def notifications_summary_payload(
 
 
 def notifications_unread_count_payload(
-    notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
+    *,
+    scheduler_notifications_visible: bool = False,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
-    rows = _apply_notification_state_overlay(
-        _load_notification_rows(notification_dir),
+    rows = _visible_scheduler_notification_rows(
+        scheduler_notifications_visible=scheduler_notifications_visible,
+        owner_user_id=owner_user_id,
     )
 
     unread_count = sum(1 for row in rows if not bool(row.get("is_read", False)))
@@ -9376,24 +10624,21 @@ def _dual_write_notification_state_postgres(row: Dict[str, Any]) -> Dict[str, An
         }
     
 def record_notification_read_state_payload(
-    notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
     *,
     notification_id: str = "",
     is_read: Any = True,
+    scheduler_notifications_visible: bool = False,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     clean_notification_id = str(notification_id or "").strip()
     if not clean_notification_id:
         raise ValueError("notification_id is required.")
 
-    rows = _apply_notification_state_overlay(
-        _load_notification_rows(notification_dir),
+    target_notification = _visible_scheduler_notification_row(
+        clean_notification_id,
+        scheduler_notifications_visible=scheduler_notifications_visible,
+        owner_user_id=owner_user_id,
     )
-
-    target_notification = None
-    for row in rows:
-        if str(row.get("notification_id", "") or "").strip() == clean_notification_id:
-            target_notification = dict(row)
-            break
 
     if target_notification is None:
         raise ValueError(f"Notification not found: {clean_notification_id}")
@@ -9402,11 +10647,17 @@ def record_notification_read_state_payload(
 
     state_row = {
         "state_timestamp": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+        "owner_user_id": _clean_text(owner_user_id),
         "notification_id": clean_notification_id,
         "is_read": str(normalized_is_read),
+        "is_deleted": False,
     }
 
     postgres_write = _dual_write_notification_state_postgres(state_row)
+    if not postgres_write.get("ok"):
+        raise NotificationStorageUnavailableError(
+            "Notification storage is unavailable."
+        )
 
     target_notification["is_read"] = normalized_is_read
     target_notification["read_state_timestamp"] = state_row["state_timestamp"]
@@ -9415,6 +10666,106 @@ def record_notification_read_state_payload(
         "ok": True,
         "state_row": state_row,
         "notification": target_notification,
+    }
+
+
+def delete_notification_payload(
+    *,
+    notification_id: str = "",
+    scheduler_notifications_visible: bool = False,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    clean_notification_id = _clean_text(notification_id)
+    clean_owner_user_id = _clean_text(owner_user_id)
+    if not clean_notification_id:
+        raise ValueError("notification_id is required.")
+    if not clean_owner_user_id:
+        raise ValueError("owner_user_id is required.")
+    if not scheduler_notifications_visible:
+        raise ValueError(f"Notification not found: {clean_notification_id}")
+
+    source_notification = _load_scheduler_notification_source_row(
+        clean_notification_id,
+    )
+    if source_notification is None:
+        raise ValueError(f"Notification not found: {clean_notification_id}")
+
+    visible_rows = _apply_notification_state_overlay(
+        [source_notification],
+        owner_user_id=clean_owner_user_id,
+    )
+    visible_notification = dict(visible_rows[0]) if visible_rows else None
+    if visible_notification is None:
+        return {
+            "ok": True,
+            "notification_id": clean_notification_id,
+            "deleted": True,
+            "already_deleted": True,
+        }
+
+    state_row = {
+        "state_timestamp": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+        "owner_user_id": clean_owner_user_id,
+        "notification_id": clean_notification_id,
+        "is_read": bool(visible_notification.get("is_read", False)),
+        "is_deleted": True,
+    }
+    postgres_write = _dual_write_notification_state_postgres(state_row)
+    if not postgres_write.get("ok"):
+        raise NotificationStorageUnavailableError(
+            "Notification storage is unavailable."
+        )
+
+    return {
+        "ok": True,
+        "notification_id": clean_notification_id,
+        "deleted": True,
+        "already_deleted": False,
+        "state_row": state_row,
+    }
+
+
+def delete_all_notifications_payload(
+    *,
+    scheduler_notifications_visible: bool = False,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    clean_owner_user_id = _clean_text(owner_user_id)
+    if not clean_owner_user_id:
+        raise ValueError("owner_user_id is required.")
+    if not scheduler_notifications_visible:
+        raise ValueError("Notifications are unavailable for this owner.")
+
+    visible_rows = _load_scheduler_notification_rows(
+        owner_user_id=clean_owner_user_id,
+    )
+    if not visible_rows:
+        return {
+            "ok": True,
+            "deleted": True,
+            "already_deleted": True,
+            "deleted_count": 0,
+        }
+
+    state_row = {
+        "state_timestamp": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+        "owner_user_id": clean_owner_user_id,
+        "notification_id": _NOTIFICATION_DELETE_ALL_STATE_ID,
+        "is_read": True,
+        "is_deleted": True,
+    }
+    postgres_write = _dual_write_notification_state_postgres(state_row)
+    if not postgres_write.get("ok"):
+        raise NotificationStorageUnavailableError(
+            "Notification storage is unavailable."
+        )
+
+    return {
+        "ok": True,
+        "deleted": True,
+        "already_deleted": False,
+        "deleted_count": len(visible_rows),
+        "state_row": state_row,
     }
 
 def scheduler_storage_contract_payload(
@@ -9471,6 +10822,12 @@ _PIPELINE_CHILD_ENV_EXACT_NAMES = {
     "TZ",
     "PYTHONPATH",
     "PYTHONUNBUFFERED",
+    "TAILORING_EXTRACTION_PROVIDER",
+    "TAILORING_EXTRACTION_MODEL",
+    "TAILORING_REWRITE_PROVIDER",
+    "TAILORING_REWRITE_MODEL",
+    "TAILORING_JUDGE_PROVIDER",
+    "TAILORING_JUDGE_MODEL",
     "SSL_CERT_FILE",
     "REQUESTS_CA_BUNDLE",
     "CURL_CA_BUNDLE",
@@ -9942,6 +11299,9 @@ def run_live_pipeline_payload(
 
             if reason == "owner_already_running":
                 raise ValueError("A live pipeline run is already in progress for this user.")
+
+            if reason == "bulk_generation_in_progress":
+                raise ValueError("bulk_generation_in_progress")
 
             if reason == "capacity_full":
                 raise ValueError(
@@ -11198,6 +12558,7 @@ def _scan_keyword_rows_from_replacement_issues(
 
     matched_keys = {_scan_issue_canonical_term(term) for term in matched_terms if _scan_issue_canonical_term(term)}
     missing_keys = {_scan_issue_canonical_term(term) for term in missing_terms if _scan_issue_canonical_term(term)}
+    authoritative_summary_keys = matched_keys | missing_keys
 
     grouped: Dict[str, List[Dict[str, Any]]] = {}
     display_by_key: Dict[str, str] = {}
@@ -11206,9 +12567,21 @@ def _scan_keyword_rows_from_replacement_issues(
         if _clean_text(issue.get("group_id")) != "skills":
             continue
 
-        terms = _scan_issue_display_terms(dict(issue.get("raw", {}) or issue)) or _scan_issue_display_terms(issue)
-        if not terms:
-            terms = [_clean_text(issue.get("title"))]
+        raw_issue = dict(issue.get("raw", {}) or issue)
+        terms = _scan_issue_display_terms(raw_issue)
+        if not terms and authoritative_summary_keys:
+            # A replacement row can lack structured JD signals while its source
+            # resume bullet contains several unrelated skills.  The presentation
+            # title may summarize those terms with commas, but it is not an
+            # authoritative skill identity.  Link only atomic terms that the
+            # scorer already classified in its matched/missing summary.
+            terms = [
+                term
+                for term in _scan_issue_text_signal_terms(raw_issue)
+                if _scan_issue_canonical_term(term) in authoritative_summary_keys
+            ]
+        if not terms and not authoritative_summary_keys:
+            terms = _scan_issue_display_terms(issue) or [_clean_text(issue.get("title"))]
 
         for term in terms:
             canonical = _scan_issue_canonical_term(term)
@@ -12560,6 +13933,18 @@ def _scan_issue_from_replacement_row(
 
     can_direct_accept = score_gate == "direct_replacement"
 
+    # The raw-sign score gate governs direct acceptance. It must not also veto
+    # operator visibility for a rewrite that materiality classified as safe and
+    # optional with no user-visible score movement: that row carries concrete
+    # replacement text and is meant for human review, unlike a genuine point loss.
+    export_safe_zero_point = (
+        _clean_text(row.get("materiality_validation_status")) == "export_safe_no_score_lift"
+        and delta_points == 0
+    )
+    is_visible_in_review = (
+        score_gate != "rejected_by_score_gate" or export_safe_zero_point
+    )
+
     resolved_group_id = _scan_issue_group_id_for_row(row, lane=lane)
     resolved_group_label = _scan_issue_group_label(resolved_group_id)
 
@@ -12602,7 +13987,7 @@ def _scan_issue_from_replacement_row(
         "original_final_score": row.get("original_final_score", None),
         "projected_final_score": row.get("projected_final_score", None),
         "scan_issue_type": score_gate,
-        "is_visible_in_review": score_gate != "rejected_by_score_gate",
+        "is_visible_in_review": is_visible_in_review,
         "llm_judge_score_intent": _clean_text(row.get("llm_judge_score_intent")),
         "llm_judge_expected_dimensions": list(row.get("llm_judge_expected_dimensions", []) or []),
         "llm_judge_risk_flags": list(row.get("llm_judge_risk_flags", []) or []),
@@ -12737,6 +14122,15 @@ def _build_tailoring_scan_issue_contract(
     env: Dict[str, str] | None = None,
     critic_trace_module: Any = None,
 ) -> Dict[str, Any]:
+    jd_requirement_terms = [
+        term
+        for field in ("required_skills", "preferred_skills", "all_skills")
+        for term in list((jd_record or {}).get(field, []) or [])
+    ]
+    normalized_tailoring_summary = _normalize_scan_tailoring_summary_disjunctions(
+        tailoring_summary,
+        required_terms=jd_requirement_terms,
+    )
     replacement_issues: List[Dict[str, Any]] = []
 
     lane_specs = [
@@ -12796,7 +14190,7 @@ def _build_tailoring_scan_issue_contract(
     deterministic_issues = (
         _build_searchability_scan_issues(
             resume_evidence,
-            tailoring_summary=tailoring_summary,
+            tailoring_summary=normalized_tailoring_summary,
         )
         + _build_formatting_scan_issues(resume_evidence)
         + _build_recruiter_tip_scan_issues(resume_evidence)
@@ -12805,7 +14199,7 @@ def _build_tailoring_scan_issue_contract(
         _scan_keyword_rows_from_replacement_issues(
             replacement_issues,
             resume_evidence=resume_evidence,
-            tailoring_summary=tailoring_summary,
+            tailoring_summary=normalized_tailoring_summary,
             jd_record=jd_record,
         )
         + _scan_keyword_rows_from_non_skill_replacement_issues(replacement_issues)
@@ -12815,7 +14209,7 @@ def _build_tailoring_scan_issue_contract(
         _build_predicted_skill_scan_rows(
             existing_issues=issues,
             resume_evidence=resume_evidence,
-            tailoring_summary=tailoring_summary,
+            tailoring_summary=normalized_tailoring_summary,
             jd_record=jd_record,
         )
     )
@@ -12854,7 +14248,7 @@ def _build_tailoring_scan_issue_contract(
 
     critic_advisory = _attach_critic_advisory_to_scan_issues(
         issues,
-        tailoring_summary=tailoring_summary,
+        tailoring_summary=normalized_tailoring_summary,
         env=env,
         trace_module=critic_trace_module,
     )
@@ -13470,6 +14864,31 @@ def _derive_workspace_button_state_from_raw_payload(
                 return dict(value)
         return {}
 
+    def _has_grounded_bullet_diagnosis(value: Any) -> bool:
+        if not isinstance(value, dict):
+            return False
+
+        has_source_identity = any(
+            _clean_text(value.get(key))
+            for key in ("source", "entry_id", "bullet_id")
+        )
+        has_resume_evidence = any(
+            _clean_text(value.get(key))
+            for key in (
+                "parent_bullet",
+                "original_text",
+                "current_evidence",
+                "recommended_rewrite",
+                "structural_clause_text",
+            )
+        )
+        has_grounded_signals = any(
+            _clean_text(item)
+            for key in ("jd_signal_terms", "overlaps", "likely_impacted_dimensions")
+            for item in list(value.get(key, []) or [])
+        )
+        return has_resume_evidence and (has_source_identity or has_grounded_signals)
+
     app_ready = list(payload_data.get("app_ready_replacements", []) or [])
     direct_apply_optional = list(payload_data.get("direct_apply_optional_replacements", []) or [])
     ai_optimize_optional = list(payload_data.get("ai_optimize_optional_replacements", []) or [])
@@ -13554,12 +14973,17 @@ def _derive_workspace_button_state_from_raw_payload(
 
     actionable_count = ready_count + direct_apply_optional_count + ai_optimize_optional_count
 
+    grounded_bullet_diagnosis_count = sum(
+        1
+        for diagnosis in list(payload_data.get("bullet_diagnoses", []) or [])
+        if _has_grounded_bullet_diagnosis(diagnosis)
+    )
     legacy_review_count = max(
         len(list(payload_data.get("top_edit_priorities", []) or [])),
         len(list(payload_data.get("edit_cards", []) or [])),
         len(list(payload_data.get("rewrite_candidates", []) or [])),
         len(list(payload_data.get("bullet_reuse_candidates", []) or [])),
-        len(list(payload_data.get("bullet_diagnoses", []) or [])),
+        grounded_bullet_diagnosis_count,
     )
     anchor_count = max(
         len(list(payload_data.get("anchor_cards", []) or [])),
@@ -13571,7 +14995,7 @@ def _derive_workspace_button_state_from_raw_payload(
     if actionable_count > 0:
         workspace_state = "ready"
     elif review_count > 0 or anchor_count > 0:
-        workspace_state = "review"
+        workspace_state = "no_safe_rewrites"
     else:
         workspace_state = "empty"
 
@@ -13677,10 +15101,15 @@ def _normalize_tailoring_state_filter_values(value: Any) -> List[str]:
         if text == "empty":
             text = "unavailable"
 
-        if text in {"direction_only", "no_safe_rewrite", "no_safe_rewrites"}:
+        # "review" is retired as a user-facing Tailoring state; it overlaps
+        # conceptually with "no_safe_rewrites" (tailoring/review evidence
+        # exists but no actionable rewrite survived), so a saved/legacy
+        # `tailoring_state=review` filter degrades into the modern filter
+        # rather than becoming invalid or silently returning nothing.
+        if text in {"direction_only", "no_safe_rewrite", "no_safe_rewrites", "review"}:
             text = "no_safe_rewrites"
 
-        if text not in {"ready", "review", "unavailable", "no_safe_rewrites"}:
+        if text not in {"ready", "unavailable", "no_safe_rewrites"}:
             continue
 
         if text in seen:
@@ -13709,7 +15138,17 @@ def _row_matches_tailoring_state_filter(
     workspace_state = _clean_text(tailoring_state.get("tailoring_workspace_state")).lower()
 
     normalized_state = "unavailable" if workspace_state == "empty" else workspace_state
-    matches = not requested_states or normalized_state in set(requested_states)
+
+    # "review" is retired as a user-facing Tailoring state filter, folded into
+    # "no_safe_rewrites" for FILTER MATCHING ONLY (a historical/legacy row
+    # that still resolves to "review" must not disappear when "No safe
+    # rewrites" is selected). This intentionally does not touch
+    # `normalized_state`/`enriched_row["tailoring_workspace_state"]` below:
+    # that value also drives getWorkspaceBlockedReason()/
+    # resolvePlanningWorklistAction() in planning.js, and Open Workspace
+    # enable/disable behavior must stay exactly as it was before this task.
+    filter_match_state = "no_safe_rewrites" if normalized_state == "review" else normalized_state
+    matches = not requested_states or filter_match_state in set(requested_states)
 
     enriched_row = {
         **dict(row),
@@ -14184,6 +15623,29 @@ def _find_planning_row_for_regeneration(
     raise ValueError("Could not find planning row for targeted regeneration.")
 
 
+ALLOWED_TAILORING_PARSE_RETRY_LIMITS = (0, 1)
+
+
+def _normalize_tailoring_parse_retry_limit(value: Any) -> int:
+    """Validate the bounded parse-retry allowance sent by a caller."""
+
+    if type(value) is not int or value not in ALLOWED_TAILORING_PARSE_RETRY_LIMITS:
+        raise ValueError("parse_retry_limit must be 0 or 1.")
+    return value
+
+
+def _serialized_targeted_regeneration(function):
+    """Serialize shared manifest/training-log writes for one Planning run."""
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        output_dir = kwargs.get("output_dir", args[0] if args else DEFAULT_OUTPUT_DIR)
+        lock_path = Path(output_dir) / ".selected-resume-regeneration.lock"
+        with exclusive_file_lock(lock_path, timeout_seconds=1800.0):
+            return function(*args, **kwargs)
+    return wrapped
+
+
+@_serialized_targeted_regeneration
 def regenerate_selected_resume_tailoring_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     job_corpus: Path = DEFAULT_CORPUS_PATH,
@@ -14193,8 +15655,12 @@ def regenerate_selected_resume_tailoring_payload(
     selected_resume: str = "",
     generate_llm_tailoring: bool = False,
     refresh_llm_tailoring: bool = False,
+    parse_retry_limit: int = 1,
     owner_user_id: str = "",
 ) -> Dict[str, Any]:
+    normalized_parse_retry_limit = _normalize_tailoring_parse_retry_limit(
+        parse_retry_limit
+    )
     ja = _job_app()
     merged_rows = ja._build_job_index(output_dir)
     target_row = _find_planning_row_for_regeneration(
@@ -14311,6 +15777,9 @@ def regenerate_selected_resume_tailoring_payload(
                 str(tailoring_llm_json_path),
             ]
         )
+        tailoring_cmd.extend(
+            ["--parse-retry-limit", str(normalized_parse_retry_limit)]
+        )
         if refresh_llm_tailoring:
             tailoring_cmd.append("--refresh-llm-cache")
         if (
@@ -14409,6 +15878,16 @@ def regenerate_selected_resume_tailoring_payload(
 
     _write_csv_rows(manifest_path, fieldnames, manifest_rows)
 
+    workspace_state = _tailoring_workspace_button_state(
+        {
+            "tailoring_json": str(tailoring_json_path),
+            "tailoring_md": str(tailoring_md_path),
+            "tailoring_llm_json": llm_json_value,
+            "packet_json": str(packet_json_path),
+        },
+        output_dir=Path(output_dir),
+    )
+
     return {
         "ok": True,
         "job_doc_id": job_doc_id_value,
@@ -14423,6 +15902,15 @@ def regenerate_selected_resume_tailoring_payload(
         "training_log_jsonl": str(training_log_jsonl_path),
         "llm_tailoring_status": llm_status["llm_tailoring_status"],
         "manifest_path": str(manifest_path),
+        "tailoring_workspace_state": workspace_state[
+            "tailoring_workspace_state"
+        ],
+        "tailoring_actionable_replacement_count": workspace_state[
+            "tailoring_actionable_replacement_count"
+        ],
+        "tailoring_review_replacement_count": workspace_state[
+            "tailoring_review_replacement_count"
+        ],
     }
 
 def _normalize_application_status(value: Any) -> str:
@@ -14942,6 +16430,7 @@ LIVE_JD_INTELLIGENCE_DRY_RUN_PROMPT_VERSION = "v1"
 LIVE_JD_INTELLIGENCE_DRY_RUN_TEMPERATURE = 0
 LIVE_JD_INTELLIGENCE_DRY_RUN_MAX_TOKENS = 700
 LIVE_JD_INTELLIGENCE_DRY_RUN_THINKING_BUDGET = 0
+PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID = "jd_intelligence"
 LIVE_JD_INTELLIGENCE_DRY_RUN_SYSTEM_PROMPT = (
     "You extract structured job-description intelligence for a manual dry-run. "
     "Return only JSON and never recommend application actions."
@@ -14950,14 +16439,6 @@ LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED = (
     os.getenv("APPLYLENS_LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED", "false").strip().lower()
     == "true"
 )
-LIVE_JD_INTELLIGENCE_DRY_RUN_PROVIDER = os.getenv(
-    "APPLYLENS_LIVE_JD_INTELLIGENCE_DRY_RUN_PROVIDER",
-    os.getenv("LLM_PROVIDER", "groq"),
-).strip().lower()
-LIVE_JD_INTELLIGENCE_DRY_RUN_MODEL = os.getenv(
-    "APPLYLENS_LIVE_JD_INTELLIGENCE_DRY_RUN_MODEL",
-    os.getenv("LLM_MODEL", "llama-3.1-8b-instant"),
-).strip()
 LIVE_JD_INTELLIGENCE_DRY_RUN_FALLBACK_ENABLED = (
     os.getenv("APPLYLENS_LIVE_JD_INTELLIGENCE_DRY_RUN_FALLBACK_ENABLED", "false")
     .strip()
@@ -14970,33 +16451,77 @@ LIVE_JD_LLM_PLANNING_SCAN_EXTRACTION_ENABLED = (
     .lower()
     == "true"
 )
+LIVE_TAILORING_SUGGESTION_DRY_RUN_JD_SIGNAL_LINK_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "field": {"type": "string"},
+        "signal": {"type": "string"},
+    },
+    "required": ["field", "signal"],
+}
+LIVE_TAILORING_SUGGESTION_DRY_RUN_SUGGESTION_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "suggestion_id": {"type": "string"},
+        "source_bullet_id": {"type": "string"},
+        "original_text": {"type": "string"},
+        "suggested_text": {"type": "string"},
+        "reason": {"type": "string"},
+        "evidence_spans": {"type": "array", "items": {"type": "string"}},
+        "jd_signal_links": {
+            "type": "array",
+            "items": LIVE_TAILORING_SUGGESTION_DRY_RUN_JD_SIGNAL_LINK_SCHEMA,
+        },
+        "patch_ready": {"type": "boolean"},
+        "projected_score_delta": {"type": "number"},
+        "risk_flags": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": [
+        "suggestion_id",
+        "source_bullet_id",
+        "original_text",
+        "suggested_text",
+        "reason",
+        "evidence_spans",
+        "jd_signal_links",
+        "patch_ready",
+        "projected_score_delta",
+        "risk_flags",
+    ],
+}
+LIVE_TAILORING_SUGGESTION_DRY_RUN_UNSUPPORTED_CLAIM_RISK_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "field": {"type": "string"},
+        "signal": {"type": "string"},
+        "risk": {"type": "string"},
+    },
+    "required": ["field", "signal", "risk"],
+}
 LIVE_TAILORING_SUGGESTION_DRY_RUN_RESPONSE_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
     "properties": {
         "patch_ready_suggestions": {
             "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": True,
-                "properties": {
-                    "suggestion_id": {"type": "string"},
-                    "source_bullet_id": {"type": "string"},
-                    "original_text": {"type": "string"},
-                    "suggested_text": {"type": "string"},
-                    "reason": {"type": "string"},
-                    "evidence_spans": {"type": "array", "items": {"type": "string"}},
-                    "jd_signal_links": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
-                    "patch_ready": {"type": "boolean"},
-                    "projected_score_delta": {"type": "number"},
-                    "risk_flags": {"type": "array", "items": {"type": "string"}},
-                },
-            },
+            "items": LIVE_TAILORING_SUGGESTION_DRY_RUN_SUGGESTION_SCHEMA,
         },
-        "guidance_only_suggestions": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
-        "rejected_suggestions": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+        "guidance_only_suggestions": {
+            "type": "array",
+            "items": LIVE_TAILORING_SUGGESTION_DRY_RUN_SUGGESTION_SCHEMA,
+        },
+        "rejected_suggestions": {
+            "type": "array",
+            "items": LIVE_TAILORING_SUGGESTION_DRY_RUN_SUGGESTION_SCHEMA,
+        },
         "missing_evidence": {"type": "array", "items": {"type": "string"}},
-        "unsupported_claim_risks": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+        "unsupported_claim_risks": {
+            "type": "array",
+            "items": LIVE_TAILORING_SUGGESTION_DRY_RUN_UNSUPPORTED_CLAIM_RISK_SCHEMA,
+        },
         "projected_score_delta": {"type": "number"},
         "rationale": {"type": "string"},
     },
@@ -15020,33 +16545,23 @@ LIVE_TAILORING_SUGGESTION_DRY_RUN_ENABLED = (
 )
 LIVE_TAILORING_SUGGESTION_DRY_RUN_PROVIDER = os.getenv(
     "APPLYLENS_LIVE_TAILORING_SUGGESTION_DRY_RUN_PROVIDER",
-    os.getenv("LLM_PROVIDER", "groq"),
+    "groq",
 ).strip().lower()
 LIVE_TAILORING_SUGGESTION_DRY_RUN_MODEL = os.getenv(
     "APPLYLENS_LIVE_TAILORING_SUGGESTION_DRY_RUN_MODEL",
-    os.getenv("LLM_MODEL", "llama-3.1-8b-instant"),
+    "openai/gpt-oss-120b",
 ).strip()
-LIVE_TAILORING_SUGGESTION_DRY_RUN_FALLBACK_ENABLED = (
-    os.getenv("APPLYLENS_LIVE_TAILORING_SUGGESTION_DRY_RUN_FALLBACK_ENABLED", "false")
-    .strip()
-    .lower()
-    == "true"
-)
+LIVE_TAILORING_SUGGESTION_DRY_RUN_FALLBACK_ENABLED = False
 LIVE_EXACT_RESUME_CHANGE_PROPOSAL_PROVIDER = os.getenv(
     "APPLYLENS_LIVE_EXACT_RESUME_CHANGE_PROPOSAL_PROVIDER",
-    os.getenv("LLM_PROVIDER", "groq"),
+    "groq",
 ).strip().lower()
 LIVE_EXACT_RESUME_CHANGE_PROPOSAL_MODEL = os.getenv(
     "APPLYLENS_LIVE_EXACT_RESUME_CHANGE_PROPOSAL_MODEL",
-    os.getenv("LLM_MODEL", "llama-3.1-8b-instant"),
+    "openai/gpt-oss-120b",
 ).strip()
 LIVE_EXACT_RESUME_CHANGE_PROPOSAL_PROMPT_VERSION = "v1"
-LIVE_EXACT_RESUME_CHANGE_PROPOSAL_FALLBACK_ENABLED = (
-    os.getenv("APPLYLENS_LIVE_EXACT_RESUME_CHANGE_PROPOSAL_FALLBACK_ENABLED", "false")
-    .strip()
-    .lower()
-    == "true"
-)
+LIVE_EXACT_RESUME_CHANGE_PROPOSAL_FALLBACK_ENABLED = False
 LIVE_CRITIC_GUARDRAIL_DRY_RUN_DECISION_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -15125,20 +16640,13 @@ LIVE_CRITIC_GUARDRAIL_DRY_RUN_ENABLED = (
     .lower()
     == "true"
 )
-LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROVIDER = os.getenv(
-    "APPLYLENS_LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROVIDER",
-    os.getenv("LLM_PROVIDER", "groq"),
-).strip().lower()
-LIVE_CRITIC_GUARDRAIL_DRY_RUN_MODEL = os.getenv(
-    "APPLYLENS_LIVE_CRITIC_GUARDRAIL_DRY_RUN_MODEL",
-    os.getenv("LLM_MODEL", "llama-3.1-8b-instant"),
-).strip()
 LIVE_CRITIC_GUARDRAIL_DRY_RUN_FALLBACK_ENABLED = (
     os.getenv("APPLYLENS_LIVE_CRITIC_GUARDRAIL_DRY_RUN_FALLBACK_ENABLED", "false")
     .strip()
     .lower()
     == "true"
 )
+MANUAL_CRITIC_GUARDRAIL_WORKLOAD_ID = "critic_evaluation"
 
 
 def _live_jd_intelligence_structured_output_contract() -> Dict[str, Any]:
@@ -15172,14 +16680,33 @@ def _live_jd_intelligence_prompt(
     ])
 
 
+def _resolve_manual_jd_intelligence_route() -> Dict[str, str]:
+    """Resolve the recommended provider/model route for the manual JD dry-run.
+
+    Raises when the recommendation authority is unavailable or returns a blank
+    provider/model so callers fail closed instead of executing on generic
+    provider/model defaults.
+    """
+    route = resolve_recommended_user_provider_route(
+        PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID
+    )
+    resolved_provider = str((route or {}).get("provider") or "").strip()
+    resolved_model = str((route or {}).get("model") or "").strip()
+    if not resolved_provider or not resolved_model:
+        raise ValueError("manual_jd_intelligence_recommended_route_unavailable")
+    return {"provider": resolved_provider, "model": resolved_model}
+
+
 def _live_jd_intelligence_provider_adapter(adapter_input: Dict[str, Any]) -> Dict[str, Any]:
     from src.ai.llm_client import run_chat_completion_with_metadata
 
-    provider = LIVE_JD_INTELLIGENCE_DRY_RUN_PROVIDER
-    model = LIVE_JD_INTELLIGENCE_DRY_RUN_MODEL
+    route = _resolve_manual_jd_intelligence_route()
+    resolved_provider = route["provider"]
+    resolved_model = route["model"]
     result = run_chat_completion_with_metadata(
-        provider=provider,
-        model=model,
+        provider=resolved_provider,
+        model=resolved_model,
+        workload_id=PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID,
         temperature=LIVE_JD_INTELLIGENCE_DRY_RUN_TEMPERATURE,
         max_tokens=LIVE_JD_INTELLIGENCE_DRY_RUN_MAX_TOKENS,
         response_mime_type="application/json",
@@ -15210,6 +16737,126 @@ def _live_jd_intelligence_provider_adapter(adapter_input: Dict[str, Any]) -> Dic
         {
             "model_provider": _clean_text(result.get("provider")),
             "model_name": _clean_text(result.get("model")),
+            "prompt_version": LIVE_JD_INTELLIGENCE_DRY_RUN_PROMPT_VERSION,
+            "token_usage": dict(result.get("token_usage") or result.get("token_usage_json") or {}),
+            "cost": dict(result.get("cost") or result.get("cost_json") or {}),
+            "latency_ms": result.get("latency_ms", 0),
+            "provider_fallback_used": bool(result.get("fallback_used", False)),
+            "structured_output_schema": _live_jd_intelligence_structured_output_contract(),
+        }
+    )
+    return payload
+
+
+_PLANNING_SCAN_JD_SIGNAL_SCHEMA_FIELDS = frozenset(
+    LIVE_JD_INTELLIGENCE_DRY_RUN_RESPONSE_SCHEMA["required"]
+)
+_PLANNING_SCAN_JD_PROVIDER_METADATA_FIELDS = frozenset(
+    {
+        "model_provider",
+        "model_name",
+        "prompt_version",
+        "token_usage",
+        "cost",
+        "latency_ms",
+        "provider_fallback_used",
+        "structured_output_schema",
+        "raw_response",
+    }
+)
+
+
+def _validated_planning_scan_jd_provider_payload(
+    provider_payload: Any,
+) -> Tuple[Dict[str, Any], List[str]]:
+    """Validate the strict JD schema again before any scan evidence can use it."""
+
+    if not isinstance(provider_payload, dict):
+        return {}, ["provider_response_not_object"]
+
+    source = deepcopy(provider_payload)
+    raw_response = source.get("raw_response")
+    if isinstance(raw_response, str):
+        try:
+            decoded = json.loads(raw_response)
+        except json.JSONDecodeError:
+            return {}, ["invalid_json_response"]
+        if not isinstance(decoded, dict):
+            return {}, ["provider_response_not_object"]
+        source.update(decoded)
+
+    errors: List[str] = []
+    missing = sorted(_PLANNING_SCAN_JD_SIGNAL_SCHEMA_FIELDS - set(source))
+    if missing:
+        errors.append("missing_required_fields:" + ",".join(missing))
+
+    allowed = _PLANNING_SCAN_JD_SIGNAL_SCHEMA_FIELDS | _PLANNING_SCAN_JD_PROVIDER_METADATA_FIELDS
+    unexpected = sorted(set(source) - allowed)
+    if unexpected:
+        errors.append("unexpected_fields:" + ",".join(unexpected))
+
+    for field in sorted(_PLANNING_SCAN_JD_SIGNAL_SCHEMA_FIELDS - {"extraction_confidence"}):
+        value = source.get(field)
+        if not isinstance(value, list):
+            errors.append(f"invalid_type:{field}:array_required")
+            continue
+        if any(not isinstance(item, str) for item in value):
+            errors.append(f"invalid_type:{field}:string_items_required")
+
+    confidence = source.get("extraction_confidence")
+    if (
+        not isinstance(confidence, (int, float))
+        or isinstance(confidence, bool)
+        or not 0 <= float(confidence) <= 1
+    ):
+        errors.append("invalid_type:extraction_confidence:number_0_to_1_required")
+
+    return (source if not errors else {}), errors
+
+
+def _configured_planning_scan_jd_provider_adapter(
+    *,
+    owner_user_id: str,
+    route: Dict[str, Any],
+    adapter_input: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Run the owner's qualified JD-intelligence route through shared transport."""
+
+    result = run_user_chat_completion_with_metadata(
+        owner_user_id=_clean_text(owner_user_id),
+        provider=_clean_text(route.get("provider")),
+        model=_clean_text(route.get("model")),
+        temperature=LIVE_JD_INTELLIGENCE_DRY_RUN_TEMPERATURE,
+        max_tokens=LIVE_JD_INTELLIGENCE_DRY_RUN_MAX_TOKENS,
+        response_mime_type="application/json",
+        response_schema=_live_jd_intelligence_structured_output_contract()["schema"],
+        return_parsed=True,
+        thinking_budget=LIVE_JD_INTELLIGENCE_DRY_RUN_THINKING_BUDGET,
+        workload_id=PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID,
+        messages=[
+            {
+                "role": "system",
+                "content": LIVE_JD_INTELLIGENCE_DRY_RUN_SYSTEM_PROMPT,
+            },
+            {
+                "role": "user",
+                "content": _live_jd_intelligence_prompt(
+                    job_title=_clean_text(adapter_input.get("job_title")),
+                    company=_clean_text(adapter_input.get("company")),
+                    location=_clean_text(adapter_input.get("location")),
+                    job_description=_clean_text(adapter_input.get("job_description")),
+                    source_metadata=dict(adapter_input.get("source_metadata") or {}),
+                ),
+            },
+        ],
+    )
+    content = result.get("content")
+    payload = dict(content or {}) if isinstance(content, dict) else {"raw_response": content}
+    payload.update(
+        {
+            "model_provider": _clean_text(result.get("provider"))
+            or _clean_text(route.get("provider")),
+            "model_name": _clean_text(result.get("model")) or _clean_text(route.get("model")),
             "prompt_version": LIVE_JD_INTELLIGENCE_DRY_RUN_PROMPT_VERSION,
             "token_usage": dict(result.get("token_usage") or result.get("token_usage_json") or {}),
             "cost": dict(result.get("cost") or result.get("cost_json") or {}),
@@ -15332,6 +16979,89 @@ def _planning_scan_phase34a_provider_payload(
     }
 
 
+def _planning_scan_grounding_text(value: Any) -> str:
+    return re.sub(r"[^a-z0-9+#.]+", " ", _clean_text(value).casefold()).strip()
+
+
+def _planning_scan_signal_is_grounded(value: Any, source_text: str) -> bool:
+    signal = _planning_scan_grounding_text(value)
+    if not signal:
+        return False
+    return f" {signal} " in f" {_planning_scan_grounding_text(source_text)} "
+
+
+def _ground_planning_scan_jd_signals(
+    signals: Dict[str, Any],
+    *,
+    job_record: Dict[str, Any],
+) -> Tuple[Dict[str, Any], Dict[str, List[str]]]:
+    """Reject provider claims that are not directly supported by submitted JD input."""
+
+    source_text = "\n".join(
+        _clean_text(value)
+        for value in (
+            job_record.get("title") or job_record.get("job_title"),
+            job_record.get("location"),
+            job_record.get("description_text") or job_record.get("retrieval_text"),
+        )
+        if _clean_text(value)
+    )
+    grounded: Dict[str, Any] = {}
+    rejected: Dict[str, List[str]] = {}
+    for field in (
+        "required_skills",
+        "preferred_skills",
+        "responsibilities",
+        "tools",
+        "location_constraints",
+        "visa_constraints",
+        "red_flags",
+        "resume_evidence_needed",
+    ):
+        values = _unique_scan_terms(list(signals.get(field) or []))
+        grounded[field] = [
+            value for value in values if _planning_scan_signal_is_grounded(value, source_text)
+        ]
+        rejected_values = [value for value in values if value not in grounded[field]]
+        if rejected_values:
+            rejected[field] = rejected_values
+
+    for field in ("seniority", "domain"):
+        values = [
+            _clean_text(value)
+            for value in _clean_text(signals.get(field)).split(";")
+            if _clean_text(value)
+        ]
+        accepted = [
+            value for value in values if _planning_scan_signal_is_grounded(value, source_text)
+        ]
+        grounded[field] = "; ".join(accepted) or None
+        rejected_values = [value for value in values if value not in accepted]
+        if rejected_values:
+            rejected[field] = rejected_values
+
+    grounded["confidence"] = signals.get("confidence")
+    return grounded, rejected
+
+
+def _planning_scan_has_grounded_jd_signals(signals: Dict[str, Any]) -> bool:
+    return any(
+        signals.get(field) not in (None, "", [], {})
+        for field in (
+            "required_skills",
+            "preferred_skills",
+            "responsibilities",
+            "seniority",
+            "domain",
+            "tools",
+            "location_constraints",
+            "visa_constraints",
+            "red_flags",
+            "resume_evidence_needed",
+        )
+    )
+
+
 def build_jd_intelligence_production_task_contract_material() -> Dict[str, Any]:
     representative_input = {
         "job_title": "<job_title>",
@@ -15384,11 +17114,43 @@ def _build_planning_scan_jd_llm_extraction_metadata(
     *,
     job_record: Dict[str, Any],
     enabled: bool = False,
+    owner_user_id: str = "",
     adapter: Any = None,
     extraction_policy: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    provider_metadata: Dict[str, Any] = {}
-    provider_adapter = adapter or _live_jd_intelligence_provider_adapter
+    provider_metadata: Dict[str, Any] = {
+        "workload_id": PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID,
+    }
+    provider_adapter = adapter
+
+    if enabled and provider_adapter is None:
+        try:
+            route = resolve_effective_user_provider_route(
+                _clean_text(owner_user_id),
+                PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID,
+            )
+            provider_metadata.update(
+                {
+                    "provider": _clean_text(route.get("provider")),
+                    "model": _clean_text(route.get("model")),
+                    "effective_selection_source": _clean_text(
+                        route.get("effective_selection_source")
+                    ),
+                }
+            )
+
+            def provider_adapter(adapter_input: Dict[str, Any]) -> Dict[str, Any]:
+                return _configured_planning_scan_jd_provider_adapter(
+                    owner_user_id=owner_user_id,
+                    route=route,
+                    adapter_input=adapter_input,
+                )
+        except Exception as route_error:
+            def provider_adapter(
+                _adapter_input: Dict[str, Any],
+                _route_error: Exception = route_error,
+            ) -> Dict[str, Any]:
+                raise _route_error
 
     if not enabled:
         return {
@@ -15396,7 +17158,9 @@ def _build_planning_scan_jd_llm_extraction_metadata(
             "default_off": True,
             "live_jd_llm_extraction_planning_scan_wiring": True,
             "planning_scan_path": True,
-            "metadata_only": True,
+            "metadata_only": False,
+            "workload_id": PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID,
+            "effective_selection_source": "",
             "llm_enabled": False,
             "llm_call_attempted": False,
             "llm_call_performed": False,
@@ -15409,7 +17173,11 @@ def _build_planning_scan_jd_llm_extraction_metadata(
             "fallback_used": True,
             "validation_status": "disabled",
             "validation_errors": ["feature_flag_disabled"],
+            "response_schema_validation_status": "not_attempted",
+            "grounding_status": "disabled",
+            "grounding_rejections": {},
             "structured_jd_signals": {},
+            "validated_signals_applied_to_scoring": False,
             "enricher_result": {},
             "final_scoring_performed": False,
             "score_formula_changed": False,
@@ -15439,7 +17207,16 @@ def _build_planning_scan_jd_llm_extraction_metadata(
                     ),
                 }
             )
-            return _planning_scan_phase34a_provider_payload(raw_payload)
+            validated_payload, schema_errors = _validated_planning_scan_jd_provider_payload(
+                raw_payload
+            )
+            provider_metadata["response_schema_validation_status"] = (
+                "valid" if not schema_errors else "invalid"
+            )
+            provider_metadata["response_schema_validation_errors"] = schema_errors
+            if schema_errors:
+                return {}
+            return _planning_scan_phase34a_provider_payload(validated_payload)
         return {}
 
     planning_row = {
@@ -15459,18 +17236,34 @@ def _build_planning_scan_jd_llm_extraction_metadata(
     )
     extraction_results = list(enricher_result.get("extraction_results") or [])
     extraction = dict(extraction_results[0]) if extraction_results else {}
-    ready = extraction.get("extraction_ready") is True
+    extractor_ready = extraction.get("extraction_ready") is True
     parse_status = _clean_text(extraction.get("provider_response_parse_status"))
     blocked_reasons = list(extraction.get("blocked_reasons") or [])
+    schema_errors = list(provider_metadata.get("response_schema_validation_errors") or [])
+    schema_valid = provider_metadata.get("response_schema_validation_status") == "valid"
+    ungrounded_signals = (
+        deepcopy(extraction.get("jd_signals", {})) if extractor_ready and schema_valid else {}
+    )
+    signals, grounding_rejections = _ground_planning_scan_jd_signals(
+        ungrounded_signals,
+        job_record=job_record,
+    )
+    grounding_ready = _planning_scan_has_grounded_jd_signals(signals)
+    ready = extractor_ready and schema_valid and grounding_ready
+    if extractor_ready and schema_valid and not grounding_ready:
+        blocked_reasons.append("no_grounded_jd_signals")
     validation_status = "valid" if ready else "fallback"
-    signals = deepcopy(extraction.get("jd_signals", {})) if ready else {}
+    if not ready:
+        signals = {}
 
     return {
         "phase": "55A",
         "default_off": False,
         "live_jd_llm_extraction_planning_scan_wiring": True,
         "planning_scan_path": True,
-        "metadata_only": True,
+        "metadata_only": False,
+        "workload_id": PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID,
+        "effective_selection_source": provider_metadata.get("effective_selection_source", ""),
         "llm_enabled": True,
         "llm_call_attempted": bool(extraction.get("provider_callable_invoked", False)),
         "llm_call_performed": ready,
@@ -15480,11 +17273,20 @@ def _build_planning_scan_jd_llm_extraction_metadata(
         "token_usage": deepcopy(provider_metadata.get("token_usage", {})),
         "cost": deepcopy(provider_metadata.get("cost", {})),
         "latency_ms": provider_metadata.get("latency_ms", 0),
+        "provider_fallback_used": bool(
+            provider_metadata.get("provider_fallback_used", False)
+        ),
         "fallback_used": not ready,
         "validation_status": validation_status,
-        "validation_errors": blocked_reasons,
+        "validation_errors": [*blocked_reasons, *schema_errors],
+        "response_schema_validation_status": provider_metadata.get(
+            "response_schema_validation_status", "not_completed"
+        ),
+        "grounding_status": "valid" if ready else "fallback",
+        "grounding_rejections": grounding_rejections,
         "provider_response_parse_status": parse_status,
         "structured_jd_signals": signals,
+        "validated_signals_applied_to_scoring": ready,
         "enricher_result": deepcopy(enricher_result),
         "final_scoring_performed": False,
         "score_formula_changed": False,
@@ -15517,24 +17319,34 @@ def build_planning_scan_jd_llm_extraction_readback(
     return {
         "phase": "55B",
         "source_phase": _clean_text(source.get("phase")) or "55A",
-        "default_off": True,
+        "default_off": bool(source.get("default_off", False)),
         "live_jd_llm_readback": True,
         "planning_scan_path": True,
         "api_readback": True,
         "ui_readback": True,
-        "metadata_only": True,
+        "metadata_only": bool(source.get("metadata_only", False)),
+        "workload_id": _clean_text(source.get("workload_id")),
         "llm_enabled": bool(source.get("llm_enabled", False)),
         "llm_call_attempted": bool(source.get("llm_call_attempted", False)),
         "llm_call_performed": bool(source.get("llm_call_performed", False)),
         "fallback_used": bool(source.get("fallback_used", True)),
         "validation_status": _clean_text(source.get("validation_status")) or "missing",
         "validation_errors": list(source.get("validation_errors") or []),
+        "response_schema_validation_status": _clean_text(
+            source.get("response_schema_validation_status")
+        ) or "not_completed",
+        "grounding_status": _clean_text(source.get("grounding_status")) or "missing",
+        "grounding_rejections": deepcopy(source.get("grounding_rejections", {})),
+        "validated_signals_applied_to_scoring": bool(
+            source.get("validated_signals_applied_to_scoring", False)
+        ),
         "provider": _clean_text(source.get("provider")),
         "model": _clean_text(source.get("model")),
         "prompt_version": _clean_text(source.get("prompt_version")),
         "token_usage": token_usage,
         "cost": cost,
         "latency_ms": source.get("latency_ms", 0),
+        "provider_fallback_used": bool(source.get("provider_fallback_used", False)),
         "structured_jd_signals": structured_signals,
         "signal_summary": {
             "required_skill_count": len(list(structured_signals.get("required_skills") or [])),
@@ -15980,21 +17792,46 @@ def _planning_workspace_tailoring_suggestion_preview_rows(
     suggestion_type: str,
 ) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
-    for suggestion in suggestions:
+    for suggestion in suggestions[:8]:
         if not isinstance(suggestion, dict):
             continue
         suggestion_id = _clean_text(suggestion.get("suggestion_id"))
         if not suggestion_id:
             continue
+        jd_signal_links = []
+        for item in list(suggestion.get("jd_signal_links") or [])[:4]:
+            if not isinstance(item, dict):
+                continue
+            jd_signal_links.append(
+                {
+                    key: _clean_text(item.get(key))[:400]
+                    for key in ("field", "signal", "rationale", "evidence")
+                    if _clean_text(item.get(key))
+                }
+            )
         rows.append(
             {
                 "suggestion_id": suggestion_id,
                 "suggestion_type": suggestion_type,
-                "source_bullet_id": _clean_text(suggestion.get("source_bullet_id")),
+                "source_bullet_id": _clean_text(suggestion.get("source_bullet_id"))[:240],
                 "target_section": _clean_text(
                     suggestion.get("target_section") or suggestion.get("section")
-                ),
+                )[:240],
                 "patch_ready": bool(suggestion.get("patch_ready", False)),
+                "original_text": _clean_text(suggestion.get("original_text"))[:1200],
+                "suggested_text": _clean_text(suggestion.get("suggested_text"))[:1200],
+                "reason": _clean_text(suggestion.get("reason"))[:800],
+                "evidence_spans": [
+                    _clean_text(item)[:600]
+                    for item in list(suggestion.get("evidence_spans") or [])[:4]
+                    if _clean_text(item)
+                ],
+                "jd_signal_links": jd_signal_links,
+                "risk_flags": [
+                    _clean_text(item)[:300]
+                    for item in list(suggestion.get("risk_flags") or [])[:4]
+                    if _clean_text(item)
+                ],
             }
         )
     return rows
@@ -16041,7 +17878,7 @@ def build_planning_workspace_live_tailoring_suggestion_readback(
         for row in list(source.get("rejected_suggestions") or [])
         if isinstance(row, dict)
     ]
-    preview_rows = (
+    actionable_preview_rows = (
         _planning_workspace_tailoring_suggestion_preview_rows(
             patch_ready,
             suggestion_type="patch_ready",
@@ -16051,7 +17888,12 @@ def build_planning_workspace_live_tailoring_suggestion_readback(
             suggestion_type="guidance_only",
         )
     )
-    suggestion_ids = [row["suggestion_id"] for row in preview_rows]
+    rejected_preview_rows = _planning_workspace_tailoring_suggestion_preview_rows(
+            rejected,
+            suggestion_type="rejected",
+        )
+    preview_rows = (actionable_preview_rows + rejected_preview_rows)[:12]
+    suggestion_ids = [row["suggestion_id"] for row in actionable_preview_rows]
     safety_metadata = dict(source.get("safety_metadata") or {})
     fallback_used = bool(source.get("fallback_used", True))
     validation_status = _clean_text(source.get("validation_status")) or (
@@ -16079,6 +17921,11 @@ def build_planning_workspace_live_tailoring_suggestion_readback(
     cost = deepcopy(source.get("cost", {}))
     if not isinstance(cost, dict):
         cost = {}
+    failure_metadata = {
+        key: deepcopy(source.get(key))
+        for key in _LIVE_TAILORING_FAILURE_READBACK_FIELDS
+        if key in source
+    }
 
     return {
         "phase": "56B",
@@ -16106,15 +17953,31 @@ def build_planning_workspace_live_tailoring_suggestion_readback(
         "token_usage": token_usage,
         "cost": cost,
         "latency_ms": source.get("latency_ms", 0),
-        "suggestion_count": len(preview_rows),
+        "suggestion_count": len(patch_ready) + len(guidance_only),
         "patch_ready_suggestion_count": len(patch_ready),
         "guidance_only_suggestion_count": len(guidance_only),
         "rejected_suggestion_count": len(rejected),
         "suggestion_ids": suggestion_ids,
         "stable_suggestion_keys": suggestion_ids,
         "suggestions_preview": preview_rows,
+        "missing_evidence": [
+            _clean_text(item)[:400]
+            for item in list(source.get("missing_evidence") or [])[:8]
+            if _clean_text(item)
+        ],
+        "unsupported_claim_risks": [
+            {
+                key: _clean_text(item.get(key))[:400]
+                for key in ("field", "signal", "claim", "reason", "risk", "category", "evidence")
+                if _clean_text(item.get(key))
+            }
+            for item in list(source.get("unsupported_claim_risks") or [])[:8]
+            if isinstance(item, dict)
+        ],
+        "rationale": _clean_text(source.get("rationale"))[:1000],
         "suggestion_status": _clean_text(source.get("suggestion_status")),
         "safety": _planning_workspace_tailoring_suggestion_safety(),
+        **failure_metadata,
     }
 
 
@@ -16154,6 +18017,24 @@ def _planning_workspace_exact_change_preview_rows(
                 "change_type": _clean_text(proposal.get("change_type")),
                 "target_section": _clean_text(proposal.get("target_section")),
                 "target_identifier": _clean_text(proposal.get("target_identifier")),
+                "current_text": _clean_text(proposal.get("current_text")),
+                "proposed_text": _clean_text(proposal.get("proposed_text")),
+                "change_reason": _clean_text(proposal.get("change_reason")),
+                "jd_terms_supported": [
+                    _clean_text(value)
+                    for value in list(proposal.get("jd_terms_supported") or [])
+                    if _clean_text(value)
+                ],
+                "resume_evidence_used": [
+                    _clean_text(value)
+                    for value in list(proposal.get("resume_evidence_used") or [])
+                    if _clean_text(value)
+                ],
+                "risk_flags": [
+                    _clean_text(value)
+                    for value in list(proposal.get("risk_flags") or [])
+                    if _clean_text(value)
+                ],
                 "manual_review_required": proposal.get("manual_review_required") is True,
                 "requires_user_acceptance": proposal.get("requires_user_acceptance") is True,
             }
@@ -16734,33 +18615,56 @@ def _planning_workspace_exact_change_resume_context(
     draft: Dict[str, Any] | None,
 ) -> Dict[str, Any]:
     safe_draft = dict(draft or {})
-    evidence_rows = _planning_workspace_resume_evidence_rows_from_review(review_payload)
     bullets: List[Dict[str, Any]] = []
-    for index, evidence in enumerate(evidence_rows):
-        if not isinstance(evidence, dict):
-            continue
-        text = _clean_text(
-            evidence.get("evidence")
-            or evidence.get("text")
-            or evidence.get("resume_evidence")
-            or evidence.get("bullet")
+    structured_targets = review_payload.get("structured_resume_targets")
+    has_structured_targets = isinstance(structured_targets, dict)
+    if has_structured_targets:
+        for target in list(structured_targets.get("experience_bullets") or []):
+            if not isinstance(target, dict):
+                continue
+            source_bullet_id = _clean_text(target.get("source_bullet_id"))
+            text = _clean_text(target.get("text"))
+            if source_bullet_id and text:
+                bullets.append({"id": source_bullet_id, "text": text})
+    else:
+        evidence_rows = _planning_workspace_resume_evidence_rows_from_review(
+            review_payload
         )
-        if not text:
-            continue
-        bullets.append(
-            {
-                "id": _clean_text(evidence.get("bullet_id") or evidence.get("candidate_id"))
-                or f"evidence-{index + 1}",
-                "text": text,
-            }
-        )
+        for evidence in evidence_rows:
+            if not isinstance(evidence, dict):
+                continue
+            text = _clean_text(
+                evidence.get("evidence")
+                or evidence.get("text")
+                or evidence.get("resume_evidence")
+                or evidence.get("bullet")
+            )
+            source_bullet_id = _clean_text(
+                evidence.get("bullet_id") or evidence.get("candidate_id")
+            )
+            if not source_bullet_id or not text:
+                continue
+            bullets.append(
+                {
+                    "id": source_bullet_id,
+                    "text": text,
+                }
+            )
     for bullet_id, text in dict(safe_draft.get("manual_bullet_edits") or {}).items():
         clean_text = _clean_text(text)
         if clean_text:
             bullets.append({"id": _clean_text(bullet_id), "text": clean_text})
-    skills = review_payload.get("skills")
-    if not isinstance(skills, list):
-        skills = review_payload.get("resume_skills")
+    if has_structured_targets:
+        skills = structured_targets.get("skills")
+    else:
+        skills = review_payload.get("skills")
+        if not isinstance(skills, list):
+            skills = review_payload.get("resume_skills")
+    profile_summary = _clean_text(
+        review_payload.get("profile_summary") or review_payload.get("resume_summary")
+    )
+    if not has_structured_targets and not profile_summary:
+        profile_summary = "Manual planning workspace resume context."
     return {
         "resume_id": _clean_text(
             review_payload.get("selected_resume")
@@ -16768,11 +18672,7 @@ def _planning_workspace_exact_change_resume_context(
             or row.get("resume_name")
         ),
         "resume_name": _clean_text(review_payload.get("resume_name") or row.get("resume_name")),
-        "profile_summary": _clean_text(
-            review_payload.get("profile_summary")
-            or review_payload.get("resume_summary")
-            or "Manual planning workspace resume context."
-        ),
+        "profile_summary": profile_summary,
         "resume_bullets": bullets,
         "skills": list(skills or []) if isinstance(skills, list) else [],
     }
@@ -16783,26 +18683,94 @@ def _planning_workspace_exact_change_jd_context(
 ) -> Dict[str, Any]:
     jd_readback = review_payload.get("jd_llm_extraction_readback")
     jd_metadata = review_payload.get("jd_llm_extraction")
-    signals: Dict[str, Any] = {}
-    if isinstance(jd_readback, dict) and isinstance(
-        jd_readback.get("structured_jd_signals"),
-        dict,
-    ):
-        signals = dict(jd_readback.get("structured_jd_signals") or {})
-    elif isinstance(jd_metadata, dict) and isinstance(
-        jd_metadata.get("structured_jd_signals"),
-        dict,
-    ):
-        signals = dict(jd_metadata.get("structured_jd_signals") or {})
-    if not signals:
-        signals = {
-            "required_skills": list(review_payload.get("required_skills") or [])
-            if isinstance(review_payload.get("required_skills"), list)
-            else [],
-            "tools": list(review_payload.get("tools") or [])
-            if isinstance(review_payload.get("tools"), list)
-            else [],
-        }
+
+    def has_signal_values(signals: Dict[str, Any]) -> bool:
+        for key in (
+            "required_skills",
+            "preferred_skills",
+            "tools",
+            "responsibilities",
+            "domain",
+            "seniority",
+            "red_flags",
+        ):
+            value = signals.get(key)
+            if isinstance(value, dict) and value:
+                return True
+            if isinstance(value, (list, tuple, set)) and any(
+                _clean_text(item) for item in value
+            ):
+                return True
+            if not isinstance(value, (dict, list, tuple, set)) and _clean_text(value):
+                return True
+        return False
+
+    for metadata in (jd_readback, jd_metadata):
+        if not isinstance(metadata, dict):
+            continue
+        if metadata.get("fallback_used") is True:
+            continue
+        validation_status = _clean_text(metadata.get("validation_status"))
+        if validation_status and validation_status != "valid":
+            continue
+        structured = metadata.get("structured_jd_signals")
+        if isinstance(structured, dict) and has_signal_values(structured):
+            return dict(structured)
+
+    signals: Dict[str, List[str]] = {
+        "required_skills": [],
+        "tools": [],
+        "domain": [],
+    }
+    seen: Dict[str, set[str]] = {key: set() for key in signals}
+
+    def add_signal(key: str, value: Any) -> None:
+        text = _clean_text(value)
+        normalized = text.lower()
+        if not text or normalized in seen[key]:
+            return
+        seen[key].add(normalized)
+        signals[key].append(text)
+
+    required_skills = review_payload.get("required_skills")
+    if isinstance(required_skills, list):
+        for value in required_skills:
+            add_signal("required_skills", value)
+    tools = review_payload.get("tools")
+    if isinstance(tools, list):
+        for value in tools:
+            add_signal("tools", value)
+
+    contract = review_payload.get("scan_issue_contract")
+    issues = list(contract.get("issues") or []) if isinstance(contract, dict) else []
+    for issue in issues:
+        if not isinstance(issue, dict) or _clean_text(issue.get("group_id")) != "skills":
+            continue
+        if issue.get("predicted_skill") is True or _clean_text(
+            issue.get("keyword_source")
+        ) == "predicted_skill":
+            continue
+
+        values = _scan_issue_display_terms(issue)
+        if not values:
+            fallback_value = _clean_text(
+                issue.get("display_term")
+                or issue.get("canonical_term")
+                or issue.get("title")
+            )
+            values = [fallback_value] if fallback_value else []
+
+        term_family = _clean_text(issue.get("term_family")).lower()
+        skill_type = _clean_text(issue.get("skill_type")).lower()
+        keyword_source = _clean_text(issue.get("keyword_source")).lower()
+        target_key = "required_skills"
+        if term_family in {"tool", "tools"}:
+            target_key = "tools"
+        elif skill_type == "other_keyword" or keyword_source == "other_keyword":
+            target_key = "domain"
+        for value in values:
+            add_signal(target_key, value)
+
     return signals
 
 
@@ -16829,9 +18797,13 @@ def _live_exact_resume_change_proposal_provider_adapter(
 ) -> Dict[str, Any]:
     from src.ai.llm_client import run_chat_completion_with_metadata
 
+    provider, model = _scan_diagnostics_groq_configuration(
+        LIVE_EXACT_RESUME_CHANGE_PROPOSAL_PROVIDER,
+        LIVE_EXACT_RESUME_CHANGE_PROPOSAL_MODEL,
+    )
     result = run_chat_completion_with_metadata(
-        provider=LIVE_EXACT_RESUME_CHANGE_PROPOSAL_PROVIDER,
-        model=LIVE_EXACT_RESUME_CHANGE_PROPOSAL_MODEL,
+        provider=provider,
+        model=model,
         temperature=request_packet.get("temperature", 0),
         max_tokens=int(request_packet.get("max_output_tokens") or 1800),
         response_mime_type="application/json",
@@ -16975,6 +18947,34 @@ def _planning_workspace_live_exact_resume_change_proposal_payload(
             enabled=True,
         )
 
+    request_summary = (
+        dict(request_result.get("request_packet_summary") or {})
+        if isinstance(request_result, dict)
+        and isinstance(request_result.get("request_packet_summary"), dict)
+        else {}
+    )
+    included_count = int(request_summary.get("included_change_proposal_count") or 0)
+    if (
+        request_summary.get("request_blocked") is True
+        or included_count == 0
+        or request_summary.get("provider_dispatch_ready") is not True
+    ):
+        return build_planning_workspace_live_exact_resume_change_proposal_readback(
+            {
+                "fallback_used": False,
+                "validation_status": "blocked",
+                "validation_errors": ["exact_change_provider_dispatch_not_ready"],
+                "proposal_result": proposal_result,
+                "request_result": request_result,
+                "runtime_result": {
+                    "real_provider_call_attempted": False,
+                    "real_provider_call_performed": False,
+                    "network_call_performed": False,
+                },
+            },
+            enabled=True,
+        )
+
     effective_adapter = adapter or _live_exact_resume_change_proposal_provider_adapter
     runtime_result = build_controlled_exact_resume_change_set_real_provider_runtime_adapter_default_off(
         request_packet=request_packet,
@@ -17003,6 +19003,7 @@ def _planning_workspace_live_exact_resume_change_proposal_payload(
     validation_result = build_controlled_exact_resume_change_set_provider_response_validation_default_off(
         provider_call_result=runtime_result,
         original_request_packet=request_packet,
+        validation_policy={"require_known_proposal_ids": True},
     )
     if validation_result.get("provider_response_valid") is not True:
         return build_planning_workspace_live_exact_resume_change_proposal_readback(
@@ -20474,6 +22475,14 @@ def _live_tailoring_suggestion_structured_output_contract() -> Dict[str, Any]:
     }
 
 
+def _scan_diagnostics_groq_configuration(provider: Any, model: Any) -> tuple[str, str]:
+    safe_provider = _clean_text(provider).lower()
+    safe_model = _clean_text(model)
+    if safe_provider != "groq":
+        raise ValueError("Scan Diagnostics provider must be groq.")
+    return safe_provider, safe_model
+
+
 def _live_tailoring_suggestion_prompt(adapter_input: Dict[str, Any]) -> str:
     return "\n".join([
         "Create conservative tailoring suggestions for a manual read-only dry-run.",
@@ -20495,9 +22504,13 @@ def _live_tailoring_suggestion_prompt(adapter_input: Dict[str, Any]) -> str:
 def _live_tailoring_suggestion_provider_adapter(adapter_input: Dict[str, Any]) -> Dict[str, Any]:
     from src.ai.llm_client import run_chat_completion_with_metadata
 
+    provider, model = _scan_diagnostics_groq_configuration(
+        LIVE_TAILORING_SUGGESTION_DRY_RUN_PROVIDER,
+        LIVE_TAILORING_SUGGESTION_DRY_RUN_MODEL,
+    )
     result = run_chat_completion_with_metadata(
-        provider=LIVE_TAILORING_SUGGESTION_DRY_RUN_PROVIDER,
-        model=LIVE_TAILORING_SUGGESTION_DRY_RUN_MODEL,
+        provider=provider,
+        model=model,
         temperature=0,
         max_tokens=900,
         response_mime_type="application/json",
@@ -20664,12 +22677,30 @@ def _live_critic_guardrail_prompt(adapter_input: Dict[str, Any]) -> str:
     ])
 
 
+def _resolve_manual_critic_route() -> Dict[str, str]:
+    """Resolve the qualified provider/model route for the manual critic dry-run.
+
+    ``critic_evaluation`` currently has zero qualified candidates, so this
+    raises and the built-in live critic adapter stays unreachable. Raising is
+    the point: it keeps the manual critic surface fail-closed instead of
+    executing on generic provider/model defaults.
+    """
+    route = resolve_recommended_user_provider_route(MANUAL_CRITIC_GUARDRAIL_WORKLOAD_ID)
+    resolved_provider = str((route or {}).get("provider") or "").strip()
+    resolved_model = str((route or {}).get("model") or "").strip()
+    if not resolved_provider or not resolved_model:
+        raise ValueError("manual_critic_qualified_route_unavailable")
+    return {"provider": resolved_provider, "model": resolved_model}
+
+
 def _live_critic_guardrail_provider_adapter(adapter_input: Dict[str, Any]) -> Dict[str, Any]:
     from src.ai.llm_client import run_chat_completion_with_metadata
 
+    route = _resolve_manual_critic_route()
     result = run_chat_completion_with_metadata(
-        provider=LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROVIDER,
-        model=LIVE_CRITIC_GUARDRAIL_DRY_RUN_MODEL,
+        provider=route["provider"],
+        model=route["model"],
+        workload_id=MANUAL_CRITIC_GUARDRAIL_WORKLOAD_ID,
         temperature=LIVE_CRITIC_GUARDRAIL_DRY_RUN_TEMPERATURE,
         max_tokens=LIVE_CRITIC_GUARDRAIL_DRY_RUN_MAX_TOKENS,
         response_mime_type="application/json",
@@ -20862,7 +22893,12 @@ def build_manual_jd_intelligence_dry_run_payload(
     )
     effective_adapter = adapter
     if effective_feature_enabled and effective_adapter is None:
-        effective_adapter = _live_jd_intelligence_provider_adapter
+        try:
+            route = _resolve_manual_jd_intelligence_route()
+        except Exception:
+            route = None
+        if route is not None:
+            effective_adapter = _live_jd_intelligence_provider_adapter
     payload = jd_intelligence.build_live_jd_intelligence_dry_run_payload(
         job_title=job_title,
         company=company,
@@ -21032,6 +23068,11 @@ def build_manual_tailoring_suggestion_dry_run_payload(
                 "fallback_used": True,
                 "validation_status": "fallback",
                 "validation_errors": [f"adapter_error:{exc.__class__.__name__}"],
+                **_live_tailoring_provider_failure_metadata(
+                    exc,
+                    provider=LIVE_TAILORING_SUGGESTION_DRY_RUN_PROVIDER,
+                    model=LIVE_TAILORING_SUGGESTION_DRY_RUN_MODEL,
+                ),
             }
     else:
         payload = {
@@ -21108,7 +23149,12 @@ def build_manual_critic_guardrail_dry_run_payload(
     )
     effective_adapter = adapter
     if effective_feature_enabled and effective_adapter is None:
-        effective_adapter = _live_critic_guardrail_provider_adapter
+        try:
+            _resolve_manual_critic_route()
+        except Exception:
+            pass
+        else:
+            effective_adapter = _live_critic_guardrail_provider_adapter
     critic_input = {
         "tailoring_suggestion_payload": normalized_tailoring or {},
         "jd_intelligence": normalized_jd or normalized_jd_signals or {},
@@ -21190,6 +23236,20 @@ def build_manual_critic_guardrail_dry_run_payload(
                 "validation_errors": provider_validation_errors,
                 **provider_metadata,
             }
+    elif effective_feature_enabled:
+        payload = {
+            **payload,
+            "fallback_used": True,
+            "validation_status": "fallback",
+            "validation_errors": [
+                _clean_text(
+                    controlled_artifact.get("reason")
+                    if isinstance(controlled_artifact, dict)
+                    else ""
+                )
+                or "critic_llm_guardrail_adapter_missing"
+            ],
+        }
     else:
         payload = {
             **payload,
@@ -23385,7 +25445,9 @@ def _manual_provider_preview_provider_compatible_schema(value: Any) -> Any:
     return adapted
 
 
-def _manual_provider_preview_provider_failure_state(exc: Exception) -> str:
+def _manual_provider_preview_provider_failure_metadata(
+    exc: Exception,
+) -> Dict[str, str]:
     bounded_message = str(exc or "").strip()[:1_000]
     primary_match = _MANUAL_PROVIDER_PREVIEW_PRIMARY_FAILURE_PATTERN.fullmatch(
         bounded_message
@@ -23423,26 +25485,15 @@ def _manual_provider_preview_provider_failure_state(exc: Exception) -> str:
                     not in _MANUAL_PROVIDER_PREVIEW_SAFE_SCHEMA_KEYWORDS
                 )
             ):
-                return ""
-            state = (
-                "stage=primary;"
-                f"category={diagnostic['category']};"
-                f"provider={diagnostic['provider']};"
-                f"model={diagnostic['model']}"
-            )
-            if invalid_request_reason:
-                state += "".join(
-                    f";{field_name}={diagnostic[field_name]}"
-                    for field_name in (
-                        "invalid_request_reason",
-                        "error_type",
-                        "error_code",
-                        "error_param",
-                        "schema_keyword",
-                    )
-                    if diagnostic.get(field_name)
-                )
-            return state
+                return {}
+            return {
+                "stage": "primary",
+                **{
+                    key: value
+                    for key, value in diagnostic.items()
+                    if value
+                },
+            }
 
     fallback_match = _MANUAL_PROVIDER_PREVIEW_FALLBACK_FAILURE_PATTERN.fullmatch(
         bounded_message
@@ -23453,16 +25504,142 @@ def _manual_provider_preview_provider_failure_state(exc: Exception) -> str:
             diagnostic["primary_category"],
             diagnostic["fallback_category"],
         } <= _MANUAL_PROVIDER_PREVIEW_PROVIDER_FAILURE_CATEGORIES:
-            return (
-                "stage=fallback;"
-                f"primary_category={diagnostic['primary_category']};"
-                f"primary_provider={diagnostic['primary_provider']};"
-                f"primary_model={diagnostic['primary_model']};"
-                f"fallback_category={diagnostic['fallback_category']};"
-                f"fallback_provider={diagnostic['fallback_provider']};"
-                f"fallback_model={diagnostic['fallback_model']}"
+            return {"stage": "fallback", **diagnostic}
+    return {}
+
+
+def _manual_provider_preview_provider_failure_state(exc: Exception) -> str:
+    diagnostic = _manual_provider_preview_provider_failure_metadata(exc)
+    if diagnostic.get("stage") == "primary":
+        state = (
+            "stage=primary;"
+            f"category={diagnostic['category']};"
+            f"provider={diagnostic['provider']};"
+            f"model={diagnostic['model']}"
+        )
+        if diagnostic.get("invalid_request_reason"):
+            state += "".join(
+                f";{field_name}={diagnostic[field_name]}"
+                for field_name in (
+                    "invalid_request_reason",
+                    "error_type",
+                    "error_code",
+                    "error_param",
+                    "schema_keyword",
+                )
+                if diagnostic.get(field_name)
             )
+        return state
+    if diagnostic.get("stage") == "fallback":
+        return (
+            "stage=fallback;"
+            f"primary_category={diagnostic['primary_category']};"
+            f"primary_provider={diagnostic['primary_provider']};"
+            f"primary_model={diagnostic['primary_model']};"
+            f"fallback_category={diagnostic['fallback_category']};"
+            f"fallback_provider={diagnostic['fallback_provider']};"
+            f"fallback_model={diagnostic['fallback_model']}"
+        )
     return ""
+
+
+def _live_tailoring_provider_failure_metadata(
+    exc: Exception,
+    *,
+    provider: Any,
+    model: Any,
+) -> Dict[str, Any]:
+    safe_provider = _clean_text(provider).lower()[:100]
+    safe_model = _clean_text(model)[:200]
+    exception_class = exc.__class__.__name__
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,99}", exception_class):
+        exception_class = "Exception"
+
+    failure_category = "provider_adapter_error"
+    provider_diagnostic: Dict[str, Any] = {}
+    bounded_failure = _manual_provider_preview_provider_failure_metadata(exc)
+    if bounded_failure.get("stage") == "primary":
+        failure_category = bounded_failure["category"]
+        safe_provider = bounded_failure["provider"]
+        safe_model = bounded_failure["model"]
+        provider_diagnostic = {
+            output_key: bounded_failure[source_key]
+            for source_key, output_key in (
+                ("error_type", "provider_error_type"),
+                ("error_code", "provider_error_code"),
+                ("error_param", "provider_error_param"),
+                ("invalid_request_reason", "invalid_request_reason"),
+                ("schema_keyword", "schema_keyword"),
+            )
+            if bounded_failure.get(source_key)
+        }
+    else:
+        status_code = getattr(exc, "status_code", None)
+        try:
+            status_code = int(status_code)
+        except (TypeError, ValueError):
+            status_code = None
+        has_structured_failure = (
+            getattr(exc, "error_category", None) is not None
+            or status_code is not None
+            or isinstance(getattr(exc, "body", None), dict)
+        )
+        if has_structured_failure:
+            from src.ai.llm_client import (
+                _bounded_invalid_request_diagnostic,
+                _classify_provider_error,
+            )
+
+            normalized_category = _classify_provider_error(exc)
+            if normalized_category in _MANUAL_PROVIDER_PREVIEW_PROVIDER_FAILURE_CATEGORIES:
+                failure_category = normalized_category
+            if status_code is not None and 100 <= status_code <= 599:
+                provider_diagnostic["http_status"] = status_code
+            bounded_diagnostic = _bounded_invalid_request_diagnostic(
+                exc,
+                normalized_category,
+                safe_provider,
+            )
+            provider_diagnostic.update(
+                {
+                    output_key: bounded_diagnostic[source_key]
+                    for source_key, output_key in (
+                        ("error_type", "provider_error_type"),
+                        ("error_code", "provider_error_code"),
+                        ("error_param", "provider_error_param"),
+                        ("invalid_request_reason", "invalid_request_reason"),
+                        ("schema_keyword", "schema_keyword"),
+                    )
+                    if bounded_diagnostic.get(source_key)
+                }
+            )
+
+    summary_parts = [f"category={failure_category}"]
+    for key, label in (
+        ("http_status", "http"),
+        ("invalid_request_reason", "reason"),
+        ("provider_error_type", "type"),
+        ("provider_error_code", "code"),
+        ("provider_error_param", "parameter"),
+        ("schema_keyword", "schema_keyword"),
+    ):
+        if provider_diagnostic.get(key) not in (None, ""):
+            summary_parts.append(f"{label}={provider_diagnostic[key]}")
+    safe_error_summary = (
+        "Provider adapter failed "
+        f"({'; '.join(summary_parts)}; exception={exception_class})."
+    )[:240]
+    return {
+        "provider": safe_provider,
+        "model": safe_model,
+        "failure_category": failure_category,
+        "exception_class": exception_class,
+        **provider_diagnostic,
+        "safe_error_summary": safe_error_summary,
+        "provider_call_attempted": True,
+        "retry_performed": False,
+        "provider_fallback_performed": False,
+    }
 
 
 def _manual_provider_preview_string_list(
@@ -29894,6 +32071,130 @@ def _sort_browse_rows(
     return populated + missing
 
 
+def _select_planning_browse_rows(
+    ja: Any,
+    rows: List[Dict[str, Any]],
+    *,
+    resolved_filters: Dict[str, Any],
+    requested_limit: int,
+    requested_tailoring_states: List[str],
+    requested_preference_ids: List[str],
+    validated_preference_ids: List[str],
+    owner_user_id: str,
+    effective_output_dir: Path,
+    artifact_context: Optional[Dict[str, Any]],
+    job_metadata_by_key: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Return the authoritative filtered result before page slicing."""
+
+    selection_filters = dict(resolved_filters)
+    selection_filters["limit"] = max(len(rows), 1)
+    selection_filters.pop("page", None)
+    selection_filters.pop("tailoring_state", None)
+
+    selected = ja._select_browse_rows(rows, _make_args(**selection_filters))
+    selected = _overlay_application_actions(
+        selected,
+        owner_user_id=owner_user_id,
+    )
+    selected = _exclude_applied_rows(selected)
+
+    if requested_preference_ids:
+        selected = (
+            _overlay_job_metadata_from_map(selected, job_metadata_by_key)
+            if artifact_context
+            else _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
+        )
+        selected = _filter_browse_rows_by_preference_ids(
+            selected,
+            requested_ids=requested_preference_ids,
+            validated_ids=validated_preference_ids,
+        )
+
+    if requested_tailoring_states:
+        enriched_selected: List[Dict[str, Any]] = []
+        for row in selected:
+            matches, enriched_row = _row_matches_tailoring_state_filter(
+                row,
+                requested_tailoring_states,
+                output_dir=effective_output_dir,
+            )
+            if matches:
+                enriched_selected.append(enriched_row)
+        selected = enriched_selected
+
+    selected = _sort_browse_rows(
+        selected,
+        sort_key=resolved_filters.get("sort_key", ""),
+        sort_dir=resolved_filters.get("sort_dir", "asc"),
+    )
+    selected = selected[:requested_limit]
+    return selected
+
+
+_PLANNING_BULK_SUGGESTION_FIELDS = (
+    "job_doc_id",
+    "job_url",
+    "queue_rank",
+    "job_company",
+    "job_title",
+    "action",
+    "winner_bucket",
+    "role_family",
+    "winner_resume",
+    "winner_score",
+    "runner_up_resume",
+    "runner_up_score",
+    "runnerup_resume",
+    "runnerup_score",
+    "operator_selected_resume",
+    "selected_resume",
+    "tailoring_json",
+    "tailoring_json_key",
+    "tailoring_md",
+    "tailoring_llm_json",
+    "packet_json",
+    "packet_json_key",
+    "planning_output_dir",
+    "output_dir",
+    "packet_output_dir",
+    "artifact_output_dir",
+    "run_id",
+    "llm_tailoring_status",
+    "tailoring_status",
+    "tailoring_workspace_state",
+    "tailoring_actionable_replacement_count",
+    "tailoring_review_replacement_count",
+)
+
+
+def _planning_bulk_suggestion_projection(
+    rows: List[Dict[str, Any]],
+    *,
+    effective_output_dir: Path,
+    pipeline_run_id: str,
+) -> List[Dict[str, Any]]:
+    """Build a compact projection bounded naturally by owner/run Planning rows."""
+
+    projected: List[Dict[str, Any]] = []
+    for row in rows:
+        _, enriched_row = _row_matches_tailoring_state_filter(
+            row,
+            [],
+            output_dir=effective_output_dir,
+        )
+        compact = {
+            field: enriched_row.get(field)
+            for field in _PLANNING_BULK_SUGGESTION_FIELDS
+            if field in enriched_row
+        }
+        if pipeline_run_id:
+            compact["pipeline_run_id"] = pipeline_run_id
+            compact["planning_output_dir"] = str(effective_output_dir)
+        projected.append(compact)
+    return projected
+
+
 def browse_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     owner_user_id: str = "",
@@ -29974,51 +32275,66 @@ def browse_payload(
         rows = _overlay_tailoring_decisions(rows, tailoring_decision_by_key)
         rows = _overlay_operator_review(rows, operator_review_by_key)
 
-        selection_filters = dict(resolved_filters)
-        selection_filters["limit"] = max(len(rows), 1)
-        selection_filters.pop("page", None)
-        selection_filters.pop("tailoring_state", None)
-
-        args = _make_args(**selection_filters)
-        selected = ja._select_browse_rows(rows, args)
-
-        selected = _overlay_application_actions(selected, owner_user_id=owner_user_id)
-
-        selected = _exclude_applied_rows(selected)
-
-        if requested_preference_ids:
-            selected = (
-                _overlay_job_metadata_from_map(selected, job_metadata_by_key)
-                if artifact_context
-                else _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
-            )
-            selected = _filter_browse_rows_by_preference_ids(
-                selected,
-                requested_ids=requested_preference_ids,
-                validated_ids=validated_preference_ids,
-            )
-
-        if requested_tailoring_states:
-            enriched_selected: List[Dict[str, Any]] = []
-            for row in selected:
-                matches, enriched_row = _row_matches_tailoring_state_filter(
-                    row,
-                    requested_tailoring_states,
-                    output_dir=effective_output_dir,
-                )
-                if matches:
-                    enriched_selected.append(enriched_row)
-            selected = enriched_selected
-
-        selected = _sort_browse_rows(
-            selected,
-            sort_key=resolved_filters.get("sort_key", ""),
-            sort_dir=resolved_filters.get("sort_dir", "asc"),
+        selected = _select_planning_browse_rows(
+            ja,
+            rows,
+            resolved_filters=resolved_filters,
+            requested_limit=requested_limit,
+            requested_tailoring_states=requested_tailoring_states,
+            requested_preference_ids=requested_preference_ids,
+            validated_preference_ids=validated_preference_ids,
+            owner_user_id=owner_user_id,
+            effective_output_dir=effective_output_dir,
+            artifact_context=artifact_context,
+            job_metadata_by_key=job_metadata_by_key,
         )
 
-        selected = selected[:requested_limit]
-
         total_count = len(selected)
+        pipeline_run_id = (
+            _clean_text(artifact_context.get("run_id"))
+            if artifact_context
+            else ""
+        )
+        bulk_selection_filters = dict(resolved_filters)
+        bulk_selection_filters.update(
+            {
+                "action": [],
+                "needs_review": "",
+                "is_tie": "",
+                "fallback_status": [],
+                "winner_bucket": [],
+                "company_contains": "",
+                "title_contains": "",
+                "undecided_only": "",
+                "preference_id": [],
+                "tailoring_state": [],
+                "sort_key": "queue_rank",
+                "sort_dir": "asc",
+            }
+        )
+        bulk_universe = _select_planning_browse_rows(
+            ja,
+            rows,
+            resolved_filters=bulk_selection_filters,
+            requested_limit=max(len(rows), 1),
+            requested_tailoring_states=[],
+            requested_preference_ids=[],
+            validated_preference_ids=[],
+            owner_user_id=owner_user_id,
+            effective_output_dir=effective_output_dir,
+            artifact_context=artifact_context,
+            job_metadata_by_key=job_metadata_by_key,
+        )
+        bulk_universe = (
+            _overlay_job_metadata_from_map(bulk_universe, job_metadata_by_key)
+            if artifact_context
+            else _overlay_job_metadata(bulk_universe, job_corpus=DEFAULT_CORPUS_PATH)
+        )
+        bulk_suggestion_rows = _planning_bulk_suggestion_projection(
+            bulk_universe,
+            effective_output_dir=effective_output_dir,
+            pipeline_run_id=pipeline_run_id,
+        )
         total_pages = max((total_count + page_size - 1) // page_size, 1)
         current_page = min(current_page, total_pages)
 
@@ -30072,8 +32388,9 @@ def browse_payload(
             "total_pages": total_pages,
             "has_prev_page": current_page > 1,
             "has_next_page": current_page < total_pages,
-            "pipeline_run_id": _clean_text(artifact_context.get("run_id")) if artifact_context else "",
+            "pipeline_run_id": pipeline_run_id,
             "planning_output_dir": str(effective_output_dir),
+            "bulk_suggestion_rows": bulk_suggestion_rows,
         }
 
         return payload
@@ -31828,7 +34145,6 @@ def save_tailoring_workspace_draft_payload(
         json.dumps(draft_payload, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
-
     return {
         "ok": True,
         "draft_status": "saved",

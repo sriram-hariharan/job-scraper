@@ -7,7 +7,9 @@ from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
+from starlette.concurrency import run_in_threadpool
 from src.app import (
+    bulk_generation_service,
     provider_model_routing_service,
     services,
     user_ai_settings_service,
@@ -63,6 +65,7 @@ from src.app.application_hub_ui import router as application_hub_ui_router
 from src.app.profile_ui import router as profile_ui_router
 from src.app.auth_ui import router as auth_ui_router
 from src.app.onboarding_ui import router as onboarding_ui_router
+from src.app.guide_ui import router as guide_ui_router
 import threading
 
 from contextlib import asynccontextmanager
@@ -150,12 +153,21 @@ class PlanningStartScanRequest(BaseModel):
     upload_filename: str = ""
     upload_content_type: str = ""
     upload_base64: str = ""
-    enable_jd_llm_extraction: bool = False
+    enable_jd_llm_extraction: bool = True
 
 class PlanningExtractResumeUploadRequest(BaseModel):
     filename: str
     content_type: str = ""
     upload_base64: str
+
+
+class PlanningBulkGenerationStartRequest(BaseModel):
+    pipeline_run_id: str
+    requested_count: int = Field(ge=1, le=500)
+    candidates: list[dict[str, Any]] = Field(min_length=1, max_length=500)
+    review_filter: str = ""
+    match_filter: str = ""
+    preference_filter: str = ""
 
 
 
@@ -206,6 +218,9 @@ def _owner_scoped_planning_output_dir(
 
 
 class PlanningSavedScanStateRequest(BaseModel):
+    diagnostics_execution: bool = False
+    diagnostics_reset: bool = False
+    diagnostic_stages: list[str] = Field(default_factory=list)
     selected_patch_candidate_ids: list[str] = Field(default_factory=list)
     manual_bullet_edits: dict[str, str] = Field(default_factory=dict)
     rewrite_review_decisions: dict[str, dict[str, str] | str] = Field(default_factory=dict)
@@ -949,11 +964,107 @@ async def sanitize_user_ai_settings_validation_error(
     return await request_validation_exception_handler(request, exc)
 
 
+_BULK_SAFE_GET_PATHS = frozenset({
+    "/", "/planning", "/decisions-ui", "/applications", "/pipeline",
+    "/scheduler", "/agentic-operations", "/profile", "/profile/preferences",
+    "/profile/ai-settings", "/profile/saved-scans", "/onboarding",
+    "/health", "/user/workspace-state", "/status", "/pipeline/status",
+    "/scheduler/jobs", "/scheduler/command", "/scheduler/launchd-config",
+    "/scheduler/launchd-agent-status", "/scheduler/history",
+    "/scheduler/storage-contract", "/scheduler/postgres-status", "/scheduler/summary",
+    "/notifications", "/notifications/summary", "/notifications/unread-count",
+    "/browse", "/review", "/workflow", "/planner", "/decisions",
+    "/applied-jobs", "/saved-jobs", "/profile/resumes",
+    "/profile/resume-role-mappings", "/ai/settings", "/ai/settings/catalog",
+    "/ai/settings/recommended-routes", "/onboarding/preferences",
+    "/onboarding/location-search", "/onboarding/status", "/profile/admin/users",
+    "/profile/admin/agentic-operations/overview", "/profile/pipeline-runs",
+    "/profile/saved-scans/data", "/auth/session-config", "/auth/me", "/logout",
+    "/planning/bulk-generation/status",
+    "/planning/bulk-generation/results",
+    "/api/agent-feedback", "/api/agent-feedback/summary", "/api/agent-feedback/export",
+})
+
+
+def _bulk_generation_request_is_proven_safe(request: Request) -> bool:
+    method = str(request.method or "").upper()
+    path = str(request.url.path or "")
+    if method in {"OPTIONS", "HEAD"} or path.startswith("/static/"):
+        return True
+    if method == "POST" and (path == "/auth/logout" or (
+        path.startswith("/planning/bulk-generation/runs/") and path.endswith("/stop")
+    )):
+        return True
+    if method != "GET":
+        return False
+    if path in _BULK_SAFE_GET_PATHS:
+        return True
+    safe_read_prefixes = (
+        "/scheduler/runs/",
+        "/profile/pipeline-runs/",
+        "/planning/bulk-generation/runs/",
+        "/ai/settings/recommended-route/",
+        "/api/agentic-approvals/",
+    )
+    return any(path.startswith(prefix) for prefix in safe_read_prefixes)
+
+
+def _bulk_generation_conflict_response(owner_user_id: str) -> JSONResponse:
+    try:
+        active = bulk_generation_service.active_bulk_generation_guard_state(
+            owner_user_id=owner_user_id
+        )
+    except bulk_generation_service.BulkGenerationError:
+        active = {}
+    return JSONResponse(
+        status_code=409,
+        content={
+            "ok": False,
+            "error_category": "bulk_generation_in_progress",
+            "message": bulk_generation_service.BULK_BLOCK_MESSAGE,
+            "bulk_run_id": str(active.get("run_id", "") or ""),
+            "bulk_status": str(active.get("status", "") or "running"),
+        },
+    )
+
+
 @app.middleware("http")
 async def require_dashboard_auth(request: Request, call_next):
-    guard_response = auth_guard_response(request)
+    guard_response = await run_in_threadpool(auth_guard_response, request)
     if guard_response is not None:
         return guard_response
+
+    owner_user_id = str(
+        dict(getattr(request.state, "auth_user", {}) or {}).get("user_id", "") or ""
+    ).strip()
+    if owner_user_id and not _bulk_generation_request_is_proven_safe(request):
+        try:
+            active_bulk = await run_in_threadpool(
+                bulk_generation_service.active_bulk_generation_guard_state,
+                owner_user_id=owner_user_id
+            )
+        except bulk_generation_service.BulkGenerationError:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "ok": False,
+                    "error_category": "bulk_generation_state_unavailable",
+                    "message": "Bulk Generate state could not be verified. Try again shortly.",
+                    "bulk_run_id": "",
+                    "bulk_status": "unknown",
+                },
+            )
+        if active_bulk:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "ok": False,
+                    "error_category": "bulk_generation_in_progress",
+                    "message": bulk_generation_service.BULK_BLOCK_MESSAGE,
+                    "bulk_run_id": str(active_bulk.get("run_id", "") or ""),
+                    "bulk_status": str(active_bulk.get("status", "") or "running"),
+                },
+            )
 
     return await call_next(request)
 
@@ -1051,6 +1162,12 @@ def _raise_manual_provider_preview_live_http_error(
 
 def _auth_owner_email(request: Request) -> str:
     return str(_auth_user_from_request(request).get("email", "") or "").strip()
+
+
+def _auth_user_is_admin(request: Request) -> bool:
+    user = _auth_user_from_request(request)
+    access_level = str(user.get("access_level", "") or "").strip().lower()
+    return bool(user) and (bool(user.get("is_admin", False)) or access_level == "admin")
 
 
 def _require_admin_user(request: Request) -> dict:
@@ -1704,6 +1821,7 @@ app.include_router(application_hub_ui_router)
 app.include_router(profile_ui_router)
 app.include_router(auth_ui_router)
 app.include_router(onboarding_ui_router)
+app.include_router(guide_ui_router)
 
 @app.get("/health")
 def health():
@@ -3218,52 +3336,115 @@ def scheduler_agent_discovery_run_summary(run_id: str, http_request: Request):
 
 @app.get("/notifications")
 def notifications(
-    notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
+    http_request: Request,
     job_name: str = "",
     level: str = "",
     delivery_status: str = "",
     is_read: str = "",
     limit: int = 20,
 ):
-    return services.notifications_payload(
-        notification_dir=Path(notification_dir),
-        job_name=job_name,
-        level=level,
-        delivery_status=delivery_status,
-        is_read=is_read,
-        limit=limit,
-    )
+    try:
+        return services.notifications_payload(
+            job_name=job_name,
+            level=level,
+            delivery_status=delivery_status,
+            is_read=is_read,
+            limit=limit,
+            scheduler_notifications_visible=_auth_user_is_admin(http_request),
+            owner_user_id=_require_auth_owner_user_id(http_request),
+        )
+    except services.NotificationStorageUnavailableError:
+        raise HTTPException(
+            status_code=503,
+            detail={"ok": False, "error_category": "notification_storage_unavailable"},
+        ) from None
 
 @app.get("/notifications/summary")
 def notifications_summary(
-    notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
+    http_request: Request,
     limit: int = 10,
 ):
-    return services.notifications_summary_payload(
-        notification_dir=Path(notification_dir),
-        limit=limit,
-    )
+    try:
+        return services.notifications_summary_payload(
+            limit=limit,
+            scheduler_notifications_visible=_auth_user_is_admin(http_request),
+            owner_user_id=_require_auth_owner_user_id(http_request),
+        )
+    except services.NotificationStorageUnavailableError:
+        raise HTTPException(
+            status_code=503,
+            detail={"ok": False, "error_category": "notification_storage_unavailable"},
+        ) from None
 
 @app.get("/notifications/unread-count")
 def notifications_unread_count(
-    notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
+    http_request: Request,
 ):
-    return services.notifications_unread_count_payload(
-        notification_dir=Path(notification_dir),
-    )
+    try:
+        return services.notifications_unread_count_payload(
+            scheduler_notifications_visible=_auth_user_is_admin(http_request),
+            owner_user_id=_require_auth_owner_user_id(http_request),
+        )
+    except services.NotificationStorageUnavailableError:
+        raise HTTPException(
+            status_code=503,
+            detail={"ok": False, "error_category": "notification_storage_unavailable"},
+        ) from None
 
 
 @app.post("/notifications/read-state")
 def notifications_read_state(
+    http_request: Request,
     payload: dict = Body(...),
-    notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
 ):
     try:
         return services.record_notification_read_state_payload(
-            notification_dir=Path(notification_dir),
             notification_id=str(payload.get("notification_id", "") or ""),
             is_read=payload.get("is_read", True),
+            scheduler_notifications_visible=_auth_user_is_admin(http_request),
+            owner_user_id=_require_auth_owner_user_id(http_request),
         )
+    except services.NotificationStorageUnavailableError:
+        raise HTTPException(
+            status_code=503,
+            detail={"ok": False, "error_category": "notification_storage_unavailable"},
+        ) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/notifications/delete")
+def notifications_delete(
+    http_request: Request,
+    payload: dict = Body(...),
+):
+    try:
+        return services.delete_notification_payload(
+            notification_id=str(payload.get("notification_id", "") or ""),
+            scheduler_notifications_visible=_auth_user_is_admin(http_request),
+            owner_user_id=_require_auth_owner_user_id(http_request),
+        )
+    except services.NotificationStorageUnavailableError:
+        raise HTTPException(
+            status_code=503,
+            detail={"ok": False, "error_category": "notification_storage_unavailable"},
+        ) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/notifications/delete-all")
+def notifications_delete_all(http_request: Request):
+    try:
+        return services.delete_all_notifications_payload(
+            scheduler_notifications_visible=_auth_user_is_admin(http_request),
+            owner_user_id=_require_auth_owner_user_id(http_request),
+        )
+    except services.NotificationStorageUnavailableError:
+        raise HTTPException(
+            status_code=503,
+            detail={"ok": False, "error_category": "notification_storage_unavailable"},
+        ) from None
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     
@@ -3286,6 +3467,8 @@ def run_live_pipeline(http_request: Request, payload: dict = Body(...)):
         delete_seen_data=str(payload.get("delete_seen_data", "no") or "no"),
     )
     except ValueError as exc:
+        if str(exc) == "bulk_generation_in_progress":
+            return _bulk_generation_conflict_response(_auth_owner_user_id(http_request))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     
 @app.get("/browse")
@@ -3305,7 +3488,7 @@ def browse(
     sort_key: str = "",
     sort_dir: str = "asc",
     page: int = 1,
-    limit: int = 15,
+    limit: int = Query(default=15, ge=1),
 ):
     return services.browse_payload(
         output_dir=Path(output_dir),
@@ -3475,6 +3658,51 @@ def planning_save_saved_scan_state(
     request: PlanningSavedScanStateRequest,
 ):
     try:
+        if request.diagnostics_reset:
+            conflicting_fields = sorted(
+                key
+                for key in request.model_dump(exclude_defaults=True)
+                if key != "diagnostics_reset"
+            )
+            if conflicting_fields:
+                raise ValueError(
+                    "diagnostics_reset cannot be combined with other saved-scan state inputs: "
+                    + ", ".join(conflicting_fields)
+                )
+            return services.reset_saved_scan_diagnostics_payload(
+                scan_id=scan_id,
+                owner_user_id=_auth_owner_user_id(http_request),
+            )
+        if request.diagnostics_execution:
+            return services.execute_saved_scan_diagnostics_payload(
+                scan_id=scan_id,
+                owner_user_id=_auth_owner_user_id(http_request),
+                diagnostic_stages=request.diagnostic_stages,
+                accepted_exact_change_proposal_ids=request.accepted_exact_change_proposal_ids,
+                approved_change_plan_id=request.approved_change_plan_id,
+                guarded_resume_copy_artifact_id=request.guarded_resume_copy_artifact_id,
+                verified_artifact_operator_review_artifact_id=request.verified_artifact_operator_review_artifact_id,
+                verified_artifact_operator_decision_packet_id=request.verified_artifact_operator_decision_packet_id,
+                verified_artifact_operator_decision_artifact_id=request.verified_artifact_operator_decision_artifact_id,
+                verified_artifact_operator_decision_value=request.verified_artifact_operator_decision_value,
+                application_readiness_operator_decision_id=request.application_readiness_operator_decision_id,
+                application_readiness_operator_review_packet_id=request.application_readiness_operator_review_packet_id,
+                application_readiness_artifact_id=request.application_readiness_artifact_id,
+                manual_handoff_application_readiness_packet_id=request.manual_handoff_application_readiness_packet_id,
+                manual_handoff_artifact_id=request.manual_handoff_artifact_id,
+                handoff_audit_manual_handoff_packet_id=request.handoff_audit_manual_handoff_packet_id,
+                handoff_audit_application_readiness_packet_id=request.handoff_audit_application_readiness_packet_id,
+                handoff_audit_artifact_id=request.handoff_audit_artifact_id,
+                safety_boundary_handoff_audit_trail_id=request.safety_boundary_handoff_audit_trail_id,
+                safety_boundary_manual_handoff_packet_id=request.safety_boundary_manual_handoff_packet_id,
+                safety_boundary_application_readiness_packet_id=request.safety_boundary_application_readiness_packet_id,
+                safety_boundary_artifact_id=request.safety_boundary_artifact_id,
+                workflow_readiness_safety_boundary_summary_id=request.workflow_readiness_safety_boundary_summary_id,
+                workflow_readiness_handoff_audit_trail_id=request.workflow_readiness_handoff_audit_trail_id,
+                workflow_readiness_manual_handoff_packet_id=request.workflow_readiness_manual_handoff_packet_id,
+                workflow_readiness_application_readiness_packet_id=request.workflow_readiness_application_readiness_packet_id,
+                workflow_readiness_artifact_id=request.workflow_readiness_artifact_id,
+            )
         return services.save_saved_scan_state_payload(
             scan_id=scan_id,
             owner_user_id=_auth_owner_user_id(http_request),
@@ -3520,6 +3748,8 @@ def planning_save_saved_scan_state(
             workflow_readiness_application_readiness_packet_id=request.workflow_readiness_application_readiness_packet_id,
             workflow_readiness_artifact_id=request.workflow_readiness_artifact_id,
         )
+    except services.SavedScanDiagnosticsNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -3693,6 +3923,7 @@ def planning_regenerate_selected_resume(
             selected_resume=str(payload.get("selected_resume", "") or ""),
             generate_llm_tailoring=bool(payload.get("generate_llm_tailoring", False)),
             refresh_llm_tailoring=bool(payload.get("refresh_llm_tailoring", False)),
+            parse_retry_limit=payload.get("parse_retry_limit", 1),
             owner_user_id=owner_user_id,
         )
     except services.SelectedResumeRegenerationError:
@@ -3702,6 +3933,86 @@ def planning_regenerate_selected_resume(
         ) from None
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _bulk_generation_error_response(
+    exc: bulk_generation_service.BulkGenerationError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "ok": False,
+            "error_category": exc.category,
+            "message": exc.message,
+            "bulk_run_id": str(exc.run.get("run_id", "") or ""),
+            "bulk_status": str(exc.run.get("status", "") or ""),
+        },
+    )
+
+
+@app.post("/planning/bulk-generation/start", status_code=202)
+def planning_bulk_generation_start(
+    request: PlanningBulkGenerationStartRequest,
+    http_request: Request,
+):
+    try:
+        return bulk_generation_service.start_bulk_generation(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            pipeline_run_id=request.pipeline_run_id,
+            candidates=request.candidates,
+            requested_count=request.requested_count,
+            review_filter=request.review_filter,
+            match_filter=request.match_filter,
+            preference_filter=request.preference_filter,
+        )
+    except bulk_generation_service.BulkGenerationError as exc:
+        return _bulk_generation_error_response(exc)
+
+
+@app.get("/planning/bulk-generation/status")
+def planning_bulk_generation_status(http_request: Request):
+    try:
+        return bulk_generation_service.get_bulk_generation_status(
+            owner_user_id=_require_auth_owner_user_id(http_request)
+        )
+    except bulk_generation_service.BulkGenerationError as exc:
+        return _bulk_generation_error_response(exc)
+
+
+@app.get("/planning/bulk-generation/results")
+def planning_bulk_generation_results(http_request: Request, pipeline_run_id: str = ""):
+    """Owner-scoped, read-only Bulk Generate history for one pipeline run.
+
+    Kept separate from /status so the canonical polling and active-run guard
+    payload is not widened with an unrelated history body.
+    """
+    try:
+        return bulk_generation_service.get_bulk_generation_pipeline_results(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            pipeline_run_id=pipeline_run_id,
+        )
+    except bulk_generation_service.BulkGenerationError as exc:
+        return _bulk_generation_error_response(exc)
+
+
+@app.get("/planning/bulk-generation/runs/{run_id}")
+def planning_bulk_generation_run_status(run_id: str, http_request: Request):
+    try:
+        return bulk_generation_service.get_bulk_generation_status(
+            owner_user_id=_require_auth_owner_user_id(http_request), run_id=run_id
+        )
+    except bulk_generation_service.BulkGenerationError as exc:
+        return _bulk_generation_error_response(exc)
+
+
+@app.post("/planning/bulk-generation/runs/{run_id}/stop")
+def planning_bulk_generation_stop(run_id: str, http_request: Request):
+    try:
+        return bulk_generation_service.request_bulk_generation_stop(
+            owner_user_id=_require_auth_owner_user_id(http_request), run_id=run_id
+        )
+    except bulk_generation_service.BulkGenerationError as exc:
+        return _bulk_generation_error_response(exc)
 
 @app.post("/planning/preview-selected-patches")
 def planning_preview_selected_patches(
@@ -4308,6 +4619,17 @@ def profile_admin_users(http_request: Request, limit: int = 100):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.get("/profile/admin/agentic-operations/overview")
+def profile_admin_agentic_operations_overview(http_request: Request):
+    _require_admin_user(http_request)
+    try:
+        return services.agentic_operations_overview_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.patch("/profile/admin/users/{user_id}/access")
 def profile_admin_update_user_access(
     user_id: str,
@@ -4372,6 +4694,7 @@ def profile_pipeline_run_agent_trace(
     include_stage_trace_readiness: str = "",
     include_trace_evidence_pack: str = "",
 ):
+    _require_admin_user(http_request)
     try:
         return services.agent_trace_payload(
             owner_user_id=_require_auth_owner_user_id(http_request),
@@ -4402,6 +4725,7 @@ def profile_pipeline_run_evidence_chain_trace(
     limit_runs: int = 10,
     limit_steps: int = 100,
 ):
+    _require_admin_user(http_request)
     try:
         return services.get_evidence_chain_trace_readback_payload(
             owner_user_id=_require_auth_owner_user_id(http_request),
@@ -6059,6 +6383,7 @@ def jd_live_provider_canary_readback(
 
 @app.get("/profile/pipeline-runs/{run_id}/agentic-review-data")
 def profile_pipeline_run_agentic_review_data(run_id: str, http_request: Request):
+    _require_admin_user(http_request)
     try:
         return services.profile_pipeline_run_agentic_review_payload(
             owner_user_id=_require_auth_owner_user_id(http_request),
@@ -6076,6 +6401,8 @@ def profile_pipeline_run_rerun(run_id: str, http_request: Request):
             run_id=run_id,
         )
     except (SystemExit, ValueError) as exc:
+        if str(exc) == "bulk_generation_in_progress":
+            return _bulk_generation_conflict_response(_auth_owner_user_id(http_request))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 @app.get("/profile/saved-scans/data")

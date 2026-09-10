@@ -182,9 +182,15 @@ def _row(plan, workload_id):
     )
 
 
-def _live_evidence(plan, workload_id, *, invalid_contract=False):
+def _live_evidence(
+    plan, workload_id, *, invalid_contract=False, renderer_bound=False
+):
     row = _row(plan, workload_id)
     authorization, pricing = _live_inputs(plan, row)
+    if renderer_bound:
+        authorization = live.build_renderer_bound_live_authorization(
+            authorization, plan=plan
+        )
     outputs = _expected_outputs(plan)
     if workload_id == "jd_intelligence":
         outputs[row["case_alias"]] = {
@@ -830,3 +836,767 @@ def test_adapter_owner_has_no_network_environment_or_persistence_access():
         in {"write_text", "write_bytes", "open", "replace", "unlink"}
         for node in ast.walk(tree)
     )
+
+
+# ---------------------------------------------------------------------------
+# Stage 2B: additive renderer-bound live evidence handoff.
+# V1 evidence, V1 observations, and V1 authority are untouched.
+# ---------------------------------------------------------------------------
+
+
+STAGE2B_ROOT = Path(__file__).resolve().parents[1]
+CURRENT_V1_REGISTRY_SHA256 = (
+    "6d7c1e2cae7d03edadcfb4c7268ec6ec74e8c0e10b13e73cc3914baa03ea8f6f"
+)
+CURRENT_CONTROLLED_PLAN_SHA256 = (
+    "bacc7eaa4524199ba293e2d50232f5a8c6cf61014ad8dc89c3dd30d334654162"
+)
+CURRENT_FIXTURE_CORPUS_SHA256 = (
+    "59180e4064dd74759c6ecd8630478225b191f942b68fb1880e172fe07ee80aec"
+)
+
+
+def _stage2b_renderer_bound(plan, workload_id):
+    # Stage 4I: the executor emits renderer-bound evidence natively, so this
+    # fixture no longer hand-stamps the version or the tested semantics.
+    row, renderer_authorization, pricing, renderer_evidence = _live_evidence(
+        plan, workload_id, renderer_bound=True
+    )
+    assert renderer_evidence["evidence_version"] == (
+        live.RENDERER_BOUND_LIVE_EVIDENCE_VERSION
+    )
+    _v1_row, authorization, _v1_pricing, evidence = _live_evidence(
+        plan, workload_id
+    )
+    semantics = live.build_workload_qualification_semantics_fingerprints(plan)
+    return {
+        "row": row,
+        "v1_authorization": authorization,
+        "authorization": renderer_authorization,
+        "pricing": pricing,
+        "v1_evidence": evidence,
+        "evidence": renderer_evidence,
+        "semantics": semantics,
+    }
+
+
+def test_stage2b_v1_evidence_and_observation_remain_unchanged(plan):
+    row, authorization, pricing, evidence = _live_evidence(
+        plan, "skill_extraction"
+    )
+
+    assert live.LIVE_EVIDENCE_VERSION == (
+        "controlled-live-qualification-evidence-v1"
+    )
+    assert live.RENDERER_BOUND_LIVE_EVIDENCE_VERSION != (
+        live.LIVE_EVIDENCE_VERSION
+    )
+    assert evidence["evidence_version"] == live.LIVE_EVIDENCE_VERSION
+    for summary in evidence["grading_summaries"]:
+        assert live.TESTED_WORKLOAD_SEMANTICS_FIELD not in summary
+
+    observation = adapter.build_qualification_observation(
+        evidence=evidence,
+        schedule_key=row["schedule_key"],
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+    )
+    assert adapter.validate_qualification_observation(observation)
+    assert set(observation) == adapter._OBSERVATION_FIELDS
+    assert "tested_workload_qualification_semantics_sha256" not in observation
+    assert "qualification_semantics_generation" not in observation
+    assert observation["observation_version"] == (
+        adapter.QUALIFICATION_OBSERVATION_VERSION
+    )
+
+
+def test_stage2b_v1_evidence_cannot_gain_a_tested_semantics_digest(plan):
+    row, authorization, pricing, evidence = _live_evidence(
+        plan, "skill_extraction"
+    )
+    semantics = live.build_workload_qualification_semantics_fingerprints(plan)
+
+    # The V1 builder exposes no parameter that could carry it.
+    with pytest.raises(TypeError):
+        adapter.build_qualification_observation(
+            evidence=evidence,
+            schedule_key=row["schedule_key"],
+            plan=plan,
+            authorization=authorization,
+            pricing=pricing,
+            tested_workload_qualification_semantics_sha256=semantics[
+                "skill_extraction"
+            ],
+        )
+
+    # The renderer-bound builder refuses V1 evidence outright.
+    renderer_authorization = live.build_renderer_bound_live_authorization(
+        authorization, plan=plan
+    )
+    with pytest.raises(ValueError):
+        adapter.build_renderer_bound_qualification_observation(
+            evidence=evidence,
+            schedule_key=row["schedule_key"],
+            plan=plan,
+            authorization=renderer_authorization,
+            pricing=pricing,
+        )
+
+
+def test_stage2b_renderer_bound_observation_carries_validated_digest(plan):
+    context = _stage2b_renderer_bound(plan, "skill_extraction")
+
+    observation = adapter.build_renderer_bound_qualification_observation(
+        evidence=context["evidence"],
+        schedule_key=context["row"]["schedule_key"],
+        plan=plan,
+        authorization=context["authorization"],
+        pricing=context["pricing"],
+    )
+
+    assert set(observation) == adapter._RENDERER_BOUND_OBSERVATION_FIELDS
+    assert observation["observation_version"] == (
+        adapter.RENDERER_BOUND_OBSERVATION_VERSION
+    )
+    assert observation["qualification_semantics_generation"] == (
+        "renderer_bound_v1"
+    )
+    assert observation["tested_workload_qualification_semantics_sha256"] == (
+        context["semantics"]["skill_extraction"]
+    )
+    assert observation["evidence_schema_version"] == (
+        live.RENDERER_BOUND_LIVE_EVIDENCE_VERSION
+    )
+    assert observation["tested_task_contract_sha256"] == (
+        context["row"]["production_task_contract_sha256"]
+    )
+
+
+def test_stage2b_renderer_bound_observation_refuses_caller_supplied_digest(plan):
+    context = _stage2b_renderer_bound(plan, "skill_extraction")
+
+    with pytest.raises(ValueError):
+        adapter.build_renderer_bound_qualification_observation(
+            evidence=context["evidence"],
+            schedule_key=context["row"]["schedule_key"],
+            plan=plan,
+            authorization=context["authorization"],
+            pricing=context["pricing"],
+            tested_workload_qualification_semantics_sha256=context[
+                "semantics"
+            ]["skill_extraction"],
+        )
+
+
+def test_stage2b_missing_or_mismatched_tested_semantics_fails_closed(plan):
+    context = _stage2b_renderer_bound(plan, "skill_extraction")
+
+    missing = deepcopy(context["evidence"])
+    for summary in missing["grading_summaries"]:
+        del summary[live.TESTED_WORKLOAD_SEMANTICS_FIELD]
+    with pytest.raises(ValueError):
+        live.validate_renderer_bound_live_qualification_evidence(
+            missing,
+            plan=plan,
+            authorization=context["authorization"],
+            pricing=context["pricing"],
+        )
+
+    mismatched = deepcopy(context["evidence"])
+    for summary in mismatched["grading_summaries"]:
+        summary[live.TESTED_WORKLOAD_SEMANTICS_FIELD] = "0" * 64
+    with pytest.raises(ValueError):
+        live.validate_renderer_bound_live_qualification_evidence(
+            mismatched,
+            plan=plan,
+            authorization=context["authorization"],
+            pricing=context["pricing"],
+        )
+    with pytest.raises(ValueError):
+        adapter.build_renderer_bound_qualification_observation(
+            evidence=mismatched,
+            schedule_key=context["row"]["schedule_key"],
+            plan=plan,
+            authorization=context["authorization"],
+            pricing=context["pricing"],
+        )
+
+    unauthorized = deepcopy(context["authorization"])
+    unauthorized[live.APPROVED_WORKLOAD_SEMANTICS_FIELD] = {
+        workload_id: "1" * 64
+        for workload_id in unauthorized[
+            live.APPROVED_WORKLOAD_SEMANTICS_FIELD
+        ]
+    }
+    with pytest.raises(ValueError):
+        live.validate_renderer_bound_live_qualification_evidence(
+            context["evidence"],
+            plan=plan,
+            authorization=unauthorized,
+            pricing=context["pricing"],
+        )
+
+
+def test_stage2b_tampering_with_tested_digest_moves_the_evidence_digest(plan):
+    context = _stage2b_renderer_bound(plan, "skill_extraction")
+
+    baseline = live.renderer_bound_live_qualification_evidence_sha256(
+        context["evidence"],
+        plan=plan,
+        authorization=context["authorization"],
+        pricing=context["pricing"],
+    )
+    assert baseline != live.live_qualification_evidence_sha256(
+        context["v1_evidence"],
+        plan=plan,
+        authorization=context["v1_authorization"],
+        pricing=context["pricing"],
+    )
+
+    tampered = deepcopy(context["evidence"])
+    for summary in tampered["grading_summaries"]:
+        summary[live.TESTED_WORKLOAD_SEMANTICS_FIELD] = "2" * 64
+    with pytest.raises(ValueError):
+        live.renderer_bound_live_qualification_evidence_sha256(
+            tampered,
+            plan=plan,
+            authorization=context["authorization"],
+            pricing=context["pricing"],
+        )
+
+
+def test_stage2b_execution_contract_binds_workload_local_semantics(plan):
+    from src.evaluation import controlled_production_parity_benchmark as parity
+    from src.evaluation.provider_fixture_benchmark import (
+        fixture_case_corpus_sha256,
+        load_fixture_case_corpus,
+    )
+
+    corpus = load_fixture_case_corpus()
+    universe = live.build_renderer_bound_live_qualification_universe(plan)
+    assert len(universe) == 44
+
+    skill = parity.workload_qualification_semantics_sha256(
+        "skill_extraction", plan=plan, corpus=corpus
+    )
+    judge = parity.workload_qualification_semantics_sha256(
+        "tailoring_judge", plan=plan, corpus=corpus
+    )
+    assert skill != judge
+
+    by_workload = {
+        row["workload_id"]: row[live.TESTED_WORKLOAD_SEMANTICS_FIELD]
+        for row in universe
+    }
+    assert by_workload["skill_extraction"] == skill
+    assert by_workload["tailoring_judge"] == judge
+    assert fixture_case_corpus_sha256(corpus) not in set(by_workload.values())
+
+
+def test_stage2b_registry_boundary_consumes_the_adapter_digest(plan):
+    from src.evaluation import (
+        controlled_provider_qualification_registry as registry,
+    )
+
+    context = _stage2b_renderer_bound(plan, "skill_extraction")
+    observation = adapter.build_renderer_bound_qualification_observation(
+        evidence=context["evidence"],
+        schedule_key=context["row"]["schedule_key"],
+        plan=plan,
+        authorization=context["authorization"],
+        pricing=context["pricing"],
+    )
+
+    source = json.loads(
+        (
+            STAGE2B_ROOT
+            / "outputs"
+            / "provider_benchmark"
+            / "provider-qualification-registry.json"
+        ).read_text(encoding="utf-8")
+    )
+    base_cell = next(
+        cell
+        for cell in source["cells"]
+        if cell["workload_id"] == "skill_extraction"
+        and cell["provider"] == "groq"
+    )
+
+    cell = registry.build_renderer_bound_qualification_cell(
+        base_cell=base_cell,
+        qualification_semantics_generation=observation[
+            "qualification_semantics_generation"
+        ],
+        current_workload_qualification_semantics_sha256=context["semantics"][
+            "skill_extraction"
+        ],
+        tested_workload_qualification_semantics_sha256=observation[
+            "tested_workload_qualification_semantics_sha256"
+        ],
+    )
+    assert cell["qualification_semantics_generation"] == "renderer_bound_v1"
+    assert cell["tested_workload_qualification_semantics_sha256"] == (
+        observation["tested_workload_qualification_semantics_sha256"]
+    )
+    assert cell["status"] == "qualified"
+
+    # The registry artifact itself is never written by this handoff.
+    assert registry.provider_qualification_registry_sha256(source) == (
+        CURRENT_V1_REGISTRY_SHA256
+    )
+
+
+def test_stage2b_v1_authority_invariants_hold(plan):
+    from src.evaluation import (
+        controlled_provider_qualification_registry as registry,
+    )
+    from src.evaluation import provider_model_recommendation_policy as policy
+    from src.evaluation.controlled_provider_benchmark_plan import (
+        controlled_provider_benchmark_plan_sha256,
+        legacy_case_alias_map,
+    )
+    from src.evaluation.provider_fixture_benchmark import (
+        fixture_case_corpus_sha256,
+        load_fixture_case_corpus,
+    )
+
+    corpus = load_fixture_case_corpus()
+    source = json.loads(
+        (
+            STAGE2B_ROOT
+            / "outputs"
+            / "provider_benchmark"
+            / "provider-qualification-registry.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert fixture_case_corpus_sha256(corpus) == CURRENT_FIXTURE_CORPUS_SHA256
+    assert controlled_provider_benchmark_plan_sha256(plan) == (
+        CURRENT_CONTROLLED_PLAN_SHA256
+    )
+    assert len(legacy_case_alias_map(corpus)) == 15
+    assert registry.provider_qualification_registry_sha256(source) == (
+        CURRENT_V1_REGISTRY_SHA256
+    )
+    assert len(
+        policy.build_provider_model_recommendation_policy(source)["workloads"]
+    ) == 12
+
+
+# ---------------------------------------------------------------------------
+# Stage 4F: explicit future corpus through the renderer-bound adapter.
+# V1 observations are untouched; cases.json is never written.
+# ---------------------------------------------------------------------------
+
+
+STAGE4F_FUTURE_CORPUS_SHA256 = (
+    "1f11a262af93ec2b1a6eb7fee337e5802cf9f15719618c072b6691613a37d071"
+)
+STAGE4F_FUTURE_PLAN_SHA256 = (
+    "c2a1b03e834e8707fbd4647bff53a537e00c65e4cf135d71bd15cf660a2d3ec1"
+)
+STAGE4F_FUTURE_SKILL_SEMANTICS = (
+    "2cb1da2c7cbfab3ed3a296e5e1c2ade48c0ffc7b608da984fce5668d29551aa9"
+)
+STAGE4F_SKILL_TASK_CONTRACT = (
+    "73784a99de4913b95e2d2a1e8a1b10a9eee1665fd83a179be34a4fe31b82fa4c"
+)
+
+
+def _stage4f_future_corpus():
+    import test_provider_fixture_benchmark as fixture_suite
+
+    from src.evaluation.provider_fixture_benchmark import (
+        load_fixture_case_corpus,
+    )
+
+    future = deepcopy(load_fixture_case_corpus())
+    future["cases"] = future["cases"] + (
+        fixture_suite.stage4b_proposed_skill_cases()
+    )
+    return future
+
+
+class _Stage4FDispatcher:
+    def __init__(self, plan, corpus):
+        from src.evaluation.controlled_production_parity_benchmark import (
+            validate_and_grade_production_parity_response,
+        )
+        from src.evaluation.controlled_provider_benchmark_plan import (
+            _case_alias,
+        )
+        from src.evaluation.provider_fixture_benchmark import (
+            fixture_case_corpus_sha256,
+        )
+
+        self._grade = validate_and_grade_production_parity_response
+        digest = fixture_case_corpus_sha256(corpus)
+        reviews = {
+            row["case_alias"]: row for row in plan["transmission_review"]
+        }
+        self.corpus = deepcopy(corpus)
+        self.outputs = {
+            _case_alias(case["case_id"], digest): deepcopy(
+                case["expected_output"]
+            )
+            for case in corpus["cases"]
+            if reviews[_case_alias(case["case_id"], digest)][
+                "eligible_for_later_controlled_transmission"
+            ]
+        }
+        self.calls = []
+
+    def __call__(
+        self, *, provider, api_key, parity_request, scheduled, plan,
+        monotonic_clock,
+    ):
+        self.calls.append(scheduled["schedule_key"])
+        return {
+            "parity_result": self._grade(
+                parity_request,
+                deepcopy(self.outputs[scheduled["case_alias"]]),
+                plan=plan,
+                corpus=self.corpus,
+            ),
+            "provider": provider,
+            "model": scheduled["model"],
+            "latency_ms": 25.0,
+            "input_token_count": 40,
+            "output_token_count": 20,
+            "provider_outcome_category": "success",
+        }
+
+
+def _stage4f_execute(case_id):
+    """Run one future-corpus skill row end to end with an injected transport."""
+
+    from src.evaluation.controlled_provider_benchmark_plan import (
+        _case_alias,
+        build_controlled_provider_benchmark_plan,
+        controlled_provider_benchmark_plan_sha256,
+    )
+    from src.evaluation.provider_fixture_benchmark import (
+        fixture_case_corpus_sha256,
+    )
+
+    future = _stage4f_future_corpus()
+    assert fixture_case_corpus_sha256(future) == STAGE4F_FUTURE_CORPUS_SHA256
+    plan = build_controlled_provider_benchmark_plan(corpus=future)
+    assert controlled_provider_benchmark_plan_sha256(plan) == (
+        STAGE4F_FUTURE_PLAN_SHA256
+    )
+    semantics = live.build_workload_qualification_semantics_fingerprints(
+        plan, corpus=future
+    )
+    assert semantics["skill_extraction"] == STAGE4F_FUTURE_SKILL_SEMANTICS
+
+    alias = _case_alias(case_id, fixture_case_corpus_sha256(future))
+    row = next(
+        candidate
+        for candidate in live.build_live_qualification_universe(plan)
+        if candidate["case_alias"] == alias
+        and candidate["provider"] == "groq"
+    )
+    authorization, pricing = _live_inputs(plan, row)
+    renderer_authorization = live.build_renderer_bound_live_authorization(
+        authorization, plan=plan, corpus=future
+    )
+    dispatcher = _Stage4FDispatcher(plan, future)
+    # Stage 4I: executed with the renderer-bound authorization, so the evidence
+    # is renderer-bound natively and is never stamped afterwards.
+    evidence = live.execute_controlled_live_qualification(
+        plan=plan,
+        live_authorization=renderer_authorization,
+        pricing=pricing,
+        requested_schedule_keys=[row["schedule_key"]],
+        operator_credentials={"groq": TEST_SECRET},
+        execution_time_source=lambda: EXECUTION_TIME,
+        transport_dispatchers={"groq": dispatcher, "openai": dispatcher},
+        monotonic_clock=lambda: 1.0,
+        corpus=future,
+    )
+    assert evidence["evidence_version"] == (
+        live.RENDERER_BOUND_LIVE_EVIDENCE_VERSION
+    )
+    assert evidence["grading_summaries"][0][
+        live.TESTED_WORKLOAD_SEMANTICS_FIELD
+    ] == semantics["skill_extraction"]
+    renderer_evidence = evidence
+    return {
+        "future": future,
+        "plan": plan,
+        "row": row,
+        "authorization": renderer_authorization,
+        "pricing": pricing,
+        "dispatcher": dispatcher,
+        "evidence": evidence,
+        "renderer_evidence": renderer_evidence,
+    }
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    (
+        "skill_extraction_required_preferred_v1",
+        "skill_extraction_windowed_mid_required_tail_preferred_v1",
+    ),
+)
+def test_stage4f_future_corpus_reaches_the_renderer_bound_observation(case_id):
+    context = _stage4f_execute(case_id)
+    evidence = context["evidence"]
+
+    assert context["dispatcher"].calls == [context["row"]["schedule_key"]]
+    assert evidence["execution_status"] == "completed"
+    assert evidence["stop_reason"] is None
+    assert evidence["aggregate_usage"]["provider_call_count"] == 1
+
+    summary = context["renderer_evidence"]["grading_summaries"][0]
+    assert summary[live.TESTED_WORKLOAD_SEMANTICS_FIELD] == (
+        STAGE4F_FUTURE_SKILL_SEMANTICS
+    )
+    assert summary["production_task_contract_sha256"] == (
+        STAGE4F_SKILL_TASK_CONTRACT
+    )
+
+    observation = adapter.build_renderer_bound_qualification_observation(
+        evidence=context["renderer_evidence"],
+        schedule_key=context["row"]["schedule_key"],
+        plan=context["plan"],
+        authorization=context["authorization"],
+        pricing=context["pricing"],
+        corpus=context["future"],
+    )
+    assert observation["qualification_semantics_generation"] == (
+        "renderer_bound_v1"
+    )
+    assert observation[
+        "tested_workload_qualification_semantics_sha256"
+    ] == STAGE4F_FUTURE_SKILL_SEMANTICS
+    assert observation["tested_task_contract_sha256"] == (
+        STAGE4F_SKILL_TASK_CONTRACT
+    )
+    assert set(observation) == adapter._RENDERER_BOUND_OBSERVATION_FIELDS
+
+
+def test_stage4f_adapter_corpus_plan_mismatch_fails_closed():
+    from src.evaluation.controlled_provider_benchmark_plan import (
+        build_controlled_provider_benchmark_plan,
+    )
+    from src.evaluation.provider_fixture_benchmark import (
+        load_fixture_case_corpus,
+    )
+
+    context = _stage4f_execute("skill_extraction_required_preferred_v1")
+    current_corpus = load_fixture_case_corpus()
+    current_plan = build_controlled_provider_benchmark_plan(
+        corpus=current_corpus
+    )
+
+    # future plan + current corpus
+    with pytest.raises(ValueError):
+        adapter.build_renderer_bound_qualification_observation(
+            evidence=context["renderer_evidence"],
+            schedule_key=context["row"]["schedule_key"],
+            plan=context["plan"],
+            authorization=context["authorization"],
+            pricing=context["pricing"],
+            corpus=current_corpus,
+        )
+
+    # current plan + future corpus
+    with pytest.raises(ValueError):
+        adapter.build_renderer_bound_qualification_observation(
+            evidence=context["renderer_evidence"],
+            schedule_key=context["row"]["schedule_key"],
+            plan=current_plan,
+            authorization=context["authorization"],
+            pricing=context["pricing"],
+            corpus=context["future"],
+        )
+
+    # omitting the corpus falls back to disk and cannot validate a future plan
+    with pytest.raises(ValueError):
+        adapter.build_renderer_bound_qualification_observation(
+            evidence=context["renderer_evidence"],
+            schedule_key=context["row"]["schedule_key"],
+            plan=context["plan"],
+            authorization=context["authorization"],
+            pricing=context["pricing"],
+        )
+
+
+def test_stage4f_v1_observation_path_is_untouched(plan):
+    row, authorization, pricing, evidence = _live_evidence(
+        plan, "skill_extraction"
+    )
+
+    # The V1 builder still has no corpus parameter at all.
+    import inspect
+
+    assert "corpus" not in inspect.signature(
+        adapter.build_qualification_observation
+    ).parameters
+
+    observation = adapter.build_qualification_observation(
+        evidence=evidence,
+        schedule_key=row["schedule_key"],
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+    )
+    assert adapter.validate_qualification_observation(observation)
+    assert set(observation) == adapter._OBSERVATION_FIELDS
+    assert "tested_workload_qualification_semantics_sha256" not in observation
+    assert "qualification_semantics_generation" not in observation
+
+    # The adapter never computes workload semantics to invent provenance.
+    source = (
+        STAGE2B_ROOT
+        / "src/evaluation/controlled_provider_qualification_evidence_adapter.py"
+    ).read_text(encoding="utf-8")
+    assert "workload_qualification_semantics_sha256(" not in source
+
+
+def test_stage4f_registry_and_prospective_policy_handoff():
+    from src.evaluation import (
+        controlled_provider_qualification_registry as registry,
+    )
+    from src.evaluation import provider_model_recommendation_policy as policy
+
+    context = _stage4f_execute("skill_extraction_required_preferred_v1")
+    observation = adapter.build_renderer_bound_qualification_observation(
+        evidence=context["renderer_evidence"],
+        schedule_key=context["row"]["schedule_key"],
+        plan=context["plan"],
+        authorization=context["authorization"],
+        pricing=context["pricing"],
+        corpus=context["future"],
+    )
+
+    source_registry = json.loads(
+        (
+            STAGE2B_ROOT
+            / "outputs"
+            / "provider_benchmark"
+            / "provider-qualification-registry.json"
+        ).read_text(encoding="utf-8")
+    )
+    base_cell = next(
+        cell
+        for cell in source_registry["cells"]
+        if cell["workload_id"] == "skill_extraction"
+        and cell["provider"] == "groq"
+    )
+    base_cell = deepcopy(base_cell)
+    base_cell["status"] = "qualified"
+    base_cell["status_reasons"] = ["qualification_requirements_satisfied"]
+    base_cell["current_task_contract_sha256"] = STAGE4F_SKILL_TASK_CONTRACT
+    base_cell["tested_task_contract_sha256"] = observation[
+        "tested_task_contract_sha256"
+    ]
+
+    cell = registry.build_renderer_bound_qualification_cell(
+        base_cell=base_cell,
+        qualification_semantics_generation=observation[
+            "qualification_semantics_generation"
+        ],
+        current_workload_qualification_semantics_sha256=(
+            STAGE4F_FUTURE_SKILL_SEMANTICS
+        ),
+        tested_workload_qualification_semantics_sha256=observation[
+            "tested_workload_qualification_semantics_sha256"
+        ],
+    )
+    assert cell["qualification_semantics_generation"] == "renderer_bound_v1"
+    assert (
+        cell["tested_workload_qualification_semantics_sha256"]
+        == cell["current_workload_qualification_semantics_sha256"]
+        == STAGE4F_FUTURE_SKILL_SEMANTICS
+    )
+    assert (
+        cell["tested_task_contract_sha256"]
+        == cell["current_task_contract_sha256"]
+        == STAGE4F_SKILL_TASK_CONTRACT
+    )
+    assert cell["status"] == "qualified"
+
+    # Stage 3 workload-local validation accepts only an explicit pin.
+    renderer_registry = {
+        **{
+            field: deepcopy(source_registry[field])
+            for field in source_registry
+            if field != "cells"
+        },
+        "registry_schema_version": (
+            registry.RENDERER_BOUND_REGISTRY_SCHEMA_VERSION
+        ),
+        "registry_contract_version": (
+            registry.RENDERER_BOUND_REGISTRY_CONTRACT_VERSION
+        ),
+        "qualification_semantics_generations": list(
+            registry.QUALIFICATION_SEMANTICS_GENERATIONS
+        ),
+        "cells": [cell]
+        + [
+            registry.build_renderer_bound_qualification_cell(
+                base_cell=other,
+                qualification_semantics_generation=(
+                    "legacy_no_renderer_binding"
+                ),
+                current_workload_qualification_semantics_sha256=(
+                    STAGE4F_FUTURE_SKILL_SEMANTICS
+                ),
+            )
+            for other in source_registry["cells"]
+            if other["workload_id"] == "skill_extraction"
+            and other["provider"] != "groq"
+        ],
+    }
+    assert registry.validate_renderer_bound_qualification_registry(
+        renderer_registry
+    )
+
+    pin = {
+        "pin_version": policy.RENDERER_BOUND_RECOMMENDATION_PIN_VERSION,
+        "workload_id": "skill_extraction",
+        "provider": cell["provider"],
+        "model": cell["model"],
+        "selection_basis": "synthetic_stage4f_basis_pending_review",
+        "expected_status": "qualified",
+        "expected_status_reasons": list(cell["status_reasons"]),
+        "expected_qualification_semantics_generation": "renderer_bound_v1",
+        "expected_current_workload_qualification_semantics_sha256": (
+            STAGE4F_FUTURE_SKILL_SEMANTICS
+        ),
+        "expected_tested_workload_qualification_semantics_sha256": (
+            STAGE4F_FUTURE_SKILL_SEMANTICS
+        ),
+        "expected_current_task_contract_sha256": STAGE4F_SKILL_TASK_CONTRACT,
+        "expected_tested_task_contract_sha256": STAGE4F_SKILL_TASK_CONTRACT,
+        "expected_qualification_binding_sha256": cell[
+            "qualification_binding_sha256"
+        ],
+        "expected_evidence_sha256": cell["evidence_sha256"],
+        "expected_review_sha256": cell["review_sha256"],
+        "expected_candidate_universe": [
+            {
+                "provider": row["provider"],
+                "model": row["model"],
+                "status": row["status"],
+            }
+            for row in renderer_registry["cells"]
+        ],
+    }
+    assert policy.validate_renderer_bound_workload_recommendation(
+        renderer_registry, pin=pin
+    )
+
+    # The V1 frozen recommendation is never usable as a renderer-bound pin.
+    with pytest.raises(ValueError):
+        policy.validate_renderer_bound_recommendation_pin(
+            {
+                "workload_id": "skill_extraction",
+                **policy._FROZEN_RECOMMENDATIONS["skill_extraction"],
+            }
+        )

@@ -139,6 +139,7 @@ def _execute_durable_tailoring_graph(
     output_llm_json: str,
     refresh_llm_cache: bool,
     enable_safe_app_ready_rewrite_promotion: bool,
+    parse_retry_limit: int,
     pipeline_run_id: str,
     owner_user_id: str,
     context_id: str,
@@ -197,6 +198,7 @@ def _execute_durable_tailoring_graph(
             enable_safe_app_ready_rewrite_promotion=(
                 enable_safe_app_ready_rewrite_promotion
             ),
+            parse_retry_limit=parse_retry_limit,
             pipeline_run_id=pipeline_run_id,
             owner_user_id=owner_user_id,
             context_id=context_id,
@@ -314,6 +316,7 @@ def _maybe_execute_authoritative_tailoring_generation_graph(
     output_llm_json: str = "",
     refresh_llm_cache: bool = False,
     enable_safe_app_ready_rewrite_promotion: bool = False,
+    parse_retry_limit: int = 1,
     env: dict[str, str] | None = None,
     job_index: int | None = None,
     durable_repository=None,
@@ -366,6 +369,7 @@ def _maybe_execute_authoritative_tailoring_generation_graph(
             enable_safe_app_ready_rewrite_promotion=(
                 enable_safe_app_ready_rewrite_promotion
             ),
+            parse_retry_limit=parse_retry_limit,
             pipeline_run_id=pipeline_run_id,
             owner_user_id=owner_user_id,
             context_id=context_id,
@@ -389,6 +393,7 @@ def _maybe_execute_authoritative_tailoring_generation_graph(
             enable_safe_app_ready_rewrite_promotion=(
                 enable_safe_app_ready_rewrite_promotion
             ),
+            parse_retry_limit=parse_retry_limit,
             pipeline_run_id=pipeline_run_id,
             owner_user_id=owner_user_id,
             context_id=context_id,
@@ -578,6 +583,17 @@ def main() -> None:
         help="Ignore any existing live LLM cache and regenerate the LLM tailoring output.",
     )
     parser.add_argument(
+        "--parse-retry-limit",
+        type=int,
+        default=1,
+        choices=(0, 1),
+        help=(
+            "Bounded live tailoring parse-retry allowance. 0 forbids a second "
+            "provider request after a parse failure; 1 keeps the existing "
+            "single-retry behavior."
+        ),
+    )
+    parser.add_argument(
         "--enable-safe-app-ready-rewrite-promotion",
         action="store_true",
         help=(
@@ -675,6 +691,7 @@ def main() -> None:
             enable_safe_app_ready_rewrite_promotion=(
                 enable_safe_app_ready_rewrite_promotion
             ),
+            parse_retry_limit=args.parse_retry_limit,
             job_index=args.job_index,
         )
         if graph_result is None:
@@ -686,6 +703,7 @@ def main() -> None:
                 enable_safe_app_ready_rewrite_promotion=(
                     enable_safe_app_ready_rewrite_promotion
                 ),
+                parse_retry_limit=args.parse_retry_limit,
             )
         else:
             llm_output = graph_result["tailoring_result"]

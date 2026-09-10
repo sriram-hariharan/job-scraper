@@ -44,7 +44,10 @@ from src.tailoring.selection import (
     _rewrite_direction_verifier_report,
 )
 
-from src.tailoring.score_utils import is_effectively_score_neutral
+from src.tailoring.score_utils import (
+    is_effectively_score_neutral,
+    score_delta_to_points,
+)
 
 from src.matching.signal_family_matcher import (
     expandable_aliases_for_supported_term,
@@ -6218,6 +6221,16 @@ def _materiality_validate_rewrite_candidate(
     candidate["precheck_scorer_visible_evidence_changed"] = evidence_changed
     candidate["precheck_evidence_delta"] = evidence_delta
 
+    # Materiality branching works in the user-visible point unit, not the raw
+    # float. A delta that rounds to zero points is not a score change the
+    # operator can see, so it enters the existing zero-point policy regardless
+    # of its raw sign. The raw delta above is preserved for telemetry.
+    policy_delta = (
+        0.0
+        if score_delta_to_points(overall_delta) == 0
+        else overall_delta
+    )
+
     patch_generation_method = str(candidate.get("patch_generation_method", "") or "").strip()
     patch_generation_method_base = patch_generation_method.split("+", 1)[0].strip()
 
@@ -6266,7 +6279,7 @@ def _materiality_validate_rewrite_candidate(
         "deterministic_fronted_using_phrase",
     }
 
-    if overall_delta < 0.0:
+    if policy_delta < 0.0:
         candidate["proposal_status"] = "direction_only"
         candidate["proposal_type"] = "directional_rewrite"
         candidate["direction_only_reason"] = (
@@ -6282,7 +6295,7 @@ def _materiality_validate_rewrite_candidate(
         return candidate
 
     if (
-        is_effectively_score_neutral(overall_delta)
+        is_effectively_score_neutral(policy_delta)
         and patch_generation_method_base == "live_llm_concrete_patch_candidate"
     ):
         regressions = list(
@@ -6318,7 +6331,7 @@ def _materiality_validate_rewrite_candidate(
         candidate["materiality_validation_note"] = note
         return candidate
 
-    if overall_delta == 0.0 and not evidence_changed:
+    if policy_delta == 0.0 and not evidence_changed:
         if _fronting_rewrite_can_remain_patch_ready_without_evidence_delta(candidate):
             candidate["material_delta_found"] = False
             candidate["materiality_validation_status"] = "export_safe_no_score_lift"
@@ -6341,7 +6354,7 @@ def _materiality_validate_rewrite_candidate(
         )
         return candidate
 
-    if overall_delta == 0.0 and _fronting_rewrite_counts_as_material_without_score_lift(
+    if policy_delta == 0.0 and _fronting_rewrite_counts_as_material_without_score_lift(
         candidate,
         evidence_changed,
     ):
@@ -6352,7 +6365,7 @@ def _materiality_validate_rewrite_candidate(
         )
         return candidate
 
-    if overall_delta == 0.0 and patch_generation_method_base in export_safe_neutral_methods:
+    if policy_delta == 0.0 and patch_generation_method_base in export_safe_neutral_methods:
         candidate["material_delta_found"] = False
         candidate["materiality_validation_status"] = "export_safe_no_score_lift"
         candidate["materiality_validation_note"] = (

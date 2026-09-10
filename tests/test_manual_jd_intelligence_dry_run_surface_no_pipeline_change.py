@@ -1,6 +1,7 @@
 from copy import deepcopy
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from src.app import api, services
@@ -432,3 +433,149 @@ def test_ui_manual_jd_dry_run_click_posts_readonly_endpoint_once():
     assert source.count("data-manual-jd-intelligence-dry-run") == 4
     assert "manual_jd_intelligence_dry_run_result" in source
     assert "renderManualJdIntelligenceDryRunSection(tracePayload)" in source
+
+
+def _install_recommended_jd_route(monkeypatch, *, provider="routed-provider", model="routed-model"):
+    """Force the manual JD surface onto a sentinel recommended route."""
+    seen = []
+
+    def fake_resolver(workload_id):
+        seen.append(workload_id)
+        return {"provider": provider, "model": model}
+
+    monkeypatch.setattr(services, "resolve_recommended_user_provider_route", fake_resolver)
+    return seen
+
+
+def test_live_provider_adapter_executes_on_recommended_route_not_generic_defaults(monkeypatch):
+    captured = {}
+    seen = _install_recommended_jd_route(monkeypatch)
+
+    def fake_run_chat_completion_with_metadata(**kwargs):
+        captured.update(kwargs)
+        return {
+            "content": _valid_adapter_payload(),
+            "provider": "routed-provider",
+            "model": "routed-model",
+            "fallback_used": False,
+        }
+
+    import src.ai.llm_client as llm_client
+
+    monkeypatch.setattr(
+        llm_client,
+        "run_chat_completion_with_metadata",
+        fake_run_chat_completion_with_metadata,
+    )
+
+    services._live_jd_intelligence_provider_adapter(_request_payload())
+
+    assert seen == [services.PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID]
+    assert captured["provider"] == "routed-provider"
+    assert captured["model"] == "routed-model"
+    assert captured["workload_id"] == services.PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID
+    assert captured["provider"] != "forbidden-generic-provider"
+    assert captured["model"] != "forbidden-generic-model"
+    assert captured["fallback_enabled"] is services.LIVE_JD_INTELLIGENCE_DRY_RUN_FALLBACK_ENABLED
+
+
+def test_service_enabled_resolves_recommended_route_before_attaching_adapter(monkeypatch):
+    seen = _install_recommended_jd_route(monkeypatch)
+    monkeypatch.setattr(services, "LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED", True)
+    monkeypatch.setattr(
+        services,
+        "_live_jd_intelligence_provider_adapter",
+        lambda _payload: _valid_adapter_payload(),
+    )
+
+    payload = services.build_manual_jd_intelligence_dry_run_payload(**_request_payload())
+
+    assert seen == [services.PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID]
+    assert payload["validation_status"] == "valid"
+    _assert_readonly_safety(payload, did_call_llm=True)
+
+
+def test_service_disabled_never_resolves_recommended_route(monkeypatch):
+    seen = _install_recommended_jd_route(monkeypatch)
+    monkeypatch.setattr(services, "LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED", False)
+
+    payload = services.build_manual_jd_intelligence_dry_run_payload(**_request_payload())
+
+    assert seen == []
+    assert payload["validation_status"] == "disabled"
+    assert payload["validation_errors"] == ["feature_flag_disabled"]
+    _assert_readonly_safety(payload, did_call_llm=False)
+
+
+@pytest.mark.parametrize(
+    "route_result",
+    [
+        "raise",
+        {"provider": "", "model": "routed-model"},
+        {"provider": "routed-provider", "model": ""},
+        {},
+        None,
+    ],
+)
+def test_service_enabled_route_failure_fails_closed_without_provider_call(
+    monkeypatch, route_result
+):
+    provider_calls = []
+
+    def fake_resolver(_workload_id):
+        if route_result == "raise":
+            raise RuntimeError("recommendation authority unavailable")
+        return route_result
+
+    monkeypatch.setattr(services, "resolve_recommended_user_provider_route", fake_resolver)
+    monkeypatch.setattr(services, "LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED", True)
+    monkeypatch.setattr(
+        services,
+        "_live_jd_intelligence_provider_adapter",
+        lambda payload: provider_calls.append(payload) or _valid_adapter_payload(),
+    )
+
+    payload = services.build_manual_jd_intelligence_dry_run_payload(**_request_payload())
+
+    assert provider_calls == []
+    assert payload["validation_status"] == "fallback"
+    assert payload["fallback_used"] is True
+    assert payload["validation_errors"] == ["adapter_missing"]
+    _assert_readonly_safety(payload, did_call_llm=False)
+
+
+def test_service_enabled_explicit_injected_adapter_requires_no_recommendation(monkeypatch):
+    """An explicitly injected adapter owns its own execution seam.
+
+    Recommendation resolution is only required when the service is about to
+    attach its own built-in live provider adapter, so caller-supplied adapters
+    must never be blocked by unrelated recommendation resolution.
+    """
+    calls = []
+
+    def forbidden_resolver(workload_id):
+        raise AssertionError(
+            "recommendation resolution must not run for an explicitly injected adapter"
+        )
+
+    monkeypatch.setattr(services, "resolve_recommended_user_provider_route", forbidden_resolver)
+    def injected_adapter(payload):
+        calls.append(payload)
+        return {
+            **_valid_adapter_payload(),
+            "model_provider": "caller-provider",
+            "model_name": "caller-model",
+        }
+
+    payload = services.build_manual_jd_intelligence_dry_run_payload(
+        **_request_payload(),
+        adapter=injected_adapter,
+        feature_enabled=True,
+    )
+
+    assert len(calls) == 1
+    assert payload["validation_status"] == "valid"
+    assert payload["fallback_used"] is False
+    assert payload["model_provider"] == "caller-provider"
+    assert payload["model_name"] == "caller-model"
+    _assert_readonly_safety(payload, did_call_llm=True)

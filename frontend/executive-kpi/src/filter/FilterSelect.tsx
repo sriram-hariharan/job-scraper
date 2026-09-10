@@ -109,9 +109,11 @@ export function SharedFilterSelect({
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
     const viewportPadding = 12;
-    const availableWidth = Math.max(220, window.innerWidth - viewportPadding * 2);
-    const width = Math.min(Math.max(rect.width, 240), availableWidth);
-    const left = Math.min(Math.max(rect.left, viewportPadding), window.innerWidth - width - viewportPadding);
+    const availableWidth = Math.max(0, window.innerWidth - viewportPadding * 2);
+    const minimumWidth = Math.min(240, availableWidth);
+    const width = Math.min(Math.max(rect.width, minimumWidth), availableWidth);
+    const maxLeft = Math.max(viewportPadding, window.innerWidth - width - viewportPadding);
+    const left = Math.min(Math.max(rect.left, viewportPadding), maxLeft);
     const below = window.innerHeight - rect.bottom - viewportPadding;
     const above = rect.top - viewportPadding;
     const placement = below < 190 && above > below ? "top" : "bottom";
@@ -238,13 +240,15 @@ export function SharedFilterSelect({
       aria-labelledby={labelId}
       aria-multiselectable={mode === "multiple"}
       data-placement={position.placement}
+      data-searchable={searchable ? "true" : "false"}
       style={menuStyle}
     >
       {searchable ? (
         <label className="shared-filter-select__search">
           <span className="sr-only">Search {label.toLowerCase()}</span>
-          <Search size={15} aria-hidden="true" />
+          <Search size={17} aria-hidden="true" />
           <input
+            className="shared-filter-select__search-input"
             autoFocus
             type="search"
             value={query}
@@ -270,7 +274,7 @@ export function SharedFilterSelect({
           return (
             <button
               type="button"
-              className={`shared-filter-select__option ${selected ? "is-selected" : ""} ${"tone" in option && option.tone ? "has-tone" : ""}`}
+              className={`shared-filter-select__option ${selected ? "is-selected" : ""} ${option.isAll ? "is-all" : ""} ${"tone" in option && option.tone ? "has-tone" : ""}`.replace(/\s+/g, " ").trim()}
               key={option.value}
               ref={(node) => { optionRefs.current[index] = node; }}
               role="option"
@@ -296,11 +300,16 @@ export function SharedFilterSelect({
   ) : null;
 
   return (
-    <div className="shared-filter-select" data-filter-select-id={id}>
+    <div
+      className={`shared-filter-select ${open ? "is-open" : ""}`.trim()}
+      data-filter-select-id={id}
+      data-searchable={searchable ? "true" : "false"}
+      data-state={open ? "open" : "closed"}
+    >
       <span className="shared-filter-select__label" id={labelId}>{label}</span>
       <button
         type="button"
-        className="shared-filter-select__trigger"
+        className={`shared-filter-select__trigger ${open ? "is-open" : ""}`.trim()}
         id={id}
         ref={triggerRef}
         aria-labelledby={`${labelId} ${id}-value`}

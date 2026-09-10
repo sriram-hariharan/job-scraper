@@ -94,7 +94,7 @@ def _read_sql_artifact(path: Path, label: str) -> str:
     return sql
 
 
-def _normalize_notification_read_flag(value: Any) -> bool:
+def _normalize_notification_bool(value: Any, field_name: str) -> bool:
     if isinstance(value, bool):
         return value
 
@@ -105,15 +105,26 @@ def _normalize_notification_read_flag(value: Any) -> bool:
     if raw in {"0", "false", "no", "n", "off", "unread"}:
         return False
 
-    raise ValueError("is_read must be a boolean-like value.")
+    raise ValueError(f"{field_name} must be a boolean-like value.")
+
+
+def _normalize_notification_read_flag(value: Any) -> bool:
+    return _normalize_notification_bool(value, "is_read")
 
 
 def _build_state_id(normalized_row: Dict[str, Any]) -> str:
+    # Preserve the historical identifier for legacy ownerless read-state rows
+    # so re-running the existing CSV sync cannot duplicate them after this
+    # additive schema change. New owner-scoped or deleted states bind both new
+    # dimensions into their deterministic identifier.
     signature_payload = {
         "state_timestamp": normalized_row["state_timestamp"],
         "notification_id": normalized_row["notification_id"],
         "is_read": normalized_row["is_read"],
     }
+    if normalized_row["owner_user_id"] or normalized_row["is_deleted"]:
+        signature_payload["owner_user_id"] = normalized_row["owner_user_id"]
+        signature_payload["is_deleted"] = normalized_row["is_deleted"]
     blob = _json_compact(signature_payload)
     return hashlib.sha1(blob.encode("utf-8")).hexdigest()
 
@@ -131,11 +142,17 @@ def notification_state_db_row(record: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("Notification state record is missing required field: notification_id")
 
     is_read = _normalize_notification_read_flag(record.get("is_read"))
+    is_deleted = _normalize_notification_bool(
+        record.get("is_deleted", False),
+        "is_deleted",
+    )
 
     normalized_row = {
         "state_timestamp": state_timestamp,
+        "owner_user_id": _clean_text(record.get("owner_user_id")),
         "notification_id": notification_id,
         "is_read": is_read,
+        "is_deleted": is_deleted,
     }
     normalized_row["state_id"] = _build_state_id(normalized_row)
     return normalized_row
@@ -144,15 +161,19 @@ def notification_state_db_row(record: Dict[str, Any]) -> Dict[str, Any]:
 def notification_state_table_specs() -> Dict[str, Any]:
     return {
         "notification_state_events": {
-            "description": "Append-only operational history of notification read/unread state changes.",
+            "description": "Append-only owner-scoped notification read/unread and deletion state changes.",
             "primary_key": ["state_id"],
             "columns": [
                 {"name": "state_id", "type": "text", "nullable": False},
                 {"name": "state_timestamp", "type": "timestamptz", "nullable": False},
+                {"name": "owner_user_id", "type": "text", "nullable": False},
                 {"name": "notification_id", "type": "text", "nullable": False},
                 {"name": "is_read", "type": "boolean", "nullable": False},
+                {"name": "is_deleted", "type": "boolean", "nullable": False},
             ],
             "indexes": [
+                {"name": "idx_notification_state_owner_notification_timestamp", "columns": ["owner_user_id", "notification_id", "state_timestamp"]},
+                {"name": "idx_notification_state_owner_deleted_timestamp", "columns": ["owner_user_id", "is_deleted", "state_timestamp"]},
                 {"name": "idx_notification_state_notification_timestamp", "columns": ["notification_id", "state_timestamp"]},
                 {"name": "idx_notification_state_is_read_timestamp", "columns": ["is_read", "state_timestamp"]},
             ],
@@ -166,9 +187,23 @@ def render_notification_state_schema_sql() -> str:
             "CREATE TABLE IF NOT EXISTS notification_state_events (",
             "    state_id TEXT PRIMARY KEY,",
             "    state_timestamp TIMESTAMPTZ NOT NULL,",
+            "    owner_user_id TEXT NOT NULL DEFAULT '',",
             "    notification_id TEXT NOT NULL,",
-            "    is_read BOOLEAN NOT NULL",
+            "    is_read BOOLEAN NOT NULL,",
+            "    is_deleted BOOLEAN NOT NULL DEFAULT FALSE",
             ");",
+            "",
+            "ALTER TABLE notification_state_events",
+            "ADD COLUMN IF NOT EXISTS owner_user_id TEXT NOT NULL DEFAULT '';",
+            "",
+            "ALTER TABLE notification_state_events",
+            "ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;",
+            "",
+            "CREATE INDEX IF NOT EXISTS idx_notification_state_owner_notification_timestamp",
+            "ON notification_state_events (owner_user_id, notification_id, state_timestamp DESC);",
+            "",
+            "CREATE INDEX IF NOT EXISTS idx_notification_state_owner_deleted_timestamp",
+            "ON notification_state_events (owner_user_id, is_deleted, state_timestamp DESC);",
             "",
             "CREATE INDEX IF NOT EXISTS idx_notification_state_notification_timestamp",
             "ON notification_state_events (notification_id, state_timestamp DESC);",
@@ -226,20 +261,25 @@ def notification_state_contract_health_payload() -> Dict[str, Any]:
 
 def _build_insert_sql(row: Dict[str, Any]) -> str:
     bool_literal = "TRUE" if row["is_read"] else "FALSE"
+    deleted_literal = "TRUE" if row["is_deleted"] else "FALSE"
 
     return "\n".join(
         [
             "INSERT INTO notification_state_events (",
             "    state_id,",
             "    state_timestamp,",
+            "    owner_user_id,",
             "    notification_id,",
-            "    is_read",
+            "    is_read,",
+            "    is_deleted",
             ")",
             "VALUES (",
             f"    {_sql_quote_text(row['state_id'])},",
             f"    {_sql_quote_text(row['state_timestamp'])}::timestamptz,",
+            f"    {_sql_quote_text(row['owner_user_id'])},",
             f"    {_sql_quote_text(row['notification_id'])},",
-            f"    {bool_literal}",
+            f"    {bool_literal},",
+            f"    {deleted_literal}",
             ")",
             "ON CONFLICT (state_id) DO NOTHING;",
         ]

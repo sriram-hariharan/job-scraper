@@ -6,8 +6,10 @@ import subprocess
 
 
 PLANNING_JS = Path("src/app/static/planning.js")
+APP_JS = Path("src/app/static/app.js")
 PLANNING_UI = Path("src/app/planning_ui.py")
 STYLES_CSS = Path("src/app/static/styles.css")
+FRONTEND_STYLES_CSS = Path("frontend/executive-kpi/src/styles.css")
 TAILORING_PREMIUM_CSS = Path("src/app/static/tailoring_workspace_premium.css")
 SCAN_WORKSPACE_CSS = Path("src/app/static/scan_workspace.css")
 SCAN_WORKSPACE_REVIEW_CSS = Path("src/app/static/scan_workspace_review.css")
@@ -80,15 +82,18 @@ def _evaluate_generate_suggestions_cases():
         "resolveGenerateSuggestionsSelectedResume",
         "canGenerateSuggestionsForRow",
         "buildGenerateSuggestionsPayload",
+        "buildBulkGenerateSuggestionsPayload",
         "resolvePlanningRowOutputDir",
         "buildGenerateSuggestionsEndpoint",
         "getWorkspaceBlockedReason",
         "resolvePlanningWorklistAction",
+        "getPlanningBulkSuggestionSummary",
         "buildTailoringButtonHtml",
     ]
     functions = "\n\n".join(_function_source(source, name) for name in function_names)
     script = f"""
 const escapeHtml = (value) => String(value ?? "");
+const BULK_GENERATE_SUGGESTIONS_PARSE_RETRY_LIMIT = 0;
 {functions}
 const labelFor = (row) => {{
   const html = buildTailoringButtonHtml(row);
@@ -181,7 +186,223 @@ const rows = {{
     packet_json: "packet.json",
   }}),
 }};
+const bulkRows = [
+  {{ job_doc_id: "packet", winner_resume: "Winner.pdf", packet_json: "packet.json" }},
+  {{ job_doc_id: "ready", winner_resume: "Winner.pdf", tailoring_json: "tailoring.json", tailoring_workspace_state: "ready", tailoring_actionable_replacement_count: 2 }},
+  {{ job_doc_id: "blocked", winner_resume: "Winner.pdf", tailoring_json: "blocked.json", tailoring_workspace_state: "unavailable", tailoring_actionable_replacement_count: 0 }},
+  {{ job_doc_id: "missing-resume" }},
+];
+const bulkSummary = getPlanningBulkSuggestionSummary(bulkRows);
+rows.bulkSummary = {{
+  eligibleCount: bulkSummary.eligibleCount,
+  alreadyPrepared: bulkSummary.alreadyPrepared,
+  unavailable: bulkSummary.unavailable,
+  candidateIds: bulkSummary.candidateRows.map((row) => row.job_doc_id),
+  payload: buildBulkGenerateSuggestionsPayload(bulkSummary.candidateRows[0]),
+  singleRowPayload: buildGenerateSuggestionsPayload(bulkSummary.candidateRows[0]),
+}};
 console.log(JSON.stringify(rows));
+"""
+    completed = subprocess.run(
+        ["node", "-e", script],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return json.loads(completed.stdout)
+
+
+def _evaluate_bulk_generate_suggestions_execution():
+    source = _source()
+    execute_source = _async_function_source(source, "executeBulkGenerateSuggestions")
+    acknowledge_source = _async_function_source(
+        source, "acknowledgeBulkGenerateSuggestionsCompletion"
+    )
+    script = f"""
+let bulkGenerateSuggestionsState = {{
+  candidateRows: [{{ job_doc_id: "A" }}, {{ job_doc_id: "B" }}, {{ job_doc_id: "C" }}],
+  total: 3,
+  completed: 0,
+  succeeded: 0,
+  needsAttention: 0,
+  currentIndex: -1,
+  isRunning: false,
+  stopRequested: false,
+  results: [],
+}};
+let active = 0;
+let maxActive = 0;
+let order = [];
+let renderStates = [];
+let publishCalls = 0;
+let refreshCalls = 0;
+let retryLimits = [];
+const publishPlanningWorklistState = () => {{ publishCalls += 1; }};
+const renderBulkGenerateSuggestionsOverlay = (state) => {{ renderStates.push(state); }};
+const buildGenerateSuggestionsEndpoint = () => "/planning/regenerate-selected-resume";
+const buildGenerateSuggestionsPayload = (row, {{ parseRetryLimit = 1 }} = {{}}) => ({{ job_doc_id: row.job_doc_id, generate_llm_tailoring: true, refresh_llm_tailoring: false, parse_retry_limit: parseRetryLimit === 0 ? 0 : 1 }});
+const BULK_GENERATE_SUGGESTIONS_PARSE_RETRY_LIMIT = 0;
+const buildBulkGenerateSuggestionsPayload = (row) => buildGenerateSuggestionsPayload(row, {{ parseRetryLimit: BULK_GENERATE_SUGGESTIONS_PARSE_RETRY_LIMIT }});
+const bulkGenerateSuggestionsJobLabel = (row) => row.job_doc_id;
+const classifyBulkGenerateSuggestionsResponse = (row) => ({{ status: "success", label: row.job_doc_id, error: "" }});
+const extractGenerateSuggestionsError = () => "safe failure";
+let postJson = async (_url, payload) => {{
+  order.push(`start-${{payload.job_doc_id}}`);
+  retryLimits.push(payload.parse_retry_limit);
+  active += 1;
+  maxActive = Math.max(maxActive, active);
+  await Promise.resolve();
+  active -= 1;
+  order.push(`end-${{payload.job_doc_id}}`);
+  if (payload.job_doc_id === "B") throw new Error("failure");
+  return {{ ok: true }};
+}};
+{execute_source}
+const getBulkGenerateSuggestionsOverlay = () => ({{ dataset: {{ workflowState: "complete" }} }});
+const closeBulkGenerateSuggestionsOverlay = () => undefined;
+const loadPlanningTable = async () => {{ refreshCalls += 1; }};
+{acknowledge_source}
+(async () => {{
+  await executeBulkGenerateSuggestions();
+  const completed = {{
+    order: order.slice(),
+    maxActive,
+    completed: bulkGenerateSuggestionsState.completed,
+    succeeded: bulkGenerateSuggestionsState.succeeded,
+    needsAttention: bulkGenerateSuggestionsState.needsAttention,
+    statuses: bulkGenerateSuggestionsState.results.map((result) => result.status),
+    publishCalls,
+    retryLimits: retryLimits.slice(),
+  }};
+  await acknowledgeBulkGenerateSuggestionsCompletion();
+  completed.refreshCalls = refreshCalls;
+
+  order = [];
+  bulkGenerateSuggestionsState = {{
+    candidateRows: [{{ job_doc_id: "A" }}, {{ job_doc_id: "B" }}, {{ job_doc_id: "C" }}],
+    total: 3,
+    completed: 0,
+    succeeded: 0,
+    needsAttention: 0,
+    currentIndex: -1,
+    isRunning: false,
+    stopRequested: false,
+    results: [],
+  }};
+  const originalPost = postJson;
+  postJson = async (url, payload) => {{
+    const response = await originalPost(url, payload);
+    bulkGenerateSuggestionsState.stopRequested = true;
+    return response;
+  }};
+  await executeBulkGenerateSuggestions();
+  const stopped = {{
+    order: order.slice(),
+    completed: bulkGenerateSuggestionsState.completed,
+    succeeded: bulkGenerateSuggestionsState.succeeded,
+    needsAttention: bulkGenerateSuggestionsState.needsAttention,
+    remaining: bulkGenerateSuggestionsState.total - bulkGenerateSuggestionsState.completed,
+    finalRender: renderStates[renderStates.length - 1],
+  }};
+  console.log(JSON.stringify({{ completed, stopped }}));
+}})();
+"""
+    completed = subprocess.run(
+        ["node", "-e", script],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return json.loads(completed.stdout)
+
+
+def test_planning_and_executive_legacy_limit_normalizers_preserve_high_values():
+    planning_normalize = _function_source(_source(), "normalizePlanningFilters")
+    executive_normalize = _function_source(
+        APP_JS.read_text(encoding="utf-8"), "normalizeQueueFilters"
+    )
+    script = f"""
+const normalizePlanningFilterValues = (values) => Array.isArray(values) ? values : [];
+{planning_normalize}
+{executive_normalize}
+console.log(JSON.stringify({{
+  planning: normalizePlanningFilters({{ limit: 1000 }}).limit,
+  executive: normalizeQueueFilters({{ limit: 1000 }}).limit,
+}}));
+"""
+    completed = subprocess.run(
+        ["node", "-e", script],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert json.loads(completed.stdout) == {"planning": 1000, "executive": 1000}
+    assert "Math.min(100" not in planning_normalize
+    assert "Math.min(200" not in executive_normalize
+
+
+def _evaluate_bulk_generate_suggestions_selection():
+    source = _source()
+    functions = "\n\n".join(
+        (
+            _function_source(source, "normalizeBulkGenerateSuggestionsCount"),
+            _function_source(source, "getPlanningBulkSuggestionSelection"),
+            _function_source(source, "resetBulkGenerateSuggestionsConfiguration"),
+        )
+    )
+    script = f"""
+let bulkGenerateSuggestionsState = {{}};
+const planningTableState = {{ bulkSuggestionRows: [] }};
+const resetBulkGenerateSuggestionsState = () => undefined;
+const resolvePlanningWorklistAction = (row) => ({{ kind: row.kind }});
+{functions}
+const rows = [
+  {{ job_doc_id: "D", kind: "generate_suggestions", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "B", kind: "generate_suggestions", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "A", kind: "generate_suggestions", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "C", kind: "generate_suggestions", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "E", kind: "generate_suggestions", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "F", kind: "generate_suggestions", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "other-match", kind: "generate_suggestions", action: "APPLY", winner_bucket: "solid", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "other-state", kind: "generate_suggestions", action: "APPLY", winner_bucket: "weak", tailoring_workspace_state: "missing", role_family: "applied_ai" }},
+  {{ job_doc_id: "other-preference", kind: "generate_suggestions", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "data_engineering" }},
+  {{ job_doc_id: "other-review", kind: "generate_suggestions", action: "MAYBE_TAILOR", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "open", kind: "open_workspace", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "blocked", kind: "blocked", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+  {{ job_doc_id: "unavailable", kind: "unavailable", action: "APPLY", winner_bucket: "strong", tailoring_workspace_state: "ready", role_family: "applied_ai" }},
+];
+const config = {{
+  requestedCount: 3,
+  reviewAction: "APPLY",
+  winnerBucket: "strong",
+  preferenceId: "applied_ai",
+}};
+const limited = getPlanningBulkSuggestionSelection(rows, config);
+const overAvailable = getPlanningBulkSuggestionSelection(rows, {{ ...config, requestedCount: 20 }});
+const unbounded = getPlanningBulkSuggestionSelection(rows, {{ ...config, requestedCount: 1000 }});
+resetBulkGenerateSuggestionsConfiguration(24);
+const defaultLarge = bulkGenerateSuggestionsState.requestedCount;
+resetBulkGenerateSuggestionsConfiguration(4);
+const defaultSmall = bulkGenerateSuggestionsState.requestedCount;
+console.log(JSON.stringify({{
+  limited: {{
+    eligibleCount: limited.eligibleCount,
+    filteredCount: limited.filteredCount,
+    selectedCount: limited.selectedCount,
+    ids: limited.candidateRows.map((row) => row.job_doc_id),
+  }},
+  unbounded: {{
+    overAvailableCount: overAvailable.selectedCount,
+    selectedCount: unbounded.selectedCount,
+    ids: unbounded.candidateRows.map((row) => row.job_doc_id),
+  }},
+  defaults: [defaultLarge, defaultSmall],
+  normalized: [
+    normalizeBulkGenerateSuggestionsCount("1000"),
+    normalizeBulkGenerateSuggestionsCount("0"),
+    normalizeBulkGenerateSuggestionsCount("1.5"),
+  ],
+}}));
 """
     completed = subprocess.run(
         ["node", "-e", script],
@@ -417,6 +638,491 @@ def test_generate_suggestions_button_uses_existing_workspace_when_artifacts_exis
     assert 'data-generate-suggestions="true"' in button_source
     assert '"Regenerate"' not in button_source
     assert '"Generate LLM tailoring"' not in button_source
+
+
+def test_bulk_generation_reuses_exact_action_resolution_and_single_row_payload():
+    cases = _evaluate_generate_suggestions_cases()
+    bulk = cases["bulkSummary"]
+
+    assert bulk == {
+        "eligibleCount": 1,
+        "alreadyPrepared": 1,
+        "unavailable": 2,
+        "candidateIds": ["packet"],
+        "payload": {
+            "pipeline_run_id": "",
+            "job_doc_id": "packet",
+            "queue_rank": "",
+            "selected_resume": "Winner.pdf",
+            "generate_llm_tailoring": True,
+            "refresh_llm_tailoring": False,
+            "parse_retry_limit": 0,
+        },
+        "singleRowPayload": {
+            "pipeline_run_id": "",
+            "job_doc_id": "packet",
+            "queue_rank": "",
+            "selected_resume": "Winner.pdf",
+            "generate_llm_tailoring": True,
+            "refresh_llm_tailoring": False,
+            "parse_retry_limit": 1,
+        },
+    }
+
+    source = _source()
+    summary_source = _function_source(source, "getPlanningBulkSuggestionSummary")
+    assert "resolvePlanningWorklistAction(row)" in summary_source
+    assert 'action.kind === "generate_suggestions"' in summary_source
+    assert 'action.kind === "open_workspace"' in summary_source
+
+
+def test_bulk_generation_start_is_one_prompt_server_owned_request():
+    source = _source()
+    execute_source = _async_function_source(source, "executeBulkGenerateSuggestions")
+    assert "Promise.all" not in execute_source
+    assert "buildBulkGenerateSuggestionsPayload(row)" in execute_source
+    assert "const BULK_GENERATE_SUGGESTIONS_PARSE_RETRY_LIMIT = 0;" in source
+    assert 'await postJson("/planning/bulk-generation/start"' in execute_source
+    assert "/planning/regenerate-selected-resume" not in execute_source
+    assert "for (let index" not in execute_source
+    assert "requested_count: rows.length" in execute_source
+    assert "closeBulkGenerateSuggestionsOverlay()" in execute_source
+    assert "ApplyLensBulkGeneration?.refresh" in execute_source
+    assert "loadPlanningTable" not in execute_source
+    assert "retry" not in execute_source.lower()
+
+
+def test_bulk_configuration_intersects_filters_preserves_order_and_has_no_count_cap():
+    cases = _evaluate_bulk_generate_suggestions_selection()
+
+    assert cases["limited"] == {
+        "eligibleCount": 10,
+        "filteredCount": 6,
+        "selectedCount": 3,
+        "ids": ["D", "B", "A"],
+    }
+    assert cases["unbounded"] == {
+        "overAvailableCount": 6,
+        "selectedCount": 6,
+        "ids": ["D", "B", "A", "C", "E", "F"],
+    }
+    assert cases["defaults"] == [10, 4]
+    assert cases["normalized"] == [1000, 0, 0]
+
+
+def test_bulk_http_200_llm_failure_is_not_counted_as_prepared_success():
+    source = _source()
+    classify_source = _function_source(
+        source, "classifyBulkGenerateSuggestionsResponse"
+    )
+    failure_message_source = _function_source(
+        source, "generateSuggestionsLlmFailureMessage"
+    )
+    script = f"""
+const bulkGenerateSuggestionsJobLabel = (row) => row.job_title;
+const buildGenerateSuggestionsWorkspaceRow = (row, response) => ({{ ...row, ...response }});
+const resolvePlanningWorklistAction = (row) => ({{
+  kind: row.tailoring_workspace_state === "ready" ? "open_workspace" : "unavailable",
+  blockedReason: row.tailoring_workspace_state === "ready" ? "" : "No usable workspace",
+}});
+{failure_message_source}
+{classify_source}
+console.log(JSON.stringify({{
+  failed: classifyBulkGenerateSuggestionsResponse(
+    {{ job_title: "A" }},
+    {{ ok: true, llm_tailoring_status: "failed", tailoring_workspace_state: "ready" }}
+  ),
+  ready: classifyBulkGenerateSuggestionsResponse(
+    {{ job_title: "B" }},
+    {{ ok: true, llm_tailoring_status: "generated", tailoring_workspace_state: "ready" }}
+  ),
+  unusable: classifyBulkGenerateSuggestionsResponse(
+    {{ job_title: "C" }},
+    {{ ok: true, llm_tailoring_status: "generated", tailoring_workspace_state: "unavailable" }}
+  ),
+  empty: classifyBulkGenerateSuggestionsResponse(
+    {{ job_title: "D" }},
+    {{ ok: true, llm_tailoring_status: "generated", tailoring_workspace_state: "empty" }}
+  ),
+  noSafeRewrites: classifyBulkGenerateSuggestionsResponse(
+    {{ job_title: "E" }},
+    {{ ok: true, llm_tailoring_status: "generated", tailoring_workspace_state: "no_safe_rewrites" }}
+  ),
+}}));
+"""
+    completed = subprocess.run(
+        ["node", "-e", script],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    cases = json.loads(completed.stdout)
+    assert cases["failed"]["status"] == "needs_attention"
+    assert cases["failed"]["outcome"] == "failed"
+    assert "no suggestions were" in cases["failed"]["error"]
+    assert "Nothing was submitted." in cases["failed"]["error"]
+    assert cases["ready"]["status"] == "success"
+    assert cases["ready"]["outcome"] == "generated"
+    assert cases["unusable"]["status"] == "needs_attention"
+    assert cases["empty"] == {
+        "status": "success",
+        "outcome": "empty",
+        "label": "D",
+        "error": "",
+    }
+    assert cases["noSafeRewrites"] == {
+        "status": "success",
+        "outcome": "no_safe_rewrites",
+        "label": "E",
+        "error": "",
+    }
+
+
+def test_bulk_completion_detail_separates_empty_review_and_failure_outcomes():
+    render_source = _function_source(_source(), "renderBulkGenerateSuggestionsResults")
+
+    assert 'result.outcome === "empty"' in render_source
+    assert 'result.outcome === "no_safe_rewrites"' in render_source
+    assert 'result.status === "needs_attention"' in render_source
+    assert "No grounded rewrite evidence" in render_source
+    assert "Review guidance" in render_source
+    assert "Needs attention" in render_source
+
+
+def test_bulk_tailoring_primary_action_uses_restrained_soft_plum_tokens():
+    styles = STYLES_CSS.read_text(encoding="utf-8")
+    tailoring_tokens = styles.split(".workflow-overlay--tailoring {", 1)[1].split("}", 1)[0]
+    light_tokens = styles.split(
+        'html[data-theme="light"] .workflow-overlay--tailoring {', 1
+    )[1].split("}", 1)[0]
+
+    for tokens in (tailoring_tokens, light_tokens):
+        assert "--workflow-action-bg: #72587c;" in tokens
+        assert "linear-gradient" not in tokens
+        assert "#4f46e5" not in tokens
+        assert "#7c3aed" not in tokens
+    assert "--workflow-accent: #bfaac5;" in tailoring_tokens
+    assert "--workflow-accent: #72587c;" in light_tokens
+
+
+def test_no_global_important_background_rule_can_match_the_bulk_control():
+    """The earlier exclusion covered only one selector family and missed this one.
+
+    Any broad `background ... !important` rule whose rightmost compound is a
+    bare <button> and whose ancestors the Bulk control actually has will beat
+    the component rule regardless of specificity, so every such family must
+    carry the opt-out.
+    """
+
+    import re
+
+    # Ancestors the Bulk button really has inside the Planning worklist card.
+    allowed_ancestors = {
+        "html", "body", "main", "#planningWorklistRoot",
+        ".planning-dashboard-page", ".page", ".planning-dashboard-shell",
+        ".shared-table-card", ".shared-table-heading-with-actions",
+        ".shared-table-heading-actions", ".shared-table-heading",
+    }
+
+    def ancestors_reachable(prefix: str) -> bool:
+        if not prefix.strip():
+            return True
+        for token in [t for t in re.split(r"[\s>+~]+", prefix.strip()) if t]:
+            token = re.sub(r":[a-z-]+(\([^)]*\))?$", "", token)
+            if token in ("html", "body", "main", "*") or token.startswith("html["):
+                continue
+            if token in allowed_ancestors:
+                continue
+            parts = re.findall(r"[.#][\w-]+", token)
+            if parts and all(part in allowed_ancestors for part in parts):
+                continue
+            return False
+        return True
+
+    offenders = []
+    for sheet in (STYLES_CSS, Path("src/app/static/app_redesign.css")):
+        css = sheet.read_text(encoding="utf-8")
+        for match in re.finditer(r"([^{}]+)\{([^{}]*)\}", css):
+            body = match.group(2)
+            if "!important" not in body:
+                continue
+            if not re.search(r"background(-color|-image)?\s*:", body):
+                continue
+            line = css[: match.start()].count("\n") + 1
+            for selector in match.group(1).split(","):
+                selector = " ".join(selector.split())
+                if not selector or "/*" in selector:
+                    continue
+                parts = re.split(r"\s*[\s>+~]\s*", selector)
+                last, prefix = parts[-1], " ".join(parts[:-1])
+                if not re.match(r"^button([:.\[]|$)", last):
+                    continue
+                negations = [n.strip() for n in re.findall(r":not\(([^)]*)\)", last)]
+                if ".planning-react-bulk-generate" in negations:
+                    continue
+                if not ancestors_reachable(prefix):
+                    continue
+                offenders.append(f"{sheet.name}:{line} {selector[:80]}")
+
+    assert not offenders, "Global !important background can override Bulk: " + "; ".join(offenders)
+
+    # The specific family that was missed the first time.
+    styles = STYLES_CSS.read_text(encoding="utf-8")
+    assert (
+        "button:not(.primary-btn):not(.app-shell-primary-link)" in styles
+    )
+    for match in re.finditer(r"button:not\(\.primary-btn\)(?::not\([^)]*\))*", styles):
+        assert ".planning-react-bulk-generate" in match.group(0)
+
+
+def test_sticky_action_cells_own_an_isolated_foreground_paint_shield():
+    """Runtime showed ordinary cells geometrically overlap the sticky column.
+
+    A table cell's own background is not a reliable cover for the *content* of
+    cells scrolling beneath it, so the sticky cell isolates a stacking context
+    and paints an explicit shield above them but below its own contents.
+    """
+
+    styles = FRONTEND_STYLES_CSS.read_text(encoding="utf-8")
+
+    # Shield exists for both tables, on the real TablePrimitives hook.
+    for selector in (
+        ".shared-table-viewport td.is-sticky-action::before",
+        ".shared-table-viewport th.is-sticky-action::before",
+        ".executive-queue-table-viewport td.is-sticky-action::before",
+        ".executive-queue-table-viewport th.is-sticky-action::before",
+    ):
+        assert selector in styles
+
+    shield_start = styles.index(".shared-table-viewport th.is-sticky-action::before")
+    shield = styles[shield_start : styles.index("}", shield_start)]
+    assert 'content: "";' in shield
+    assert "position: absolute;" in shield
+    assert "inset: 0;" in shield
+    assert "z-index: 0;" in shield
+    assert "background: var(--sticky-action-bg);" in shield
+    assert "pointer-events: none;" in shield
+
+    # Sticky cell isolates its own stacking context; contents sit above shield.
+    assert "isolation: isolate;" in styles
+    lift_start = styles.index(".shared-table-viewport th.is-sticky-action > *")
+    lift = styles[lift_start : styles.index("}", lift_start)]
+    assert "position: relative;" in lift
+    assert "z-index: 1;" in lift
+
+    # Shield surface comes from the existing opaque row tokens only.
+    for token in (
+        "--sticky-action-bg: var(--queue-row-default);",
+        "--sticky-action-bg: var(--queue-surface-muted);",
+        "--sticky-action-bg: var(--queue-row-alternate);",
+        "--sticky-action-bg: var(--queue-row-hover);",
+        "--sticky-action-bg: var(--queue-row-expanded);",
+        "--sticky-action-bg: var(--queue-row-focus);",
+    ):
+        assert token in styles
+
+    # Opaque one-pixel seam at the left boundary.
+    assert "-1px 0 0 var(--queue-border)" in styles
+
+    # Table safety invariants preserved.
+    assert "z-index: 9999" not in styles
+    assert styles.count("border-collapse: separate;") >= 2
+    assert styles.count("overflow: auto;") >= 2
+
+
+def test_sticky_action_column_owns_an_opaque_paint_layer_in_both_tables():
+    """Adjacent columns must never paint through the final sticky column."""
+
+    styles = FRONTEND_STYLES_CSS.read_text(encoding="utf-8")
+
+    # Both viewports establish their own stacking context and still scroll.
+    assert ".shared-table-viewport {\n  isolation: isolate;" in styles
+    assert ".executive-queue-table-viewport {\n  isolation: isolate;" in styles
+    assert styles.count("overflow: auto;") >= 2
+
+    # The sticky cell is a real covering layer, not just a positioned cell.
+    for marker in (
+        "opacity: 1;",
+        "background-image: none;",
+        "background-clip: border-box;",
+    ):
+        assert marker in styles
+    assert "background-clip: padding-box" not in styles
+
+    # Generic sticky hook applied by TablePrimitives, plus the column ids.
+    assert ".shared-table-viewport th.is-sticky-action," in styles
+    assert ".shared-table-viewport td.is-sticky-action," in styles
+    assert ".executive-queue-table-viewport td.is-sticky-action {" in styles
+
+    # Every row state paints an opaque row token on the sticky cell.
+    for token in (
+        "var(--queue-row-default)",
+        "var(--queue-row-alternate)",
+        "var(--queue-row-hover)",
+        "var(--queue-row-expanded)",
+        "var(--queue-row-focus)",
+    ):
+        assert token in styles
+    assert "td.is-sticky-action { background: var(--queue-row-alternate); }" in styles
+    assert "td.is-sticky-action { background: var(--queue-row-hover); }" in styles
+    assert "td.is-sticky-action { background: var(--queue-row-expanded); }" in styles
+
+    # Sticky header sits above sticky body, which sits above ordinary cells.
+    assert "z-index: 5;" in styles
+    assert "z-index: 6; background: var(--queue-surface-muted); }" in styles
+    assert "z-index: 9999" not in styles
+
+
+def test_packet_status_is_a_separate_column_from_the_sticky_next_step_cell():
+    """Proves a visible `Packet ready` inside the sticky region is bleed."""
+
+    worklist = (
+        Path("frontend/executive-kpi/src/PlanningWorklist.tsx")
+    ).read_text(encoding="utf-8")
+
+    assert 'id: "packet_status"' in worklist
+    assert 'stickyColumnId="next_step"' in worklist
+    packet_index = worklist.index('id: "packet_status"')
+    next_step_index = worklist.index('id: "next_step"')
+    assert packet_index != next_step_index
+
+
+def test_executive_pipeline_run_meta_is_retained_but_visually_hidden():
+    """app.js still resolves the node; the idle pill is not rendered."""
+
+    ui_source = Path("src/app/ui.py").read_text(encoding="utf-8")
+    app_js = Path("src/app/static/app.js").read_text(encoding="utf-8")
+
+    assert 'id="pipelineRunMeta"' in ui_source
+    assert 'class="subtext pipeline-run-meta hidden" id="pipelineRunMeta"' in ui_source
+    assert ui_source.index('id="sourceYieldRoot"') < ui_source.index('id="pipelineRunMeta"')
+    assert ui_source.index('id="pipelineRunMeta"') < ui_source.index('id="executiveQueueRoot"')
+    assert 'qs("pipelineRunMeta")' in app_js
+
+
+def test_bulk_configuration_progress_and_safety_contract_is_explicit_and_bounded():
+    source = _source()
+    ui = PLANNING_UI.read_text(encoding="utf-8")
+    styles = STYLES_CSS.read_text(encoding="utf-8")
+    frontend_styles = FRONTEND_STYLES_CSS.read_text(encoding="utf-8")
+    open_source = _function_source(source, "openBulkGenerateSuggestionsConfirmation")
+    update_source = _function_source(source, "updateBulkGenerateSuggestionsConfiguration")
+    start_source = _async_function_source(source, "startBulkGenerateSuggestionsExecution")
+    keydown_source = _function_source(source, "handleBulkGenerateSuggestionsDialogKeydown")
+    execute_source = _async_function_source(source, "executeBulkGenerateSuggestions")
+    stop_source = _function_source(source, "stopBulkGenerateSuggestionsAfterCurrent")
+    overlay_source = _function_source(source, "renderBulkGenerateSuggestionsOverlay")
+
+    for element_id in (
+        "bulkGenerateSuggestionsOverlay",
+        "bulkGenerateSuggestionsControls",
+        "bulkGenerateSuggestionsNumber",
+        "bulkGenerateSuggestionsReviewFilter",
+        "bulkGenerateSuggestionsMatchFilter",
+        "bulkGenerateSuggestionsPreferenceFilter",
+        "bulkGenerateSuggestionsSummary",
+        "bulkGenerateSuggestionsCurrent",
+        "bulkGenerateSuggestionsResults",
+        "bulkGenerateSuggestionsSecondaryBtn",
+        "bulkGenerateSuggestionsPrimaryBtn",
+    ):
+        assert f'id="{element_id}"' in ui
+        assert f'qs("{element_id}")' in source
+
+    assert 'id="bulkGenerateSuggestionsTailoringFilter"' not in ui
+    assert 'qs("bulkGenerateSuggestionsTailoringFilter")' not in source
+
+    assert "Nothing will be submitted to employers." in ui
+    assert "Choose which eligible Planning jobs should receive tailoring suggestions." in ui
+    assert "Enter a positive whole number." in ui
+    assert "bulk-generate-suggestions-summary" in styles
+    assert "getPlanningBulkSuggestionSummary()" in open_source
+    assert "resetBulkGenerateSuggestionsConfiguration(scopeSummary.eligibleCount)" in open_source
+    assert 'renderBulkGenerateSuggestionsOverlay("confirm", getPlanningBulkSuggestionSelection())' in open_source
+    assert "getPlanningBulkSuggestionSelection()" in update_source
+    assert "resetBulkGenerateSuggestionsState(selection.candidateRows)" in start_source
+    assert "await executeBulkGenerateSuggestions()" in start_source
+    assert "postJson" not in open_source + update_source
+    # The one overlay serves both flows: the initial CTA is unchanged, and the
+    # re-run flow reuses the same settings step with re-run copy.
+    assert '? `Re-run selected (${selection.selectedCount})`' in overlay_source
+    assert ': "Generate suggestions"' in overlay_source
+    assert '"Re-run bulk suggestions"' in overlay_source
+    assert '"Bulk generate suggestions"' in overlay_source
+    assert "Review the settings before re-running suggestions for the selected jobs." in overlay_source
+    assert "Generate suggestion for 1 job" not in overlay_source
+    assert "Generate suggestions for ${selection.selectedCount} jobs" not in overlay_source
+    assert "primaryBtn.disabled = selection.selectedCount === 0" in overlay_source
+    assert 'event.key === "Escape" && state === "confirm"' in keydown_source
+    assert 'event.key !== "Tab"' in keydown_source
+    assert "closeBulkGenerateSuggestionsOverlay()" in keydown_source
+    assert "generateSuggestionsState.isRunning" in open_source
+    assert "bulkGenerateSuggestionsState.isRunning" in open_source
+    assert "Stop after current" in overlay_source
+    assert "were not started" in overlay_source
+    assert "setInterval" not in overlay_source + execute_source
+    assert "abort" not in stop_source.lower()
+    assert 'overlay.setAttribute("aria-busy", state === "running" ? "true" : "false")' in overlay_source
+    assert execute_source.index("bulkGenerateSuggestionsState.isRunning = true") < execute_source.index(
+        'postJson("/planning/bulk-generation/start"'
+    )
+    assert "for (let index" not in execute_source
+    assert "ApplyLensBulkGeneration?.stop" in stop_source
+    assert '.workflow-overlay--tailoring[data-workflow-state="running"] .workflow-dialog-status-icon::after {' in styles
+    assert '.workflow-overlay--tailoring:not(.is-success):not(.is-error) .workflow-dialog-status-icon::after {' not in styles
+    assert '.bulk-generate-suggestions-fullpage[data-workflow-state="confirm"] .workflow-dialog-status-icon::after {' in styles
+    assert "animation: none;" in styles
+    assert ".workflow-overlay--tailoring.is-stopped .workflow-dialog-status-icon" in styles
+
+    # Bulk action is a compact neutral/plum product control, ID-scoped so no
+    # generic button rule can win, in both themes.
+    assert (
+        "#planningWorklistRoot .planning-react-bulk-generate {" in frontend_styles
+    )
+    assert "border: 1px solid #9fc7bb;" in frontend_styles
+    assert "background: #d3e8e2;" in frontend_styles
+    assert "color: #16322d;" in frontend_styles
+    assert (
+        "#planningWorklistRoot .planning-react-bulk-generate__icon {"
+        in frontend_styles
+    )
+    assert "color: #356f63;" in frontend_styles
+    assert (
+        "#planningWorklistRoot .planning-react-bulk-generate small {"
+        in frontend_styles
+    )
+    assert "color: #466e65;" in frontend_styles
+    assert 'html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate {' in frontend_styles
+    assert "border-color: #3f6c64;" in frontend_styles
+    assert "background: #24433f;" in frontend_styles
+    assert "color: #a8d4ca;" in frontend_styles
+    assert "color: #f3faf8;" in frontend_styles
+    assert (
+        'html[data-theme="dark"] #planningWorklistRoot .planning-react-bulk-generate small {'
+        in frontend_styles
+    )
+    assert "color: #c7dfda;" in frontend_styles
+    bulk_style_start = frontend_styles.index(
+        "#planningWorklistRoot .planning-react-bulk-generate {"
+    )
+    bulk_style_end = frontend_styles.index(
+        ".shared-table-title-line", bulk_style_start
+    )
+    bulk_styles = frontend_styles[bulk_style_start:bulk_style_end]
+    # The control must never regress to a gradient CTA, and must not need
+    # !important to beat the generic `button` rule.
+    assert "gradient" not in bulk_styles
+    assert "!important" not in bulk_styles
+
+    guarded_bulk_source = open_source + update_source + start_source + execute_source + stop_source + overlay_source
+    for forbidden in (
+        "/application-actions",
+        "mark_applied",
+        "submit_application",
+        "application_status",
+        "Promise.all",
+    ):
+        assert forbidden not in guarded_bulk_source
 
 
 def test_packet_only_rows_render_generate_suggestions_not_open_workspace():
@@ -1572,3 +2278,751 @@ def test_tailoring_workspace_ui_e_generated_actions_use_dedicated_visual_classes
     assert 'classList.toggle("tailoring-workspace-free-edit-action--save"' in inline_score
     assert 'workspacePresentation ? "tailoring-workspace-review-action-btn"' in replacement
     assert 'workspacePresentation ? "tailoring-workspace-select-btn"' in replacement
+
+
+def test_bulk_rerun_reuses_the_existing_settings_overlay_and_start_path():
+    """Re-run is the same settings step and the same executor, only scoped."""
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    rerun_source = planning[
+        planning.index("async function startBulkGenerateSuggestionsRerun") :
+        planning.index("function updateBulkGenerateSuggestionsConfiguration")
+    ]
+    selection_source = planning[
+        planning.index("function getPlanningBulkSuggestionSelection") :
+        planning.index("function buildPlanningWorklistBridgeState")
+    ]
+
+    # Superseded: the Results Center re-run now starts DIRECTLY and must not
+    # reopen the first-run configuration overlay.
+    assert 'renderBulkGenerateSuggestionsOverlay("confirm"' not in rerun_source
+    assert "resetBulkGenerateSuggestionsConfiguration(" not in rerun_source
+    assert "getBulkGenerateSuggestionsOverlay()" in rerun_source  # admission guard only
+    # No parallel executor: it delegates to the one existing executor.
+    assert "await executeBulkGenerateSuggestions()" in rerun_source
+    code_only = "\n".join(
+        line for line in rerun_source.splitlines()
+        if not line.strip().startswith(("*", "/*", "//"))
+    )
+    for forbidden in ("postJson", "fetch(", "/planning/bulk-generation/start"):
+        assert forbidden not in code_only
+    # Existing admission guards are still respected before opening.
+    assert "bulkGenerateSuggestionsState.isRunning" in rerun_source
+    assert "generateSuggestionsState.isRunning" in rerun_source
+    # Selected jobs are the MAXIMUM scope; filters can only narrow it.
+    assert 'String(config.mode || "initial") === "rerun"' in selection_source
+    assert "rerunScope" in selection_source
+    assert "scopeRows.filter(" in selection_source
+
+
+def test_planning_exposes_only_the_public_brandfetch_client_id():
+    ui = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    config_source = ui[
+        ui.index("def _planning_public_config_script") :
+        ui.index("_PLANNING_JSON_CONTEXT_SUFFIXES")
+    ]
+    assert 'os.getenv("BRANDFETCH_CLIENT_ID", "")' in config_source
+    assert "_safe_json_script(" in config_source
+    # Never a private Brandfetch key, and no other credential family.
+    for forbidden in ("BRANDFETCH_API_KEY", "BRANDFETCH_SECRET", "API_KEY"):
+        assert forbidden not in config_source
+    assert "window.__APPLYLENS_PLANNING_CONFIG__" in ui
+
+
+def test_company_logo_resolution_is_bridge_owned_deduplicated_and_unpersisted():
+    """planning.js owns every logo request; the React island stays network-free."""
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    resolver = planning[
+        planning.index("const planningCompanyLogoDomains") :
+        planning.index("function resetBulkGenerateResultsState")
+    ]
+
+    # One in-memory page-lifetime cache, one request per unresolved company.
+    assert "new Map()" in resolver
+    assert "planningCompanyLogoDomains.has(normalized)" in resolver
+    assert "planningCompanyLogoDomains.set(normalized, pending)" in resolver
+    # Deterministic matching only: exact normalized name, verified tie-break.
+    assert "normalizePlanningCompanyName(entry?.name) === normalized" in resolver
+    assert "verified.length === 1" in resolver
+    # Never persisted anywhere.
+    for forbidden in ("localStorage", "sessionStorage", "postJson", "INSERT", "indexedDB"):
+        assert forbidden not in resolver
+    # Requests are scoped to the modal, not the whole page load.
+    assert 'action.type === "bulk_view_results"' in planning
+    assert "void resolveBulkResultCompanyLogos();" in planning
+    # Absent client id short-circuits before any network call.
+    assert "if (!clientId) return;" in resolver
+
+    react = Path("frontend/executive-kpi/src/PlanningWorklist.tsx").read_text(encoding="utf-8")
+    assert "fetch(" not in react
+    assert "cdn.brandfetch.io" in react
+    assert 'loading="lazy"' in react
+    assert "api.brandfetch.io" not in react
+
+
+def test_company_logo_matching_is_slug_tolerant_but_still_exact():
+    """`andurilindustries` (ATS board slug) and `Anduril Industries` must reduce
+    to the same identity, without introducing fuzzy matching."""
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    resolver = planning[
+        planning.index("function normalizePlanningCompanyName") :
+        planning.index("function resetBulkGenerateResultsState")
+    ]
+
+    # Whitespace is removed entirely, so a slug and a spaced brand name match.
+    assert 'replace(/[^a-z0-9]+/g, "")' in resolver
+    assert 'replace(/[^a-z0-9]+/g, " ")' not in resolver
+
+    # Brandfetch commonly returns several identically named brands on different
+    # domains; its own `verified` flag is the deterministic tie-break.
+    assert "entry?.verified === true" in resolver
+    assert "verified.length === 1" in resolver
+    assert "named.length === 1" in resolver
+
+    # Still exact-only: no similarity, ranking, or first-result-wins.
+    for forbidden in ("levenshtein", "includes(", "startsWith(", "results[0]", "_score", "sort("):
+        assert forbidden not in resolver
+
+
+def test_company_logo_uses_the_explicit_brandfetch_domain_route():
+    react = Path("frontend/executive-kpi/src/PlanningWorklist.tsx").read_text(encoding="utf-8")
+    assert "cdn.brandfetch.io/domain/" in react
+    assert "/w/64/h/64/fallback/lettermark/type/icon" in react
+    assert 'loading="lazy"' in react
+    # No referrer policy override: Brandfetch requires a normal browser Referer.
+    assert "no-referrer" not in react
+
+
+def test_bulk_results_controls_opt_out_of_the_global_important_skin():
+    """The page-level `button`/`input` skins use !important, which no stylesheet
+    specificity can beat. Modal controls must join the existing :not() opt-out
+    chain, exactly like .planning-react-bulk-generate already does."""
+    button_classes = (
+        "planning-bulk-results__close",
+        "planning-bulk-results__pill",
+        "planning-bulk-results__clear",
+        "planning-bulk-results__secondary",
+        "planning-bulk-results__primary",
+    )
+    input_classes = (
+        "planning-bulk-results__search-input",
+        "planning-bulk-results__checkbox",
+    )
+
+    def split_selectors(selector_line):
+        """Split a selector list while ignoring commas inside :not()/:where()."""
+        depth = 0
+        start = 0
+        selectors = []
+        for index, character in enumerate(selector_line):
+            if character == "(":
+                depth += 1
+            elif character == ")":
+                depth -= 1
+            elif character == "," and depth == 0:
+                selectors.append(selector_line[start:index])
+                start = index + 1
+        selectors.append(selector_line[start:].removesuffix(" {").removesuffix("{"))
+        return [selector.strip() for selector in selectors]
+
+    for path in ("src/app/static/app_redesign.css", "src/app/static/styles.css"):
+        css = Path(path).read_text(encoding="utf-8")
+        assert "::placeholder:where(" not in css
+        for line in css.splitlines():
+            stripped = line.strip()
+            # Excluded via a single zero-specificity :where(:not(...)) list so
+            # the surrounding cascade keeps its exact original weight.
+            for selector in (
+                selector for selector in split_selectors(stripped)
+                if selector.startswith("button:not(") or selector.startswith("body button:not(")
+            ):
+                for name in button_classes:
+                    assert f".{name}" in selector, f"{path}: button skin does not exclude {name}"
+                assert ":where(:not(" in selector
+            for selector in (
+                selector for selector in split_selectors(stripped)
+                if selector.startswith("input:not(")
+                or selector.startswith('html[data-theme="light"] input:not(')
+            ):
+                for name in input_classes:
+                    assert f".{name}" in selector, f"{path}: input skin does not exclude {name}"
+                assert ":where(:not(" in selector
+            if stripped.startswith(":where(a, button, input, select, textarea, [tabindex])"):
+                assert ":where(:not(.planning-bulk-results__search-input))" in stripped
+
+
+def test_bulk_results_search_parent_is_the_only_visual_field_surface():
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    shell_selector = ".planning-bulk-results .planning-bulk-results__search {"
+    shell = css[css.index(shell_selector) : css.index("}", css.index(shell_selector))]
+    for visual_owner in ("border:", "border-radius:", "background:"):
+        assert visual_owner in shell
+
+    input_selector = ".planning-bulk-results .planning-bulk-results__search-input {"
+    input_rule = css[css.index(input_selector) : css.index("}", css.index(input_selector))]
+    for reset in (
+        "border: 0",
+        "border-radius: 0",
+        "outline: none",
+        "appearance: none",
+        "background: transparent",
+        "background-image: none",
+        "box-shadow: none",
+    ):
+        assert reset in input_rule
+
+
+def test_bulk_results_clear_selection_is_a_compact_secondary_button():
+    react = Path("frontend/executive-kpi/src/PlanningWorklist.tsx").read_text(encoding="utf-8")
+    clear_control = react[
+        react.index('className="planning-bulk-results__clear"') - 80 :
+        react.index("Clear selection") + len("Clear selection")
+    ]
+    assert '<button' in clear_control
+    assert 'type="button"' in clear_control
+
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    selector = ".planning-bulk-results .planning-bulk-results__clear {"
+    rule = css[css.index(selector) : css.index("}", css.index(selector))]
+    assert "height: 36px" in rule
+    assert "padding: 0 12px" in rule
+    assert "border: 1px solid var(--bulk-control-border)" in rule
+    assert "border-radius: 8px" in rule
+    assert "background: var(--bulk-control-bg)" in rule
+    assert "box-shadow: none" in rule
+    assert "text-decoration: none" in rule
+
+
+def test_bulk_results_theme_blocks_define_palette_tokens_only():
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    dark_selector = (
+        'html:not([data-theme="light"]) .planning-bulk-results,\n'
+        'html[data-theme="dark"] .planning-bulk-results {'
+    )
+    light_selector = 'html[data-theme="light"] .planning-bulk-results {'
+    for selector in (dark_selector, light_selector):
+        start = css.index(selector)
+        rule = css[start : css.index("}", start)]
+        body = rule.split("{", 1)[1]
+        declarations = [line.strip() for line in body.splitlines() if line.strip()]
+        assert len(declarations) > 30
+        assert all(line.startswith("--bulk-") for line in declarations)
+        for token in (
+            "--bulk-bg:",
+            "--bulk-text-strong:",
+            "--bulk-control-bg:",
+            "--bulk-table-head:",
+            "--bulk-row-selected:",
+            "--bulk-neutral-bg:",
+            "--bulk-primary-bg:",
+        ):
+            assert token in rule
+
+
+def test_bulk_results_header_adds_top_breathing_room_without_growing():
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    selector = ".planning-bulk-results .planning-bulk-results__head {"
+    rule = css[css.index(selector) : css.index("}", css.index(selector))]
+    assert "height: 78px" in rule
+    assert "box-sizing: border-box" in rule
+    assert "padding: 10px 18px 0 20px" in rule
+
+
+def test_bulk_results_neutral_badge_and_active_filter_use_theme_tokens():
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    neutral_selector = ".planning-bulk-results .planning-bulk-results__badge.is-neutral {"
+    neutral = css[css.index(neutral_selector) : css.index("}", css.index(neutral_selector))]
+    for token in ("--bulk-neutral-text", "--bulk-neutral-bg", "--bulk-neutral-border"):
+        assert token in neutral
+
+    active_selector = ".planning-bulk-results .planning-bulk-results__pill.is-active {"
+    active = css[css.index(active_selector) : css.index("}", css.index(active_selector))]
+    # Superseded contract: selection now ONLY outlines; the pill keeps its
+    # own semantic tone, so .is-active declares no background or text colour.
+    assert "border-color: var(--bulk-accent)" in active
+    assert "var(--bulk-accent-ring)" in active
+    assert "background:" not in active
+
+
+def test_bulk_results_bridge_publishes_truthful_resume_score_pair_fields():
+    javascript = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    score_start = javascript.index("function planningResumeMatchScore")
+    score_fn = javascript[score_start : javascript.index("/** Join persisted Bulk history", score_start)]
+    assert "normalizeResumeName(selectedResume)" in score_fn
+    assert "normalizeResumeName(row.winner_resume)" in score_fn
+    assert "row.winner_score" in score_fn
+    assert "row.runner_up_resume || row.runnerup_resume" in score_fn
+    assert "row.runner_up_score ?? row.runnerup_score" in score_fn
+
+    merge_start = javascript.index("function mergeBulkResultItems")
+    merge_fn = javascript[merge_start : javascript.index("/**\n * Company -> employer", merge_start)]
+    for field in ("winner_resume:", "winner_score:", "runner_up_resume:", "runner_up_score:", "match_score:"):
+        assert field in merge_fn
+
+
+def test_bulk_results_rows_own_a_canonical_theme_cell_surface():
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    selector = (
+        ".planning-bulk-results .planning-bulk-results__table "
+        "tbody .planning-bulk-results__row > td {"
+    )
+    rule = css[css.index(selector) : css.index("}", css.index(selector))]
+    assert "background:" in rule
+    assert "color:" in rule
+    assert rule.count("!important") == 2
+    for state in (":hover > td", ".is-selected > td", ".is-selected:hover > td"):
+        assert state in css
+
+
+def test_bulk_results_modal_allocates_all_spare_height_to_the_table():
+    """Header/cards/toolbar must not push the table below the fold."""
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    shell = css[
+        css.index(".planning-bulk-results {") :
+        css.index(".planning-bulk-results:focus-visible")
+    ]
+    assert "display: grid" in shell
+    assert "grid-template-rows: auto auto auto minmax(0, 1fr) auto" in shell
+    assert "min-height: 0" in shell
+
+    table_wrap = css[
+        css.index(".planning-bulk-results .planning-bulk-results__table-wrap {") :
+    ][:400]
+    assert "min-height: 0" in table_wrap
+    assert "overflow-y: auto" in table_wrap
+    assert "overflow-x: hidden" in table_wrap
+
+
+def _bulk_results_base_selectors(css_text):
+    """Base (non-state, non-media) `.planning-bulk-results*` selectors."""
+    import collections
+    import re as _re
+
+    text = _re.sub(r"/\*.*?\*/", "", css_text, flags=_re.S)
+    state = _re.compile(r"(:hover|:focus|:focus-within|:focus-visible|:disabled|:checked|::[a-z-]+|\.is-[a-z-]+|\[)")
+    counts = collections.Counter()
+    depth = media = 0
+    for match in _re.finditer(r"@media[^{]*\{|\{|\}|[^{}]+", text):
+        token = match.group(0)
+        if token.startswith("@media"):
+            media += 1
+            depth += 1
+            continue
+        if token == "{":
+            depth += 1
+            continue
+        if token == "}":
+            depth -= 1
+            if media and depth < media:
+                media -= 1
+            continue
+        if depth != media or media:
+            continue
+        for selector in token.split(","):
+            selector = " ".join(selector.split())
+            if ".planning-bulk-results" not in selector or state.search(selector):
+                continue
+            counts[selector] += 1
+    return counts
+
+
+def test_bulk_results_css_has_exactly_one_base_block_per_selector():
+    """Maintainability guard: no stacking a second copy of a selector later in
+    the file. State (:hover/.is-active/...) and @media overrides are allowed."""
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    counts = _bulk_results_base_selectors(css)
+    duplicates = {sel: n for sel, n in counts.items() if n > 1}
+    assert not duplicates, f"duplicate base selectors: {sorted(duplicates)}"
+    # The modal really is defined here (guards against an empty/no-op audit).
+    assert len(counts) > 25
+
+
+def test_served_stylesheets_carry_only_a_zero_specificity_modal_opt_out():
+    """app_redesign.css / styles.css must hold NO modal design - only the
+    :where(:not(...)) exclusion, which contributes zero specificity so the
+    existing shell cascade (notification/theme/profile buttons) is untouched."""
+    for path in ("src/app/static/app_redesign.css", "src/app/static/styles.css"):
+        css = Path(path).read_text(encoding="utf-8")
+        mentions = css.count("planning-bulk-results")
+        inside_where = css.count(":where(:not(.planning-bulk-results")
+        assert mentions > 0
+        # Every single mention lives inside a :where() opt-out list.
+        assert mentions == sum(
+            line.count("planning-bulk-results")
+            for line in css.splitlines()
+            if ":where(:not(.planning-bulk-results" in line
+        ), f"{path} contains modal styling outside the opt-out"
+        assert inside_where > 0
+        # No modal colour/layout leaked into the shared sheets.
+        for leaked in (".planning-bulk-results--dark", ".planning-bulk-results__table {"):
+            assert leaked not in css
+
+
+def test_modal_opt_out_does_not_touch_shared_shell_controls():
+    """The opt-out must never change which rules match the shell toolbar."""
+    import re as _re
+
+    shell = ("notification-btn", "theme-toggle-btn", "profile-avatar-btn",
+             "profile-menu-button", "notification-chip")
+    where = _re.compile(r":where\(:not\([^()]*\)\)")
+    for path in ("src/app/static/app_redesign.css", "src/app/static/styles.css"):
+        for line in Path(path).read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if ":where(:not(.planning-bulk-results" not in stripped:
+                continue
+            # The opt-out lists modal classes only - never a shell control.
+            opt_out = where.search(stripped).group(0)
+            for name in shell:
+                assert name not in opt_out
+            # The entire exclusion remains inside :where(), so the inner
+            # :not() contributes zero selector specificity.
+            assert opt_out.startswith(":where(:not(")
+
+
+def _bulk_theme_vars(css_text, selector):
+    """Read the --bulk-* custom properties from one modal theme block."""
+    import re as _re
+
+    start = css_text.index(selector)
+    block = css_text[start:css_text.index("}", start)]
+    return dict(_re.findall(r"(--bulk-[a-z0-9-]+)\s*:\s*([^;]+);", block))
+
+
+def _relative_luminance(hex_colour):
+    value = hex_colour.strip().lstrip("#")
+    channels = [int(value[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def _contrast(foreground, background):
+    a, b = _relative_luminance(foreground), _relative_luminance(background)
+    high, low = max(a, b), min(a, b)
+    return (high + 0.05) / (low + 0.05)
+
+
+def test_filter_pills_carry_a_semantic_tone_in_both_themes():
+    """Every filter has its OWN default background, present whether or not it
+    is selected. Tones are composed from existing semantic tokens."""
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    expected = {
+        "is-tone-all": "--bulk-accent-fill",
+        "is-tone-generated": "--bulk-success-bg",
+        "is-tone-safe": "--bulk-neutral-bg",
+        "is-tone-attention": "--bulk-attention-bg",
+    }
+    for modifier, token in expected.items():
+        anchor = f".planning-bulk-results .planning-bulk-results__pill.{modifier} {{"
+        assert anchor in css, f"missing tone modifier {modifier}"
+        block = css[css.index(anchor):css.index("}", css.index(anchor))]
+        assert "--pill-bg:" in block and token in block
+        for variable in ("--pill-border:", "--pill-text:", "--pill-count-bg:", "--pill-count-text:"):
+            assert variable in block, f"{modifier} missing {variable}"
+
+    # Both themes define every token those tones consume.
+    for selector in (".planning-bulk-results {", 'html[data-theme="light"] .planning-bulk-results {'):
+        variables = _bulk_theme_vars(css, selector)
+        for token in ("--bulk-accent-fill", "--bulk-success-bg", "--bulk-neutral-bg",
+                      "--bulk-attention-bg", "--bulk-neutral-border", "--bulk-neutral-text"):
+            assert token in variables, f"{selector} missing {token}"
+
+
+def test_active_filter_only_adds_an_outline_and_never_replaces_the_tone():
+    """Selection must not repaint the pill: no background/colour in .is-active."""
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    anchor = ".planning-bulk-results .planning-bulk-results__pill.is-active {"
+    block = css[css.index(anchor):css.index("}", css.index(anchor))]
+
+    assert "border-color: var(--bulk-accent)" in block
+    assert "box-shadow:" in block
+    # The selected state owns no fill or text colour at all.
+    declarations = {
+        line.split(":", 1)[0].strip()
+        for line in block.splitlines()
+        if ":" in line and not line.strip().startswith(("/*", "*", "."))
+    }
+    for forbidden in ("background", "background-color", "color", "--pill-bg", "--pill-text"):
+        assert forbidden not in declarations, f".is-active must not set {forbidden}"
+
+    # Hover must not repaint the semantic background either.
+    hover_anchor = ".planning-bulk-results .planning-bulk-results__pill:hover {"
+    hover = css[css.index(hover_anchor):css.index("}", css.index(hover_anchor))]
+    assert "background:" not in hover
+
+
+def test_safe_no_rewrite_status_is_visibly_blue_not_neutral_grey():
+    """Safe / no rewrite is an intentional cool blue in both themes - neither
+    success green, failure red, nor near-grey."""
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    anchor = ".planning-bulk-results .planning-bulk-results__badge.is-neutral {"
+    block = css[css.index(anchor):css.index("}", css.index(anchor))]
+    for token in ("--bulk-neutral-text", "--bulk-neutral-bg", "--bulk-neutral-border"):
+        assert token in block
+
+    for selector in (".planning-bulk-results {", 'html[data-theme="light"] .planning-bulk-results {'):
+        variables = _bulk_theme_vars(css, selector)
+        border = variables["--bulk-neutral-border"].strip()
+        marker = variables["--bulk-neutral-marker"].strip()
+        # Blue channel must dominate red and green for the border and dot.
+        for name, colour in (("border", border), ("marker", marker)):
+            assert colour.startswith("#"), f"{selector} {name} is not a hex colour"
+            r, g, b = (int(colour[i:i + 2], 16) for i in (1, 3, 5))
+            assert b > r + 40 and b > g + 20, f"{selector} neutral {name} is not blue enough"
+            # Not a grey: channels must not be near-equal.
+            assert max(r, g, b) - min(r, g, b) > 60, f"{selector} neutral {name} reads as grey"
+
+
+def test_primary_rerun_action_does_not_reuse_the_filter_count_colour():
+    """The CTA sits on deep indigo and needs white text; it must not share the
+    filter chip's near-black variable."""
+    css = Path("frontend/executive-kpi/src/styles.css").read_text(encoding="utf-8")
+    start = css.index(".planning-bulk-results .planning-bulk-results__primary {")
+    block = css[start:css.index("}", start)]
+    assert "--bulk-primary-text" in block
+    assert "--bulk-active-count-text" not in block
+    for selector in (".planning-bulk-results {", 'html[data-theme="light"] .planning-bulk-results {'):
+        variables = _bulk_theme_vars(css, selector)
+        assert _contrast(variables["--bulk-primary-text"], variables["--bulk-primary-bg"]) >= 4.5
+
+
+def _selection_source():
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    return planning[
+        planning.index("function getPlanningBulkSuggestionSelection") :
+        planning.index("function buildPlanningWorklistBridgeState")
+    ]
+
+
+def test_initial_bulk_lane_still_uses_the_first_time_generate_gate():
+    """A row that already has tailoring artifacts resolves to open_workspace and
+    must stay out of a FRESH Bulk Generate. Unchanged behaviour."""
+    source = _selection_source()
+    assert 'resolvePlanningWorklistAction(row).kind === "generate_suggestions"' in source
+    # The first-time gate is the non-rerun branch of the lane split.
+    initial_branch = source[source.index(": scopeRows.filter("):]
+    assert 'resolvePlanningWorklistAction(row).kind === "generate_suggestions"' in initial_branch
+
+    resolver = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    # The artifact gate itself is untouched.
+    assert "const canGenerateSuggestions = !hasArtifacts && canGenerateSuggestionsForRow(row);" in resolver
+
+
+def test_rerun_lane_admits_supplied_identities_that_already_have_artifacts():
+    """Re-running a job whose previous attempt produced artifacts is the point
+    of the Results Center, so artifact presence must not disqualify it."""
+    source = _selection_source()
+    rerun_branch = source[source.index("const eligibleRows = rerunScope"):source.index(": scopeRows.filter(")]
+    # The rerun lane validates identity + resume, and never consults artifacts.
+    assert "canGenerateSuggestionsForRow(row)" in rerun_branch
+    assert "planningRowIdentityKeys(row).some((key) => rerunScope.has(key))" in rerun_branch
+    for forbidden in ("hasTailoringWorkspaceArtifacts", "resolvePlanningWorklistAction", "open_workspace"):
+        assert forbidden not in rerun_branch, f"rerun lane must not gate on {forbidden}"
+
+
+def test_rerun_scope_can_only_narrow_never_expand():
+    """Identities come from the Results Center; filters may reduce that set."""
+    source = _selection_source()
+    # Every rerun candidate must intersect the supplied identity set.
+    assert "rerunScope.has(key)" in source
+    # Filters are applied AFTER the scope intersection, so they only narrow.
+    scope_at = source.index("const eligibleRows = rerunScope")
+    filter_at = source.index("const filteredRows = eligibleRows.filter(")
+    assert scope_at < filter_at
+    assert "eligibleRows.filter(" in source
+    # requestedCount can only shrink the final candidate list.
+    assert "Math.min(requestedCount, filteredRows.length)" in source
+
+
+def test_rerun_with_stale_or_missing_identities_fails_visibly_not_silently():
+    """A genuinely empty rerun scope must surface through the existing app error
+    surface rather than closing the workspace with no feedback."""
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    rerun_source = planning[
+        planning.index("async function startBulkGenerateSuggestionsRerun") :
+        planning.index("function updateBulkGenerateSuggestionsConfiguration")
+    ]
+    assert "if (!scoped.selectedCount) {" in rerun_source
+    assert "showAppError(" in rerun_source
+    assert "Bulk re-run unavailable" in rerun_source
+    # Mode is reset so a failed re-run cannot leak into the next initial run.
+    assert 'bulkGenerateSuggestionsState.mode = "initial";' in rerun_source
+    assert "bulkGenerateSuggestionsState.rerunIdentities = [];" in rerun_source
+    # No new notification architecture: reuses the existing helper.
+    assert "function showAppError(" in planning
+
+
+def test_rerun_preserves_winner_runner_up_resume_validation():
+    """canGenerateSuggestionsForRow still demands a job reference and a resume
+    drawn from the current winner/runner-up allowlist."""
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    can_generate = planning[
+        planning.index("function canGenerateSuggestionsForRow") :
+        planning.index("function buildGenerateSuggestionsPayload")
+    ]
+    assert "row?.job_doc_id || row?.queue_rank" in can_generate
+    assert "resolveGenerateSuggestionsSelectedResume(row)" in can_generate
+
+    allowed = planning[
+        planning.index("function resolveGenerateSuggestionsAllowedResume") :
+        planning.index("function resolveGenerateSuggestionsSelectedResume")
+    ]
+    assert "row?.winner_resume" in allowed
+    assert "row?.runner_up_resume" in allowed
+    assert "allowedResumes.includes(candidate)" in allowed
+
+
+def test_rerun_start_path_keeps_backend_stale_candidate_validation():
+    """The fix is frontend admission only: backend safety is untouched."""
+    service = Path("src/app/bulk_generation_service.py").read_text(encoding="utf-8")
+    validate = service[
+        service.index("def validate_bulk_generation_candidates") :
+        service.index("def _launch_worker")
+    ]
+    assert '"stale_candidate"' in validate
+    assert '"duplicate_candidate"' in validate
+    assert "winner_resume" in validate and "runner_up_resume" in validate
+    # The worker still regenerates through the authoritative services path.
+    assert "services.regenerate_selected_resume_tailoring_payload" in service
+    assert "refresh_llm_tailoring=False" in service
+
+
+def _rerun_source():
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    return planning[
+        planning.index("async function startBulkGenerateSuggestionsRerun") :
+        planning.index("function updateBulkGenerateSuggestionsConfiguration")
+    ]
+
+
+def _executor_source():
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    return planning[
+        planning.index("async function executeBulkGenerateSuggestions") :
+        planning.index("async function stopBulkGenerateSuggestionsAfterCurrent")
+    ]
+
+
+def test_results_rerun_starts_directly_and_never_opens_the_settings_overlay():
+    """Re-run selected / Re-run all eligible must bypass the first-run
+    configuration overlay entirely."""
+    rerun = _rerun_source()
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+
+    assert "resetBulkGenerateSuggestionsState(scoped.candidateRows)" in rerun
+    assert "await executeBulkGenerateSuggestions()" in rerun
+    # No configuration UI is opened or reconfigured on this path.
+    for forbidden in (
+        'renderBulkGenerateSuggestionsOverlay("confirm"',
+        "resetBulkGenerateSuggestionsConfiguration(",
+        "renderBulkGenerateSuggestionsPreferenceOptions()",
+    ):
+        assert forbidden not in rerun, f"re-run must not call {forbidden}"
+    # The action handler delegates to the direct starter.
+    assert "await startBulkGenerateSuggestionsRerun(action.scope, action.jobIdentities)" in planning
+    assert "function openBulkGenerateSuggestionsRerun" not in planning
+
+
+def test_rerun_requested_count_equals_the_explicit_scope_and_cannot_truncate():
+    """A 10-job first-run default must never truncate an 18- or 64-job re-run."""
+    rerun = _rerun_source()
+    assert "bulkGenerateSuggestionsState.requestedCount = identities.length;" in rerun
+    # selectedCount = min(requestedCount, filteredRows.length); with
+    # requestedCount == |identities| the scope is never clipped.
+    selection = _selection_source()
+    assert "Math.min(requestedCount, filteredRows.length)" in selection
+    assert "candidateRows: filteredRows.slice(0, selectedCount)" in selection
+    # The start body sends the actual row count, not the UI number.
+    executor = _executor_source()
+    assert "requested_count: rows.length" in executor
+
+
+def test_rerun_neutralizes_first_run_filters():
+    """Review readiness / Match strength / Preferences are first-run controls;
+    they are recorded metadata only and must not scope a re-run."""
+    rerun = _rerun_source()
+    for field in ("reviewAction", "winnerBucket", "preferenceId"):
+        assert f'bulkGenerateSuggestionsState.{field} = "";' in rerun
+
+    executor = _executor_source()
+    assert 'review_filter: isRerun ? "" : bulkGenerateSuggestionsState.reviewAction' in executor
+    assert 'match_filter: isRerun ? "" : bulkGenerateSuggestionsState.winnerBucket' in executor
+    assert 'preference_filter: isRerun ? "" : bulkGenerateSuggestionsState.preferenceId' in executor
+
+    # Backend proof that these fields are metadata, not generation semantics.
+    service = Path("src/app/bulk_generation_service.py").read_text(encoding="utf-8")
+    start = service[service.index("def start_bulk_generation") : service.index("def request_bulk_generation_stop")]
+    for field in ("review_filter", "match_filter", "preference_filter"):
+        # Present only inside the recorded config payload.
+        assert f'"{field}": _clean(' in start
+    worker = Path("src/app/bulk_generation_worker.py").read_text(encoding="utf-8")
+    for field in ("review_filter", "match_filter", "preference_filter"):
+        assert field not in worker, f"{field} must have no worker semantics"
+
+
+def test_rerun_reuses_the_single_existing_start_and_progress_path():
+    """One executor, one endpoint, one canonical status/progress mechanism."""
+    executor = _executor_source()
+    assert 'postJson("/planning/bulk-generation/start"' in executor
+    assert "window.ApplyLensBulkGeneration?.refresh?.()" in executor
+    assert "publishPlanningWorklistState()" in executor
+
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    # Exactly one start call site and one executor in the whole bridge.
+    assert planning.count('postJson("/planning/bulk-generation/start"') == 1
+    assert planning.count("async function executeBulkGenerateSuggestions(") == 1
+    # Stop-after-current still routes through the shared canonical controller.
+    assert "window.ApplyLensBulkGeneration?.stop?.()" in planning
+
+
+def test_rerun_defers_running_state_until_the_start_is_accepted():
+    """Results must not be dismissed by an optimistic running state that a
+    rejected start would then revoke."""
+    executor = _executor_source()
+    assert 'const isRerun = String(bulkGenerateSuggestionsState.mode || "initial") === "rerun";' in executor
+    assert "if (!isRerun) publishPlanningWorklistState();" in executor
+    assert "if (isRerun) publishPlanningWorklistState();" in executor
+    # A rejected re-run reverts running, resets mode, and shows the existing
+    # error surface instead of falling into the first-run overlay.
+    failure = executor[executor.index("} catch (err) {"):]
+    assert "bulkGenerateSuggestionsState.isRunning = false;" in failure
+    assert 'bulkGenerateSuggestionsState.mode = "initial";' in failure
+    assert 'showAppError("Bulk Generate could not start", err)' in failure
+    assert 'renderBulkGenerateSuggestionsOverlay("confirm"' in failure  # initial lane only
+    assert "} else {" in failure
+
+
+def test_first_run_bulk_still_opens_the_configuration_overlay():
+    """Fresh Bulk Generate keeps its settings step unchanged."""
+    planning = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    confirm = planning[
+        planning.index("function openBulkGenerateSuggestionsConfirmation") :
+        planning.index("async function startBulkGenerateSuggestionsRerun")
+    ]
+    assert 'bulkGenerateSuggestionsState.mode = "initial";' in confirm
+    assert "resetBulkGenerateSuggestionsConfiguration(scopeSummary.eligibleCount)" in confirm
+    assert "renderBulkGenerateSuggestionsPreferenceOptions()" in confirm
+    assert 'renderBulkGenerateSuggestionsOverlay("confirm", getPlanningBulkSuggestionSelection())' in confirm
+    # The action still routes fresh Bulk through the configuration step.
+    assert 'action.type === "bulk_generate_suggestions"' in planning
+    assert "openBulkGenerateSuggestionsConfirmation();" in planning
+    # And the overlay still carries the four first-run controls.
+    ui = Path("src/app/planning_ui.py").read_text(encoding="utf-8")
+    for control in (
+        "bulkGenerateSuggestionsNumber",
+        "bulkGenerateSuggestionsReviewFilter",
+        "bulkGenerateSuggestionsMatchFilter",
+        "bulkGenerateSuggestionsPreferenceFilter",
+    ):
+        assert control in ui
+
+
+def test_rerun_keeps_every_admission_guard():
+    """The direct start does not weaken any existing guard."""
+    rerun = _rerun_source()
+    assert "bulkGenerateSuggestionsState.isRunning || generateSuggestionsState.isRunning" in rerun
+    assert "if (overlay && !overlay.classList.contains(\"hidden\")) return;" in rerun
+    assert "if (!identities.length) return;" in rerun
+    # Scope + resume validation still comes from the shared selection helper.
+    assert "getPlanningBulkSuggestionSelection(" in rerun
+    selection = _selection_source()
+    assert "canGenerateSuggestionsForRow(row)" in selection
+    assert "rerunScope.has(key)" in selection

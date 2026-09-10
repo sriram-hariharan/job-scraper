@@ -37,9 +37,9 @@ def executive_dashboard() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Executive Queue Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=phase133d_s1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
+  <link rel="stylesheet" href="/static/styles.css?v=eucalyptus_action_cascade_r2" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1" />
 </head>
 <body class="executive-dashboard-page">
   {render_top_shell("/")}
@@ -78,7 +78,7 @@ def executive_dashboard() -> str:
       <noscript>Enable JavaScript to view source yield.</noscript>
     </section>
 
-    <div class="subtext pipeline-run-meta" id="pipelineRunMeta">Pipeline idle.</div>
+    <div class="subtext pipeline-run-meta hidden" id="pipelineRunMeta">Pipeline idle.</div>
     <section
       id="executiveQueueRoot"
       class="executive-queue-root"
@@ -90,32 +90,34 @@ def executive_dashboard() -> str:
     </section>
   </div>
 
-  <section class="modal-backdrop hidden" id="applicationActionModal">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div>
-          <h3>Update application status</h3>
+  <section class="modal-backdrop hidden" id="applicationActionModal" role="dialog" aria-modal="true" aria-labelledby="applicationStatusDialogTitle" aria-describedby="applicationModalMeta">
+    <div class="modal-card application-status-dialog">
+      <div class="application-status-dialog__header">
+        <span class="application-status-dialog__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+        <div class="application-status-dialog__heading">
+          <h3 id="applicationStatusDialogTitle">Update application status</h3>
           <div class="subtext" id="applicationModalMeta">Choose what happened after opening the job.</div>
         </div>
-        <button class="ghost-btn modal-close-btn" id="closeApplicationModalBtn" type="button">Close</button>
+        <button class="ghost-btn modal-close-btn application-status-dialog__close" id="closeApplicationModalBtn" type="button" aria-label="Close application status dialog" title="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
       </div>
 
-      <div class="modal-body">
-        <div class="info-pair">
+      <div class="modal-body application-status-dialog__job" aria-label="Selected job">
+        <div class="application-status-dialog__job-field">
           <span class="label">Company</span>
           <span id="applicationModalCompany">-</span>
         </div>
-        <div class="info-pair">
-          <span class="label">Title</span>
+        <div class="application-status-dialog__job-field">
+          <span class="label">Role</span>
           <span id="applicationModalTitle">-</span>
         </div>
       </div>
 
-      <div class="modal-actions">
-        <button type="button" class="status-action-btn applied-action-btn" data-status-action="APPLIED">Applied</button>
-        <button type="button" class="status-action-btn saved-action-btn" data-status-action="SAVED">Save for later</button>
-        <button type="button" class="status-action-btn not-applied-action-btn" data-status-action="NOT_APPLIED">Not applied</button>
-        <button type="button" class="ghost-btn" data-status-action="DISMISSED">Dismiss</button>
+      <div class="application-status-dialog__prompt">Choose a status</div>
+      <div class="modal-actions application-status-dialog__actions">
+        <button type="button" class="status-action-btn applied-action-btn" data-status-action="APPLIED"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span>Applied</span></button>
+        <button type="button" class="status-action-btn saved-action-btn" data-status-action="SAVED"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>Save for later</span></button>
+        <button type="button" class="status-action-btn not-applied-action-btn" data-status-action="NOT_APPLIED"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg><span>Not applied</span></button>
+        <button type="button" class="ghost-btn application-status-dialog__dismiss" data-status-action="DISMISSED"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Dismiss</span></button>
       </div>
     </div>
   </section>
@@ -238,8 +240,8 @@ def executive_dashboard() -> str:
   </div>
 </section>
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1"></script>
   <script src="/static/app.js?v=phase133d_s1"></script>
   </body>
 </html>
@@ -414,8 +416,8 @@ def pipeline_dashboard() -> str:
   <title>Pipeline Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=phase133d_s1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1" />
 </head>
 <body class="pipeline-dashboard-page">
   {render_top_shell("/pipeline")}
@@ -432,9 +434,9 @@ def pipeline_dashboard() -> str:
   {_pipeline_dashboard_launch_dialogs()}
   {_pipeline_dashboard_error_dialog()}
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
   <script src="/static/app.js?v=phase133d_s1"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1"></script>
 </body>
 </html>
     """.strip()
@@ -450,9 +452,9 @@ def scheduler_dashboard(request: Request) -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Scheduler Health</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
-  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" />
+  <link rel="stylesheet" href="/static/styles.css?v=shared_filter_fluid_select_r2" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1" />
 </head>
 <body class="scheduler-health-page">
   {render_top_shell("/scheduler")}
@@ -468,8 +470,60 @@ def scheduler_dashboard(request: Request) -> str:
   </main>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
-  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1"></script>
+</body>
+</html>
+    """.strip()
+
+
+@router.get("/agentic-operations", response_class=HTMLResponse)
+def agentic_operations_console(request: Request) -> str:
+    _require_admin_user(request)
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic Operations</title>
+  <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
+  <link rel="stylesheet" href="/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1" />
+</head>
+<body class="agentic-operations-page">
+  {render_top_shell("/agentic-operations")}
+  <main class="page agentic-operations-shell">
+    <header class="page-header app-page-header">
+      <div class="page-header-main app-page-header__main">
+        <div class="agentic-operations-header-title-row app-page-header__title-row">
+          <h1 class="app-page-header__title">Agentic Operations</h1>
+          <span class="agentic-operations-header-badge app-page-header__badge">Admin only</span>
+          <span
+            id="agenticOperationsHeaderReadOnlyBadge"
+            class="agentic-operations-header-badge-slot"
+          ></span>
+        </div>
+        <p class="subtext app-page-header__description">
+          Administrative read-only workspace for agent supervision and runtime evidence.
+        </p>
+      </div>
+    </header>
+
+    <section
+      id="agenticOperationsRoot"
+      aria-label="Agentic Operations workspace"
+      aria-live="polite"
+    >
+      <div class="agentic-operations-server-fallback">Loading Agentic Operations...</div>
+      <noscript>Enable JavaScript to view Agentic Operations.</noscript>
+    </section>
+  </main>
+
+  <script src="/static/vendor/tabler/tabler.min.js"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
+  <script type="module" src="/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1"></script>
 </body>
 </html>
     """.strip()

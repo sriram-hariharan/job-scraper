@@ -953,9 +953,16 @@ def test_saved_scans_page_discloses_ready_report_storage():
     html = saved_scans_page()
 
     assert "Review New Scan reports generated from submitted resumes and job descriptions." in html
+    # The storage disclosure is preserved verbatim, demoted from the old
+    # full-width tinted banner to a muted caption in the section header.
     assert "generated match score and review payload in Postgres" in html
-    assert "<th>Action</th>" in html
-    assert 'colspan="9"' in html
+    assert "saved-scans-storage-note" in html
+    assert "saved-scans-note" not in html
+    # One Actions column replaces the old Action + blank delete columns.
+    assert "<th class=\"saved-scans-actions-head\">Actions</th>" in html
+    assert "<th>Action</th>" not in html
+    assert 'colspan="8"' in html
+    assert 'colspan="9"' not in html
     assert "/static/profile.js?v=profile_saved_scans_e5_discard_icon" in html
     assert "savedScanDeleteModal" in html
 
@@ -968,7 +975,10 @@ def test_saved_scans_profile_script_labels_ready_reports():
     assert "Saved intake only" in script
     assert "/scan-workspace?saved_scan_id=" in script
     assert "data-saved-scan-delete" in script
-    assert "saved-scan-action-badge" in script
+    # savedScanStatusMeta keeps its action metadata, but the table no longer
+    # renders it as a badge column - Status and the Open icon carry that now.
+    assert "saved-scan-action-badge" not in script
+    assert "saved-scan-action-btn--open" in script
 
 def test_selector_prefers_score_positive_candidate_over_neutral_llm_candidate():
     plan = build_final_replacement_plan(
@@ -1174,11 +1184,20 @@ def test_selector_direct_lanes_require_meaningful_displayed_score_lift():
     meaningful_plan = build_final_replacement_plan([meaningful_ready], [])
     tiny_optional_plan = build_final_replacement_plan([tiny_optional], [])
 
+    # app_ready still requires a meaningful displayed lift: a zero-point delta
+    # never reaches it, however tiny and positive the raw float is.
     assert tiny_ready_plan["app_ready_replacements"] == []
-    assert tiny_optional_plan["direct_apply_optional_replacements"] == []
     assert meaningful_plan["app_ready_replacements"][0][
         "replacement_candidate_id"
     ] == "meaningful_ready"
+    # P3S3. The optional lane does accept this candidate. A raw delta that
+    # rounds to zero points is exactly how production assigns
+    # "export_safe_no_score_lift", so this pairing is production-shaped and the
+    # lane its allowlist advertises must be reachable.
+    assert tiny_optional_plan["direct_apply_optional_replacements"][0][
+        "replacement_candidate_id"
+    ] == "tiny_optional"
+    assert tiny_optional_plan["app_ready_replacements"] == []
 
 
 def test_selector_keeps_tiny_negative_non_actionable_despite_zero_display_points():
@@ -1210,30 +1229,56 @@ def test_selector_qualified_neutral_outweighs_unqualified_tiny_positive_noise():
     assert plan["direction_only_replacements"] == []
 
 
-def test_selector_keeps_direct_lanes_positive_score_only():
+def test_selector_keeps_app_ready_positive_score_only():
+    """P3S3. app_ready stays positive-lift only; the optional lane accepts a
+    zero-point rewrite only when it carries the allowlisted export-safe status.
+
+    The previous fixture paired delta=0.02 with "export_safe_no_score_lift",
+    a combination production cannot emit -- that status is only ever assigned
+    to zero-point deltas -- so it proved nothing about the optional lane.
+    """
     positive_ready = _candidate("positive_ready", delta=0.02)
     neutral_ready = _candidate("neutral_ready", delta=0.0)
-    positive_optional = _candidate("positive_optional", bullet_id="bullet_2", delta=0.02)
     neutral_optional = _candidate("neutral_optional", bullet_id="bullet_3", delta=0.0)
-    positive_optional["materiality_validation_status"] = "export_safe_no_score_lift"
     neutral_optional["materiality_validation_status"] = "export_safe_no_score_lift"
+    neutral_not_allowlisted = _candidate(
+        "neutral_not_allowlisted", bullet_id="bullet_4", delta=0.0
+    )
+    neutral_not_allowlisted["materiality_validation_status"] = (
+        "scorer_neutral_no_evidence_change"
+    )
+    negative_optional = _candidate(
+        "negative_optional", bullet_id="bullet_5", delta=-0.02
+    )
+    negative_optional["materiality_validation_status"] = "export_safe_no_score_lift"
 
     positive_ready_plan = build_final_replacement_plan([positive_ready], [])
     neutral_ready_plan = build_final_replacement_plan([neutral_ready], [])
     optional_plan = build_final_replacement_plan(
-        [positive_optional, neutral_optional], []
+        [neutral_optional, neutral_not_allowlisted, negative_optional], []
     )
 
+    # Positive safe candidates keep their existing app-ready lane.
     assert positive_ready_plan["app_ready_replacements"][0][
         "replacement_candidate_id"
     ] == "positive_ready"
+    # A neutral rewrite never becomes app-ready, whatever its status.
     assert neutral_ready_plan["app_ready_replacements"] == []
-    assert optional_plan["direct_apply_optional_replacements"][0][
-        "replacement_candidate_id"
-    ] == "positive_optional"
-    assert all(
-        row["replacement_candidate_id"] != "neutral_optional"
+    assert optional_plan["app_ready_replacements"] == []
+
+    optional_ids = [
+        row["replacement_candidate_id"]
         for row in optional_plan["direct_apply_optional_replacements"]
+    ]
+    # Only the allowlisted export-safe neutral candidate reaches the lane.
+    assert optional_ids == ["neutral_optional"]
+    # A neutral delta without the permitted status is not a zero-score bypass.
+    assert "neutral_not_allowlisted" not in optional_ids
+    # Negative deltas stay rejected from every actionable lane.
+    assert "negative_optional" not in optional_ids
+    assert all(
+        row["replacement_candidate_id"] != "negative_optional"
+        for row in optional_plan["ai_optimize_optional_replacements"]
     )
 
 
@@ -1506,6 +1551,40 @@ def _live_patch_prompt_payload():
     return packet, payload
 
 
+def _bare_tool_semantic_payload(*, source_text=None):
+    payload = _live_patch_payload()
+    anchor = payload["evidence_layers"]["anchors"][0]
+    anchor["text"] = source_text or "Delivered Python, SQL, Airflow."
+    anchor["parent_bullet"] = anchor["text"]
+    anchor["overlaps"] = ["Python", "SQL", "Airflow"]
+    anchor["supported_terms"] = ["Python", "SQL", "Airflow"]
+    payload["summary"]["missing_required"] = ["Kubernetes"]
+    payload["summary"]["missing_preferred"] = []
+    return payload
+
+
+def _semantic_rewrite_response(*, first_direction, gap_direction):
+    response = _live_patch_response()
+    response["rewrite_directions"] = [
+        {
+            "prefix": "Lead with",
+            "source": "Data Analyst @ ExampleCo",
+            "direction": first_direction,
+        },
+        {
+            "prefix": "Support with",
+            "source": "Data Analyst @ ExampleCo",
+            "direction": "retain python sql and airflow as supplied evidence",
+        },
+        {
+            "prefix": "Keep gap explicit",
+            "source": "",
+            "direction": gap_direction,
+        },
+    ]
+    return response
+
+
 def test_live_rewrite_prompt_default_stays_direction_only_contract():
     packet, payload = _live_patch_prompt_payload()
     prompt = payload["live_rewrite_prompt"]
@@ -1516,6 +1595,320 @@ def test_live_rewrite_prompt_default_stays_direction_only_contract():
     assert "Concrete candidate source table" not in prompt
     assert "source_bullet_id:" not in prompt
     assert "source_entry_id:" not in prompt
+
+
+def test_live_rewrite_prompts_define_evidence_gap_and_bare_tool_semantics():
+    packet, payload = _live_patch_prompt_payload()
+    prompts = (
+        tailoring_llm.TAILORING_GENERATION_PRIMARY_SYSTEM_PROMPT,
+        tailoring_llm.TAILORING_GENERATION_RETRY_SYSTEM_PROMPT,
+        tailoring_llm.TAILORING_GENERATION_PROMOTION_SYSTEM_PROMPT,
+        tailoring_llm.TAILORING_GENERATION_PROMOTION_RETRY_SYSTEM_PROMPT,
+        payload["live_rewrite_prompt"],
+        tailoring_llm._build_live_concrete_rewrite_prompt(packet, payload),
+    )
+
+    assert all("not evidenced" in prompt for prompt in prompts)
+    assert all("tool or skill name alone" in prompt.lower() for prompt in prompts)
+    for prompt in prompts:
+        assert "emphasize Python as supported source evidence" in prompt
+        assert "surface SQL prominently as supported evidence" in prompt
+        assert "retain Airflow visibly as supporting evidence" in prompt
+        for unsupported_expansion in (
+            "development",
+            "querying",
+            "orchestration",
+            "pipeline impact",
+            "production ownership",
+            "architecture",
+            "optimization",
+            "implementation",
+            "automation",
+            "measurable impact",
+        ):
+            assert unsupported_expansion in prompt
+
+
+def test_normal_live_prompt_good_examples_are_evidence_bounded():
+    _packet, payload = _live_patch_prompt_payload()
+    good_examples = [
+        line
+        for line in payload["live_rewrite_prompt"].splitlines()
+        if line.startswith("- Good direction example:")
+    ]
+
+    assert good_examples == [
+        '- Good direction example: "surface SQL and Python prominently as supported evidence"',
+        '- Good direction example: "surface Excel reporting prominently as supported evidence"',
+    ]
+    for example in good_examples:
+        assert not any(
+            unsupported_concept in example.lower()
+            for unsupported_concept in (
+                "risk-reduction",
+                "error-reduction",
+                "impact",
+                "ownership",
+                "querying",
+                "orchestration",
+            )
+        )
+
+
+def test_bare_tool_tokens_allow_tool_level_visibility_directions():
+    response = _live_patch_response()
+    response["rewrite_directions"] = [
+        {
+            "prefix": "Lead with",
+            "source": "Data Analyst @ ExampleCo",
+            "direction": "emphasize Python as supported source evidence",
+        },
+        {
+            "prefix": "Support with",
+            "source": "Data Analyst @ ExampleCo",
+            "direction": "surface SQL prominently as supported evidence",
+        },
+        {
+            "prefix": "Support with",
+            "source": "Data Analyst @ ExampleCo",
+            "direction": "retain Airflow visibly as supporting evidence",
+        },
+    ]
+
+    parsed = tailoring_llm._validate_live_llm_parsed_contract(
+        response,
+        _bare_tool_semantic_payload(),
+    )
+
+    assert [row["direction"] for row in parsed["rewrite_directions"]] == [
+        "emphasize Python as supported source evidence",
+        "surface SQL prominently as supported evidence",
+        "retain Airflow visibly as supporting evidence",
+    ]
+
+
+@pytest.mark.parametrize(
+    "gap_direction",
+    [
+        "state that the candidate lacks Kubernetes experience",
+        "candidate has no experience with Kubernetes",
+    ],
+)
+def test_missing_evidence_rejects_candidate_biography_claims(gap_direction):
+    with pytest.raises(
+        tailoring_llm.LiveLlmContractError,
+        match="live_llm_contract_direction_3_candidate_absence_claim",
+    ) as exc_info:
+        tailoring_llm._validate_live_llm_parsed_contract(
+            _semantic_rewrite_response(
+                first_direction="place python sql and airflow terms in opening clause",
+                gap_direction=gap_direction,
+            ),
+            _bare_tool_semantic_payload(),
+        )
+
+    assert exc_info.value.code == (
+        "live_llm_contract_direction_candidate_absence_claim"
+    )
+
+
+def test_missing_evidence_allows_neutral_gap_status_and_supported_tool_terms():
+    parsed = tailoring_llm._validate_live_llm_parsed_contract(
+        _semantic_rewrite_response(
+            first_direction="place python sql and airflow terms in opening clause",
+            gap_direction="Kubernetes is not evidenced in the supplied resume",
+        ),
+        _bare_tool_semantic_payload(),
+    )
+
+    assert [row["prefix"] for row in parsed["rewrite_directions"]] == [
+        "Lead with",
+        "Support with",
+        "Keep gap explicit",
+    ]
+    assert parsed["rewrite_directions"][2]["direction"] == (
+        "Kubernetes is not evidenced in the supplied resume"
+    )
+
+
+def test_explicit_negative_source_can_support_matching_negative_statement():
+    parsed = tailoring_llm._validate_live_llm_parsed_contract(
+        _semantic_rewrite_response(
+            first_direction="place python sql and airflow terms in opening clause",
+            gap_direction="candidate has no experience with Kubernetes",
+        ),
+        _bare_tool_semantic_payload(
+            source_text=(
+                "Python, SQL, Airflow. Candidate has no experience with Kubernetes."
+            )
+        ),
+    )
+
+    assert parsed["rewrite_directions"][2]["direction"] == (
+        "candidate has no experience with Kubernetes"
+    )
+
+
+@pytest.mark.parametrize(
+    "direction",
+    [
+        "python development achievements in the opening clause",
+        "sql querying and airflow orchestration as supporting technical context",
+        "pipeline impact from python sql and airflow evidence",
+        "kubernetes production ownership in the opening clause",
+    ],
+)
+def test_bare_tool_tokens_reject_unsupported_factual_expansion(direction):
+    with pytest.raises(
+        tailoring_llm.LiveLlmContractError,
+        match="live_llm_contract_direction_1_unsupported_factual_expansion",
+    ) as exc_info:
+        tailoring_llm._validate_live_llm_parsed_contract(
+            _semantic_rewrite_response(
+                first_direction=direction,
+                gap_direction="Kubernetes is not evidenced in the supplied resume",
+            ),
+            _bare_tool_semantic_payload(),
+        )
+
+    assert exc_info.value.code == (
+        "live_llm_contract_direction_unsupported_factual_expansion"
+    )
+
+
+def test_explicit_source_activities_remain_usable():
+    source_text = (
+        "Used Python for SQL queries and orchestrated Airflow pipelines in "
+        "production workflows."
+    )
+    parsed = tailoring_llm._validate_live_llm_parsed_contract(
+        _semantic_rewrite_response(
+            first_direction=(
+                "sql querying and airflow orchestration in production workflows"
+            ),
+            gap_direction="Kubernetes is not evidenced in the supplied resume",
+        ),
+        _bare_tool_semantic_payload(source_text=source_text),
+    )
+
+    assert parsed["rewrite_directions"][0]["direction"] == (
+        "sql querying and airflow orchestration in production workflows"
+    )
+
+
+def test_source_label_punctuation_is_canonicalized_before_factual_validation():
+    payload = _bare_tool_semantic_payload(
+        source_text=(
+            "Expanded the platform to nine API-driven workflows using AWS Lambda "
+            "and Step Functions, automating refunds and payment retries."
+        )
+    )
+    payload["evidence_layers"]["anchors"][0]["source"] = (
+        "Sr. Data Scientist @ Techmentee Inc."
+    )
+    response = {
+        "rewrite_directions": [
+            {
+                "prefix": "Lead with",
+                "source": "Sr. Data Scientist @ Techmentee Inc",
+                "direction": (
+                    "emphasize AWS Lambda and Step Functions for automated workflow"
+                ),
+            },
+            {
+                "prefix": "Support with",
+                "source": "Sr. Data Scientist @ Techmentee Inc",
+                "direction": "retain AWS Lambda and Step Functions as supplied evidence",
+            },
+            {
+                "prefix": "Keep gap explicit",
+                "source": "",
+                "direction": "Kubernetes is not evidenced in the supplied resume",
+            },
+        ]
+    }
+
+    parsed = tailoring_llm._validate_live_llm_parsed_contract(response, payload)
+
+    assert parsed["rewrite_directions"][0]["direction"].endswith(
+        "automated workflow"
+    )
+    assert tailoring_llm._live_rewrite_source_texts_for_label(
+        payload,
+        "Sr. Data Scientist @ Techmentee Inc",
+    )
+    assert tailoring_llm._live_rewrite_source_texts_for_label(
+        payload,
+        "Wrong Source @ ExampleCo",
+    ) == []
+
+
+def test_canonical_source_binding_does_not_allow_unsupported_orchestration():
+    payload = _bare_tool_semantic_payload(
+        source_text=(
+            "Expanded the platform to nine API-driven workflows using AWS Lambda "
+            "and Step Functions, automating refunds and payment retries."
+        )
+    )
+    payload["evidence_layers"]["anchors"][0]["source"] = (
+        "Sr. Data Scientist @ Techmentee Inc."
+    )
+    response = {
+        "rewrite_directions": [
+            {
+                "prefix": "Lead with",
+                "source": "Sr. Data Scientist @ Techmentee Inc",
+                "direction": (
+                    "emphasize AWS Lambda and Step Functions for automated "
+                    "workflow orchestration"
+                ),
+            }
+        ]
+    }
+
+    with pytest.raises(
+        tailoring_llm.LiveLlmContractError,
+        match=(
+            "live_llm_contract_direction_1_unsupported_factual_expansion:orchestration$"
+        ),
+    ):
+        tailoring_llm._validate_live_llm_parsed_contract(response, payload)
+
+
+def test_explicit_sql_querying_and_reporting_remain_usable():
+    source_text = (
+        "Used Python and Airflow. Wrote SQL queries for recurring reporting."
+    )
+    parsed = tailoring_llm._validate_live_llm_parsed_contract(
+        _semantic_rewrite_response(
+            first_direction="sql querying for recurring reporting as explicit evidence",
+            gap_direction="Kubernetes is not evidenced in the supplied resume",
+        ),
+        _bare_tool_semantic_payload(source_text=source_text),
+    )
+
+    assert parsed["rewrite_directions"][0]["direction"] == (
+        "sql querying for recurring reporting as explicit evidence"
+    )
+
+
+def test_explicit_source_backed_outcome_wording_remains_usable():
+    source_text = (
+        "Delivered a documented error-reduction outcome using Python and SQL."
+    )
+    parsed = tailoring_llm._validate_live_llm_parsed_contract(
+        _semantic_rewrite_response(
+            first_direction=(
+                "preserve documented error-reduction outcome in supporting clause"
+            ),
+            gap_direction="Kubernetes is not evidenced in the supplied resume",
+        ),
+        _bare_tool_semantic_payload(source_text=source_text),
+    )
+
+    assert parsed["rewrite_directions"][0]["direction"] == (
+        "preserve documented error-reduction outcome in supporting clause"
+    )
 
 
 def test_live_rewrite_schema_omits_provider_minimum_but_remains_strict():
@@ -1725,7 +2118,7 @@ def _successful_tailoring_runtime(provider, model):
 
 
 @pytest.mark.parametrize("owner_value", (None, "   "))
-def test_live_tailoring_without_owner_preserves_legacy_provider_path(
+def test_live_tailoring_without_owner_preserves_primary_and_hard_disables_fallback(
     monkeypatch,
     tmp_path,
     owner_value,
@@ -1771,10 +2164,7 @@ def test_live_tailoring_without_owner_preserves_legacy_provider_path(
     assert len(legacy_calls) == 1
     assert legacy_calls[0]["provider"] == tailoring_llm.LLM_TAILOR_PROVIDER
     assert legacy_calls[0]["model"] == tailoring_llm.LLM_TAILOR_MODEL
-    assert (
-        legacy_calls[0]["fallback_enabled"]
-        == tailoring_llm.TAILOR_LLM_FALLBACK_ENABLED
-    )
+    assert legacy_calls[0]["fallback_enabled"] is False
     assert (
         legacy_calls[0]["fallback_provider"]
         == tailoring_llm.TAILOR_LLM_FALLBACK_PROVIDER
@@ -1783,6 +2173,24 @@ def test_live_tailoring_without_owner_preserves_legacy_provider_path(
         legacy_calls[0]["fallback_model"]
         == tailoring_llm.TAILOR_LLM_FALLBACK_MODEL
     )
+    assert legacy_calls[0]["workload_id"] == "tailoring_generation"
+    assert legacy_calls[0]["temperature"] == tailoring_llm.LLM_TAILOR_TEMPERATURE
+    assert legacy_calls[0]["max_tokens"] == tailoring_llm.LLM_TAILOR_MAX_TOKENS
+    assert legacy_calls[0]["response_mime_type"] == "application/json"
+    assert legacy_calls[0]["response_schema"] == tailoring_llm._live_rewrite_response_schema(
+        False
+    )
+    assert legacy_calls[0]["return_parsed"] is True
+    assert legacy_calls[0]["thinking_budget"] == 0
+    assert legacy_calls[0]["messages"][0]["content"] == (
+        tailoring_llm.TAILORING_GENERATION_PRIMARY_SYSTEM_PROMPT
+    )
+    assert legacy_calls[0]["messages"][1]["content"] == payload["live_rewrite_prompt"]
+    assert result["fallback_enabled"] is False
+    assert result["fallback_attempted"] is False
+    assert result["fallback_used"] is False
+    assert result["fallback_provider"] == ""
+    assert result["fallback_model"] == ""
 
 
 def test_owner_tailoring_cache_miss_freezes_route_and_disables_fallback(
@@ -2473,6 +2881,22 @@ def test_neutral_live_concrete_evidence_removal_cannot_become_material(monkeypat
     ]
 
 
+def test_identical_live_concrete_patch_remains_non_material(monkeypatch):
+    candidate = _validate_live_concrete_materiality(
+        monkeypatch,
+        original_snapshot={"explicit_skills": ["Python"]},
+        patched_snapshot={"explicit_skills": ["Python"]},
+    )
+    candidate["original_text"] = candidate["patch_text"]
+
+    assert candidate["proposal_status"] == "direction_only"
+    assert candidate["patch_ready"] is False
+    assert candidate["material_delta_found"] is False
+    assert candidate["materiality_validation_status"] == (
+        "scorer_neutral_no_supported_jd_signal_gain"
+    )
+
+
 def test_neutral_live_concrete_supported_signal_gain_can_remain_material(monkeypatch):
     candidate = _validate_live_concrete_materiality(
         monkeypatch,
@@ -2764,6 +3188,184 @@ def test_keyword_contract_uses_summary_and_resume_evidence_for_matched_missing_r
     assert rows["sql"]["has_ai_suggestion"] is True
     assert rows["sql"]["can_accept"] is False
     assert rows["sql"]["row_action_label"] == "Phrase"
+
+
+def test_keyword_contract_preserves_authoritative_atomic_skill_identities():
+    kwargs = {
+        "trusted_ready": [],
+        "trusted_optional": [],
+        "ai_optimize_optional": [],
+        "directional_guidance": [],
+        "resume_evidence": _resume_evidence(
+            skills=["Python", "Tableau"],
+            bullets=["Built Python workflows and Tableau dashboards."],
+        ),
+        "tailoring_summary": {
+            "matched_required": ["Python", "Tableau"],
+            "missing_required": ["Statistical analysis"],
+        },
+    }
+
+    first = _build_tailoring_scan_issue_contract(**kwargs)
+    second = _build_tailoring_scan_issue_contract(**kwargs)
+    expected_terms = {"python", "tableau", "statistical analysis"}
+    first_rows = {
+        issue["canonical_term"]: issue
+        for issue in first["issues"]
+        if issue.get("group_id") == "skills"
+        and issue.get("canonical_term") in expected_terms
+    }
+    second_ids = {
+        issue["canonical_term"]: issue["issue_id"]
+        for issue in second["issues"]
+        if issue.get("group_id") == "skills"
+        and issue.get("canonical_term") in expected_terms
+    }
+
+    assert set(first_rows) == expected_terms
+    assert first_rows["python"]["bucket"] == "matched"
+    assert first_rows["tableau"]["bucket"] == "matched"
+    assert first_rows["statistical analysis"]["bucket"] == "missing"
+    assert {term: row["issue_id"] for term, row in first_rows.items()} == second_ids
+    assert len(set(second_ids.values())) == 3
+
+
+def test_replacement_presentation_title_cannot_create_grouped_missing_skill():
+    source_bullet = (
+        "Identified cardiovascular biomarkers using Python statistical analysis "
+        "and Tableau visualizations, supporting improved healthcare product assessments"
+    )
+    contract = _build_tailoring_scan_issue_contract(
+        trusted_ready=[],
+        trusted_optional=[],
+        ai_optimize_optional=[],
+        directional_guidance=[
+            {
+                "replacement_candidate_id": "replacement_3",
+                "source_bullet_id": "bullet_3",
+                "original_text": source_bullet,
+                "rewrite_direction": "Lead with python in this opening clause.",
+                "likely_impacted_dimensions": [
+                    "required_skills_alignment",
+                    "tooling_alignment",
+                ],
+                "replacement_source": "deterministic",
+            }
+        ],
+        resume_evidence=_resume_evidence(
+            skills=["Python", "Tableau"],
+            bullets=[source_bullet],
+        ),
+        tailoring_summary={
+            "matched_required": ["Python"],
+            "missing_required": ["Matlab", "Statistical modeling", "C++"],
+        },
+    )
+
+    skill_rows = [
+        issue for issue in contract["issues"]
+        if issue.get("group_id") == "skills"
+    ]
+    python_rows = [
+        issue for issue in skill_rows
+        if issue.get("canonical_term") == "python"
+    ]
+
+    assert all(
+        issue.get("canonical_term") != "python, tableau, statistical analysis"
+        for issue in skill_rows
+    )
+    assert len(python_rows) == 1
+    assert python_rows[0]["bucket"] == "matched"
+    assert python_rows[0]["row_action_type"] == "matched"
+    assert "replacement_3" in python_rows[0]["linked_candidate_ids"]
+
+
+@pytest.mark.parametrize(
+    ("resume_skills", "matched_terms", "missing_terms", "expected_term", "expected_bucket"),
+    [
+        (["Python"], ["Python"], ["R", "Python or R"], "python", "matched"),
+        (["R"], ["R"], ["Python", "Python or R"], "r", "matched"),
+        (["Python", "R"], ["Python", "R"], ["Python or R"], "python", "matched"),
+        ([], [], ["Python", "R", "Python or R"], "python or r", "missing"),
+    ],
+)
+def test_scan_or_requirement_is_one_atomic_scoring_identity(
+    resume_skills,
+    matched_terms,
+    missing_terms,
+    expected_term,
+    expected_bucket,
+):
+    jd_terms = ["Python", "Python or R", "R"]
+    contract = _build_tailoring_scan_issue_contract(
+        trusted_ready=[],
+        trusted_optional=[],
+        ai_optimize_optional=[],
+        directional_guidance=[],
+        resume_evidence=_resume_evidence(
+            skills=resume_skills,
+            bullets=[f"Used {' and '.join(resume_skills)} in production."]
+            if resume_skills
+            else [],
+        ),
+        tailoring_summary={
+            "matched_required": matched_terms,
+            "matched_terms": matched_terms,
+            "missing_required": missing_terms,
+            "missing_terms": missing_terms,
+        },
+        jd_record={
+            "required_skills": jd_terms,
+            "all_skills": jd_terms,
+        },
+    )
+
+    or_group_rows = [
+        issue
+        for issue in contract["issues"]
+        if issue.get("group_id") == "skills"
+        and issue.get("canonical_term") in {"python", "r", "python or r"}
+        and issue.get("row_action_type") not in {"predicted_skill", "other_keyword"}
+    ]
+
+    assert [(row["canonical_term"], row["bucket"]) for row in or_group_rows] == [
+        (expected_term, expected_bucket)
+    ]
+    assert or_group_rows[0]["required_count"] == 1
+    assert or_group_rows[0]["score_priority_weight"] > 0
+    assert not any(
+        row.get("canonical_term") == "python" and row.get("bucket") == "missing"
+        for row in contract["issues"]
+    )
+
+
+def test_scan_or_normalization_does_not_parse_unstructured_prose_or_change_atomic_missing():
+    contract = _build_tailoring_scan_issue_contract(
+        trusted_ready=[],
+        trusted_optional=[],
+        ai_optimize_optional=[],
+        directional_guidance=[],
+        resume_evidence=_resume_evidence(),
+        tailoring_summary={
+            "matched_required": [],
+            "missing_required": ["Research or development", "Kubernetes"],
+        },
+        jd_record={
+            "required_skills": ["Research or development", "Kubernetes"],
+            "all_skills": ["Research or development", "Kubernetes"],
+        },
+    )
+    rows = {
+        issue["canonical_term"]: issue
+        for issue in contract["issues"]
+        if issue.get("group_id") == "skills"
+    }
+
+    assert rows["research or development"]["bucket"] == "missing"
+    assert rows["kubernetes"]["bucket"] == "missing"
+    assert "research" not in rows
+    assert "development" not in rows
 
 
 def test_keyword_contract_selects_highest_positive_candidate_for_duplicate_term():
@@ -3190,6 +3792,79 @@ def test_workspace_draft_persists_excluded_scan_issue_ids():
         ]
 
 
+def test_packet_backed_workspace_draft_persists_exclude_and_reinclude():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        output_dir = Path(tmp_dir) / "planning"
+        packet_dir = output_dir / "job_packets"
+        packet_dir.mkdir(parents=True, exist_ok=True)
+        packet_path = packet_dir / "example__data_scientist__resume.json"
+        packet_path.write_text(
+            """
+{
+  "job": {"company": "Example", "title": "Data Scientist"},
+  "selection": {"selected_resume": "resume.pdf"},
+  "selected_patch_candidate_ids": []
+}
+""".strip(),
+            encoding="utf-8",
+        )
+        packet_key = packet_path.relative_to(output_dir).as_posix()
+        issue_id = "scan_issue:skills:keyword:causal_inference"
+
+        saved = save_tailoring_workspace_draft_payload(
+            output_dir=output_dir,
+            tailoring_json_path=packet_key,
+            selected_resume="resume.pdf",
+            selected_patch_candidate_ids=[],
+            manual_bullet_edits={},
+            rewrite_review_decisions={},
+            excluded_scan_issue_ids=[issue_id],
+            personal_details={},
+            note="packet exclusion",
+        )
+        draft_path = Path(saved["draft_json_path"])
+
+        assert saved["ok"] is True
+        assert draft_path.exists()
+        assert draft_path.resolve() == packet_path.with_name(
+            "example__data_scientist__resume__tailoring_workspace_draft.json"
+        ).resolve()
+        assert json.loads(draft_path.read_text(encoding="utf-8"))[
+            "excluded_scan_issue_ids"
+        ] == [issue_id]
+
+        loaded = load_tailoring_workspace_draft_payload(
+            output_dir=output_dir,
+            tailoring_json_path=packet_key,
+            selected_resume="resume.pdf",
+        )
+        assert loaded["has_saved_draft"] is True
+        assert loaded["draft"]["excluded_scan_issue_ids"] == [issue_id]
+
+        restored = save_tailoring_workspace_draft_payload(
+            output_dir=output_dir,
+            tailoring_json_path=packet_key,
+            selected_resume="resume.pdf",
+            selected_patch_candidate_ids=[],
+            manual_bullet_edits={},
+            rewrite_review_decisions={},
+            excluded_scan_issue_ids=[],
+            personal_details={},
+            note="packet re-included",
+        )
+        assert restored["draft"]["excluded_scan_issue_ids"] == []
+        assert json.loads(draft_path.read_text(encoding="utf-8"))[
+            "excluded_scan_issue_ids"
+        ] == []
+
+        reloaded = load_tailoring_workspace_draft_payload(
+            output_dir=output_dir,
+            tailoring_json_path=packet_key,
+            selected_resume="resume.pdf",
+        )
+        assert reloaded["draft"]["excluded_scan_issue_ids"] == []
+
+
 def test_scan_extracts_resume_personal_details_from_header():
     details = _extract_resume_personal_details(
         _resume_evidence(
@@ -3299,3 +3974,232 @@ if __name__ == "__main__":
     test_workspace_draft_persists_excluded_scan_issue_ids()
     test_scan_extracts_resume_personal_details_from_header()
     test_workspace_draft_persists_personal_details()
+
+
+def _bounded_retry_owner_route(monkeypatch, responses):
+    """Route one owner at gpt-oss-120b and hand back scripted contents."""
+
+    calls = []
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "owner-a")
+    monkeypatch.setattr(
+        tailoring_llm,
+        "resolve_effective_user_provider_route",
+        lambda owner, workload: {
+            "provider": "groq",
+            "model": "openai/gpt-oss-120b",
+            "effective_selection_source": "applylens_recommended",
+        },
+    )
+
+    def runtime(**_kwargs):
+        calls.append(1)
+        content = responses[min(len(calls) - 1, len(responses) - 1)]
+        return {
+            "content": content,
+            "provider": "groq",
+            "model": "openai/gpt-oss-120b",
+        }
+
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_user_chat_completion_with_metadata",
+        runtime,
+    )
+    monkeypatch.setattr(
+        tailoring_llm,
+        "run_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("legacy runtime must not run"),
+    )
+    return calls
+
+
+def test_parse_retry_limit_zero_forbids_a_second_provider_request(monkeypatch):
+    packet, payload = _live_patch_prompt_payload()
+    calls = _bounded_retry_owner_route(monkeypatch, ["NOT JSON AT ALL"])
+
+    result = tailoring_llm._run_live_llm_tailoring(
+        packet=packet,
+        payload=payload,
+        refresh_llm_cache=True,
+        enable_safe_app_ready_rewrite_promotion=True,
+        parse_retry_limit=0,
+    )
+
+    assert len(calls) == 1
+    assert result["parse_ok"] is False
+    assert result["retry_used"] is False
+    assert result["retry_raw_response"] == ""
+    assert result["provider_request_count"] == 1
+    assert result["parse_retry_count"] == 0
+    assert result["parse_retry_limit"] == 0
+    assert "Retry parse failed" not in result["parse_error"]
+
+
+def test_parse_retry_limit_one_preserves_the_existing_single_retry(monkeypatch):
+    packet, payload = _live_patch_prompt_payload()
+    calls = _bounded_retry_owner_route(monkeypatch, ["NOT JSON AT ALL"])
+
+    result = tailoring_llm._run_live_llm_tailoring(
+        packet=packet,
+        payload=payload,
+        refresh_llm_cache=True,
+        enable_safe_app_ready_rewrite_promotion=True,
+        parse_retry_limit=1,
+    )
+
+    assert len(calls) == 2
+    assert result["retry_used"] is True
+    assert result["provider_request_count"] == 2
+    assert result["parse_retry_count"] == 1
+
+
+@pytest.mark.parametrize("limit", (2, -1, "1", None, True))
+def test_parse_retry_limit_is_bounded_to_zero_or_one(limit):
+    with pytest.raises(ValueError):
+        tailoring_llm.normalize_live_llm_parse_retry_limit(limit)
+
+
+def test_ungroundable_empty_result_is_accepted_without_a_retry(monkeypatch):
+    packet, payload = _live_patch_prompt_payload()
+    ungroundable = dict(payload)
+    ungroundable["evidence_layers"] = {
+        "anchors": [],
+        "supports": [],
+        "context": [],
+    }
+    assert not tailoring_llm._live_payload_has_grounded_rewrite_material(
+        ungroundable
+    )
+    empty = {"rewrite_directions": [], "concrete_replacement_candidates": []}
+    calls = _bounded_retry_owner_route(monkeypatch, [empty])
+
+    result = tailoring_llm._run_live_llm_tailoring(
+        packet=packet,
+        payload=ungroundable,
+        refresh_llm_cache=True,
+        enable_safe_app_ready_rewrite_promotion=True,
+        parse_retry_limit=1,
+    )
+
+    assert len(calls) == 1
+    assert result["parse_ok"] is True
+    assert result["retry_used"] is False
+    assert result["provider_request_count"] == 1
+    assert result["parsed"]["rewrite_directions"] == []
+    assert result["parsed"]["concrete_replacement_candidates"] == []
+
+
+def test_grounded_empty_result_still_fails_the_live_contract():
+    packet, payload = _live_patch_prompt_payload()
+    assert tailoring_llm._live_payload_has_grounded_rewrite_material(payload)
+    empty = {"rewrite_directions": [], "concrete_replacement_candidates": []}
+
+    with pytest.raises(tailoring_llm.LiveLlmContractError) as promotion:
+        tailoring_llm._validate_live_llm_parsed_contract(
+            dict(empty),
+            payload,
+            enable_safe_app_ready_rewrite_promotion=True,
+        )
+    assert promotion.value.code == (
+        "live_llm_contract_no_valid_rewrite_or_concrete_candidate"
+    )
+
+    with pytest.raises(tailoring_llm.LiveLlmContractError) as default_mode:
+        tailoring_llm._validate_live_llm_parsed_contract(
+            dict(empty),
+            payload,
+            enable_safe_app_ready_rewrite_promotion=False,
+        )
+    assert default_mode.value.code == (
+        "live_llm_contract_empty_rewrite_directions"
+    )
+
+
+@pytest.mark.parametrize(
+    "direction",
+    [
+        "python implementation work in the opening clause",
+        "python automation work in the opening clause",
+        "sql implementation activity as supporting technical context",
+        "airflow automation responsibility as supporting technical context",
+    ],
+)
+def test_bare_tool_tokens_reject_unsupported_implementation_and_automation(
+    direction,
+):
+    with pytest.raises(
+        tailoring_llm.LiveLlmContractError,
+        match="live_llm_contract_direction_1_unsupported_factual_expansion",
+    ) as exc_info:
+        tailoring_llm._validate_live_llm_parsed_contract(
+            _semantic_rewrite_response(
+                first_direction=direction,
+                gap_direction="Kubernetes is not evidenced in the supplied resume",
+            ),
+            _bare_tool_semantic_payload(),
+        )
+
+    assert exc_info.value.code == (
+        "live_llm_contract_direction_unsupported_factual_expansion"
+    )
+
+
+@pytest.mark.parametrize(
+    ("source_text", "direction"),
+    [
+        (
+            "Implemented a Python validation framework for claims processing.",
+            "surface the python implementation evidence in the opening clause",
+        ),
+        (
+            "Automated weekly ingestion and transformation using Python and SQL.",
+            "surface the python automation evidence in the opening clause",
+        ),
+    ],
+)
+def test_explicit_source_supports_implementation_and_automation(
+    source_text,
+    direction,
+):
+    parsed = tailoring_llm._validate_live_llm_parsed_contract(
+        _semantic_rewrite_response(
+            first_direction=direction,
+            gap_direction="Kubernetes is not evidenced in the supplied resume",
+        ),
+        _bare_tool_semantic_payload(source_text=source_text),
+    )
+
+    assert parsed["rewrite_directions"][0]["direction"] == direction
+
+
+@pytest.mark.parametrize(
+    "direction",
+    [
+        "automatic failover is mentioned in the opening clause",
+        "complement the summary with the supplied tool evidence",
+    ],
+)
+def test_activity_concepts_do_not_capture_unrelated_words(direction):
+    parsed = tailoring_llm._validate_live_llm_parsed_contract(
+        _semantic_rewrite_response(
+            first_direction=direction,
+            gap_direction="Kubernetes is not evidenced in the supplied resume",
+        ),
+        _bare_tool_semantic_payload(),
+    )
+
+    assert parsed["rewrite_directions"][0]["direction"] == direction
+
+
+def test_activity_concept_families_cover_expected_morphology():
+    bare_tool_source = ["Python, SQL, Airflow."]
+    for form in ("implementation", "implement", "implemented", "implementing"):
+        assert tailoring_llm._live_direction_unsupported_factual_concepts(
+            form,
+            bare_tool_source,
+        ) == ["implementation"]
+    for form in ("automation", "automate", "automated", "automating"):
+        assert tailoring_llm._live_direction_unsupported_factual_concepts(
+            form,
+            bare_tool_source,
+        ) == ["automation"]

@@ -373,7 +373,6 @@ def _proposal(
     jd_terms_supported: list[str],
     resume_evidence_used: list[str],
     risk_flags: list[str],
-    include_text: bool,
 ) -> dict[str, Any]:
     proposal = {
         "proposal_id": f"phase42a-{index:03d}",
@@ -384,8 +383,8 @@ def _proposal(
         "change_type": change_type,
         "target_section": target_section,
         "target_identifier": target_identifier,
-        "current_text": current_text if include_text else "",
-        "proposed_text": proposed_text if include_text else "",
+        "current_text": current_text,
+        "proposed_text": proposed_text,
         "change_reason": change_reason,
         "jd_terms_supported": list(jd_terms_supported),
         "resume_evidence_used": list(resume_evidence_used),
@@ -399,11 +398,30 @@ def _proposal(
     return proposal
 
 
+def _is_effective_text_change(candidate: Any) -> bool:
+    return (
+        isinstance(candidate, dict)
+        and _norm(candidate.get("current_text"))
+        != _norm(candidate.get("proposed_text"))
+    )
+
+
+def _presentation_proposal(
+    candidate: dict[str, Any],
+    *,
+    include_text: bool,
+) -> dict[str, Any]:
+    proposal = deepcopy(candidate)
+    if not include_text:
+        proposal["current_text"] = ""
+        proposal["proposed_text"] = ""
+    return proposal
+
+
 def _summary_candidate(
     term: str,
     item: dict[str, Any],
     evidence: dict[str, Any],
-    include_text: bool,
     proposal_index: int,
 ) -> dict[str, Any] | None:
     for match in evidence["matches"]:
@@ -424,7 +442,6 @@ def _summary_candidate(
                 jd_terms_supported=[term],
                 resume_evidence_used=[current],
                 risk_flags=[],
-                include_text=include_text,
             )
     return None
 
@@ -434,7 +451,6 @@ def _skill_candidate(
     item: dict[str, Any],
     evidence: dict[str, Any],
     skills_text: str,
-    include_text: bool,
     proposal_index: int,
 ) -> dict[str, Any] | None:
     has_resume_evidence = any(
@@ -458,7 +474,6 @@ def _skill_candidate(
         jd_terms_supported=[term],
         resume_evidence_used=evidence_text,
         risk_flags=[],
-        include_text=include_text,
     )
 
 
@@ -466,7 +481,6 @@ def _bullet_candidate(
     term: str,
     item: dict[str, Any],
     evidence: dict[str, Any],
-    include_text: bool,
     proposal_index: int,
 ) -> dict[str, Any] | None:
     for match in evidence["matches"]:
@@ -485,7 +499,6 @@ def _bullet_candidate(
                 jd_terms_supported=[term],
                 resume_evidence_used=[current],
                 risk_flags=[],
-                include_text=include_text,
             )
     return None
 
@@ -494,7 +507,6 @@ def _project_candidate(
     term: str,
     item: dict[str, Any],
     evidence: dict[str, Any],
-    include_text: bool,
     proposal_index: int,
 ) -> dict[str, Any] | None:
     for match in evidence["matches"]:
@@ -513,7 +525,6 @@ def _project_candidate(
                 jd_terms_supported=[term],
                 resume_evidence_used=[current],
                 risk_flags=[],
-                include_text=include_text,
             )
     return None
 
@@ -521,7 +532,6 @@ def _project_candidate(
 def _evidence_note_candidate(
     term: str,
     item: dict[str, Any],
-    include_text: bool,
     proposal_index: int,
 ) -> dict[str, Any]:
     return _proposal(
@@ -536,7 +546,6 @@ def _evidence_note_candidate(
         jd_terms_supported=[term],
         resume_evidence_used=[],
         risk_flags=["missing_source_evidence"],
-        include_text=include_text,
     )
 
 
@@ -637,10 +646,14 @@ def build_exact_resume_change_set_proposal_builder_default_off(
                     proposal = _evidence_note_candidate(
                         term,
                         item,
-                        policy["include_before_after_text"],
                         proposal_index,
                     )
-                    proposals.append(proposal)
+                    proposals.append(
+                        _presentation_proposal(
+                            proposal,
+                            include_text=policy["include_before_after_text"],
+                        )
+                    )
                     proposal_index = proposal_index + 1
                     per_item_count = per_item_count + 1
                 else:
@@ -661,7 +674,6 @@ def build_exact_resume_change_set_proposal_builder_default_off(
                         item,
                         evidence,
                         skills_text,
-                        policy["include_before_after_text"],
                         proposal_index,
                     )
                 )
@@ -671,7 +683,6 @@ def build_exact_resume_change_set_proposal_builder_default_off(
                         term,
                         item,
                         evidence,
-                        policy["include_before_after_text"],
                         proposal_index,
                     )
                 )
@@ -681,7 +692,6 @@ def build_exact_resume_change_set_proposal_builder_default_off(
                         term,
                         item,
                         evidence,
-                        policy["include_before_after_text"],
                         proposal_index,
                     )
                 )
@@ -691,21 +701,39 @@ def build_exact_resume_change_set_proposal_builder_default_off(
                         term,
                         item,
                         evidence,
-                        policy["include_before_after_text"],
                         proposal_index,
                     )
                 )
-            selected = next((candidate for candidate in candidates if candidate), None)
+            available_candidates = [
+                candidate for candidate in candidates if isinstance(candidate, dict)
+            ]
+            selected = next(
+                (
+                    candidate
+                    for candidate in available_candidates
+                    if _is_effective_text_change(candidate)
+                ),
+                None,
+            )
             if selected is None:
                 skipped_terms.append(
                     {
                         "item_id": deepcopy(item.get("item_id")),
                         "term": term,
-                        "reason": "change_type_not_allowed_or_no_target",
+                        "reason": (
+                            "no_effective_change"
+                            if available_candidates
+                            else "change_type_not_allowed_or_no_target"
+                        ),
                     }
                 )
                 continue
-            proposals.append(selected)
+            proposals.append(
+                _presentation_proposal(
+                    selected,
+                    include_text=policy["include_before_after_text"],
+                )
+            )
             proposal_index = proposal_index + 1
             per_item_count = per_item_count + 1
 

@@ -20,6 +20,35 @@ _GROQ_MODELS_WITHOUT_JSON_SCHEMA = {
     "llama-3.3-70b-versatile",
 }
 
+# Workload-scoped response-mode compatibility. This is NOT a model capability
+# denial: openai/gpt-oss-120b supports strict JSON Schema and stays on it for
+# every other workload (jd_intelligence is qualified that way). It records that
+# tailoring_generation's prompt/schema pairing has never been proven under
+# strict server-side validation on this model -- llama-3.3-70b-versatile, the
+# model it replaced, effectively ran this workload as json_object because it
+# sits in _GROQ_MODELS_WITHOUT_JSON_SCHEMA. Restoring json_object for exactly
+# this combination reinstates the historical behavior. ApplyLens production
+# validation remains the sole authority over the response either way.
+_GROQ_WORKLOAD_JSON_OBJECT_COMPATIBILITY = frozenset(
+    {
+        ("groq", "openai/gpt-oss-120b", "tailoring_generation"),
+    }
+)
+
+
+def groq_workload_requires_json_object(provider, model, workload_id) -> bool:
+    """Single authority for the workload-scoped json_object exception.
+
+    Production runtime and controlled qualification both consult this so the
+    effective response mode for a provider/model/workload can never diverge.
+    """
+
+    return (
+        str(provider or "").strip().lower(),
+        str(model or "").strip().lower(),
+        str(workload_id or "").strip().lower(),
+    ) in _GROQ_WORKLOAD_JSON_OBJECT_COMPATIBILITY
+
 _OPENAI_GPT_5_MINI_MODEL_PATTERN = re.compile(
     r"^gpt-5-mini(?:-\d{4}-\d{2}-\d{2})?$",
     re.IGNORECASE,
@@ -574,6 +603,7 @@ def _run_groq_chat_completion(
     return_parsed=False,
     thinking_budget=None,
     provider_client=None,
+    workload_id=None,
 ):
     increment_provider_metric("groq_calls")
     client = provider_client if provider_client is not None else get_groq_client()
@@ -587,10 +617,14 @@ def _run_groq_chat_completion(
 
     model_name = str(model or "").strip().lower()
     supports_json_schema = model_name not in _GROQ_MODELS_WITHOUT_JSON_SCHEMA
+    workload_forces_json_object = groq_workload_requires_json_object(
+        "groq", model_name, workload_id
+    )
     uses_structured_json_schema = (
         response_mime_type == "application/json"
         and response_schema is not None
         and supports_json_schema
+        and not workload_forces_json_object
     )
     is_groq_gpt_oss = model_name.startswith("openai/gpt-oss-")
     if is_groq_gpt_oss and not uses_structured_json_schema:
@@ -719,6 +753,7 @@ def _run_single_provider(
     return_parsed=False,
     thinking_budget=None,
     provider_client=None,
+    workload_id=None,
 ):
     provider_name = provider_name.strip().lower()
 
@@ -733,6 +768,7 @@ def _run_single_provider(
             return_parsed=return_parsed,
             thinking_budget=thinking_budget,
             provider_client=provider_client,
+            workload_id=workload_id,
         )
 
     if provider_name == "openai":
@@ -764,6 +800,7 @@ def run_chat_completion_with_metadata(
     fallback_provider=None,
     fallback_model=None,
     provider_client=None,
+    workload_id=None,
 ):
     primary_provider, primary_model = _normalize_and_validate_provider_model(
         provider or DEFAULT_PROVIDER,
@@ -813,6 +850,7 @@ def run_chat_completion_with_metadata(
             return_parsed=return_parsed,
             thinking_budget=thinking_budget,
             provider_client=provider_client,
+            workload_id=workload_id,
         )
         return {
             "content": content,
@@ -854,6 +892,7 @@ def run_chat_completion_with_metadata(
                 response_schema=response_schema,
                 return_parsed=return_parsed,
                 thinking_budget=thinking_budget,
+                workload_id=workload_id,
             )
             increment_provider_metric("fallback_successes")
             return {
@@ -889,6 +928,7 @@ def run_chat_completion(
     fallback_provider=None,
     fallback_model=None,
     provider_client=None,
+    workload_id=None,
 ):
     result = run_chat_completion_with_metadata(
         messages=messages,
@@ -904,5 +944,6 @@ def run_chat_completion(
         fallback_provider=fallback_provider,
         fallback_model=fallback_model,
         provider_client=provider_client,
+        workload_id=workload_id,
     )
     return result["content"]

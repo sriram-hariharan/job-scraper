@@ -126,6 +126,85 @@ def test_tailoring_schema_fix_changes_the_production_task_fingerprint():
     )
 
 
+def test_skill_context_reassignment_version_changes_fingerprint_not_cache_key(
+    monkeypatch,
+):
+    from src.ai import skill_llm_enricher
+
+    job_text = (
+        "Required Qualifications:\n- Python\n"
+        "Preferred Qualifications:\n- Airflow"
+    )
+    baseline_fingerprint = fingerprints.production_task_contract_sha256(
+        "skill_extraction"
+    )
+    baseline_cache_key = skill_llm_enricher.build_skill_cache_key(job_text)
+    contract = fingerprints.build_production_task_contract(
+        "skill_extraction"
+    )
+
+    assert contract["deterministic_transformation_contract"][
+        "context_reassignment"
+    ] == "section-bounded-context-v2"
+    assert skill_llm_enricher.SKILL_EXTRACTION_PROMPT_VERSION == (
+        "v6_postfilter_cleanup"
+    )
+
+    monkeypatch.setattr(
+        skill_llm_enricher,
+        "SKILL_CONTEXT_REASSIGNMENT_CONTRACT_VERSION",
+        "section-bounded-context-v3-test",
+    )
+
+    assert (
+        fingerprints.production_task_contract_sha256("skill_extraction")
+        != baseline_fingerprint
+    )
+    assert (
+        skill_llm_enricher.build_skill_cache_key(job_text)
+        == baseline_cache_key
+    )
+
+
+def test_tailoring_semantic_contract_versions_and_bounds_are_explicit():
+    contract = fingerprints.build_production_task_contract(
+        "tailoring_generation"
+    )
+
+    assert contract["task_contract_version"] == "v9"
+    assert contract["deterministic_transformation_contract"]["version"] == (
+        "tailoring-generation-validation-v5"
+    )
+    transformation = contract["deterministic_transformation_contract"]
+    # The parse-failure policy is now a bounded, caller-controlled allowance so
+    # a zero-retry authorization is enforceable end to end.
+    assert transformation["parse_retry_limits"] == [0, 1]
+    assert transformation["default_parse_retry_limit"] == 1
+    assert transformation["parse_failure"] == (
+        "bounded_caller_parse_retry_limit_0_or_1_then_empty_parsed_result"
+    )
+    assert "implementation" in transformation["factual_expansion_concepts"]
+    assert "automation" in transformation["factual_expansion_concepts"]
+    assert transformation["source_supported_activity_concepts"] == (
+        "implementation_and_automation_activity_require_explicit_source_support"
+    )
+    assert transformation["ungroundable_empty_result"] == (
+        "accepted_when_no_available_source_labels_exist"
+    )
+    assert transformation["source_label_binding"] == (
+        "canonical_source_label_normalization_applied_to_request_and_evidence_rows"
+    )
+    assert contract["task_parameters"]["max_tokens"] == 700
+    for name, prompt in contract["prompt_contract"].items():
+        if name == "retry_user_prefix":
+            continue
+        assert "not evidenced" in prompt
+        assert "tool or skill name alone" in prompt.lower()
+        assert "emphasize Python as supported source evidence" in prompt
+        assert "surface SQL prominently as supported evidence" in prompt
+        assert "retain Airflow visibly as supporting evidence" in prompt
+
+
 def test_tailoring_schema_changes_only_tailoring_generation_fingerprint(
     monkeypatch,
 ):
@@ -296,15 +375,6 @@ def test_provider_model_credentials_runtime_and_operational_state_are_excluded(
     baseline = fingerprints.build_all_production_task_contract_fingerprints()
 
     for owner, name in (
-        (skill_llm_enricher, "MODEL"),
-        (job_fit_evaluator, "MODEL"),
-        (rag_answerer, "MODEL"),
-        (resume_selector, "LLM_FALLBACK_PROVIDER"),
-        (resume_selector, "LLM_FALLBACK_MODEL"),
-        (services, "LIVE_JD_INTELLIGENCE_DRY_RUN_PROVIDER"),
-        (services, "LIVE_JD_INTELLIGENCE_DRY_RUN_MODEL"),
-        (services, "LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROVIDER"),
-        (services, "LIVE_CRITIC_GUARDRAIL_DRY_RUN_MODEL"),
         (services, "SCAN_PHRASE_PROVIDER"),
         (services, "SCAN_PHRASE_MODEL"),
         (tailoring_llm, "LLM_TAILOR_PROVIDER"),
@@ -357,7 +427,10 @@ def test_provider_model_credentials_runtime_and_operational_state_are_excluded(
 @pytest.mark.parametrize(
     ("workload_id", "expected_parameters"),
     [
-        ("skill_extraction", {"temperature": 0, "max_tokens": 500}),
+        (
+            "skill_extraction",
+            {"temperature": 0, "max_tokens": 500, "thinking_budget": 0},
+        ),
         ("job_fit_evaluation", {"temperature": 0, "max_tokens": 600}),
         (
             "jd_intelligence",

@@ -37,6 +37,30 @@ let generateSuggestionsState = {
   returnFocus: null,
 };
 
+let bulkGenerateSuggestionsState = {
+  candidateRows: [],
+  total: 0,
+  completed: 0,
+  succeeded: 0,
+  needsAttention: 0,
+  currentIndex: -1,
+  isRunning: false,
+  stopRequested: false,
+  remaining: 0,
+  currentLabel: "",
+  verified: true,
+  results: [],
+  returnFocus: null,
+  requestedCount: 0,
+  reviewAction: "",
+  winnerBucket: "",
+  preferenceId: "",
+  // "initial" keeps the existing first-run copy/CTA; "rerun" reuses the very
+  // same overlay for a scoped re-run from the results workspace.
+  mode: "initial",
+  rerunIdentities: [],
+};
+
 const PLANNING_TABLE_LAST_RESPONSE_STORAGE_KEY = "planningTableLastResponse_v4";
 const PIPELINE_DATA_VERSION_STORAGE_KEY = "job_operator_pipeline_data_version";
 const PLANNING_TABLE_REQUEST_TIMEOUT_MS = 0;
@@ -46,6 +70,7 @@ const PLANNING_WORKLIST_ACTION_EVENT_NAME = "applylens:planning-worklist-action"
 
 const planningTableState = {
   rows: [],
+  bulkSuggestionRows: [],
   metaLabel: "Loading...",
   sort: {
     key: "",
@@ -603,7 +628,7 @@ function normalizePlanningFilters(filters = {}) {
     tailoringStates: normalizePlanningFilterValues(filters.tailoringStates),
     preferenceIds: normalizePlanningFilterValues(filters.preferenceIds),
     undecidedOnly: Boolean(filters.undecidedOnly),
-    limit: Number.isFinite(parsedLimit) ? Math.min(100, Math.max(1, Math.floor(parsedLimit))) : 15,
+    limit: Number.isFinite(parsedLimit) ? Math.max(1, Math.floor(parsedLimit)) : 15,
   };
 }
 
@@ -1651,7 +1676,348 @@ function setPlanningRequestedPage(page) {
   planningTableState.pagination.page = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
 }
 
+function getPlanningBulkSuggestionSummary(rows = planningTableState.bulkSuggestionRows) {
+  const scopeRows = Array.isArray(rows) ? rows : [];
+  const candidateRows = [];
+  let alreadyPrepared = 0;
+  let unavailable = 0;
+
+  scopeRows.forEach((row) => {
+    const action = resolvePlanningWorklistAction(row);
+    if (action.kind === "generate_suggestions") {
+      candidateRows.push(row);
+    } else if (action.kind === "open_workspace") {
+      alreadyPrepared += 1;
+    } else {
+      unavailable += 1;
+    }
+  });
+
+  return {
+    candidateRows,
+    eligibleCount: candidateRows.length,
+    alreadyPrepared,
+    unavailable,
+  };
+}
+
+function normalizeBulkGenerateSuggestionsCount(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1 || !Number.isInteger(parsed)) return 0;
+  return parsed;
+}
+
+/**
+ * Terminal Bulk Generate history for the CURRENT Live Pipeline run.
+ * Read-only presentation state: it never starts, stops or mutates a run and it
+ * never touches the canonical /planning/bulk-generation/status polling used by
+ * the shared shell guard.
+ */
+let bulkGenerateResultsState = {
+  pipelineRunId: "",
+  loadStatus: "idle",
+  found: false,
+  items: [],
+  latestRunId: "",
+  latestStatus: "",
+  lastFinishedAt: "",
+  processedCount: 0,
+  generatedCount: 0,
+  rerunnableCount: 0,
+  requestToken: 0,
+};
+
+function getPlanningBrandfetchClientId() {
+  const raw = window.__APPLYLENS_PLANNING_CONFIG__ || {};
+  return String(raw.brandfetchClientId || "").trim();
+}
+
+function getPlanningCurrentPipelineRunId(rows = planningTableState.bulkSuggestionRows) {
+  const scopeRows = Array.isArray(rows) ? rows : [];
+  for (const row of scopeRows) {
+    const candidate = String(row?.pipeline_run_id || "").trim();
+    if (candidate) return candidate;
+  }
+  for (const row of planningTableState.rows || []) {
+    const candidate = String(row?.pipeline_run_id || "").trim();
+    if (candidate) return candidate;
+  }
+  return "";
+}
+
+function planningRowIdentityKeys(row) {
+  return [
+    String(row?.job_doc_id || "").trim(),
+    String(row?.job_identity || "").trim(),
+    String(row?.queue_rank || "").trim(),
+  ].filter(Boolean);
+}
+
+/**
+ * Score that actually corresponds to the resume Bulk selected. Never shows the
+ * winner score against a different resume; unknown pairings return null.
+ */
+function planningResumeMatchScore(row, selectedResume) {
+  const resume = normalizeResumeName(selectedResume);
+  if (!row || !resume) return null;
+  if (resume === normalizeResumeName(row.winner_resume)) {
+    if (row.winner_score === null || row.winner_score === undefined || String(row.winner_score).trim() === "") return null;
+    const score = Number(row.winner_score);
+    return Number.isFinite(score) ? score : null;
+  }
+  if (resume === normalizeResumeName(row.runner_up_resume || row.runnerup_resume)) {
+    const rawScore = row.runner_up_score ?? row.runnerup_score;
+    if (rawScore === null || rawScore === undefined || String(rawScore).trim() === "") return null;
+    const score = Number(rawScore);
+    return Number.isFinite(score) ? score : null;
+  }
+  return null;
+}
+
+/** Join persisted Bulk history to current Planning rows on stable identity. */
+function mergeBulkResultItems(items, rows = planningTableState.bulkSuggestionRows) {
+  const byIdentity = new Map();
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    planningRowIdentityKeys(row).forEach((key) => {
+      if (!byIdentity.has(key)) byIdentity.set(key, row);
+    });
+  });
+  return (Array.isArray(items) ? items : []).map((item) => {
+    const keys = [
+      String(item.job_doc_id || "").trim(),
+      String(item.job_identity || "").trim(),
+      String(item.queue_rank || "").trim(),
+    ].filter(Boolean);
+    let row = null;
+    for (const key of keys) {
+      if (byIdentity.has(key)) {
+        row = byIdentity.get(key);
+        break;
+      }
+    }
+    return {
+      ...item,
+      job_title: String(row?.job_title || "").trim(),
+      job_company: String(row?.job_company || "").trim(),
+      job_location: String(row?.job_location || "").trim(),
+      company_domain: String(row?.company_domain || row?.company_website || "").trim(),
+      winner_resume: normalizeResumeName(row?.winner_resume),
+      winner_score: row?.winner_score ?? null,
+      runner_up_resume: normalizeResumeName(row?.runner_up_resume || row?.runnerup_resume),
+      runner_up_score: row?.runner_up_score ?? row?.runnerup_score ?? null,
+      match_score: planningResumeMatchScore(row, item.selected_resume),
+    };
+  });
+}
+
+/**
+ * Company -> employer domain resolution for the results workspace logos.
+ * Page-lifetime in-memory only: never written to localStorage, the database, or
+ * any repository asset, and never issued for the whole Planning job set at page
+ * load. One Brand Search request per unresolved company, reused across every
+ * duplicate of that company.
+ */
+const planningCompanyLogoDomains = new Map();
+
+function normalizePlanningCompanyName(value) {
+  // Whitespace is removed entirely so an ATS board slug and a spaced brand name
+  // collapse to the same identity: "andurilindustries" == "Anduril Industries".
+  // Still an exact comparison - no fuzzy/similarity matching.
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[.,]/g, " ")
+    .replace(/\b(inc|llc|ltd|corp|corporation|co|gmbh|plc|sa|bv)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+}
+
+async function resolvePlanningCompanyLogoDomain(company, clientId) {
+  const normalized = normalizePlanningCompanyName(company);
+  if (!normalized || !clientId) return "";
+  if (planningCompanyLogoDomains.has(normalized)) {
+    return planningCompanyLogoDomains.get(normalized);
+  }
+  const pending = (async () => {
+    try {
+      const response = await fetch(
+        `https://api.brandfetch.io/v2/search/${encodeURIComponent(company)}?c=${encodeURIComponent(clientId)}`
+      );
+      if (!response.ok) return "";
+      const payload = await response.json();
+      const results = Array.isArray(payload) ? payload : [];
+      // Deterministic: accept only an unambiguous exact normalized-name match.
+      // A wrong employer logo is worse than a lettermark, so anything ambiguous
+      // deliberately falls back.
+      const named = results.filter(
+        (entry) =>
+          normalizePlanningCompanyName(entry?.name) === normalized
+          && String(entry?.domain || "").trim()
+      );
+      // Exactly one Brandfetch-verified brand with this exact normalized name
+      // is trustworthy. Zero or several -> lettermark, because a wrong employer
+      // logo is worse than no logo.
+      const verified = named.filter((entry) => entry?.verified === true);
+      if (verified.length === 1) return String(verified[0].domain || "").trim();
+      if (named.length === 1) return String(named[0].domain || "").trim();
+      return "";
+    } catch {
+      return "";
+    }
+  })();
+  planningCompanyLogoDomains.set(normalized, pending);
+  return pending;
+}
+
+/** Resolve only the companies actually present in the results, once each. */
+async function resolveBulkResultCompanyLogos() {
+  const clientId = getPlanningBrandfetchClientId();
+  if (!clientId) return;
+  const items = bulkGenerateResultsState.items || [];
+  const pendingCompanies = new Map();
+  items.forEach((item) => {
+    if (String(item.company_domain || "").trim()) return;
+    const company = String(item.job_company || "").trim();
+    const normalized = normalizePlanningCompanyName(company);
+    if (!normalized || pendingCompanies.has(normalized)) return;
+    pendingCompanies.set(normalized, company);
+  });
+  if (!pendingCompanies.size) return;
+  const resolved = new Map();
+  await Promise.all(
+    Array.from(pendingCompanies.entries()).map(async ([normalized, company]) => {
+      resolved.set(normalized, await resolvePlanningCompanyLogoDomain(company, clientId));
+    })
+  );
+  let changed = false;
+  bulkGenerateResultsState.items = items.map((item) => {
+    if (String(item.company_domain || "").trim()) return item;
+    const domain = resolved.get(normalizePlanningCompanyName(item.job_company)) || "";
+    if (!domain) return item;
+    changed = true;
+    return { ...item, company_domain: domain };
+  });
+  if (changed) publishPlanningWorklistState();
+}
+
+function resetBulkGenerateResultsState() {
+  bulkGenerateResultsState = {
+    ...bulkGenerateResultsState,
+    pipelineRunId: "",
+    loadStatus: "idle",
+    found: false,
+    items: [],
+    latestRunId: "",
+    latestStatus: "",
+    lastFinishedAt: "",
+    processedCount: 0,
+    generatedCount: 0,
+    rerunnableCount: 0,
+  };
+}
+
+async function loadBulkGenerationResults({ force = false } = {}) {
+  const pipelineRunId = getPlanningCurrentPipelineRunId();
+  if (!pipelineRunId) {
+    if (bulkGenerateResultsState.pipelineRunId) {
+      resetBulkGenerateResultsState();
+      publishPlanningWorklistState();
+    }
+    return;
+  }
+  if (!force && bulkGenerateResultsState.pipelineRunId === pipelineRunId
+      && bulkGenerateResultsState.loadStatus === "ready") {
+    return;
+  }
+  const token = bulkGenerateResultsState.requestToken + 1;
+  bulkGenerateResultsState.requestToken = token;
+  bulkGenerateResultsState.loadStatus = "loading";
+  try {
+    const payload = await fetchJson(
+      `/planning/bulk-generation/results?pipeline_run_id=${encodeURIComponent(pipelineRunId)}`
+    );
+    if (bulkGenerateResultsState.requestToken !== token) return;
+    bulkGenerateResultsState = {
+      ...bulkGenerateResultsState,
+      pipelineRunId,
+      loadStatus: "ready",
+      found: Boolean(payload?.found),
+      items: mergeBulkResultItems(payload?.items || []),
+      latestRunId: String(payload?.latest_run_id || ""),
+      latestStatus: String(payload?.latest_status || ""),
+      lastFinishedAt: String(payload?.latest_finished_at || ""),
+      processedCount: Number(payload?.processed_count || 0),
+      generatedCount: Number(payload?.generated_count || 0),
+      rerunnableCount: Number(payload?.rerunnable_count || 0),
+    };
+  } catch (err) {
+    if (bulkGenerateResultsState.requestToken !== token) return;
+    // Results are an enhancement: a failure must never break Planning.
+    bulkGenerateResultsState = {
+      ...bulkGenerateResultsState,
+      pipelineRunId,
+      loadStatus: "error",
+      found: false,
+      items: [],
+    };
+  }
+  publishPlanningWorklistState();
+}
+
+function getPlanningBulkSuggestionSelection(
+  rows = planningTableState.bulkSuggestionRows,
+  config = bulkGenerateSuggestionsState
+) {
+  const scopeRows = Array.isArray(rows) ? rows : [];
+  // In rerun mode the jobs chosen in the results workspace are the MAXIMUM
+  // scope. Filters below can narrow it; nothing can widen it.
+  const rerunScope = String(config.mode || "initial") === "rerun"
+    ? new Set((config.rerunIdentities || []).map((value) => String(value || "").trim()).filter(Boolean))
+    : null;
+  // Two explicit lanes.
+  //
+  // INITIAL: unchanged first-time gate - a row that already has tailoring
+  // artifacts resolves to "open_workspace" and is not a fresh-generate
+  // candidate.
+  //
+  // RERUN: the Results Center has already constrained the scope to items the
+  // persisted Bulk history marked rerunnable, and re-running a job that
+  // produced artifacts on the previous attempt is the entire point. Artifact
+  // presence therefore must not disqualify it. Current job identity and a
+  // valid winner/runner-up selected resume are still required here, and every
+  // backend stale-candidate/resume-allowlist check still runs on start.
+  const eligibleRows = rerunScope
+    ? scopeRows.filter(
+        (row) =>
+          canGenerateSuggestionsForRow(row)
+          && planningRowIdentityKeys(row).some((key) => rerunScope.has(key))
+      )
+    : scopeRows.filter(
+        (row) => resolvePlanningWorklistAction(row).kind === "generate_suggestions"
+      );
+  const reviewAction = String(config.reviewAction || "").trim().toUpperCase();
+  const winnerBucket = String(config.winnerBucket || "").trim().toLowerCase();
+  const preferenceId = String(config.preferenceId || "").trim();
+  const filteredRows = eligibleRows.filter((row) => {
+    if (reviewAction && String(row.action || "").trim().toUpperCase() !== reviewAction) return false;
+    if (winnerBucket && String(row.winner_bucket || "").trim().toLowerCase() !== winnerBucket) return false;
+    if (preferenceId && String(row.role_family || "").trim() !== preferenceId) return false;
+    return true;
+  });
+  const requestedCount = normalizeBulkGenerateSuggestionsCount(config.requestedCount);
+  const selectedCount = Math.min(requestedCount, filteredRows.length);
+  return {
+    eligibleRows,
+    filteredRows,
+    candidateRows: filteredRows.slice(0, selectedCount),
+    eligibleCount: eligibleRows.length,
+    filteredCount: filteredRows.length,
+    requestedCount,
+    selectedCount,
+  };
+}
+
 function buildPlanningWorklistBridgeState() {
+  const bulkSummary = getPlanningBulkSuggestionSummary();
   return {
     status: planningTableState.status,
     rows: planningTableState.rows.map((row) => ({
@@ -1672,6 +2038,42 @@ function buildPlanningWorklistBridgeState() {
       preferenceIds: planningTableState.filters.preferenceIds.slice(),
     },
     preferenceOptions: planningTableState.preferenceOptions.map((option) => ({ ...option })),
+    bulkSuggestions: {
+      eligibleCount: bulkSummary.eligibleCount,
+      available: bulkSummary.eligibleCount > 0 && !bulkGenerateSuggestionsState.isRunning,
+      isRunning: bulkGenerateSuggestionsState.isRunning,
+      // Presentation-only mirror of the canonical server progress already held
+      // by the shared shell; Planning renders it beside its own Bulk control.
+      total: Number(bulkGenerateSuggestionsState.total || 0),
+      completed: Number(bulkGenerateSuggestionsState.completed || 0),
+      needsAttention: Number(bulkGenerateSuggestionsState.needsAttention || 0),
+      remaining: Number(bulkGenerateSuggestionsState.remaining || 0),
+      currentLabel: String(bulkGenerateSuggestionsState.currentLabel || ""),
+      stopRequested: Boolean(bulkGenerateSuggestionsState.stopRequested),
+      verified: bulkGenerateSuggestionsState.verified !== false,
+      // Bounded per-item statuses already returned by the Bulk status response.
+      items: (bulkGenerateSuggestionsState.results || []).map((item) => ({
+        label: String(item.label || ""),
+        status: String(item.status || "pending"),
+        outcome: String(item.outcome || ""),
+      })),
+      // Terminal Bulk history for the current Live Pipeline job set. Both
+      // pipeline ids travel so presentation can invalidate a stale result set
+      // without deleting any persisted history.
+      currentPipelineRunId: getPlanningCurrentPipelineRunId(),
+      resultPipelineRunId: String(bulkGenerateResultsState.pipelineRunId || ""),
+      hasResults: Boolean(bulkGenerateResultsState.found)
+        && bulkGenerateResultsState.items.length > 0,
+      latestRunId: String(bulkGenerateResultsState.latestRunId || ""),
+      latestStatus: String(bulkGenerateResultsState.latestStatus || ""),
+      lastFinishedAt: String(bulkGenerateResultsState.lastFinishedAt || ""),
+      processedCount: Number(bulkGenerateResultsState.processedCount || 0),
+      generatedCount: Number(bulkGenerateResultsState.generatedCount || 0),
+      rerunnableCount: Number(bulkGenerateResultsState.rerunnableCount || 0),
+      resultLoadStatus: String(bulkGenerateResultsState.loadStatus || "idle"),
+      resultItems: bulkGenerateResultsState.items.map((item) => ({ ...item })),
+      brandfetchClientId: getPlanningBrandfetchClientId(),
+    },
   };
 }
 
@@ -1862,6 +2264,7 @@ function capturePlanningTableSnapshot() {
 
   return {
     rows: planningTableState.rows.slice(),
+    bulkSuggestionRows: planningTableState.bulkSuggestionRows.slice(),
     metaLabel: planningTableState.metaLabel,
     metrics: { ...planningTableState.metrics },
     pagination: {
@@ -1877,6 +2280,7 @@ function restorePlanningTableSnapshot(snapshot, { note = "" } = {}) {
     ...snapshot.pagination,
   };
   planningTableState.metrics = { ...snapshot.metrics };
+  planningTableState.bulkSuggestionRows = snapshot.bulkSuggestionRows.slice();
 
   renderPlanningRows(snapshot.rows, note ? `${snapshot.metaLabel} · ${note}` : snapshot.metaLabel);
 
@@ -1908,6 +2312,12 @@ function applyPlanningTableResponse(data, { historyMode = "replace" } = {}) {
     pipeline_run_id: row.pipeline_run_id || data.pipeline_run_id || "",
     planning_output_dir: row.planning_output_dir || data.planning_output_dir || "",
   }));
+  planningTableState.bulkSuggestionRows = (data.bulk_suggestion_rows || [])
+    .map((row) => ({
+      ...row,
+      pipeline_run_id: row.pipeline_run_id || data.pipeline_run_id || "",
+      planning_output_dir: row.planning_output_dir || data.planning_output_dir || "",
+    }));
 
   updatePlanningStats(totalCount, contextualRows);
 
@@ -1915,6 +2325,19 @@ function applyPlanningTableResponse(data, { historyMode = "replace" } = {}) {
     contextualRows,
     `Planning detail view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
   );
+
+  // A new Live Pipeline run is a new job-set context: drop the previous result
+  // presentation immediately, then load this pipeline's own Bulk history.
+  // Persisted history for older runs is never deleted or mutated.
+  const activePipelineRunId = getPlanningCurrentPipelineRunId();
+  if (bulkGenerateResultsState.pipelineRunId
+      && bulkGenerateResultsState.pipelineRunId !== activePipelineRunId) {
+    resetBulkGenerateResultsState();
+    bulkGenerateSuggestionsState.mode = "initial";
+    bulkGenerateSuggestionsState.rerunIdentities = [];
+  }
+  // Non-blocking: Planning must render even if Bulk history is unavailable.
+  void loadBulkGenerationResults();
 }
 
 function prefetchPlanningTablePage(pageNumber) {
@@ -1987,7 +2410,7 @@ function readPlanningUrlState(search = window.location.search) {
 
   const parsedLimit = Number(params.get("limit") || "15");
   const limit = Number.isFinite(parsedLimit)
-    ? Math.min(100, Math.max(1, Math.floor(parsedLimit)))
+    ? Math.max(1, Math.floor(parsedLimit))
     : 15;
 
   const rawSortKey = String(params.get("sort_key") || "").trim();
@@ -5026,6 +5449,7 @@ function getScanWorkspaceContext() {
     packetJsonPath: String(page.dataset.packetJsonPath || "").trim(),
     packetJsonKey: String(page.dataset.packetJsonKey || "").trim(),
     planningOutputDir: String(page.dataset.planningOutputDir || "").trim(),
+    pipelineRunId: String(page.dataset.pipelineRunId || "").trim(),
   };
 }
 
@@ -9401,6 +9825,7 @@ function buildScanWorkspaceBackToTailoringUrl() {
     params.set("packet_json", context.packetJsonKey || context.packetJsonPath);
   }
   if (context.planningOutputDir) params.set("output_dir", context.planningOutputDir);
+  if (context.pipelineRunId) params.set("pipeline_run_id", context.pipelineRunId);
 
   return `/tailoring-workspace?${params.toString()}`;
 }
@@ -9988,6 +10413,7 @@ function setScanWorkspaceIssueExcluded(issueId, excluded) {
   if (window.scanWorkspacePhase1?.renderPersistenceStatus) {
     window.scanWorkspacePhase1.renderPersistenceStatus();
   }
+
 }
 
 function toggleScanWorkspaceCandidateSelection(candidateId) {
@@ -10203,6 +10629,31 @@ function getScanWorkspaceRequiredSkillWeight(payload, scoringMissingRows = []) {
   return 0.2;
 }
 
+function resolveScanWorkspaceBaselineScorePoints(payload = getScanWorkspacePayload()) {
+  const scoreSnapshot = payload?.scan_score && typeof payload.scan_score === "object"
+    ? payload.scan_score
+    : {};
+  const scorePreview = payload?.score_preview && typeof payload.score_preview === "object"
+    ? payload.score_preview
+    : {};
+  const values = [
+    scoreSnapshot.score,
+    scorePreview.projected_score_points,
+    scorePreview.projected_score,
+    scorePreview.original_score_points,
+    scorePreview.original_score,
+  ];
+
+  for (const value of values) {
+    const points = coerceScanWorkspaceScorePoints(value);
+    if (points !== null) {
+      return Math.max(0, Math.min(100, points));
+    }
+  }
+
+  return null;
+}
+
 function getScanWorkspaceExclusionAdjustedScore(
   payload = getScanWorkspacePayload(),
   { excludedIssueIds = getScanWorkspaceExcludedIssueIds() } = {}
@@ -10210,13 +10661,8 @@ function getScanWorkspaceExclusionAdjustedScore(
   const scoreSnapshot = payload?.scan_score && typeof payload.scan_score === "object"
     ? payload.scan_score
     : {};
-  const rawScore = Number(scoreSnapshot.score);
-  if (!Number.isFinite(rawScore)) return null;
-
-  const baseScore = Math.max(
-    0,
-    Math.min(100, rawScore >= 0 && rawScore <= 1 ? rawScore * 100 : rawScore)
-  );
+  const baseScore = resolveScanWorkspaceBaselineScorePoints(payload);
+  if (baseScore === null) return null;
   const issues = getScanWorkspaceRawContractIssues(payload);
   const excluded = new Set(normalizeScanWorkspaceExcludedIssueIds(excludedIssueIds));
   if (!issues.length || !excluded.size) {
@@ -10290,7 +10736,7 @@ function getScanWorkspaceExclusionAdjustedScore(
 }
 
 function hasScanWorkspaceIssueContract(payload = getScanWorkspacePayload()) {
-  return getScanWorkspaceContractIssues(payload).length > 0;
+  return getScanWorkspaceRawContractIssues(payload).length > 0;
 }
 
 function normalizeScanWorkspaceContractIssue(issue) {
@@ -10412,11 +10858,25 @@ function normalizeScanWorkspaceContractIssue(issue) {
   };
 }
 
-function getScanWorkspaceNormalizedContractIssues(payload = getScanWorkspacePayload()) {
-  return getScanWorkspaceContractIssues(payload)
-    .map((issue) => normalizeScanWorkspaceContractIssue(issue))
+function getScanWorkspaceNormalizedContractIssues(
+  payload = getScanWorkspacePayload(),
+  { includeExcluded = false } = {}
+) {
+  const excluded = new Set(getScanWorkspaceExcludedIssueIds());
+  const sourceIssues = includeExcluded
+    ? getScanWorkspaceRawContractIssues(payload)
+    : getScanWorkspaceContractIssues(payload);
+  return sourceIssues
+    .map((issue) => {
+      const normalized = normalizeScanWorkspaceContractIssue(issue);
+      return {
+        ...normalized,
+        is_scan_excluded: excluded.has(String(normalized.scan_issue_id || "").trim()),
+      };
+    })
     .filter((issue) => String(issue?.candidate_id || issue?.scan_issue_id || "").trim())
-    .filter((issue) => issue?.is_visible_in_review !== false);
+    .filter((issue) => issue?.is_visible_in_review !== false)
+    .filter((issue) => includeExcluded || issue?.is_scan_excluded !== true);
 }
 
 function buildScanWorkspacePersonalDetailsPanel() {
@@ -10435,7 +10895,7 @@ function buildScanWorkspacePersonalDetailsPanel() {
 
 function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspacePayload()) {
   const contract = getScanWorkspaceIssueContract(payload);
-  const issues = getScanWorkspaceNormalizedContractIssues(payload);
+  const issues = getScanWorkspaceNormalizedContractIssues(payload, { includeExcluded: true });
 
   const groupRows = Array.isArray(contract?.groups) ? contract.groups : [];
   const defaultGroups = [
@@ -10454,12 +10914,14 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
     const groupIssues = issues.filter(
       (issue) => String(issue?.scan_issue_group_id || "").trim() === groupId
     );
+    const activeGroupIssues = groupIssues.filter((issue) => issue?.is_scan_excluded !== true);
+    const excludedItems = groupIssues.filter((issue) => issue?.is_scan_excluded === true);
 
-    const matchedItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "matched");
-    const missingItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "missing");
-    const aiItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "ai");
-    const predictedItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "predicted");
-    const otherKeywordItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "other_keyword");
+    const matchedItems = activeGroupIssues.filter((issue) => issue.scan_issue_bucket === "matched");
+    const missingItems = activeGroupIssues.filter((issue) => issue.scan_issue_bucket === "missing");
+    const aiItems = activeGroupIssues.filter((issue) => issue.scan_issue_bucket === "ai");
+    const predictedItems = activeGroupIssues.filter((issue) => issue.scan_issue_bucket === "predicted");
+    const otherKeywordItems = activeGroupIssues.filter((issue) => issue.scan_issue_bucket === "other_keyword");
     const bucketRows = Array.isArray(sourceGroup?.buckets) ? sourceGroup.buckets : [];
 
     const panel = {
@@ -10472,7 +10934,8 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
       matchedCount: matchedItems.length,
       missingCount: missingItems.length,
       aiCount: aiItems.length,
-      totalCount: groupIssues.length,
+      totalCount: activeGroupIssues.length,
+      excludedCount: excludedItems.length,
       predictedCount: predictedItems.length,
       otherKeywordCount: otherKeywordItems.length,
       groups: [],
@@ -10517,7 +10980,7 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
       };
 
       skillTypeOrder.forEach((skillType) => {
-        const skillTypeItems = groupIssues.filter((issue) => {
+        const skillTypeItems = activeGroupIssues.filter((issue) => {
           const rowSkillType = String(issue?.skill_type || "").trim() || "hard_skill";
           return rowSkillType === skillType.key;
         });
@@ -10537,7 +11000,16 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
         });
       });
 
-      const untypedItems = groupIssues.filter((issue) => !String(issue?.skill_type || "").trim());
+      if (excludedItems.length) {
+        panel.groups.push({
+          title: "Excluded",
+          summary: `${excludedItems.length} skill item(s) excluded from active Missing counts and scoring.`,
+          bucket: "excluded",
+          items: excludedItems,
+        });
+      }
+
+      const untypedItems = activeGroupIssues.filter((issue) => !String(issue?.skill_type || "").trim());
       if (panel.groups.length || !untypedItems.length) {
         if (!panel.groups.length) {
           panel.groups.push({
@@ -10562,7 +11034,7 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
     orderedBuckets.forEach((bucketRow) => {
       const bucketKey = String(bucketRow?.bucket || "").trim();
       if (!bucketKey) return;
-      const bucketItems = groupIssues.filter((issue) => issue.scan_issue_bucket === bucketKey);
+      const bucketItems = activeGroupIssues.filter((issue) => issue.scan_issue_bucket === bucketKey);
       if (!bucketItems.length) return;
 
       panel.groups.push({
@@ -11004,6 +11476,8 @@ function getScanWorkspaceIssueCoverageLabel(item) {
 }
 
 function coerceScanWorkspaceScorePoints(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && !value.trim()) return null;
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return null;
   return Math.round(numeric >= -1 && numeric <= 1 ? numeric * 100 : numeric);
@@ -11255,7 +11729,9 @@ function renderScanWorkspaceIssueInventory(items, bucket, { isSkillsPanel = fals
           const showFlagIcon =
             item?.row_action_type === "matched" ||
             bucket === "matched";
-          const canExclude = isScanWorkspaceIssueExcludable(item);
+          const isExcluded = item?.is_scan_excluded === true;
+          const canExclude = !isExcluded && isScanWorkspaceIssueExcludable(item);
+          const canReinclude = isExcluded && Boolean(scanIssueId);
           const tokenClass = (value) => String(value || "review")
             .trim()
             .toLowerCase()
@@ -11270,7 +11746,7 @@ function renderScanWorkspaceIssueInventory(items, bucket, { isSkillsPanel = fals
           return `
             <button
               type="button"
-              class="scan-workspace-issue-row ${toneClass} ${isSkillsPanel ? "scan-workspace-issue-row--skill" : ""} ${isActive ? "is-active" : ""} ${isAnchorable ? "" : "is-static"}"
+              class="scan-workspace-issue-row ${toneClass} ${isExcluded ? "is-excluded" : ""} ${isSkillsPanel ? "scan-workspace-issue-row--skill" : ""} ${isActive ? "is-active" : ""} ${isAnchorable ? "" : "is-static"}"
               ${isAnchorable ? `data-scan-focus-candidate="${escapeHtml(candidateId)}"` : `data-scan-static-issue="${escapeHtml(rowId)}"`}
               ${jdEvidence ? `data-scan-evidence-tooltip="${escapeHtml(jdEvidence)}" aria-describedby="scanWorkspaceEvidenceTooltip"` : ""}
               ${scoreTitle && !isSkillsPanel ? `title="${escapeHtml(scoreTitle)}"` : ""}
@@ -11305,6 +11781,22 @@ function renderScanWorkspaceIssueInventory(items, bucket, { isSkillsPanel = fals
 
               <span class="scan-workspace-issue-right">
                 ${
+                  canReinclude
+                    ? `
+                      <span
+                        role="button"
+                        tabindex="0"
+                        class="scan-workspace-issue-exclude-btn scan-workspace-issue-reinclude-btn"
+                        data-scan-reinclude-issue="${escapeHtml(scanIssueId)}"
+                        title="Re-include this skill in scan report counts"
+                      >
+                        Re-include
+                      </span>
+                    `
+                    : ""
+                }
+
+                ${
                   canExclude
                     ? `
                       <span
@@ -11327,12 +11819,12 @@ function renderScanWorkspaceIssueInventory(items, bucket, { isSkillsPanel = fals
                 }
 
                 ${
-                  meta
+                  isExcluded || meta
                     ? `
                       <span class="scan-workspace-issue-token-wrap">
                         ${shouldRenderMetaIconOutside ? `<span class="scan-workspace-issue-token-icon scan-workspace-issue-token-icon--outside">${metaIcon}</span>` : ""}
-                        <span class="scan-workspace-issue-meta scan-workspace-issue-pill--${escapeHtml(tokenClass(meta))}">
-                          ${escapeHtml(meta)}
+                        <span class="scan-workspace-issue-meta scan-workspace-issue-pill--${escapeHtml(tokenClass(isExcluded ? "Excluded" : meta))}">
+                          ${escapeHtml(isExcluded ? "Excluded" : meta)}
                         </span>
                       </span>
                     `
@@ -12053,6 +12545,17 @@ function bindScanWorkspaceHandlers() {
     root.dataset.bound = "true";
 
     root.addEventListener("click", (event) => {
+      const reincludeButton = event.target.closest("[data-scan-reinclude-issue]");
+      if (reincludeButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const issueId = String(reincludeButton.dataset.scanReincludeIssue || "").trim();
+        if (issueId) {
+          setScanWorkspaceIssueExcluded(issueId, false);
+        }
+        return;
+      }
+
       const excludeButton = event.target.closest("[data-scan-exclude-issue]");
       if (excludeButton) {
         event.preventDefault();
@@ -12100,6 +12603,17 @@ function bindScanWorkspaceHandlers() {
     });
 
     root.addEventListener("keydown", (event) => {
+      const reincludeButton = event.target.closest("[data-scan-reinclude-issue]");
+      if (reincludeButton && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        event.stopPropagation();
+        const issueId = String(reincludeButton.dataset.scanReincludeIssue || "").trim();
+        if (issueId) {
+          setScanWorkspaceIssueExcluded(issueId, false);
+        }
+        return;
+      }
+
       const excludeButton = event.target.closest("[data-scan-exclude-issue]");
       if (!excludeButton || (event.key !== "Enter" && event.key !== " ")) return;
       event.preventDefault();
@@ -12351,6 +12865,9 @@ async function initScanWorkspacePage() {
 
   try {
     scanWorkspaceState.preloadPayload = payload;
+    if (typeof captureScanWorkspacePersistenceCheckpoint === "function") {
+      captureScanWorkspacePersistenceCheckpoint("A: immediately after preload assignment");
+    }
     updateScanWorkspaceContextLine(payload);
 
     const savedDraft = payload && payload.draft && typeof payload.draft === "object"
@@ -12485,7 +13002,8 @@ function canGenerateSuggestionsForRow(row) {
   return hasJobReference && Boolean(resolveGenerateSuggestionsSelectedResume(row));
 }
 
-function buildGenerateSuggestionsPayload(row) {
+function buildGenerateSuggestionsPayload(row, { parseRetryLimit = 1 } = {}) {
+  const boundedRetryLimit = parseRetryLimit === 0 ? 0 : 1;
   return {
     pipeline_run_id: row?.pipeline_run_id || row?.run_id || "",
     job_doc_id: row?.job_doc_id || "",
@@ -12493,7 +13011,18 @@ function buildGenerateSuggestionsPayload(row) {
     selected_resume: resolveGenerateSuggestionsSelectedResume(row),
     generate_llm_tailoring: true,
     refresh_llm_tailoring: false,
+    parse_retry_limit: boundedRetryLimit,
   };
+}
+
+// Bulk runs under an explicit zero-retry authorization: a parse failure must
+// never issue a second provider request for a batched job.
+const BULK_GENERATE_SUGGESTIONS_PARSE_RETRY_LIMIT = 0;
+
+function buildBulkGenerateSuggestionsPayload(row) {
+  return buildGenerateSuggestionsPayload(row, {
+    parseRetryLimit: BULK_GENERATE_SUGGESTIONS_PARSE_RETRY_LIMIT,
+  });
 }
 
 function resolvePlanningRowOutputDir(row) {
@@ -12531,7 +13060,7 @@ function getTailoringWorkspaceRouteStatusLabel(row) {
   if (workspaceState === "ready" || actionableCount > 0) return "Ready suggestions";
   if (workspaceState === "review" || reviewCount > 0) return "Review guidance";
   if (workspaceState === "no_safe_rewrites") return "No safe rewrites yet";
-  if (rawStatus === "failed") return "No safe rewrites yet";
+  if (rawStatus === "failed") return "AI tailoring unavailable";
   if (rawStatus) return humanizeUnderscoreLabel(rawStatus);
   return "Suggestions available";
 }
@@ -12550,8 +13079,23 @@ function getWorkspaceBlockedReason(row) {
     return "LLM tailoring generation is off for this row.";
   }
 
-  if (workspaceState === "no_safe_rewrites") {
+  // Authoritative workspace state takes precedence over the optional LLM
+  // refinement pass. Deterministic tailoring (direction/review evidence, or
+  // app-ready replacements) is produced independently of the separate
+  // --use-llm refinement step, so a valid usable workspace must not be
+  // blocked merely because that optional refinement failed/unreadable to
+  // parse. A row with no usable evidence at all (empty/unavailable, or
+  // legacy "review" below) is still blocked by a failed/unreadable LLM pass.
+  if (workspaceState === "no_safe_rewrites" || workspaceState === "ready") {
     return "";
+  }
+
+  if (["failed", "unreadable"].includes(llmStatus)) {
+    return "AI tailoring unavailable. No suggestions were produced for this row.";
+  }
+
+  if (workspaceState === "empty") {
+    return "No grounded rewrite evidence was found for this row.";
   }
 
   if (
@@ -12928,6 +13472,499 @@ async function acknowledgeGenerateSuggestionsLoader() {
   await loadPlanningTable({ forceNetwork: true });
 }
 
+function getBulkGenerateSuggestionsOverlay() {
+  return qs("bulkGenerateSuggestionsOverlay");
+}
+
+function setBulkGenerateSuggestionsBackgroundInert(isInert) {
+  const overlay = getBulkGenerateSuggestionsOverlay();
+  Array.from(document.body.children).forEach((element) => {
+    if (element === overlay || element.contains(overlay) || element.tagName === "SCRIPT") return;
+    if (isInert) {
+      if (!element.hasAttribute("inert")) {
+        element.setAttribute("data-bulk-generate-suggestions-inert", "true");
+        element.setAttribute("inert", "");
+      }
+    } else if (element.getAttribute("data-bulk-generate-suggestions-inert") === "true") {
+      element.removeAttribute("inert");
+      element.removeAttribute("data-bulk-generate-suggestions-inert");
+    }
+  });
+  document.body.classList.toggle("tailoring-workflow-open", isInert);
+}
+
+function resetBulkGenerateSuggestionsState(candidateRows = []) {
+  bulkGenerateSuggestionsState.candidateRows = candidateRows.slice();
+  bulkGenerateSuggestionsState.total = candidateRows.length;
+  bulkGenerateSuggestionsState.completed = 0;
+  bulkGenerateSuggestionsState.succeeded = 0;
+  bulkGenerateSuggestionsState.needsAttention = 0;
+  bulkGenerateSuggestionsState.currentIndex = -1;
+  bulkGenerateSuggestionsState.isRunning = false;
+  bulkGenerateSuggestionsState.stopRequested = false;
+  bulkGenerateSuggestionsState.results = [];
+}
+
+function resetBulkGenerateSuggestionsConfiguration(eligibleCount) {
+  bulkGenerateSuggestionsState.requestedCount = Math.min(10, Math.max(0, eligibleCount));
+  bulkGenerateSuggestionsState.reviewAction = "";
+  bulkGenerateSuggestionsState.winnerBucket = "";
+  bulkGenerateSuggestionsState.preferenceId = "";
+  resetBulkGenerateSuggestionsState();
+}
+
+function renderBulkGenerateSuggestionsPreferenceOptions() {
+  const select = qs("bulkGenerateSuggestionsPreferenceFilter");
+  if (!select) return;
+  select.innerHTML = [
+    '<option value="">All preferences</option>',
+    ...planningTableState.preferenceOptions.map((option) => (
+      `<option value="${escapeHtml(option.role_family_id)}">${escapeHtml(option.display_name)}</option>`
+    )),
+  ].join("");
+}
+
+function syncBulkGenerateSuggestionsControls(selection) {
+  const numberInput = qs("bulkGenerateSuggestionsNumber");
+  const numberError = qs("bulkGenerateSuggestionsNumberError");
+  if (numberInput) {
+    numberInput.value = bulkGenerateSuggestionsState.requestedCount || "";
+    numberInput.setAttribute("aria-invalid", selection.requestedCount ? "false" : "true");
+  }
+  numberError?.classList.toggle("hidden", Boolean(selection.requestedCount));
+  const valuesById = {
+    bulkGenerateSuggestionsReviewFilter: bulkGenerateSuggestionsState.reviewAction,
+    bulkGenerateSuggestionsMatchFilter: bulkGenerateSuggestionsState.winnerBucket,
+    bulkGenerateSuggestionsPreferenceFilter: bulkGenerateSuggestionsState.preferenceId,
+  };
+  Object.entries(valuesById).forEach(([id, value]) => {
+    const control = qs(id);
+    if (control) control.value = value;
+  });
+}
+
+function bulkGenerateSuggestionsJobLabel(row) {
+  const title = String(row?.job_title || "Untitled job").trim() || "Untitled job";
+  const company = String(row?.job_company || "").trim();
+  return company ? `${title} · ${company}` : title;
+}
+
+function renderBulkGenerateSuggestionsSummary() {
+  const summary = qs("bulkGenerateSuggestionsSummary");
+  if (!summary) return;
+  const state = bulkGenerateSuggestionsState;
+  const remaining = Math.max(state.total - state.completed, 0);
+  summary.innerHTML = `
+    <div><span>Eligible</span><strong>${state.total}</strong></div>
+    <div><span>Completed</span><strong>${state.succeeded}</strong></div>
+    <div><span>Needs attention</span><strong>${state.needsAttention}</strong></div>
+    <div><span>Remaining</span><strong>${remaining}</strong></div>
+  `;
+}
+
+function renderBulkGenerateSuggestionsResults() {
+  const resultsEl = qs("bulkGenerateSuggestionsResults");
+  if (!resultsEl) return;
+  const reviewRows = bulkGenerateSuggestionsState.results.filter(
+    (result) => result.outcome === "no_safe_rewrites"
+  );
+  const emptyRows = bulkGenerateSuggestionsState.results.filter(
+    (result) => result.outcome === "empty"
+  );
+  const attentionRows = bulkGenerateSuggestionsState.results.filter(
+    (result) => result.status === "needs_attention"
+  );
+  const sections = [
+    reviewRows.length
+      ? `<section><strong>Review guidance</strong><ul>${reviewRows.map((result) => `<li>${escapeHtml(result.label)}</li>`).join("")}</ul></section>`
+      : "",
+    emptyRows.length
+      ? `<section><strong>No grounded rewrite evidence</strong><ul>${emptyRows.map((result) => `<li>${escapeHtml(result.label)}</li>`).join("")}</ul></section>`
+      : "",
+    attentionRows.length
+      ? `<section><strong>Needs attention</strong><ul>${attentionRows.map((result) => `<li>${escapeHtml(result.label)}</li>`).join("")}</ul></section>`
+      : "",
+  ].filter(Boolean);
+  if (!sections.length) {
+    resultsEl.innerHTML = "";
+    resultsEl.classList.add("hidden");
+    return;
+  }
+  resultsEl.innerHTML = sections.join("");
+  resultsEl.classList.remove("hidden");
+}
+
+function renderBulkGenerateSuggestionsOverlay(state, scopeSummary = null) {
+  const overlay = getBulkGenerateSuggestionsOverlay();
+  if (!overlay) return;
+  const titleEl = qs("bulkGenerateSuggestionsTitle");
+  const badgeEl = qs("bulkGenerateSuggestionsBadge");
+  const textEl = qs("bulkGenerateSuggestionsText");
+  const currentEl = qs("bulkGenerateSuggestionsCurrent");
+  const controlsEl = qs("bulkGenerateSuggestionsControls");
+  const statusIcon = qs("bulkGenerateSuggestionsStatusIcon");
+  const primaryBtn = qs("bulkGenerateSuggestionsPrimaryBtn");
+  const secondaryBtn = qs("bulkGenerateSuggestionsSecondaryBtn");
+  const wasHidden = overlay.classList.contains("hidden");
+
+  if (wasHidden) {
+    bulkGenerateSuggestionsState.returnFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+  }
+
+  overlay.classList.remove("hidden", "is-success", "is-error", "is-stopped");
+  overlay.dataset.workflowState = state;
+  overlay.setAttribute("aria-busy", state === "running" ? "true" : "false");
+  setBulkGenerateSuggestionsBackgroundInert(true);
+  if (statusIcon) statusIcon.textContent = "";
+
+  if (state === "confirm") {
+    const selection = scopeSummary || getPlanningBulkSuggestionSelection();
+    const isRerun = String(bulkGenerateSuggestionsState.mode || "initial") === "rerun";
+    if (badgeEl) badgeEl.textContent = isRerun ? "Bulk suggestion re-run" : "Bulk suggestion generation";
+    if (titleEl) {
+      titleEl.textContent = isRerun ? "Re-run bulk suggestions" : "Bulk generate suggestions";
+    }
+    if (textEl) {
+      textEl.textContent = isRerun
+        ? "Review the settings before re-running suggestions for the selected jobs."
+        : "Choose which eligible Planning jobs should receive tailoring suggestions.";
+    }
+    controlsEl?.classList.remove("hidden");
+    syncBulkGenerateSuggestionsControls(selection);
+    const summaryEl = qs("bulkGenerateSuggestionsSummary");
+    if (summaryEl) {
+      summaryEl.innerHTML = `
+        <div><span>Eligible after filters</span><strong>${selection.filteredCount}</strong></div>
+        <div><span>Selected to generate</span><strong>${selection.selectedCount}</strong></div>
+      `;
+    }
+    if (currentEl) currentEl.classList.add("hidden");
+    renderBulkGenerateSuggestionsResults();
+    if (secondaryBtn) {
+      secondaryBtn.textContent = "Cancel";
+      secondaryBtn.disabled = false;
+      secondaryBtn.classList.remove("hidden");
+    }
+    if (primaryBtn) {
+      primaryBtn.textContent = isRerun
+        ? `Re-run selected (${selection.selectedCount})`
+        : "Generate suggestions";
+      primaryBtn.disabled = selection.selectedCount === 0;
+      primaryBtn.classList.remove("hidden");
+    }
+    if (wasHidden) window.requestAnimationFrame(() => secondaryBtn?.focus());
+    return;
+  }
+
+  renderBulkGenerateSuggestionsSummary();
+  controlsEl?.classList.add("hidden");
+
+  if (state === "running") {
+    const currentRow = bulkGenerateSuggestionsState.candidateRows[
+      bulkGenerateSuggestionsState.currentIndex
+    ];
+    if (badgeEl) badgeEl.textContent = "Generating suggestions";
+    if (titleEl) titleEl.textContent = `${bulkGenerateSuggestionsState.completed} of ${bulkGenerateSuggestionsState.total} completed`;
+    if (textEl) textEl.textContent = "Each job is processed sequentially through the existing secured generation flow.";
+    if (currentEl) {
+      currentEl.innerHTML = `<span>Current</span><strong>${escapeHtml(bulkGenerateSuggestionsJobLabel(currentRow))}</strong>`;
+      currentEl.classList.remove("hidden");
+    }
+    if (secondaryBtn) {
+      secondaryBtn.textContent = bulkGenerateSuggestionsState.stopRequested
+        ? "Stopping after current…"
+        : "Stop after current";
+      secondaryBtn.disabled = bulkGenerateSuggestionsState.stopRequested;
+      secondaryBtn.classList.remove("hidden");
+    }
+    if (primaryBtn) primaryBtn.classList.add("hidden");
+    return;
+  }
+
+  const wasStopped = state === "stopped";
+  overlay.classList.add(
+    wasStopped
+      ? "is-stopped"
+      : bulkGenerateSuggestionsState.needsAttention
+        ? "is-error"
+        : "is-success"
+  );
+  if (statusIcon) {
+    statusIcon.textContent = wasStopped
+      ? "■"
+      : bulkGenerateSuggestionsState.needsAttention
+        ? "!"
+        : "✓";
+  }
+  if (badgeEl) badgeEl.textContent = wasStopped ? "Stopped" : "Complete";
+  if (titleEl) titleEl.textContent = wasStopped ? "Suggestion generation stopped" : "Suggestions prepared";
+  if (textEl) {
+    const remaining = Math.max(
+      bulkGenerateSuggestionsState.total - bulkGenerateSuggestionsState.completed,
+      0
+    );
+    textEl.textContent = wasStopped
+      ? `${bulkGenerateSuggestionsState.succeeded} completed, ${bulkGenerateSuggestionsState.needsAttention} need attention, and ${remaining} were not started.`
+      : `${bulkGenerateSuggestionsState.succeeded} completed and ${bulkGenerateSuggestionsState.needsAttention} need attention.`;
+  }
+  if (currentEl) currentEl.classList.add("hidden");
+  renderBulkGenerateSuggestionsResults();
+  if (secondaryBtn) secondaryBtn.classList.add("hidden");
+  if (primaryBtn) {
+    primaryBtn.textContent = "Done";
+    primaryBtn.disabled = false;
+    primaryBtn.classList.remove("hidden");
+    window.requestAnimationFrame(() => primaryBtn.focus());
+  }
+}
+
+function closeBulkGenerateSuggestionsOverlay() {
+  getBulkGenerateSuggestionsOverlay()?.classList.add("hidden");
+  setBulkGenerateSuggestionsBackgroundInert(false);
+  const returnFocus = bulkGenerateSuggestionsState.returnFocus;
+  bulkGenerateSuggestionsState.returnFocus = null;
+  if (returnFocus instanceof HTMLElement && returnFocus.isConnected) returnFocus.focus();
+}
+
+function openBulkGenerateSuggestionsConfirmation() {
+  if (bulkGenerateSuggestionsState.isRunning || generateSuggestionsState.isRunning) return;
+  const overlay = getBulkGenerateSuggestionsOverlay();
+  if (overlay && !overlay.classList.contains("hidden")) return;
+  const scopeSummary = getPlanningBulkSuggestionSummary();
+  if (!scopeSummary.eligibleCount) return;
+  bulkGenerateSuggestionsState.mode = "initial";
+  bulkGenerateSuggestionsState.rerunIdentities = [];
+  resetBulkGenerateSuggestionsConfiguration(scopeSummary.eligibleCount);
+  renderBulkGenerateSuggestionsPreferenceOptions();
+  renderBulkGenerateSuggestionsOverlay("confirm", getPlanningBulkSuggestionSelection());
+}
+
+/**
+ * Re-run entry point. The Results Center has already established the exact
+ * scope, so this starts the run DIRECTLY through the existing Bulk start path
+ * and never reopens the first-run configuration overlay.
+ *
+ * Number of jobs / Review readiness / Match strength / Preferences belong to
+ * first-time Bulk generation only: they are recorded as metadata by
+ * start_bulk_generation and are never used to select or generate candidates,
+ * so a re-run submits neutral values and the explicit identities stand alone.
+ */
+async function startBulkGenerateSuggestionsRerun(scope, jobIdentities) {
+  if (bulkGenerateSuggestionsState.isRunning || generateSuggestionsState.isRunning) return;
+  const overlay = getBulkGenerateSuggestionsOverlay();
+  if (overlay && !overlay.classList.contains("hidden")) return;
+  const identities = (Array.isArray(jobIdentities) ? jobIdentities : [])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  if (!identities.length) return;
+
+  bulkGenerateSuggestionsState.mode = "rerun";
+  bulkGenerateSuggestionsState.rerunIdentities = identities;
+  // Neutral filters and a requested count equal to the explicit scope, so the
+  // first-run "Number of jobs" default can never truncate a re-run.
+  bulkGenerateSuggestionsState.reviewAction = "";
+  bulkGenerateSuggestionsState.winnerBucket = "";
+  bulkGenerateSuggestionsState.preferenceId = "";
+  bulkGenerateSuggestionsState.requestedCount = identities.length;
+
+  const scoped = getPlanningBulkSuggestionSelection(
+    planningTableState.bulkSuggestionRows,
+    bulkGenerateSuggestionsState
+  );
+  if (!scoped.selectedCount) {
+    bulkGenerateSuggestionsState.mode = "initial";
+    bulkGenerateSuggestionsState.rerunIdentities = [];
+    // Never fail silently: a genuinely empty rerun scope means the selected
+    // jobs no longer resolve to current Planning rows with a valid resume.
+    showAppError(
+      "Bulk re-run unavailable",
+      new Error(
+        "The selected jobs are no longer available for re-run in the current Live Pipeline. Reload Planning and try again."
+      )
+    );
+    return;
+  }
+
+  resetBulkGenerateSuggestionsState(scoped.candidateRows);
+  // Same executor, same POST /planning/bulk-generation/start, same canonical
+  // status polling and running progress UI as a first-time Bulk run.
+  await executeBulkGenerateSuggestions();
+}
+
+function updateBulkGenerateSuggestionsConfiguration() {
+  if (getBulkGenerateSuggestionsOverlay()?.dataset.workflowState !== "confirm") return;
+  bulkGenerateSuggestionsState.requestedCount = normalizeBulkGenerateSuggestionsCount(
+    qs("bulkGenerateSuggestionsNumber")?.value
+  );
+  bulkGenerateSuggestionsState.reviewAction = qs("bulkGenerateSuggestionsReviewFilter")?.value || "";
+  bulkGenerateSuggestionsState.winnerBucket = qs("bulkGenerateSuggestionsMatchFilter")?.value || "";
+  bulkGenerateSuggestionsState.preferenceId = qs("bulkGenerateSuggestionsPreferenceFilter")?.value || "";
+  renderBulkGenerateSuggestionsOverlay("confirm", getPlanningBulkSuggestionSelection());
+}
+
+async function startBulkGenerateSuggestionsExecution() {
+  const selection = getPlanningBulkSuggestionSelection();
+  if (!selection.selectedCount) {
+    renderBulkGenerateSuggestionsOverlay("confirm", selection);
+    return;
+  }
+  resetBulkGenerateSuggestionsState(selection.candidateRows);
+  await executeBulkGenerateSuggestions();
+}
+
+function handleBulkGenerateSuggestionsDialogKeydown(event) {
+  const overlay = getBulkGenerateSuggestionsOverlay();
+  const state = overlay?.dataset.workflowState || "";
+  if (event.key === "Escape" && state === "confirm") {
+    event.preventDefault();
+    closeBulkGenerateSuggestionsOverlay();
+    return;
+  }
+  if (event.key !== "Tab" || !overlay || overlay.classList.contains("hidden")) return;
+  const focusable = Array.from(
+    overlay.querySelectorAll('button:not([disabled]):not(.hidden), input:not([disabled]), select:not([disabled])')
+  );
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function generateSuggestionsLlmFailureMessage(response) {
+  const llmStatus = String(response?.llm_tailoring_status || "").trim().toLowerCase();
+  if (!["failed", "unreadable"].includes(llmStatus)) return "";
+  return "AI tailoring did not complete for this job, so no suggestions were produced. Nothing was submitted. Retry, or check the AI provider route if this keeps happening.";
+}
+
+function classifyBulkGenerateSuggestionsResponse(row, response) {
+  const workspaceRow = buildGenerateSuggestionsWorkspaceRow(row, response || {});
+  const action = resolvePlanningWorklistAction(workspaceRow);
+  const llmStatus = String(response?.llm_tailoring_status || "").trim().toLowerCase();
+  const workspaceState = String(
+    response?.tailoring_workspace_state || workspaceRow.tailoring_workspace_state || ""
+  ).trim().toLowerCase();
+  const llmFailed = ["failed", "unreadable"].includes(llmStatus);
+  const label = bulkGenerateSuggestionsJobLabel(row);
+  if (response?.ok === true && !llmFailed) {
+    if (workspaceState === "empty") {
+      return { status: "success", outcome: "empty", label, error: "" };
+    }
+    if (["no_safe_rewrites", "review"].includes(workspaceState)) {
+      return { status: "success", outcome: "no_safe_rewrites", label, error: "" };
+    }
+    if (workspaceState === "ready" || action.kind === "open_workspace") {
+      return { status: "success", outcome: "generated", label, error: "" };
+    }
+  }
+  const error = llmFailed
+    ? generateSuggestionsLlmFailureMessage(response || {})
+    : action.blockedReason || "A usable tailoring workspace was not produced.";
+  return {
+    status: "needs_attention",
+    outcome: "failed",
+    label,
+    error,
+  };
+}
+
+async function executeBulkGenerateSuggestions() {
+  if (bulkGenerateSuggestionsState.isRunning || !bulkGenerateSuggestionsState.total) return;
+  const isRerun = String(bulkGenerateSuggestionsState.mode || "initial") === "rerun";
+  bulkGenerateSuggestionsState.isRunning = true;
+  bulkGenerateSuggestionsState.stopRequested = false;
+  // First-run keeps its existing optimistic running state. A Results Center
+  // re-run defers it until the start is accepted, so the Results workspace is
+  // never dismissed on a start that turns out to be rejected.
+  if (!isRerun) publishPlanningWorklistState();
+  const rows = bulkGenerateSuggestionsState.candidateRows;
+  const runIds = Array.from(new Set(rows.map((row) => String(row.pipeline_run_id || row.run_id || "").trim())));
+  try {
+    if (runIds.length !== 1 || !runIds[0]) {
+      throw new Error("Bulk Generate requires one owner-scoped pipeline run.");
+    }
+    await postJson("/planning/bulk-generation/start", {
+      pipeline_run_id: runIds[0],
+      requested_count: rows.length,
+      candidates: rows.map((row) => {
+        const payload = buildBulkGenerateSuggestionsPayload(row);
+        return {
+          job_identity: String(row.job_doc_id || row.job_url || row.queue_rank || "").trim(),
+          job_doc_id: payload.job_doc_id,
+          queue_rank: payload.queue_rank,
+          selected_resume: payload.selected_resume,
+        };
+      }),
+      review_filter: isRerun ? "" : bulkGenerateSuggestionsState.reviewAction,
+      match_filter: isRerun ? "" : bulkGenerateSuggestionsState.winnerBucket,
+      preference_filter: isRerun ? "" : bulkGenerateSuggestionsState.preferenceId,
+    });
+    closeBulkGenerateSuggestionsOverlay();
+    // Accepted: publish the running state so the Planning control morphs and
+    // the Results workspace closes itself.
+    if (isRerun) publishPlanningWorklistState();
+    await window.ApplyLensBulkGeneration?.refresh?.();
+  } catch (err) {
+    bulkGenerateSuggestionsState.isRunning = false;
+    publishPlanningWorklistState();
+    if (isRerun) {
+      // A rejected re-run must not fall back into the first-run settings
+      // overlay; the Results workspace stays open behind the error.
+      bulkGenerateSuggestionsState.mode = "initial";
+      bulkGenerateSuggestionsState.rerunIdentities = [];
+    } else {
+      renderBulkGenerateSuggestionsOverlay("confirm", getPlanningBulkSuggestionSelection());
+    }
+    showAppError("Bulk Generate could not start", err);
+  }
+}
+
+async function stopBulkGenerateSuggestionsAfterCurrent() {
+  if (!bulkGenerateSuggestionsState.isRunning) return;
+  bulkGenerateSuggestionsState.stopRequested = true;
+  await window.ApplyLensBulkGeneration?.stop?.();
+}
+
+function applyServerBulkGenerationState(eventOrState) {
+  const state = eventOrState?.detail || eventOrState || {};
+  const wasRunning = bulkGenerateSuggestionsState.isRunning;
+  bulkGenerateSuggestionsState.isRunning = !state.verified || Boolean(state.active);
+  bulkGenerateSuggestionsState.stopRequested = Boolean(state.stop_requested);
+  bulkGenerateSuggestionsState.total = Number(state.total || bulkGenerateSuggestionsState.total || 0);
+  bulkGenerateSuggestionsState.completed = Number(state.completed || 0);
+  bulkGenerateSuggestionsState.succeeded = Number(state.succeeded || 0);
+  bulkGenerateSuggestionsState.needsAttention = Number(state.needs_attention || 0);
+  bulkGenerateSuggestionsState.remaining = Number(state.remaining || 0);
+  bulkGenerateSuggestionsState.currentLabel = String(state.current_job_label || state.current_job_identity || "");
+  bulkGenerateSuggestionsState.verified = state.verified !== false;
+  bulkGenerateSuggestionsState.results = Array.isArray(state.items) ? state.items.map((item) => ({
+    status: item.status === "succeeded" ? "success" : item.status,
+    outcome: item.outcome,
+    label: item.job_label || item.job_identity,
+    error: item.error_message || "",
+  })) : [];
+  publishPlanningWorklistState();
+  if (wasRunning && state.terminal) {
+    loadPlanningTable({ forceNetwork: true }).catch((err) => {
+      showAppError("Failed to refresh Planning after Bulk Generate", err);
+    });
+  }
+}
+
+async function acknowledgeBulkGenerateSuggestionsCompletion() {
+  const state = getBulkGenerateSuggestionsOverlay()?.dataset.workflowState;
+  if (!["complete", "stopped"].includes(state || "")) return;
+  closeBulkGenerateSuggestionsOverlay();
+  await loadPlanningTable({ forceNetwork: true });
+}
+
 function getPlanningRowFromTailoringDataset(button) {
   return {
     queue_rank: button.dataset.queueRank || "",
@@ -13039,6 +14076,10 @@ function buildGenerateSuggestionsWorkspaceRow(row, payload = {}) {
       phase71bDeriveRunScopedPlanningOutputDir(artifactPath),
     llm_tailoring_status: payload.llm_tailoring_status || row.llm_tailoring_status || "generated",
     tailoring_workspace_state: payload.tailoring_workspace_state || row.tailoring_workspace_state || "ready",
+    tailoring_actionable_replacement_count:
+      payload.tailoring_actionable_replacement_count ?? row.tailoring_actionable_replacement_count ?? "",
+    tailoring_review_replacement_count:
+      payload.tailoring_review_replacement_count ?? row.tailoring_review_replacement_count ?? "",
   };
 }
 
@@ -13057,6 +14098,7 @@ function extractGenerateSuggestionsError(err) {
 }
 
 async function handleGenerateSuggestionsClick(button) {
+  if (bulkGenerateSuggestionsState.isRunning) return;
   const row = getPlanningRowFromTailoringDataset(button);
   const payload = buildGenerateSuggestionsPayload(row);
   const requestSeq = generateSuggestionsState.requestSeq + 1;
@@ -13092,6 +14134,16 @@ async function handleGenerateSuggestionsClick(button) {
     const workspaceUrl = buildTailoringWorkspaceUrl(workspaceRow);
 
     generateSuggestionsState.lastWorkspaceUrl = workspaceUrl;
+
+    const llmFailureMessage = generateSuggestionsLlmFailureMessage(response || {});
+    if (llmFailureMessage) {
+      setGenerateSuggestionsLoaderState("error", {
+        error: llmFailureMessage,
+        workspaceUrl,
+      });
+      return;
+    }
+
     setGenerateSuggestionsLoaderState("success", {
       workspaceUrl,
       message: "Suggestions are ready.",
@@ -13484,6 +14536,7 @@ function renderPlanningErrorState(error) {
   planningTableState.status = "error";
   planningTableState.message = extractErrorMessage(error) || "Planning results are temporarily unavailable.";
   planningTableState.rows = [];
+  planningTableState.bulkSuggestionRows = [];
   planningTableState.resultKey += 1;
   publishPlanningWorklistState();
 }
@@ -13628,6 +14681,24 @@ function attachPlanningHandlers() {
         await loadPlanningTable({ requestedPage: 1, historyMode: "push" });
         return;
       }
+      if (action.type === "bulk_generate_suggestions") {
+        openBulkGenerateSuggestionsConfirmation();
+        return;
+      }
+      if (action.type === "bulk_stop_after_current") {
+        await stopBulkGenerateSuggestionsAfterCurrent();
+        return;
+      }
+      if (action.type === "bulk_view_results") {
+        await loadBulkGenerationResults({ force: true });
+        // Logos belong to the modal: resolve lazily on open, never at page load.
+        void resolveBulkResultCompanyLogos();
+        return;
+      }
+      if (action.type === "bulk_rerun") {
+        await startBulkGenerateSuggestionsRerun(action.scope, action.jobIdentities);
+        return;
+      }
       if (action.type !== "next_step" || !action.row) return;
 
       const actionState = resolvePlanningWorklistAction(action.row);
@@ -13636,6 +14707,7 @@ function attachPlanningHandlers() {
       if (actionState.kind === "open_workspace") {
         await handleTailoringClick(buttonLike);
       } else if (actionState.kind === "generate_suggestions") {
+        if (bulkGenerateSuggestionsState.isRunning) return;
         await handleGenerateSuggestionsClick(buttonLike);
       }
     } catch (err) {
@@ -13662,6 +14734,41 @@ function attachPlanningHandlers() {
     }
   });
   qs("generateSuggestionsOpenWorkspaceBtn").addEventListener("click", openGenerateSuggestionsWorkspace);
+  qs("bulkGenerateSuggestionsPrimaryBtn").addEventListener("click", async () => {
+    const state = getBulkGenerateSuggestionsOverlay()?.dataset.workflowState;
+    if (state === "confirm") {
+      await startBulkGenerateSuggestionsExecution();
+      return;
+    }
+    if (state === "complete" || state === "stopped") {
+      await acknowledgeBulkGenerateSuggestionsCompletion();
+    }
+  });
+  qs("bulkGenerateSuggestionsSecondaryBtn").addEventListener("click", () => {
+    const state = getBulkGenerateSuggestionsOverlay()?.dataset.workflowState;
+    if (state === "confirm") {
+      closeBulkGenerateSuggestionsOverlay();
+      return;
+    }
+    if (state === "running") void stopBulkGenerateSuggestionsAfterCurrent();
+  });
+  qs("bulkGenerateSuggestionsNumber").addEventListener("input", updateBulkGenerateSuggestionsConfiguration);
+  [
+    "bulkGenerateSuggestionsReviewFilter",
+    "bulkGenerateSuggestionsMatchFilter",
+    "bulkGenerateSuggestionsPreferenceFilter",
+  ].forEach((id) => qs(id).addEventListener("change", updateBulkGenerateSuggestionsConfiguration));
+  qs("bulkGenerateSuggestionsOverlay").addEventListener(
+    "keydown",
+    handleBulkGenerateSuggestionsDialogKeydown
+  );
+
+  window.addEventListener("applylens:bulk-generation-state", applyServerBulkGenerationState);
+  applyServerBulkGenerationState(window.ApplyLensBulkGeneration?.getState?.() || {
+    verified: false,
+    active: true,
+    status: "unknown",
+  });
 
   qs("resumeChoiceList").addEventListener("click", (event) => {
     const choiceButton = event.target.closest("[data-resume-choice='true']");
@@ -13797,7 +14904,8 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   if (isScanWorkspacePage) {
     bindScanWorkspaceDivider();
-    await initScanWorkspacePage();
+    window.scanWorkspacePlanningInitialization = initScanWorkspacePage();
+    await window.scanWorkspacePlanningInitialization;
     return;
   }
 });

@@ -191,6 +191,10 @@ function StateMessage({ icon, title, body }: { icon: "activity" | "database"; ti
 }
 
 export function SourceYield({ state }: { state: SourceYieldState }) {
+  // Top-level drawer state, separate from each SourceRow's own expansion.
+  // Declared before any early return so hook order is stable on every path.
+  const [sectionExpanded, setSectionExpanded] = useState(false);
+
   if (state.status === "loading") {
     return (
       <div className="source-yield-card" aria-label="Loading source yield">
@@ -226,7 +230,25 @@ export function SourceYield({ state }: { state: SourceYieldState }) {
           <span><strong>{count(data.totals.scraped_jobs)}</strong> acquired</span>
           <span className="is-accent"><strong>{count(data.totals.final_display_jobs)}</strong> final jobs</span>
         </div>
+        <button
+          type="button"
+          className="source-yield-section-toggle"
+          aria-expanded={sectionExpanded}
+          aria-controls="sourceYieldBody"
+          onClick={() => setSectionExpanded((open) => !open)}
+        >
+          <span className="sr-only">
+            {sectionExpanded ? "Collapse source yield details" : "Expand source yield details"}
+          </span>
+          <ChevronDown
+            aria-hidden="true"
+            className={`source-yield-section-chevron${sectionExpanded ? " is-expanded" : ""}`}
+            size={18}
+          />
+        </button>
       </header>
+      {sectionExpanded ? (
+      <div className="source-yield-body" id="sourceYieldBody">
       <div className="source-yield-table-wrap">
         <table className="source-yield-table">
           <caption className="sr-only">Source yield funnel metrics for the latest successful pipeline run</caption>
@@ -238,6 +260,8 @@ export function SourceYield({ state }: { state: SourceYieldState }) {
           <tbody>{data.sources.map((row) => <SourceRow key={row.source} row={row} />)}</tbody>
         </table>
       </div>
+      </div>
+      ) : null}
     </section>
   );
 }

@@ -8,6 +8,8 @@ import importlib
 import json
 from pathlib import Path
 
+import pytest
+
 from tests.support.phase_guard_registry import assert_protected_hashes
 import subprocess
 
@@ -404,6 +406,137 @@ def test_known_proposal_ids_and_unknown_ids_are_reported_when_required():
     assert "unknown proposal ids present" in payload["validation_errors"]
 
 
+def test_normalized_noop_provider_proposal_is_rejected():
+    payload = build_controlled_exact_resume_change_set_provider_response_validation_default_off(
+        provider_response=_provider_response(
+            refined_change_proposals=[
+                _proposal(
+                    current_text="  Built Python dashboards.  ",
+                    proposed_text="Built Python dashboards.",
+                )
+            ]
+        ),
+    )
+
+    assert payload["provider_response_valid"] is False
+    assert payload["refined_change_proposals"] == []
+    assert "proposed_text:effective_change" in payload[
+        "missing_required_fields_by_proposal"
+    ]["p1"]
+    assert "invalid refined change proposals present" in payload["validation_errors"]
+    assert "refined proposal must represent an effective text change" in payload[
+        "validation_errors"
+    ]
+
+
+@pytest.mark.parametrize(
+    "marker",
+    (
+        "Built Python dashboards. [Emphasize: AWS]",
+        "Built Python dashboards. [Align with JD term: RAG]",
+    ),
+)
+def test_repository_owned_internal_scaffolding_is_rejected(marker):
+    payload = build_controlled_exact_resume_change_set_provider_response_validation_default_off(
+        provider_response=_provider_response(
+            refined_change_proposals=[_proposal(proposed_text=marker)]
+        ),
+    )
+
+    assert payload["provider_response_valid"] is False
+    assert payload["refined_change_proposals"] == []
+    assert "proposed_text:internal_scaffolding" in payload[
+        "missing_required_fields_by_proposal"
+    ]["p1"]
+    assert "refined proposal contains internal Phase 42 scaffolding" in payload[
+        "validation_errors"
+    ]
+
+
+def test_ordinary_resume_brackets_and_parentheses_remain_valid():
+    payload = build_controlled_exact_resume_change_set_provider_response_validation_default_off(
+        provider_response=_provider_response(
+            refined_change_proposals=[
+                _proposal(
+                    proposed_text=(
+                        "Built analytics dashboards for ACME [internal platform] "
+                        "using Python (3.11)."
+                    )
+                )
+            ]
+        ),
+    )
+
+    assert payload["provider_response_valid"] is True
+    assert payload["valid_refined_change_proposal_count"] == 1
+
+
+def test_provider_refinement_preserves_original_candidate_identity():
+    original = _proposal(proposed_text="Built Python dashboards. [Emphasize: SQL]")
+    refined = _proposal(proposed_text="Built Python and SQL dashboards.")
+    request_packet = {"included_change_proposals": [original]}
+
+    payload = build_controlled_exact_resume_change_set_provider_response_validation_default_off(
+        provider_response=_provider_response(refined_change_proposals=[refined]),
+        original_request_packet=request_packet,
+        validation_policy={"require_known_proposal_ids": True},
+    )
+
+    assert payload["provider_response_valid"] is True
+    proposal = payload["refined_change_proposals"][0]
+    for field in (
+        "proposal_id",
+        "change_type",
+        "target_section",
+        "target_identifier",
+        "current_text",
+    ):
+        assert proposal[field] == original[field]
+
+
+def test_provider_cannot_retarget_a_known_candidate():
+    original = _proposal(proposed_text="Built Python dashboards. [Emphasize: SQL]")
+    retargeted = _proposal(
+        target_identifier="different-bullet",
+        proposed_text="Built Python and SQL dashboards.",
+    )
+    payload = build_controlled_exact_resume_change_set_provider_response_validation_default_off(
+        provider_response=_provider_response(refined_change_proposals=[retargeted]),
+        original_request_packet={"included_change_proposals": [original]},
+        validation_policy={"require_known_proposal_ids": True},
+    )
+
+    assert payload["provider_response_valid"] is False
+    assert "target_identifier:original_candidate" in payload[
+        "missing_required_fields_by_proposal"
+    ]["p1"]
+    assert "refined proposal identity must match the original candidate" in payload[
+        "validation_errors"
+    ]
+
+
+def test_evidence_note_with_empty_current_text_remains_valid():
+    payload = build_controlled_exact_resume_change_set_provider_response_validation_default_off(
+        provider_response=_provider_response(
+            refined_change_proposals=[
+                _proposal(
+                    change_type="evidence_note",
+                    target_section="evidence_review",
+                    target_identifier="missing-evidence:AWS",
+                    current_text="",
+                    proposed_text=(
+                        "Do not add AWS unless source evidence is supplied."
+                    ),
+                    risk_flags=["missing_source_evidence"],
+                )
+            ]
+        ),
+    )
+
+    assert payload["provider_response_valid"] is True
+    assert payload["valid_refined_change_proposal_count"] == 1
+
+
 def test_max_refined_change_proposals_violation_is_reported():
     payload = build_controlled_exact_resume_change_set_provider_response_validation_default_off(
         provider_response=_provider_response(
@@ -539,6 +672,8 @@ def test_protected_runtime_files_are_unchanged_by_hash():
         PROTECTED_HASHES,
         compatibility_profiles=(
             "phase1_ai_provider_model_routing_hash_maintenance",
+            "item71_manual_review_groq_diagnostics_fix",
+            "item71_production_exact_change_refinement",
         ),
     )
 

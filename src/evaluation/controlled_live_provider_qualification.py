@@ -22,12 +22,14 @@ from time import monotonic
 from typing import Any, Callable, Dict, Iterable, Mapping, Sequence
 
 from src.evaluation.controlled_production_parity_benchmark import (
+    MAXIMUM_PRODUCTION_CONTRACT_FAILURES,
     PRODUCTION_PARITY_BLOCKED_WORKLOADS,
     PRODUCTION_PARITY_RUNNABLE_WORKLOADS,
     build_production_parity_request,
     validate_and_grade_production_parity_response,
     validate_production_parity_request,
     validate_production_parity_result,
+    workload_qualification_semantics_sha256,
 )
 from src.evaluation.controlled_provider_benchmark_harness import (
     _schedule_from_plan,
@@ -47,6 +49,7 @@ from src.evaluation.production_task_contract_fingerprints import (
     build_all_production_task_contract_fingerprints,
 )
 from src.evaluation.provider_benchmark_contract import (
+    HARD_FAILURE_ORDER,
     MODEL_ORDER,
     WORKLOAD_ORDER,
     provider_benchmark_contract_sha256,
@@ -57,6 +60,18 @@ LIVE_QUALIFICATION_GATE_VERSION = "controlled-live-qualification-gate-v1"
 LIVE_AUTHORIZATION_VERSION = "controlled-live-qualification-authorization-v1"
 LIVE_PRICING_VERSION = "controlled-live-qualification-pricing-v1"
 LIVE_EVIDENCE_VERSION = "controlled-live-qualification-evidence-v1"
+RENDERER_BOUND_LIVE_AUTHORIZATION_VERSION = (
+    "controlled-live-qualification-authorization-renderer-bound-v1"
+)
+RENDERER_BOUND_LIVE_EVIDENCE_VERSION = (
+    "controlled-live-qualification-evidence-renderer-bound-v1"
+)
+APPROVED_WORKLOAD_SEMANTICS_FIELD = (
+    "approved_workload_qualification_semantics"
+)
+TESTED_WORKLOAD_SEMANTICS_FIELD = (
+    "tested_workload_qualification_semantics_sha256"
+)
 LIVE_VALIDATION_CONTEXT_VERSION = (
     "controlled-live-qualification-validation-context-v1"
 )
@@ -161,8 +176,69 @@ _EVIDENCE_FIELDS = {
     "stop_reason",
     "aggregate_usage",
     "grading_summaries",
+    "failure_diagnostics",
+    "transport_diagnostics",
     "retention_policy",
     "authority_invariants",
+}
+# Transport rejections happen BEFORE grading, so they deliberately do not carry
+# contract/quality-gate fields: fabricating them would misreport a request that
+# never produced a gradeable response. Same bounded-evidence convention as
+# failure_diagnostics, kept as a distinct truthful shape.
+_TRANSPORT_DIAGNOSTIC_FIELDS = {
+    "schedule_key",
+    "workload_id",
+    "provider",
+    "model",
+    "transport_failure_category",
+    "http_status_code",
+    "provider_error_type",
+    "provider_error_code",
+    "provider_error_param",
+    "has_failed_generation",
+}
+# Categorical tokens are accepted only from the repository's established
+# provider-error allowlists; anything else is already reduced to None upstream.
+_TRANSPORT_DIAGNOSTIC_TOKEN_FIELDS = (
+    "provider_error_type",
+    "provider_error_code",
+    "provider_error_param",
+)
+# Bounded, explanatory-only diagnostics for cells that fail the hard safety
+# check. Qualification remains decided by the registry status ladder; these
+# fields exist purely so a rejected cell can be explained after the fact.
+_FAILURE_DIAGNOSTIC_FIELDS = {
+    "schedule_key",
+    "case_alias",
+    "workload_id",
+    "provider",
+    "model",
+    "production_contract_valid",
+    "production_validation_errors",
+    "production_contract_failures",
+    "unsupported_claim_tokens",
+    "quality_gate_passed",
+    "hard_failure_present",
+    "hard_failures",
+    "quality_gate_components",
+    "workload_quality_metrics",
+}
+# Strict allowlist of scalar quality metrics that may be retained in bounded
+# failure diagnostics. Names outside this tuple are never copied, so a future
+# workload cannot silently widen the retained-data surface.
+_BOUNDED_WORKLOAD_METRIC_FIELDS = (
+    "bounded_score_ranges",
+    "reason_grounding",
+    "unsupported_claim_count",
+    "task_quality_passed",
+)
+_QUALITY_GATE_COMPONENT_FIELDS = {
+    "schema_valid",
+    "normalization_succeeded",
+    "required_field_completeness",
+    "authority_preserved",
+    "task_quality_passed",
+    "all_hard_failures_zero",
 }
 _VALIDATION_CONTEXT_FIELDS = {
     "context_version",
@@ -230,11 +306,35 @@ class LiveQualificationAmbiguousTimeout(RuntimeError):
 
 
 class LiveQualificationDefinitiveFailure(RuntimeError):
-    """The provider definitively rejected the single authorized request."""
+    """The provider definitively rejected the single authorized request.
+
+    Optional ``status_code`` is bounded observability only and never affects
+    the stop-reason taxonomy or retry/fallback behavior.
+    """
+
+    def __init__(
+        self,
+        *args: Any,
+        status_code: int | None = None,
+        provider_error: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(*args)
+        self.status_code = None if status_code is None else int(status_code)
+        self.provider_error = dict(provider_error) if provider_error else None
 
 
 class LiveQualificationUnknownOutcome(RuntimeError):
     """The provider outcome cannot be safely classified."""
+
+    def __init__(
+        self,
+        *args: Any,
+        status_code: int | None = None,
+        provider_error: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(*args)
+        self.status_code = None if status_code is None else int(status_code)
+        self.provider_error = dict(provider_error) if provider_error else None
 
 
 class LiveQualificationPersistenceFailure(RuntimeError):
@@ -246,6 +346,37 @@ def _bounded_transport_failure_stop_reason(value: Any) -> str:
     if category in _BOUNDED_TRANSPORT_FAILURE_STOP_REASONS:
         return category
     return "unknown_provider_outcome"
+
+
+def _safe_transport_provider_error(value: Any) -> Dict[str, Any]:
+    """Re-read only the bounded provider-error projection the adapter attached."""
+
+    payload = getattr(value, "provider_error", None)
+    if not isinstance(payload, Mapping):
+        return {
+            "provider_error_type": None,
+            "provider_error_code": None,
+            "provider_error_param": None,
+            "has_failed_generation": False,
+        }
+    return {
+        "provider_error_type": _clean(payload.get("provider_error_type")) or None,
+        "provider_error_code": _clean(payload.get("provider_error_code")) or None,
+        "provider_error_param": _clean(payload.get("provider_error_param")) or None,
+        "has_failed_generation": bool(payload.get("has_failed_generation", False)),
+    }
+
+
+def _safe_transport_status_code(value: Any) -> int | None:
+    """Read only the bounded integer status attribute a transport error carries."""
+
+    status_code = getattr(value, "status_code", None)
+    if isinstance(status_code, bool):
+        return None
+    try:
+        return int(status_code)
+    except (TypeError, ValueError):
+        return None
 
 
 def _require(condition: bool, message: str) -> None:
@@ -264,6 +395,14 @@ def _canonical_json(value: Any) -> str:
 
 def _sha256(value: Any) -> str:
     return sha256(_canonical_json(value).encode("utf-8")).hexdigest()
+
+
+def _is_sha256_digest(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
 
 
 def _clean(value: Any) -> str:
@@ -306,6 +445,147 @@ def _contains_prohibited_serialized_key(value: Any) -> bool:
     return any(key in _PROHIBITED_SERIALIZED_KEYS for key in _iter_keys(value))
 
 
+MAXIMUM_UNSUPPORTED_CLAIM_TOKENS = 16
+
+
+def _safe_unsupported_claim_tokens(value: Any) -> list[str]:
+    """Retain only tokens the closed claim extractor itself recognizes.
+
+    The grader derives these from a fixed regex vocabulary, so re-running that
+    extractor over each candidate token is an independent guarantee that no
+    free provider text, direction sentence, or prompt fragment can enter the
+    evidence even if an upstream projection changed.
+    """
+
+    from src.evaluation.controlled_production_parity_benchmark import _claim_tokens
+
+    if not isinstance(value, list):
+        return []
+    accepted: list[str] = []
+    for item in value:
+        token = _clean(item).lower()
+        if not token or token in accepted:
+            continue
+        # A token survives only when it round-trips through the closed extractor.
+        if _claim_tokens(token) == [token]:
+            accepted.append(token)
+    return sorted(accepted)[:MAXIMUM_UNSUPPORTED_CLAIM_TOKENS]
+
+
+def _safe_bounded_workload_metrics(value: Any) -> Dict[str, Any]:
+    """Return only allowlisted scalar quality metrics.
+
+    Text can never enter: each retained value must already be a bool, an int
+    or a finite float, and anything else is dropped rather than serialized.
+    """
+
+    source = value if isinstance(value, dict) else {}
+    metrics: Dict[str, Any] = {}
+    for name in _BOUNDED_WORKLOAD_METRIC_FIELDS:
+        if name not in source:
+            continue
+        item = source[name]
+        if isinstance(item, bool):
+            metrics[name] = item
+        elif isinstance(item, int):
+            metrics[name] = int(item)
+        elif isinstance(item, float) and math.isfinite(item):
+            metrics[name] = float(item)
+    return metrics
+
+
+def _bounded_failure_diagnostic(
+    *,
+    schedule_key: str,
+    scheduled: Mapping[str, Any],
+    parity_result: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Explain one failed cell using only values the graders already produced.
+
+    Nothing here is reconstructed from provider output: the raw response, the
+    normalized output and the request packet are all deliberately excluded so
+    the artifact stays safe to retain. Counter ordering follows the
+    authoritative HARD_FAILURE_ORDER so the evidence digest stays deterministic.
+    """
+
+    quality = parity_result.get("benchmark_quality")
+    quality = quality if isinstance(quality, dict) else {}
+    raw_hard_failures = quality.get("hard_failures")
+    raw_hard_failures = (
+        raw_hard_failures if isinstance(raw_hard_failures, dict) else {}
+    )
+    hard_failures = {
+        failure_id: int(raw_hard_failures.get(failure_id, 0) or 0)
+        for failure_id in HARD_FAILURE_ORDER
+    }
+    workload_metrics = quality.get("workload_metrics")
+    workload_metrics = (
+        workload_metrics if isinstance(workload_metrics, dict) else {}
+    )
+    unsupported_claim_tokens = _safe_unsupported_claim_tokens(
+        quality.get("unsupported_claim_tokens")
+    )
+    # Only bounded codes are retained. The production normalizer intentionally
+    # discards its exception, so there is no exception text to serialize.
+    validation_errors = [
+        _clean(code)
+        for code in list(parity_result.get("production_validation_errors") or [])
+        if _clean(code)
+    ]
+    # Bounded structured detail produced by the parity layer from typed
+    # attributes only. Deterministic order; provider values never appear.
+    contract_failures = [
+        {
+            "code": _clean(row.get("code")),
+            "index": row.get("index") if isinstance(row.get("index"), int) else None,
+            "count": row.get("count") if isinstance(row.get("count"), int) else None,
+        }
+        for row in list(parity_result.get("production_contract_failures") or [])
+        if isinstance(row, dict) and _clean(row.get("code"))
+    ]
+
+    return {
+        "schedule_key": schedule_key,
+        "case_alias": scheduled["case_alias"],
+        "workload_id": scheduled["workload_id"],
+        "provider": scheduled["provider"],
+        "model": scheduled["model"],
+        "production_contract_valid": bool(
+            parity_result.get("production_contract_valid", False)
+        ),
+        "production_validation_errors": validation_errors,
+        "production_contract_failures": contract_failures,
+        "unsupported_claim_tokens": unsupported_claim_tokens,
+        "quality_gate_passed": bool(quality.get("quality_gate_passed", False)),
+        "hard_failure_present": any(value != 0 for value in hard_failures.values()),
+        "hard_failures": hard_failures,
+        "quality_gate_components": {
+            "schema_valid": bool(quality.get("schema_valid_response", 0.0)),
+            "normalization_succeeded": bool(
+                quality.get("normalization_success", 0.0)
+            ),
+            "required_field_completeness": float(
+                quality.get("required_field_completeness", 0.0) or 0.0
+            ),
+            "authority_preserved": hard_failures[
+                "deterministic_authority_mutation"
+            ]
+            == 0,
+            "task_quality_passed": bool(
+                workload_metrics.get("task_quality_passed", False)
+            ),
+            "all_hard_failures_zero": all(
+                value == 0 for value in hard_failures.values()
+            ),
+        },
+        # Read-only observability. These scalars explain WHICH task-quality
+        # component failed; they never influence any qualification decision.
+        "workload_quality_metrics": _safe_bounded_workload_metrics(
+            workload_metrics
+        ),
+    }
+
+
 def _iter_strings(value: Any) -> Iterable[str]:
     if isinstance(value, dict):
         for item in value.values():
@@ -337,7 +617,7 @@ def _ordered_unique(values: Iterable[Any]) -> list[Any]:
 def build_live_qualification_universe(
     plan: Dict[str, Any] | None = None,
 ) -> list[Dict[str, Any]]:
-    """Derive all 44 historical rows and their current live eligibility."""
+    """Derive the validated staged rows and their current live eligibility."""
 
     controlled_plan = (
         build_controlled_provider_benchmark_plan()
@@ -365,18 +645,40 @@ def build_live_qualification_universe(
                 ),
             }
         )
-    _require(len(rows) == 44, "canonical historical plan size changed")
+    staged_matrix = controlled_plan["staged_matrix"]
     _require(
-        sum(row["live_qualification_eligible"] for row in rows) == 44,
-        "production-qualifiable universe size changed",
+        len(rows) == len(staged_matrix),
+        "live universe row count does not match the validated staged plan",
     )
+    # Eligibility is derived from the canonical rule for every row rather than
+    # pinned to a historical universe size, so adding valid cases to an already
+    # runnable workload is not a failure while a runnable workload losing its
+    # fingerprint, or a blocked workload becoming eligible, still fails closed.
+    expected_eligible = [
+        (
+            row["workload_id"] in PRODUCTION_PARITY_RUNNABLE_WORKLOADS
+            and row["production_task_contract_sha256"] is not None
+        )
+        for row in rows
+    ]
+    _require(
+        [row["live_qualification_eligible"] for row in rows]
+        == expected_eligible,
+        "live qualification eligibility does not match the canonical rule",
+    )
+    _require(
+        sum(row["live_qualification_eligible"] for row in rows)
+        == sum(expected_eligible),
+        "production-qualifiable universe size does not match the canonical rule",
+    )
+    plan_workloads = {row["workload_id"] for row in staged_matrix}
     _require(
         {
             row["workload_id"]
             for row in rows
             if not row["live_qualification_eligible"]
         }
-        == set(PRODUCTION_PARITY_BLOCKED_WORKLOADS),
+        == (set(PRODUCTION_PARITY_BLOCKED_WORKLOADS) & plan_workloads),
         "live-blocked workload set changed",
     )
     return deepcopy(rows)
@@ -695,11 +997,13 @@ def _default_dispatch(
     scheduled: Mapping[str, Any],
     plan: Dict[str, Any],
     monotonic_clock: Callable[[], float],
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     consumer = lambda response: validate_and_grade_production_parity_response(
         parity_request,
         response,
         plan=plan,
+        corpus=corpus,
     )
     try:
         if provider == "groq":
@@ -712,6 +1016,7 @@ def _default_dispatch(
                 parity_response_consumer=consumer,
                 monotonic_clock=monotonic_clock,
                 plan=plan,
+                corpus=corpus,
             )
         if provider == "openai":
             from src.evaluation import controlled_openai_canary_transport as transport
@@ -723,6 +1028,7 @@ def _default_dispatch(
                 parity_response_consumer=consumer,
                 monotonic_clock=monotonic_clock,
                 plan=plan,
+                corpus=corpus,
             )
     except Exception as exc:
         name = exc.__class__.__name__
@@ -730,11 +1036,26 @@ def _default_dispatch(
             raise LiveQualificationAmbiguousTimeout("ambiguous_timeout") from None
         if name == "DefinitiveTransportFailure":
             category = _bounded_transport_failure_stop_reason(exc)
+            # Bounded integer/categorical only; classification is unchanged.
+            status_code = _safe_transport_status_code(exc)
+            provider_error = _safe_transport_provider_error(exc)
             if category == "unknown_provider_outcome":
-                raise LiveQualificationUnknownOutcome(category) from None
-            raise LiveQualificationDefinitiveFailure(category) from None
+                raise LiveQualificationUnknownOutcome(
+                    category,
+                    status_code=status_code,
+                    provider_error=provider_error,
+                ) from None
+            raise LiveQualificationDefinitiveFailure(
+                category,
+                status_code=status_code,
+                provider_error=provider_error,
+            ) from None
         if name == "UnknownProviderOutcome":
-            raise LiveQualificationUnknownOutcome("unknown_provider_outcome") from None
+            raise LiveQualificationUnknownOutcome(
+                "unknown_provider_outcome",
+                status_code=_safe_transport_status_code(exc),
+                provider_error=_safe_transport_provider_error(exc),
+            ) from None
         raise
     raise LiveQualificationDefinitiveFailure("unsupported_provider")
 
@@ -746,9 +1067,13 @@ def _empty_evidence(
     authorization: Dict[str, Any],
     pricing: Dict[str, Any],
     requested_schedule_keys: list[str],
+    evidence_version: str = LIVE_EVIDENCE_VERSION,
 ) -> Dict[str, Any]:
+    # ``authorization`` is always the V1 core object. The renderer-bound
+    # generation differs only in its evidence version and its per-summary
+    # tested-semantics field, so every binding below stays byte-identical.
     return {
-        "evidence_version": LIVE_EVIDENCE_VERSION,
+        "evidence_version": evidence_version,
         "gate_version": LIVE_QUALIFICATION_GATE_VERSION,
         "execution_mode": "controlled_live_operator_qualification",
         "execution_at_utc": execution_at_utc,
@@ -777,6 +1102,8 @@ def _empty_evidence(
             },
         },
         "grading_summaries": [],
+        "failure_diagnostics": [],
+        "transport_diagnostics": [],
         "retention_policy": {
             "automatic_persistence": False,
             "explicit_persistence_required": True,
@@ -873,6 +1200,121 @@ def validate_live_qualification_evidence(
         and set(summary_keys).issubset(set(attempted)),
         "live evidence grading summary scope is invalid",
     )
+    diagnostics = evidence["failure_diagnostics"]
+    _require(
+        isinstance(diagnostics, list)
+        and all(
+            isinstance(row, dict) and set(row) == _FAILURE_DIAGNOSTIC_FIELDS
+            for row in diagnostics
+        ),
+        "live evidence failure diagnostics are invalid",
+    )
+    transport_rows = evidence["transport_diagnostics"]
+    _require(
+        isinstance(transport_rows, list)
+        and all(
+            isinstance(row, dict)
+            and set(row) == _TRANSPORT_DIAGNOSTIC_FIELDS
+            and isinstance(row["transport_failure_category"], str)
+            # Mirrors exactly what _bounded_transport_failure_stop_reason can
+            # return: a bounded member, or the fail-closed generic outcome for
+            # unrecognized detail.
+            and row["transport_failure_category"]
+            in (
+                _BOUNDED_TRANSPORT_FAILURE_STOP_REASONS
+                | {"unknown_provider_outcome"}
+            )
+            and (
+                row["http_status_code"] is None
+                or (
+                    isinstance(row["http_status_code"], int)
+                    and not isinstance(row["http_status_code"], bool)
+                )
+            )
+            and isinstance(row["has_failed_generation"], bool)
+            for row in transport_rows
+        ),
+        "live evidence transport diagnostics are invalid",
+    )
+    from src.ai.llm_client import (
+        _SAFE_PROVIDER_ERROR_CODES,
+        _SAFE_PROVIDER_ERROR_PARAMS,
+        _SAFE_PROVIDER_ERROR_TYPES,
+    )
+
+    allowed_tokens = {
+        "provider_error_type": _SAFE_PROVIDER_ERROR_TYPES,
+        "provider_error_code": _SAFE_PROVIDER_ERROR_CODES,
+        "provider_error_param": _SAFE_PROVIDER_ERROR_PARAMS,
+    }
+    _require(
+        all(
+            row[field] is None or row[field] in allowed_tokens[field]
+            for row in transport_rows
+            for field in _TRANSPORT_DIAGNOSTIC_TOKEN_FIELDS
+        ),
+        "live evidence transport diagnostic tokens are not allowlisted",
+    )
+    transport_keys = [row["schedule_key"] for row in transport_rows]
+    _require(
+        len(transport_keys) == len(set(transport_keys))
+        and set(transport_keys).issubset(set(evidence["blocked_schedule_keys"])),
+        "live evidence transport diagnostic scope is invalid",
+    )
+    diagnostic_keys = [row["schedule_key"] for row in diagnostics]
+    _require(
+        len(diagnostic_keys) == len(set(diagnostic_keys))
+        and set(diagnostic_keys).issubset(set(evidence["blocked_schedule_keys"])),
+        "live evidence failure diagnostic scope is invalid",
+    )
+    for diagnostic in diagnostics:
+        _require(
+            isinstance(diagnostic["hard_failures"], dict)
+            and set(diagnostic["hard_failures"]) == set(HARD_FAILURE_ORDER)
+            and all(
+                isinstance(value, int)
+                for value in diagnostic["hard_failures"].values()
+            ),
+            "live evidence failure diagnostic counters are invalid",
+        )
+        _require(
+            isinstance(diagnostic["quality_gate_components"], dict)
+            and set(diagnostic["quality_gate_components"])
+            == _QUALITY_GATE_COMPONENT_FIELDS,
+            "live evidence failure diagnostic gate components are invalid",
+        )
+        _require(
+            isinstance(diagnostic["production_validation_errors"], list)
+            and all(
+                isinstance(code, str) and code
+                for code in diagnostic["production_validation_errors"]
+            ),
+            "live evidence failure diagnostic validation codes are invalid",
+        )
+        _require(
+            isinstance(diagnostic["production_contract_failures"], list)
+            and len(diagnostic["production_contract_failures"])
+            <= MAXIMUM_PRODUCTION_CONTRACT_FAILURES
+            and all(
+                isinstance(row, dict)
+                and set(row) == {"code", "index", "count"}
+                and isinstance(row["code"], str)
+                and bool(row["code"])
+                and (row["index"] is None or isinstance(row["index"], int))
+                and (row["count"] is None or isinstance(row["count"], int))
+                for row in diagnostic["production_contract_failures"]
+            ),
+            "live evidence failure diagnostic contract failures are invalid",
+        )
+        tokens = diagnostic["unsupported_claim_tokens"]
+        _require(
+            isinstance(tokens, list)
+            and len(tokens) <= MAXIMUM_UNSUPPORTED_CLAIM_TOKENS
+            and tokens == sorted(set(tokens))
+            and all(isinstance(token, str) and token for token in tokens)
+            and tokens == _safe_unsupported_claim_tokens(tokens),
+            "live evidence unsupported claim tokens are invalid",
+        )
     universe = {
         row["schedule_key"]: row
         for row in build_live_qualification_universe(plan)
@@ -990,6 +1432,7 @@ def _validate_transport_result(
     scheduled: Mapping[str, Any],
     parity_request: Dict[str, Any],
     plan: Dict[str, Any],
+    corpus: Dict[str, Any] | None = None,
 ) -> bool:
     _require(isinstance(result, dict), "live transport result is required")
     missing_usage = _TRANSPORT_RESULT_FIELDS - set(result)
@@ -1009,6 +1452,7 @@ def _validate_transport_result(
         result["parity_result"],
         request=parity_request,
         plan=plan,
+        corpus=corpus,
     )
     return True
 
@@ -1027,8 +1471,15 @@ def execute_controlled_live_qualification(
     validation_context_target: str | Path | None = None,
     review_packet_target: str | Path | None = None,
     repository_root: str | Path | None = None,
+    corpus: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    """Execute an explicitly authorized serial subset; never update registry."""
+    """Execute an explicitly authorized serial subset; never update registry.
+
+    The supplied authorization generation selects the emitted evidence
+    generation: a V1 authorization emits V1 evidence and a renderer-bound
+    authorization natively emits renderer-bound evidence. There is no caller
+    flag that can request one generation while supplying the other.
+    """
 
     _require(callable(execution_time_source), "execution timestamp source is required")
     _require(callable(monotonic_clock), "monotonic clock is required")
@@ -1063,14 +1514,59 @@ def execute_controlled_live_qualification(
         )
     execution_at_utc = execution_time_source()
     controlled_plan = deepcopy(plan)
-    authorization = deepcopy(live_authorization)
+    supplied_authorization = deepcopy(live_authorization)
     pricing_payload = deepcopy(pricing)
-    validate_live_authorization(
-        authorization,
-        plan=controlled_plan,
-        pricing=pricing_payload,
-        execution_at_utc=execution_at_utc,
+    _require(
+        isinstance(supplied_authorization, dict),
+        "live authorization must be a mapping",
     )
+    supplied_generation = supplied_authorization.get("authorization_version")
+    _require(
+        supplied_generation
+        in {
+            LIVE_AUTHORIZATION_VERSION,
+            RENDERER_BOUND_LIVE_AUTHORIZATION_VERSION,
+        },
+        "live authorization generation is unrecognized",
+    )
+    renderer_bound = (
+        supplied_generation == RENDERER_BOUND_LIVE_AUTHORIZATION_VERSION
+    )
+    if renderer_bound:
+        # The renderer-bound object is the authoritative provenance. It is
+        # validated in full, against the explicit corpus, before any transport.
+        validate_renderer_bound_live_authorization(
+            supplied_authorization,
+            plan=controlled_plan,
+            pricing=pricing_payload,
+            execution_at_utc=execution_at_utc,
+            corpus=corpus,
+        )
+        renderer_bound_authorization = supplied_authorization
+        # Internal compatibility projection only, so the shared execution core
+        # keeps reading the exact V1 field set. It is not an alternative
+        # provenance: the renderer-bound evidence validator recomputes the
+        # authorization digest from this same projection.
+        authorization = _v1_projection_of_renderer_bound_authorization(
+            supplied_authorization
+        )
+        # No renderer-bound persistence writer exists yet, so fail closed
+        # rather than emitting a V1 artifact for renderer-bound evidence.
+        _require(
+            evidence_target is None
+            and validation_context_target is None
+            and review_packet_target is None,
+            "renderer-bound live evidence persistence is not supported",
+        )
+    else:
+        renderer_bound_authorization = None
+        authorization = supplied_authorization
+        validate_live_authorization(
+            authorization,
+            plan=controlled_plan,
+            pricing=pricing_payload,
+            execution_at_utc=execution_at_utc,
+        )
     eligible = _eligible_rows_by_key(controlled_plan)
     requested = list(requested_schedule_keys)
     _require(bool(requested) and len(requested) == len(set(requested)), "requested schedule subset is invalid")
@@ -1078,6 +1574,22 @@ def execute_controlled_live_qualification(
     expected_requested_order = [key for key in authorization["approved_schedule_keys"] if key in requested]
     _require(requested == expected_requested_order, "requested schedule subset must remain serial")
     rows = [eligible[key] for key in requested]
+    approved_workload_semantics = None
+    if renderer_bound:
+        approved_workload_semantics = renderer_bound_authorization[
+            APPROVED_WORKLOAD_SEMANTICS_FIELD
+        ]
+        for scheduled in rows:
+            _require(
+                scheduled["workload_id"] in approved_workload_semantics,
+                "scheduled workload has no approved qualification semantics",
+            )
+            _require(
+                _is_sha256_digest(
+                    approved_workload_semantics[scheduled["workload_id"]]
+                ),
+                "approved workload qualification semantics is malformed",
+            )
     review_requirements = canonical_human_review_requirements()
     if review_packet_target is not None:
         _require(
@@ -1092,8 +1604,17 @@ def execute_controlled_live_qualification(
         and all(isinstance(operator_credentials[key], str) and bool(operator_credentials[key].strip()) for key in required_providers),
         "exact explicit operator evaluation credentials are required",
     )
+    # The execution corpus is bound into the default dispatcher rather than
+    # passed at call time, so injected test dispatchers keep their exact
+    # existing signature.
+    def _corpus_bound_default_dispatch(**dispatch_kwargs):
+        return _default_dispatch(**dispatch_kwargs, corpus=corpus)
+
     dispatchers = (
-        {"groq": _default_dispatch, "openai": _default_dispatch}
+        {
+            "groq": _corpus_bound_default_dispatch,
+            "openai": _corpus_bound_default_dispatch,
+        }
         if transport_dispatchers is None
         else dict(transport_dispatchers)
     )
@@ -1104,6 +1625,11 @@ def execute_controlled_live_qualification(
         authorization=authorization,
         pricing=pricing_payload,
         requested_schedule_keys=requested,
+        evidence_version=(
+            RENDERER_BOUND_LIVE_EVIDENCE_VERSION
+            if renderer_bound
+            else LIVE_EVIDENCE_VERSION
+        ),
     )
     prices = _pricing_map(pricing_payload)
     review_parity_result = None
@@ -1119,14 +1645,20 @@ def execute_controlled_live_qualification(
             provider=scheduled["provider"],
             model=scheduled["model"],
             plan=controlled_plan,
+            corpus=corpus,
             live_execution_requested=False,
         )
         parity_request = build_production_parity_request(
             packet,
             plan=controlled_plan,
             expected_task_contract_sha256=fingerprints[scheduled["workload_id"]],
+            corpus=corpus,
         )
-        validate_production_parity_request(parity_request, plan=controlled_plan)
+        validate_production_parity_request(
+            parity_request,
+            plan=controlled_plan,
+            corpus=corpus,
+        )
         _require(
             parity_request["task_parameters"]["max_tokens"]
             <= ceilings["maximum_output_tokens_per_request"],
@@ -1175,7 +1707,35 @@ def execute_controlled_live_qualification(
             break
         except LiveQualificationDefinitiveFailure as exc:
             evidence["blocked_schedule_keys"].append(key)
-            evidence["stop_reason"] = _bounded_transport_failure_stop_reason(exc)
+            category = _bounded_transport_failure_stop_reason(exc)
+            evidence["stop_reason"] = category
+            # Additive only: the stop reason above is unchanged.
+            evidence["transport_diagnostics"].append(
+                {
+                    "schedule_key": key,
+                    "workload_id": scheduled["workload_id"],
+                    "provider": scheduled["provider"],
+                    "model": scheduled["model"],
+                    "transport_failure_category": category,
+                    "http_status_code": _safe_transport_status_code(exc),
+                    **_safe_transport_provider_error(exc),
+                }
+            )
+            break
+        except LiveQualificationUnknownOutcome as exc:
+            evidence["blocked_schedule_keys"].append(key)
+            evidence["stop_reason"] = "unknown_provider_outcome"
+            evidence["transport_diagnostics"].append(
+                {
+                    "schedule_key": key,
+                    "workload_id": scheduled["workload_id"],
+                    "provider": scheduled["provider"],
+                    "model": scheduled["model"],
+                    "transport_failure_category": "unknown_provider_outcome",
+                    "http_status_code": _safe_transport_status_code(exc),
+                    **_safe_transport_provider_error(exc),
+                }
+            )
             break
         except Exception:
             evidence["blocked_schedule_keys"].append(key)
@@ -1187,6 +1747,7 @@ def execute_controlled_live_qualification(
                 scheduled=scheduled,
                 parity_request=parity_request,
                 plan=controlled_plan,
+                corpus=corpus,
             )
         except ValueError as exc:
             evidence["blocked_schedule_keys"].append(key)
@@ -1210,31 +1771,35 @@ def execute_controlled_live_qualification(
         hard_failure_present = any(hard_failures.values())
         quality_passed = parity_result["benchmark_quality"]["quality_gate_passed"]
         production_valid = parity_result["production_contract_valid"]
-        evidence["grading_summaries"].append(
-            {
-                "schedule_key": key,
-                "case_alias": scheduled["case_alias"],
-                "workload_id": scheduled["workload_id"],
-                "provider": scheduled["provider"],
-                "model": scheduled["model"],
-                "production_task_contract_sha256": scheduled[
-                    "production_task_contract_sha256"
-                ],
-                "production_contract_valid": production_valid,
-                "benchmark_quality_passed": quality_passed,
-                "hard_failure_present": hard_failure_present,
-                "human_review_required": review_requirements[
-                    scheduled["workload_id"]
-                ],
-                "provider_outcome_category": result[
-                    "provider_outcome_category"
-                ],
-                "latency_ms": float(result["latency_ms"]),
-                "input_token_count": input_tokens,
-                "output_token_count": output_tokens,
-                "observed_cost": float(observed_cost),
-            }
-        )
+        grading_summary = {
+            "schedule_key": key,
+            "case_alias": scheduled["case_alias"],
+            "workload_id": scheduled["workload_id"],
+            "provider": scheduled["provider"],
+            "model": scheduled["model"],
+            "production_task_contract_sha256": scheduled[
+                "production_task_contract_sha256"
+            ],
+            "production_contract_valid": production_valid,
+            "benchmark_quality_passed": quality_passed,
+            "hard_failure_present": hard_failure_present,
+            "human_review_required": review_requirements[
+                scheduled["workload_id"]
+            ],
+            "provider_outcome_category": result["provider_outcome_category"],
+            "latency_ms": float(result["latency_ms"]),
+            "input_token_count": input_tokens,
+            "output_token_count": output_tokens,
+            "observed_cost": float(observed_cost),
+        }
+        if renderer_bound:
+            # Copied from the already validated authorization. It is never
+            # derived here, so the summary records what was authorized and
+            # tested rather than whatever current code would compute now.
+            grading_summary[TESTED_WORKLOAD_SEMANTICS_FIELD] = (
+                approved_workload_semantics[scheduled["workload_id"]]
+            )
+        evidence["grading_summaries"].append(grading_summary)
         if (
             input_tokens > ceilings["maximum_input_tokens_per_request"]
             or output_tokens > ceilings["maximum_output_tokens_per_request"]
@@ -1256,6 +1821,16 @@ def execute_controlled_live_qualification(
             evidence["stop_reason"] = "cost_ceiling_exceeded"
             break
         if not production_valid or not quality_passed or hard_failure_present:
+            # Capture the bounded explanation before fail-fast exit; without
+            # this the rejected cell keeps only its status/reason codes and the
+            # reason for rejection is unrecoverable.
+            evidence["failure_diagnostics"].append(
+                _bounded_failure_diagnostic(
+                    schedule_key=key,
+                    scheduled=scheduled,
+                    parity_result=parity_result,
+                )
+            )
             evidence["blocked_schedule_keys"].append(key)
             evidence["stop_reason"] = "hard_safety_failure"
             break
@@ -1267,12 +1842,21 @@ def execute_controlled_live_qualification(
         and evidence["completed_schedule_keys"] == requested
     ):
         evidence["execution_status"] = "completed"
-    validate_live_qualification_evidence(
-        evidence,
-        plan=controlled_plan,
-        authorization=authorization,
-        pricing=pricing_payload,
-    )
+    if renderer_bound:
+        validate_renderer_bound_live_qualification_evidence(
+            evidence,
+            plan=controlled_plan,
+            authorization=renderer_bound_authorization,
+            pricing=pricing_payload,
+            corpus=corpus,
+        )
+    else:
+        validate_live_qualification_evidence(
+            evidence,
+            plan=controlled_plan,
+            authorization=authorization,
+            pricing=pricing_payload,
+        )
     validation_context = None
     if validation_context_target is not None:
         validation_context = build_live_qualification_validation_context(
@@ -1354,6 +1938,300 @@ def serialize_live_qualification_evidence(
         pricing=pricing,
     )
     return _canonical_json(payload)
+
+
+def build_workload_qualification_semantics_fingerprints(
+    plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
+) -> Dict[str, str]:
+    """Return the current Stage 1 workload semantics digest per workload.
+
+    The calculation itself is owned by the production-parity module; this only
+    binds it into the controlled execution contract.
+    """
+
+    controlled_plan = (
+        build_controlled_provider_benchmark_plan(corpus=corpus)
+        if plan is None
+        else deepcopy(plan)
+    )
+    validate_controlled_provider_benchmark_plan(controlled_plan)
+    return {
+        workload_id: workload_qualification_semantics_sha256(
+            workload_id,
+            plan=controlled_plan,
+            corpus=corpus,
+        )
+        for workload_id in sorted(PRODUCTION_PARITY_RUNNABLE_WORKLOADS)
+    }
+
+
+def build_renderer_bound_live_qualification_universe(
+    plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
+) -> list[Dict[str, Any]]:
+    """Return the live universe with the approved workload semantics bound in.
+
+    The digest is fixed here, before any provider request, exactly as the
+    production task-contract fingerprint already is.
+    """
+
+    controlled_plan = (
+        build_controlled_provider_benchmark_plan(corpus=corpus)
+        if plan is None
+        else deepcopy(plan)
+    )
+    validate_controlled_provider_benchmark_plan(controlled_plan)
+    semantics = build_workload_qualification_semantics_fingerprints(
+        controlled_plan,
+        corpus=corpus,
+    )
+    rows = []
+    for row in build_live_qualification_universe(controlled_plan):
+        workload_id = row["workload_id"]
+        _require(
+            workload_id in semantics,
+            "renderer-bound universe is missing a workload semantics digest",
+        )
+        rows.append(
+            {
+                **deepcopy(row),
+                TESTED_WORKLOAD_SEMANTICS_FIELD: semantics[workload_id],
+            }
+        )
+    return rows
+
+
+def build_renderer_bound_live_authorization(
+    authorization: Dict[str, Any],
+    *,
+    plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Return a renderer-bound authorization from an exact V1 authorization.
+
+    V1 authorizations are never mutated; the operator approves the exact
+    workload semantics that a later renderer-bound execution may test.
+    """
+
+    base = deepcopy(authorization)
+    _require(
+        isinstance(base, dict) and set(base) == _AUTHORIZATION_FIELDS,
+        "renderer-bound authorization requires an exact V1 authorization",
+    )
+    _require(
+        base["authorization_version"] == LIVE_AUTHORIZATION_VERSION,
+        "renderer-bound authorization requires the current V1 version",
+    )
+    semantics = build_workload_qualification_semantics_fingerprints(
+        plan,
+        corpus=corpus,
+    )
+    approved = {
+        workload_id: semantics[workload_id]
+        for workload_id in sorted(base["approved_workload_ids"])
+        if workload_id in semantics
+    }
+    _require(
+        set(approved) == set(base["approved_workload_ids"]),
+        "renderer-bound authorization workload scope is not qualifiable",
+    )
+    base["authorization_version"] = RENDERER_BOUND_LIVE_AUTHORIZATION_VERSION
+    base[APPROVED_WORKLOAD_SEMANTICS_FIELD] = approved
+    return base
+
+
+def _v1_projection_of_renderer_bound_authorization(
+    authorization: Mapping[str, Any],
+) -> Dict[str, Any]:
+    projected = {
+        field: deepcopy(authorization[field])
+        for field in _AUTHORIZATION_FIELDS
+    }
+    projected["authorization_version"] = LIVE_AUTHORIZATION_VERSION
+    return projected
+
+
+def _v1_projection_of_renderer_bound_evidence(
+    evidence: Mapping[str, Any],
+) -> Dict[str, Any]:
+    projected = {
+        field: deepcopy(evidence[field]) for field in _EVIDENCE_FIELDS
+    }
+    projected["evidence_version"] = LIVE_EVIDENCE_VERSION
+    projected["grading_summaries"] = [
+        {field: deepcopy(summary[field]) for field in _SUMMARY_FIELDS}
+        for summary in evidence["grading_summaries"]
+    ]
+    return projected
+
+
+def validate_renderer_bound_live_authorization(
+    authorization: Dict[str, Any],
+    *,
+    plan: Dict[str, Any],
+    pricing: Dict[str, Any],
+    execution_at_utc: str,
+    corpus: Dict[str, Any] | None = None,
+) -> bool:
+    """Validate a renderer-bound authorization beside the untouched V1 rules."""
+
+    _require(
+        isinstance(authorization, dict)
+        and set(authorization)
+        == (_AUTHORIZATION_FIELDS | {APPROVED_WORKLOAD_SEMANTICS_FIELD}),
+        "renderer-bound authorization fields are invalid",
+    )
+    _require(
+        authorization["authorization_version"]
+        == RENDERER_BOUND_LIVE_AUTHORIZATION_VERSION,
+        "renderer-bound authorization version mismatch",
+    )
+    validate_live_authorization(
+        _v1_projection_of_renderer_bound_authorization(authorization),
+        plan=plan,
+        pricing=pricing,
+        execution_at_utc=execution_at_utc,
+    )
+    approved = authorization[APPROVED_WORKLOAD_SEMANTICS_FIELD]
+    _require(
+        isinstance(approved, Mapping) and bool(approved),
+        "approved workload semantics must be a mapping",
+    )
+    _require(
+        set(approved) == set(authorization["approved_workload_ids"]),
+        "approved workload semantics scope mismatch",
+    )
+    current = build_workload_qualification_semantics_fingerprints(
+        plan,
+        corpus=corpus,
+    )
+    for workload_id, digest in approved.items():
+        _require(
+            _is_sha256_digest(digest),
+            "approved workload semantics digest is malformed",
+        )
+        _require(
+            workload_id in current and current[workload_id] == digest,
+            "approved workload semantics digest is not current",
+        )
+    return True
+
+
+def validate_renderer_bound_live_qualification_evidence(
+    evidence: Dict[str, Any],
+    *,
+    plan: Dict[str, Any],
+    authorization: Dict[str, Any],
+    pricing: Dict[str, Any],
+    corpus: Dict[str, Any] | None = None,
+) -> bool:
+    """Validate renderer-bound live evidence.
+
+    Renderer-bound evidence is a strict superset of the V1 shape, so the V1
+    validator is delegated to on an exact in-memory projection and only the
+    added workload-semantics binding is checked here.
+    """
+
+    _require(
+        isinstance(evidence, dict) and set(evidence) == _EVIDENCE_FIELDS,
+        "renderer-bound live evidence fields are invalid",
+    )
+    _require(
+        evidence["evidence_version"] == RENDERER_BOUND_LIVE_EVIDENCE_VERSION,
+        "renderer-bound live evidence version mismatch",
+    )
+    summaries = evidence["grading_summaries"]
+    _require(
+        isinstance(summaries, list),
+        "renderer-bound grading summaries are invalid",
+    )
+    for summary in summaries:
+        _require(
+            isinstance(summary, dict)
+            and set(summary)
+            == (_SUMMARY_FIELDS | {TESTED_WORKLOAD_SEMANTICS_FIELD}),
+            "renderer-bound grading summary fields are invalid",
+        )
+
+    validate_renderer_bound_live_authorization(
+        authorization,
+        plan=plan,
+        pricing=pricing,
+        execution_at_utc=evidence["execution_at_utc"],
+        corpus=corpus,
+    )
+    validate_live_qualification_evidence(
+        _v1_projection_of_renderer_bound_evidence(evidence),
+        plan=plan,
+        authorization=_v1_projection_of_renderer_bound_authorization(
+            authorization
+        ),
+        pricing=pricing,
+    )
+
+    approved = authorization[APPROVED_WORKLOAD_SEMANTICS_FIELD]
+    universe = {
+        row["schedule_key"]: row
+        for row in build_renderer_bound_live_qualification_universe(
+            plan,
+            corpus=corpus,
+        )
+    }
+    for summary in summaries:
+        tested = summary[TESTED_WORKLOAD_SEMANTICS_FIELD]
+        _require(
+            _is_sha256_digest(tested),
+            "renderer-bound tested workload semantics digest is malformed",
+        )
+        scheduled = universe[summary["schedule_key"]]
+        _require(
+            tested == scheduled[TESTED_WORKLOAD_SEMANTICS_FIELD],
+            "renderer-bound tested workload semantics mismatch",
+        )
+        _require(
+            approved.get(summary["workload_id"]) == tested,
+            "renderer-bound tested workload semantics was not authorized",
+        )
+    return True
+
+
+def serialize_renderer_bound_live_qualification_evidence(
+    evidence: Dict[str, Any],
+    *,
+    plan: Dict[str, Any],
+    authorization: Dict[str, Any],
+    pricing: Dict[str, Any],
+    corpus: Dict[str, Any] | None = None,
+) -> str:
+    payload = deepcopy(evidence)
+    validate_renderer_bound_live_qualification_evidence(
+        payload,
+        plan=plan,
+        authorization=authorization,
+        pricing=pricing,
+        corpus=corpus,
+    )
+    return _canonical_json(payload)
+
+
+def renderer_bound_live_qualification_evidence_sha256(
+    evidence: Dict[str, Any],
+    *,
+    plan: Dict[str, Any],
+    authorization: Dict[str, Any],
+    pricing: Dict[str, Any],
+    corpus: Dict[str, Any] | None = None,
+) -> str:
+    return sha256(
+        serialize_renderer_bound_live_qualification_evidence(
+            evidence,
+            plan=plan,
+            authorization=authorization,
+            pricing=pricing,
+            corpus=corpus,
+        ).encode("utf-8")
+    ).hexdigest()
 
 
 def live_qualification_evidence_sha256(

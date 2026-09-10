@@ -381,6 +381,76 @@ _TIER_CANDIDATES = {
     for tier in ("A", "B", "C")
 }
 
+# Qualification-only additions narrower than catalog tier eligibility.  This
+# authority affects the controlled benchmark candidate matrix only; it does not
+# alter provider transport compatibility, production routing, or the model
+# catalog's general tier declarations.
+_WORKLOAD_SPECIFIC_QUALIFICATION_CANDIDATE_ADDITIONS = (
+    ("skill_extraction", "groq", "openai/gpt-oss-120b"),
+)
+
+
+def _validate_workload_specific_qualification_candidate_additions(
+    entries: Any,
+) -> bool:
+    _require(
+        isinstance(entries, (list, tuple)),
+        "workload-specific candidate additions must be a sequence",
+    )
+    workload_by_id = {
+        workload["workload_id"]: workload for workload in _WORKLOAD_DEFINITIONS
+    }
+    candidate_by_pair = {
+        (candidate["provider"], candidate["model"]): candidate
+        for candidate in _CANDIDATE_DEFINITIONS
+    }
+    seen = set()
+    for entry in entries:
+        _require(
+            isinstance(entry, (list, tuple))
+            and len(entry) == 3
+            and all(isinstance(part, str) and bool(part) for part in entry),
+            "workload-specific candidate addition is malformed",
+        )
+        identity = tuple(entry)
+        _require(
+            identity not in seen,
+            "duplicate workload-specific candidate addition",
+        )
+        seen.add(identity)
+        workload_id, provider, model = identity
+        _require(
+            workload_id in workload_by_id,
+            "workload-specific candidate addition references an unknown workload",
+        )
+        candidate = candidate_by_pair.get((provider, model))
+        _require(
+            candidate is not None,
+            "workload-specific candidate addition references an unknown provider/model",
+        )
+        _require(
+            workload_by_id[workload_id]["tier"]
+            not in candidate["eligible_tiers"],
+            "workload-specific candidate addition duplicates tier eligibility",
+        )
+    return True
+
+
+def _candidate_ids_for_workload(workload: Dict[str, Any]) -> List[str]:
+    _validate_workload_specific_qualification_candidate_additions(
+        _WORKLOAD_SPECIFIC_QUALIFICATION_CANDIDATE_ADDITIONS
+    )
+    workload_id = workload["workload_id"]
+    tier = workload["tier"]
+    additions = _WORKLOAD_SPECIFIC_QUALIFICATION_CANDIDATE_ADDITIONS
+    return [
+        candidate["candidate_id"]
+        for candidate in _CANDIDATE_DEFINITIONS
+        if tier in candidate["eligible_tiers"]
+        or (workload_id, candidate["provider"], candidate["model"])
+        in additions
+    ]
+
 _METRIC_DEFINITIONS = tuple(
     {
         "metric_id": metric_id,
@@ -826,7 +896,7 @@ def _candidate_matrix() -> List[Dict[str, Any]]:
         {
             "workload_id": workload["workload_id"],
             "tier": workload["tier"],
-            "candidate_ids": list(_TIER_CANDIDATES[workload["tier"]]),
+            "candidate_ids": _candidate_ids_for_workload(workload),
         }
         for workload in _WORKLOAD_DEFINITIONS
     ]
@@ -934,6 +1004,9 @@ def validate_provider_benchmark_contract(contract: Dict[str, Any]) -> bool:
     _require(isinstance(matrix, list) and bool(matrix), "candidate matrix must be nonempty")
     matrix_ids = [str(row.get("workload_id") or "") for row in matrix if isinstance(row, dict)]
     _require(tuple(matrix_ids) == WORKLOAD_ORDER, "candidate matrix workload coverage mismatch")
+    canonical_workload_by_id = {
+        workload["workload_id"]: workload for workload in _WORKLOAD_DEFINITIONS
+    }
     for row in matrix:
         _require(isinstance(row, dict), "candidate matrix row must be an object")
         row_candidates = row.get("candidate_ids")
@@ -945,17 +1018,19 @@ def validate_provider_benchmark_contract(contract: Dict[str, Any]) -> bool:
             len(row_candidates) == len(set(row_candidates)),
             "candidate matrix contains duplicates",
         )
+        workload_id = str(row.get("workload_id") or "")
         tier = str(row.get("tier") or "")
+        canonical_workload = canonical_workload_by_id[workload_id]
         _require(
-            row_candidates == _TIER_CANDIDATES.get(tier),
-            "candidate matrix tier definition mismatch",
+            tier == canonical_workload["tier"],
+            "candidate matrix workload tier mismatch",
+        )
+        _require(
+            row_candidates == _candidate_ids_for_workload(canonical_workload),
+            "candidate matrix eligibility definition mismatch",
         )
         for candidate_id in row_candidates:
             _require(candidate_id in candidate_by_id, "candidate matrix references an unknown candidate")
-            _require(
-                tier in candidate_by_id[candidate_id].get("eligible_tiers", []),
-                "candidate is ineligible for workload tier",
-            )
 
     _require(contract.get("metric_order") == list(METRIC_ORDER), "metric set or order mismatch")
     metric_definitions = contract.get("metric_definitions")

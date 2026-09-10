@@ -1,0 +1,3237 @@
+{
+  "provenance": {
+    "source": "outputs/application_planning/current_run_job_corpus.jsonl",
+    "source_run": "application_planning corpus captured 2026-08-04",
+    "captured_at_head": "e57b90ae27bc3ca7a6350cf36e74874500fd47d7",
+    "captured_before": "P1S19 vocabulary additions applied (approved by P1S20)",
+    "content": "build_job_evidence output only, keyed by company|title. No raw JD text, no resume or other user content. Regenerate with the same corpus to diff extraction changes.",
+    "fields": [
+      "role_archetype",
+      "role_family",
+      "seniority",
+      "required_skills",
+      "preferred_skills",
+      "all_skills",
+      "required_methods",
+      "preferred_methods",
+      "required_tools",
+      "preferred_tools",
+      "required_workflows",
+      "preferred_workflows",
+      "business_contexts",
+      "stakeholder_contexts",
+      "kpi_metrics",
+      "ownership_signals"
+    ],
+    "job_count": 80
+  },
+  "jobs": [
+    {
+      "job_key": "2k|Senior Gameplay Analytics Engineer (Unreal Engine)",
+      "role_archetype": "analytics_engineer",
+      "role_family": "analytics",
+      "seniority": "senior",
+      "required_skills": [
+        "databricks",
+        "snowflake",
+        "sql",
+        "data modeling"
+      ],
+      "preferred_skills": [
+        "c++"
+      ],
+      "all_skills": [
+        "databricks",
+        "snowflake",
+        "c++",
+        "sql",
+        "data modeling"
+      ],
+      "required_methods": [
+        "modeling",
+        "data modeling"
+      ],
+      "preferred_methods": [],
+      "required_tools": [
+        "sql",
+        "snowflake",
+        "databricks"
+      ],
+      "preferred_tools": [
+        "c++"
+      ],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "product",
+        "engineering"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "2k|Staff Data Analyst",
+      "role_archetype": "data_analyst_bi",
+      "role_family": "analytics",
+      "seniority": "staff",
+      "required_skills": [
+        "sql"
+      ],
+      "preferred_skills": [
+        "data modeling",
+        "python",
+        "r",
+        "tableau"
+      ],
+      "all_skills": [
+        "sql",
+        "data modeling",
+        "python",
+        "r",
+        "tableau"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "modeling",
+        "data modeling"
+      ],
+      "required_tools": [
+        "sql"
+      ],
+      "preferred_tools": [
+        "python",
+        "r",
+        "tableau"
+      ],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [
+        "marketing"
+      ],
+      "stakeholder_contexts": [
+        "product",
+        "marketing"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": [
+        "lead"
+      ]
+    },
+    {
+      "job_key": "accenturefederalservices|GenAI Engineer",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "python",
+        "sql",
+        "generative ai",
+        "llm",
+        "rag",
+        "vector db",
+        "fine-tuning",
+        "bedrock",
+        "aws",
+        "azure",
+        "bash",
+        "docker",
+        "kubernetes",
+        "linux"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "docker",
+        "kubernetes",
+        "python",
+        "sql",
+        "generative ai",
+        "llm",
+        "rag",
+        "vector db",
+        "fine-tuning",
+        "bedrock",
+        "aws",
+        "azure",
+        "bash",
+        "linux",
+        "r",
+        "machine learning",
+        "prompt engineering"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "python",
+        "sql",
+        "bedrock",
+        "aws",
+        "azure",
+        "bash",
+        "docker",
+        "kubernetes",
+        "linux"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "automation"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "agencies"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": [
+        "own"
+      ]
+    },
+    {
+      "job_key": "accenturefederalservices|MuleSoft Business Analyst/Tester - TO34 MuleSoft Service",
+      "role_archetype": "data_analyst_bi",
+      "role_family": "analytics",
+      "seniority": "",
+      "required_skills": [
+        "jira"
+      ],
+      "preferred_skills": [
+        "sql"
+      ],
+      "all_skills": [
+        "jira",
+        "sql"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "jira"
+      ],
+      "preferred_tools": [
+        "sql"
+      ],
+      "required_workflows": [],
+      "preferred_workflows": [
+        "reporting"
+      ],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "product",
+        "agencies"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": [
+        "own"
+      ]
+    },
+    {
+      "job_key": "anthropic|Data Scientist, Developer Productivity",
+      "role_archetype": "growth_product_analytics",
+      "role_family": "data_science",
+      "seniority": "",
+      "required_skills": [
+        "causal inference",
+        "experimental design",
+        "python",
+        "sql",
+        "machine learning",
+        "a/b testing",
+        "statistical modeling",
+        "llm"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "causal inference",
+        "experimental design",
+        "python",
+        "sql",
+        "a/b testing",
+        "llm",
+        "statistical modeling",
+        "machine learning"
+      ],
+      "required_methods": [
+        "modeling",
+        "statistical",
+        "causal inference"
+      ],
+      "preferred_methods": [],
+      "required_tools": [
+        "python",
+        "sql"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "a/b testing",
+        "reporting",
+        "visualization"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "stakeholders",
+        "non-technical",
+        "product",
+        "engineering"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Data Scientist, Policy",
+      "role_archetype": "data_scientist",
+      "role_family": "data_science",
+      "seniority": "",
+      "required_skills": [
+        "causal inference",
+        "python",
+        "sql",
+        "regression",
+        "data analysis"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "causal inference",
+        "python",
+        "sql",
+        "regression",
+        "data analysis"
+      ],
+      "required_methods": [
+        "regression",
+        "causal inference",
+        "quasi-experimental",
+        "synthetic control"
+      ],
+      "preferred_methods": [],
+      "required_tools": [
+        "python",
+        "sql"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "dashboard",
+        "pipeline"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "product"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": [
+        "own"
+      ]
+    },
+    {
+      "job_key": "anthropic|Data Scientist, Safeguards",
+      "role_archetype": "data_scientist",
+      "role_family": "data_science",
+      "seniority": "",
+      "required_skills": [
+        "python",
+        "sql"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "python",
+        "sql"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "python",
+        "sql"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "reporting",
+        "visualization"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [
+        "operations"
+      ],
+      "stakeholder_contexts": [
+        "product"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Data Scientist, Supply",
+      "role_archetype": "growth_product_analytics",
+      "role_family": "data_science",
+      "seniority": "",
+      "required_skills": [
+        "causal inference",
+        "python",
+        "sql"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "causal inference",
+        "python",
+        "sql",
+        "machine learning",
+        "llm"
+      ],
+      "required_methods": [
+        "causal inference"
+      ],
+      "preferred_methods": [],
+      "required_tools": [
+        "python",
+        "sql"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "reporting",
+        "dashboard",
+        "visualization"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [
+        "revenue",
+        "retention",
+        "operations"
+      ],
+      "stakeholder_contexts": [
+        "executive",
+        "product",
+        "engineering"
+      ],
+      "kpi_metrics": [
+        "retention",
+        "revenue"
+      ],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Lead Data Scientist, Platform Product",
+      "role_archetype": "growth_product_analytics",
+      "role_family": "data_science",
+      "seniority": "lead",
+      "required_skills": [
+        "a/b testing",
+        "causal inference",
+        "experimental design",
+        "python",
+        "sql",
+        "statistical modeling",
+        "machine learning",
+        "llm"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "a/b testing",
+        "causal inference",
+        "experimental design",
+        "python",
+        "sql",
+        "statistical modeling",
+        "machine learning",
+        "llm"
+      ],
+      "required_methods": [
+        "modeling",
+        "statistical",
+        "causal inference"
+      ],
+      "preferred_methods": [],
+      "required_tools": [
+        "python",
+        "sql"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "a/b testing",
+        "reporting",
+        "visualization"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [
+        "retention"
+      ],
+      "stakeholder_contexts": [
+        "stakeholders",
+        "non-technical",
+        "product",
+        "sales",
+        "engineering"
+      ],
+      "kpi_metrics": [
+        "retention",
+        "engagement",
+        "adoption"
+      ],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|ML/Research Engineer, Safeguards",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "python"
+      ],
+      "preferred_skills": [
+        "transformers",
+        "machine learning"
+      ],
+      "all_skills": [
+        "python",
+        "transformers",
+        "machine learning"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "python"
+      ],
+      "preferred_tools": [
+        "transformers"
+      ],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "engineering"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Machine Learning Infrastructure Engineer, Safeguards Research",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "python",
+        "machine learning",
+        "transformers"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "python",
+        "machine learning",
+        "transformers"
+      ],
+      "required_methods": [
+        "machine learning",
+        "modeling"
+      ],
+      "preferred_methods": [],
+      "required_tools": [
+        "python",
+        "transformers"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "pipeline"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "engineering"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": [
+        "own"
+      ]
+    },
+    {
+      "job_key": "anthropic|People Research Scientist, Recruiting",
+      "role_archetype": "data_analyst_bi",
+      "role_family": "data_science",
+      "seniority": "",
+      "required_skills": [
+        "machine learning",
+        "python",
+        "r",
+        "sql",
+        "statistical analysis"
+      ],
+      "preferred_skills": [
+        "bigquery"
+      ],
+      "all_skills": [
+        "machine learning",
+        "python",
+        "r",
+        "sql",
+        "statistical analysis",
+        "bigquery"
+      ],
+      "required_methods": [
+        "quasi-experimental"
+      ],
+      "preferred_methods": [
+        "machine learning",
+        "statistics",
+        "statistical",
+        "statistical analysis"
+      ],
+      "required_tools": [
+        "python",
+        "r",
+        "sql"
+      ],
+      "preferred_tools": [
+        "bigquery"
+      ],
+      "required_workflows": [
+        "reporting",
+        "dashboard",
+        "visualization"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [
+        "operations"
+      ],
+      "stakeholder_contexts": [
+        "stakeholders"
+      ],
+      "kpi_metrics": [
+        "kpis",
+        "adoption",
+        "quality"
+      ],
+      "ownership_signals": [
+        "lead"
+      ]
+    },
+    {
+      "job_key": "anthropic|Research Engineer (Senior Staff+), Safeguards Labs",
+      "role_archetype": "domain_heavy_analyst",
+      "role_family": "ml_ai_engineering",
+      "seniority": "staff",
+      "required_skills": [
+        "machine learning"
+      ],
+      "preferred_skills": [
+        "python"
+      ],
+      "all_skills": [
+        "machine learning",
+        "python",
+        "llm",
+        "evals"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "machine learning"
+      ],
+      "required_tools": [],
+      "preferred_tools": [
+        "python"
+      ],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [
+        "fraud"
+      ],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": [
+        "lead"
+      ]
+    },
+    {
+      "job_key": "anthropic|Research Engineer / Research Scientist, Tokens",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "pytorch",
+        "kubernetes"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "kubernetes",
+        "pytorch",
+        "machine learning",
+        "transformers"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "pytorch",
+        "kubernetes"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [
+        "etl"
+      ],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Research Engineer / Scientist, Alignment",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "kubernetes"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "kubernetes",
+        "python",
+        "machine learning",
+        "llm",
+        "fine-tuning",
+        "natural language processing"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "kubernetes"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Research Engineer / Scientist, Frontier Red Team (Cyber)",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "python"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "python",
+        "machine learning",
+        "llm"
+      ],
+      "required_methods": [
+        "modeling"
+      ],
+      "preferred_methods": [],
+      "required_tools": [
+        "python"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "automation"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "stakeholders",
+        "non-technical",
+        "engineering"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": [
+        "own",
+        "lead"
+      ]
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Chip Design RL (Reinforcement Learning)",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [],
+      "preferred_skills": [],
+      "all_skills": [
+        "excel",
+        "machine learning",
+        "llm"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Code RL (Reinforcement Learning)",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "python"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "python",
+        "pytorch",
+        "machine learning",
+        "experimental design",
+        "llm"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "python"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Computer Use",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "python"
+      ],
+      "preferred_skills": [
+        "machine learning",
+        "fine-tuning"
+      ],
+      "all_skills": [
+        "machine learning",
+        "python",
+        "fine-tuning"
+      ],
+      "required_methods": [
+        "machine learning"
+      ],
+      "preferred_methods": [],
+      "required_tools": [
+        "python"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "pipeline"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "product",
+        "sales",
+        "engineering"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": [
+        "drive"
+      ]
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Cybersecurity RL (Reinforcement Learning)",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "machine learning"
+      ],
+      "preferred_skills": [
+        "llm"
+      ],
+      "all_skills": [
+        "machine learning",
+        "llm"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "machine learning"
+      ],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "engineering"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Discovery",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "spark",
+        "pytorch",
+        "aws",
+        "docker",
+        "kubernetes"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "spark",
+        "pytorch",
+        "aws",
+        "docker",
+        "kubernetes",
+        "excel",
+        "machine learning"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "spark",
+        "pytorch",
+        "aws",
+        "docker",
+        "kubernetes"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "experimentation",
+        "pipeline"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "sales",
+        "engineering"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Domain Scaling",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [],
+      "preferred_skills": [],
+      "all_skills": [
+        "machine learning",
+        "llm",
+        "fine-tuning",
+        "evals"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [
+        "data quality",
+        "pipeline"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "product"
+      ],
+      "kpi_metrics": [
+        "quality"
+      ],
+      "ownership_signals": [
+        "own"
+      ]
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Economic Research Data Platform",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "python",
+        "aws"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "python",
+        "aws",
+        "machine learning"
+      ],
+      "required_methods": [
+        "statistics"
+      ],
+      "preferred_methods": [],
+      "required_tools": [
+        "python",
+        "aws"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "visualization",
+        "pipeline"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "engineering"
+      ],
+      "kpi_metrics": [
+        "quality"
+      ],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Interpretability",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "python",
+        "java"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "python",
+        "java",
+        "pytorch",
+        "machine learning",
+        "llm",
+        "transformers"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "python",
+        "java"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "engineering"
+      ],
+      "kpi_metrics": [
+        "efficiency"
+      ],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Knowledge Foundations",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "python"
+      ],
+      "preferred_skills": [
+        "fine-tuning",
+        "machine learning",
+        "llm",
+        "evals"
+      ],
+      "all_skills": [
+        "python",
+        "fine-tuning",
+        "machine learning",
+        "llm",
+        "evals"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "python"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "pipeline"
+      ],
+      "preferred_workflows": [
+        "dashboard"
+      ],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [
+        "quality"
+      ],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Knowledge Team",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "llm",
+        "python",
+        "rag"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "llm",
+        "python",
+        "rag",
+        "machine learning"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "python"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Life Sciences",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "python",
+        "machine learning",
+        "llm",
+        "docker",
+        "kubernetes"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "python",
+        "machine learning",
+        "llm",
+        "docker",
+        "kubernetes"
+      ],
+      "required_methods": [
+        "machine learning",
+        "modeling"
+      ],
+      "preferred_methods": [],
+      "required_tools": [
+        "python",
+        "docker",
+        "kubernetes"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "pipeline"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "engineering"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Machine Learning (Reinforcement Learning)",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "c++",
+        "python"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "c++",
+        "python",
+        "tensorflow",
+        "pytorch",
+        "machine learning",
+        "llm",
+        "evaluation workflows",
+        "kubernetes"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "c++",
+        "python"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "engineering"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Model Evaluations",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "python",
+        "machine learning",
+        "experimental design",
+        "regression",
+        "llm",
+        "evals"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "python",
+        "experimental design",
+        "machine learning",
+        "regression",
+        "llm",
+        "evals"
+      ],
+      "required_methods": [
+        "regression",
+        "statistics"
+      ],
+      "preferred_methods": [],
+      "required_tools": [
+        "python"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "dashboard",
+        "visualization",
+        "pipeline"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "stakeholders"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": [
+        "own"
+      ]
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Performance RL (Reinforcement Learning)",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "pytorch"
+      ],
+      "preferred_skills": [
+        "machine learning"
+      ],
+      "all_skills": [
+        "pytorch",
+        "machine learning",
+        "llm"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "pytorch"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Pretraining Scaling",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "pytorch"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "pytorch",
+        "excel",
+        "machine learning",
+        "experimental design",
+        "llm"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "pytorch"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "dashboard",
+        "pipeline"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [
+        "operations"
+      ],
+      "stakeholder_contexts": [
+        "engineering"
+      ],
+      "kpi_metrics": [
+        "efficiency"
+      ],
+      "ownership_signals": [
+        "own"
+      ]
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Production Model Post-Training",
+      "role_archetype": "growth_product_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "python"
+      ],
+      "preferred_skills": [
+        "deep learning"
+      ],
+      "all_skills": [
+        "python",
+        "deep learning",
+        "machine learning",
+        "llm",
+        "fine-tuning"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "python"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "pipeline"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "sales",
+        "engineering"
+      ],
+      "kpi_metrics": [
+        "quality"
+      ],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Universes",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "fine-tuning"
+      ],
+      "preferred_skills": [
+        "machine learning"
+      ],
+      "all_skills": [
+        "fine-tuning",
+        "machine learning",
+        "llm"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "sales",
+        "engineering"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Research Engineer, Visual Knowledge Work",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "machine learning"
+      ],
+      "preferred_skills": [
+        "deep learning"
+      ],
+      "all_skills": [
+        "machine learning",
+        "deep learning",
+        "evals"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [
+        "etl",
+        "pipeline"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "product",
+        "sales",
+        "engineering"
+      ],
+      "kpi_metrics": [
+        "quality"
+      ],
+      "ownership_signals": [
+        "own"
+      ]
+    },
+    {
+      "job_key": "anthropic|Research Engineer/Research Scientist, Pre-training",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "python",
+        "pytorch",
+        "kubernetes"
+      ],
+      "preferred_skills": [
+        "machine learning",
+        "deep learning"
+      ],
+      "all_skills": [
+        "kubernetes",
+        "python",
+        "pytorch",
+        "machine learning",
+        "deep learning",
+        "llm"
+      ],
+      "required_methods": [
+        "machine learning",
+        "modeling"
+      ],
+      "preferred_methods": [],
+      "required_tools": [
+        "python",
+        "pytorch",
+        "kubernetes"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "etl"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "engineering"
+      ],
+      "kpi_metrics": [
+        "efficiency"
+      ],
+      "ownership_signals": [
+        "lead"
+      ]
+    },
+    {
+      "job_key": "anthropic|Research Scientist, Interpretability",
+      "role_archetype": "general_analytics",
+      "role_family": "data_science",
+      "seniority": "",
+      "required_skills": [
+        "python"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "python"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "python"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "engineering"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Research Scientist, Life Sciences",
+      "role_archetype": "general_analytics",
+      "role_family": "data_science",
+      "seniority": "",
+      "required_skills": [
+        "machine learning",
+        "python"
+      ],
+      "preferred_skills": [
+        "deep learning",
+        "fine-tuning"
+      ],
+      "all_skills": [
+        "machine learning",
+        "python",
+        "deep learning",
+        "fine-tuning",
+        "data analysis",
+        "llm",
+        "agentic workflows"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "python"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "pipeline"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "product",
+        "engineering"
+      ],
+      "kpi_metrics": [
+        "quality"
+      ],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Research Scientist, Takeoff Intel",
+      "role_archetype": "growth_product_analytics",
+      "role_family": "data_science",
+      "seniority": "",
+      "required_skills": [
+        "evals",
+        "fine-tuning",
+        "forecasting",
+        "r"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "evals",
+        "fine-tuning",
+        "forecasting",
+        "r",
+        "machine learning",
+        "llm"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "modeling"
+      ],
+      "required_tools": [
+        "r"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "automation",
+        "reporting"
+      ],
+      "preferred_workflows": [
+        "forecasting"
+      ],
+      "business_contexts": [
+        "growth"
+      ],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": [
+        "own"
+      ]
+    },
+    {
+      "job_key": "anthropic|Research Scientist/Engineer, Biological Safety",
+      "role_archetype": "general_analytics",
+      "role_family": "data_science",
+      "seniority": "",
+      "required_skills": [
+        "machine learning",
+        "evals"
+      ],
+      "preferred_skills": [
+        "data analysis",
+        "python",
+        "llm"
+      ],
+      "all_skills": [
+        "data analysis",
+        "python",
+        "machine learning",
+        "evals",
+        "llm"
+      ],
+      "required_methods": [
+        "modeling"
+      ],
+      "preferred_methods": [],
+      "required_tools": [],
+      "preferred_tools": [
+        "python"
+      ],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "stakeholders",
+        "non-technical",
+        "product",
+        "engineering"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Staff Research Engineer, Discovery Team",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "staff",
+      "required_skills": [
+        "docker",
+        "kubernetes"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "docker",
+        "kubernetes",
+        "machine learning"
+      ],
+      "required_methods": [
+        "modeling"
+      ],
+      "preferred_methods": [],
+      "required_tools": [
+        "docker",
+        "kubernetes"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "automation",
+        "pipeline"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "sales",
+        "engineering"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "anthropic|Staff Software Engineer, AI Reliability",
+      "role_archetype": "general_analytics",
+      "role_family": "software_engineering",
+      "seniority": "staff",
+      "required_skills": [],
+      "preferred_skills": [],
+      "all_skills": [
+        "machine learning",
+        "llm"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": [
+        "lead"
+      ]
+    },
+    {
+      "job_key": "anthropic|Staff Software Engineer, AI Reliability Engineering",
+      "role_archetype": "general_analytics",
+      "role_family": "sre",
+      "seniority": "staff",
+      "required_skills": [],
+      "preferred_skills": [],
+      "all_skills": [
+        "machine learning",
+        "llm"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "arhs|Business Analyst",
+      "role_archetype": "data_analyst_bi",
+      "role_family": "analytics",
+      "seniority": "",
+      "required_skills": [],
+      "preferred_skills": [],
+      "all_skills": [
+        "excel"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [
+        "automation"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [
+        "operations"
+      ],
+      "stakeholder_contexts": [
+        "stakeholders"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": [
+        "lead",
+        "drive"
+      ]
+    },
+    {
+      "job_key": "baseten|AI Inference Engineer",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "python",
+        "docker"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "python",
+        "docker",
+        "spark",
+        "machine learning",
+        "applied ai"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "python",
+        "docker"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "product",
+        "engineering"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "databricks|AI Engineer - FDE (Forward Deployed Engineer)",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "aws",
+        "azure",
+        "fine-tuning",
+        "langchain",
+        "multi-agent systems",
+        "pandas",
+        "pytorch",
+        "rag",
+        "scikit-learn"
+      ],
+      "preferred_skills": [
+        "spark",
+        "machine learning"
+      ],
+      "all_skills": [
+        "aws",
+        "azure",
+        "fine-tuning",
+        "langchain",
+        "multi-agent systems",
+        "pandas",
+        "pytorch",
+        "rag",
+        "scikit-learn",
+        "spark",
+        "machine learning",
+        "excel",
+        "generative ai"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "machine learning",
+        "statistics"
+      ],
+      "required_tools": [
+        "aws",
+        "azure",
+        "langchain",
+        "pytorch"
+      ],
+      "preferred_tools": [
+        "spark"
+      ],
+      "required_workflows": [],
+      "preferred_workflows": [
+        "multi-agent systems"
+      ],
+      "business_contexts": [
+        "operations"
+      ],
+      "stakeholder_contexts": [
+        "non-technical",
+        "engineering",
+        "customers"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "databricks|Senior Applied ML Engineer - ML4Sys",
+      "role_archetype": "applied_ml",
+      "role_family": "ml_ai_engineering",
+      "seniority": "senior",
+      "required_skills": [
+        "forecasting",
+        "machine learning"
+      ],
+      "preferred_skills": [
+        "java",
+        "python",
+        "scala"
+      ],
+      "all_skills": [
+        "forecasting",
+        "machine learning",
+        "java",
+        "python",
+        "scala",
+        "excel",
+        "spark",
+        "applied ai"
+      ],
+      "required_methods": [
+        "machine learning"
+      ],
+      "preferred_methods": [],
+      "required_tools": [],
+      "preferred_tools": [
+        "java",
+        "python",
+        "scala"
+      ],
+      "required_workflows": [],
+      "preferred_workflows": [
+        "forecasting"
+      ],
+      "business_contexts": [
+        "operations"
+      ],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "databricks|Sr. AI Engineer - FDE (Forward Deployed Engineer) - U.S. Federal Sector",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "aws",
+        "azure",
+        "fine-tuning",
+        "langchain",
+        "multi-agent systems",
+        "pandas",
+        "pytorch",
+        "rag",
+        "scikit-learn"
+      ],
+      "preferred_skills": [
+        "spark",
+        "machine learning",
+        "generative ai"
+      ],
+      "all_skills": [
+        "aws",
+        "azure",
+        "fine-tuning",
+        "langchain",
+        "multi-agent systems",
+        "pandas",
+        "pytorch",
+        "rag",
+        "scikit-learn",
+        "spark",
+        "machine learning",
+        "generative ai",
+        "excel"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "machine learning",
+        "statistics"
+      ],
+      "required_tools": [
+        "aws",
+        "azure",
+        "langchain",
+        "pytorch"
+      ],
+      "preferred_tools": [
+        "spark"
+      ],
+      "required_workflows": [],
+      "preferred_workflows": [
+        "multi-agent systems"
+      ],
+      "business_contexts": [
+        "operations"
+      ],
+      "stakeholder_contexts": [
+        "non-technical",
+        "engineering",
+        "customers"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "gleanwork|Machine Learning Engineer, Assistant Quality",
+      "role_archetype": "applied_ml",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "llm",
+        "machine learning",
+        "python"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "llm",
+        "machine learning",
+        "python",
+        "applied ai",
+        "rag",
+        "semantic search",
+        "c++",
+        "java",
+        "natural language processing"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "machine learning"
+      ],
+      "required_tools": [
+        "python"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "gleanwork|Machine Learning Engineer, Search Quality",
+      "role_archetype": "applied_ml",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "c++",
+        "java",
+        "machine learning",
+        "natural language processing",
+        "python"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "c++",
+        "java",
+        "machine learning",
+        "natural language processing",
+        "python",
+        "llm"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "machine learning",
+        "natural language processing"
+      ],
+      "required_tools": [
+        "c++",
+        "java",
+        "python"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [
+        "experimentation"
+      ],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "kipp|Data Analyst",
+      "role_archetype": "growth_product_analytics",
+      "role_family": "analytics",
+      "seniority": "",
+      "required_skills": [
+        "power bi",
+        "sql",
+        "tableau"
+      ],
+      "preferred_skills": [
+        "python",
+        "r",
+        "statistical analysis"
+      ],
+      "all_skills": [
+        "power bi",
+        "sql",
+        "python",
+        "r",
+        "statistical analysis",
+        "tableau",
+        "excel",
+        "data analysis",
+        "azure",
+        "data modeling"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "sql",
+        "tableau",
+        "power bi"
+      ],
+      "preferred_tools": [
+        "python",
+        "r"
+      ],
+      "required_workflows": [
+        "reporting",
+        "dashboard",
+        "visualization",
+        "data quality",
+        "etl",
+        "elt"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [
+        "growth",
+        "finance"
+      ],
+      "stakeholder_contexts": [
+        "stakeholders",
+        "non-technical",
+        "finance",
+        "leaders"
+      ],
+      "kpi_metrics": [
+        "quality"
+      ],
+      "ownership_signals": [
+        "lead",
+        "drive"
+      ]
+    },
+    {
+      "job_key": "mattelinc|Staff Data Analyst, Lean and Process Improvement, Co Manufacturing",
+      "role_archetype": "data_analyst_bi",
+      "role_family": "analytics",
+      "seniority": "staff",
+      "required_skills": [
+        "python",
+        "sql",
+        "r",
+        "tableau",
+        "power bi",
+        "powerpoint",
+        "erp",
+        "bigquery"
+      ],
+      "preferred_skills": [
+        "applied ai",
+        "excel"
+      ],
+      "all_skills": [
+        "applied ai",
+        "excel",
+        "power bi",
+        "python",
+        "r",
+        "sql",
+        "tableau",
+        "powerpoint",
+        "erp",
+        "bigquery"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "python",
+        "sql",
+        "r",
+        "tableau",
+        "power bi",
+        "powerpoint",
+        "erp",
+        "bigquery"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "reporting"
+      ],
+      "preferred_workflows": [
+        "process improvement"
+      ],
+      "business_contexts": [
+        "contract manufacturing",
+        "procurement"
+      ],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [
+        "adoption",
+        "quality"
+      ],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "mongodb|Principal Research Scientist, Database Systems",
+      "role_archetype": "growth_product_analytics",
+      "role_family": "data_science",
+      "seniority": "principal",
+      "required_skills": [
+        "aws",
+        "azure"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "aws",
+        "azure"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "aws",
+        "azure"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [
+        "growth"
+      ],
+      "stakeholder_contexts": [
+        "stakeholders",
+        "product",
+        "engineering",
+        "customers"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": [
+        "drive",
+        "mentor"
+      ]
+    },
+    {
+      "job_key": "mongodb|Senior Data Analyst",
+      "role_archetype": "growth_product_analytics",
+      "role_family": "analytics",
+      "seniority": "senior",
+      "required_skills": [
+        "python",
+        "sql",
+        "r",
+        "tableau",
+        "data analysis"
+      ],
+      "preferred_skills": [
+        "data modeling"
+      ],
+      "all_skills": [
+        "data modeling",
+        "python",
+        "r",
+        "sql",
+        "tableau",
+        "data analysis",
+        "aws",
+        "azure"
+      ],
+      "required_methods": [
+        "statistics"
+      ],
+      "preferred_methods": [
+        "modeling",
+        "data modeling"
+      ],
+      "required_tools": [
+        "python",
+        "sql",
+        "r",
+        "tableau"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "reporting",
+        "dashboard",
+        "visualization",
+        "data quality"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [
+        "retention"
+      ],
+      "stakeholder_contexts": [
+        "stakeholders",
+        "non-technical",
+        "engineering",
+        "customers"
+      ],
+      "kpi_metrics": [
+        "retention",
+        "engagement",
+        "quality"
+      ],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "mongodb|Senior Research Scientist",
+      "role_archetype": "general_analytics",
+      "role_family": "data_science",
+      "seniority": "senior",
+      "required_skills": [
+        "deep learning",
+        "machine learning",
+        "natural language processing"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "deep learning",
+        "machine learning",
+        "natural language processing",
+        "llm",
+        "rag",
+        "semantic search",
+        "aws",
+        "azure"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "machine learning",
+        "natural language processing"
+      ],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "mongodb|Staff Research Scientist",
+      "role_archetype": "general_analytics",
+      "role_family": "data_science",
+      "seniority": "staff",
+      "required_skills": [
+        "deep learning",
+        "machine learning",
+        "natural language processing"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "deep learning",
+        "machine learning",
+        "natural language processing",
+        "llm",
+        "rag",
+        "semantic search",
+        "aws",
+        "azure"
+      ],
+      "required_methods": [
+        "machine learning",
+        "natural language processing"
+      ],
+      "preferred_methods": [],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "customers"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "reddit|Machine Learning Engineer, Ads Optimization",
+      "role_archetype": "applied_ml",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "airflow",
+        "bigquery",
+        "java",
+        "kafka",
+        "machine learning",
+        "python",
+        "spark"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "airflow",
+        "bigquery",
+        "java",
+        "kafka",
+        "machine learning",
+        "python",
+        "spark"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "machine learning"
+      ],
+      "required_tools": [
+        "airflow",
+        "bigquery",
+        "java",
+        "kafka",
+        "python",
+        "spark"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [
+        "finance",
+        "operations"
+      ],
+      "stakeholder_contexts": [
+        "finance"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "reddit|Senior Machine Learning Engineer, Ads Content Understanding",
+      "role_archetype": "applied_ml",
+      "role_family": "ml_ai_engineering",
+      "seniority": "senior",
+      "required_skills": [
+        "machine learning"
+      ],
+      "preferred_skills": [
+        "llm",
+        "python",
+        "tensorflow",
+        "pytorch",
+        "c++",
+        "java"
+      ],
+      "all_skills": [
+        "llm",
+        "machine learning",
+        "python",
+        "tensorflow",
+        "pytorch",
+        "c++",
+        "java",
+        "natural language processing"
+      ],
+      "required_methods": [
+        "modeling"
+      ],
+      "preferred_methods": [],
+      "required_tools": [],
+      "preferred_tools": [
+        "python",
+        "pytorch",
+        "tensorflow",
+        "c++",
+        "java"
+      ],
+      "required_workflows": [
+        "dashboard",
+        "pipeline"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "product"
+      ],
+      "kpi_metrics": [
+        "quality"
+      ],
+      "ownership_signals": [
+        "drive"
+      ]
+    },
+    {
+      "job_key": "reddit|Senior Staff Data Scientist - Consumer Relevance",
+      "role_archetype": "growth_product_analytics",
+      "role_family": "data_science",
+      "seniority": "staff",
+      "required_skills": [
+        "causal inference",
+        "machine learning"
+      ],
+      "preferred_skills": [
+        "python",
+        "sql",
+        "r",
+        "experimental design"
+      ],
+      "all_skills": [
+        "causal inference",
+        "machine learning",
+        "python",
+        "sql",
+        "r",
+        "experimental design"
+      ],
+      "required_methods": [
+        "statistical"
+      ],
+      "preferred_methods": [
+        "causal inference"
+      ],
+      "required_tools": [],
+      "preferred_tools": [
+        "python",
+        "sql",
+        "r"
+      ],
+      "required_workflows": [
+        "experimentation"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [
+        "retention"
+      ],
+      "stakeholder_contexts": [
+        "stakeholders",
+        "non-technical",
+        "product"
+      ],
+      "kpi_metrics": [
+        "retention",
+        "quality"
+      ],
+      "ownership_signals": [
+        "mentor"
+      ]
+    },
+    {
+      "job_key": "reddit|Senior Staff Machine Learning Engineer, ML Understanding",
+      "role_archetype": "applied_ml",
+      "role_family": "ml_ai_engineering",
+      "seniority": "staff",
+      "required_skills": [
+        "embeddings",
+        "llm"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "embeddings",
+        "llm",
+        "machine learning",
+        "generative ai"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "modeling"
+      ],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "reddit|Sr. Staff Data Scientist - Ads Measurement, Signals, Privacy",
+      "role_archetype": "data_scientist",
+      "role_family": "data_science",
+      "seniority": "staff",
+      "required_skills": [
+        "causal inference",
+        "experimental design",
+        "statistical modeling"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "causal inference",
+        "experimental design",
+        "statistical modeling",
+        "python",
+        "sql",
+        "r",
+        "machine learning"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "modeling",
+        "statistical",
+        "causal inference"
+      ],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [
+        "attribution"
+      ],
+      "preferred_workflows": [
+        "experimentation"
+      ],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [
+        "conversion",
+        "attribution",
+        "quality"
+      ],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "reddit|Staff Data Scientist - Ads Measurement, Signals, Privacy",
+      "role_archetype": "data_scientist",
+      "role_family": "data_science",
+      "seniority": "staff",
+      "required_skills": [
+        "a/b testing",
+        "causal inference",
+        "experimental design",
+        "machine learning",
+        "python",
+        "r",
+        "sql"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "a/b testing",
+        "causal inference",
+        "experimental design",
+        "machine learning",
+        "python",
+        "r",
+        "sql",
+        "predictive modeling"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "machine learning",
+        "causal inference"
+      ],
+      "required_tools": [
+        "python",
+        "r",
+        "sql"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [
+        "a/b testing"
+      ],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "scaleai|Forward Deployed Engineer, GenAI",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "generative ai"
+      ],
+      "preferred_skills": [
+        "machine learning"
+      ],
+      "all_skills": [
+        "machine learning",
+        "generative ai"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "machine learning"
+      ],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "non-technical",
+        "product",
+        "engineering",
+        "customers"
+      ],
+      "kpi_metrics": [
+        "quality"
+      ],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "scaleai|Infrastructure Software Engineer, Enterprise GenAI",
+      "role_archetype": "growth_product_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "aws",
+        "azure",
+        "kubernetes",
+        "python",
+        "sql"
+      ],
+      "preferred_skills": [
+        "vector db"
+      ],
+      "all_skills": [
+        "aws",
+        "azure",
+        "kubernetes",
+        "python",
+        "sql",
+        "vector db",
+        "machine learning",
+        "generative ai"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "python",
+        "sql",
+        "aws",
+        "azure",
+        "kubernetes"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [
+        "growth"
+      ],
+      "stakeholder_contexts": [
+        "non-technical",
+        "product",
+        "engineering",
+        "customers"
+      ],
+      "kpi_metrics": [
+        "quality"
+      ],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "scaleai|ML Research Engineer, ML Systems",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "pytorch",
+        "transformers"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "pytorch",
+        "transformers",
+        "machine learning",
+        "llm"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "pytorch",
+        "transformers"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "scaleai|Machine Learning Research Engineer, Agent Data Foundation - Enterprise GenAI",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [],
+      "preferred_skills": [],
+      "all_skills": [
+        "machine learning",
+        "generative ai",
+        "llm"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "product"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "scaleai|Machine Learning Research Engineer, Agents - Enterprise GenAI",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [],
+      "preferred_skills": [
+        "multi-agent systems"
+      ],
+      "all_skills": [
+        "multi-agent systems",
+        "machine learning",
+        "generative ai"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [
+        "multi-agent systems"
+      ],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "scaleai|Machine Learning Systems Research Engineer, Agent Post-training - Enterprise GenAI",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "pytorch",
+        "transformers"
+      ],
+      "preferred_skills": [
+        "llm"
+      ],
+      "all_skills": [
+        "pytorch",
+        "transformers",
+        "llm",
+        "machine learning",
+        "generative ai"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "pytorch",
+        "transformers"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "scaleai|Research Scientist, AI Controls and Monitoring",
+      "role_archetype": "general_analytics",
+      "role_family": "data_science",
+      "seniority": "",
+      "required_skills": [
+        "generative ai",
+        "machine learning"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "generative ai",
+        "machine learning"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "machine learning"
+      ],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "scaleai|Research Scientist, Agent Robustness",
+      "role_archetype": "general_analytics",
+      "role_family": "data_science",
+      "seniority": "",
+      "required_skills": [
+        "generative ai",
+        "machine learning"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "generative ai",
+        "machine learning"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "machine learning"
+      ],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "scaleai|Research Scientist, Frontier Risk Evaluations",
+      "role_archetype": "general_analytics",
+      "role_family": "data_science",
+      "seniority": "",
+      "required_skills": [],
+      "preferred_skills": [
+        "generative ai",
+        "machine learning",
+        "llm"
+      ],
+      "all_skills": [
+        "generative ai",
+        "machine learning",
+        "llm"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "scaleai|Research Scientist, Safety Post Training",
+      "role_archetype": "general_analytics",
+      "role_family": "data_science",
+      "seniority": "",
+      "required_skills": [
+        "generative ai",
+        "machine learning"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "generative ai",
+        "machine learning"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "machine learning"
+      ],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "scaleai|Senior / Staff Machine Learning Research Scientist, Agents",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "staff",
+      "required_skills": [
+        "pytorch",
+        "langgraph",
+        "aws"
+      ],
+      "preferred_skills": [
+        "machine learning",
+        "llm",
+        "fine-tuning"
+      ],
+      "all_skills": [
+        "aws",
+        "pytorch",
+        "langgraph",
+        "machine learning",
+        "llm",
+        "fine-tuning",
+        "tensorflow",
+        "applied ai",
+        "generative ai"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "machine learning"
+      ],
+      "required_tools": [
+        "pytorch",
+        "langgraph",
+        "aws"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "scaleai|Senior Machine Learning Engineer, Agent Oversight",
+      "role_archetype": "applied_ml",
+      "role_family": "ml_ai_engineering",
+      "seniority": "senior",
+      "required_skills": [
+        "machine learning"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "machine learning",
+        "generative ai",
+        "llm",
+        "fine-tuning"
+      ],
+      "required_methods": [
+        "statistical"
+      ],
+      "preferred_methods": [],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "product",
+        "engineering",
+        "customers"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": [
+        "own"
+      ]
+    },
+    {
+      "job_key": "scaleai|Senior Machine Learning Engineer, Public Sector",
+      "role_archetype": "applied_ml",
+      "role_family": "ml_ai_engineering",
+      "seniority": "senior",
+      "required_skills": [
+        "python",
+        "pytorch",
+        "tensorflow"
+      ],
+      "preferred_skills": [
+        "aws",
+        "deep learning"
+      ],
+      "all_skills": [
+        "python",
+        "pytorch",
+        "tensorflow",
+        "aws",
+        "deep learning",
+        "machine learning",
+        "regression",
+        "llm",
+        "natural language processing"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "python",
+        "pytorch",
+        "tensorflow"
+      ],
+      "preferred_tools": [
+        "aws"
+      ],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "scaleai|Senior Software Engineer, GenAI",
+      "role_archetype": "growth_product_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "senior",
+      "required_skills": [
+        "machine learning",
+        "generative ai",
+        "mongodb"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "machine learning",
+        "generative ai",
+        "mongodb",
+        "python",
+        "llm"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "mongodb"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [
+        "data quality",
+        "pipeline"
+      ],
+      "preferred_workflows": [],
+      "business_contexts": [
+        "growth"
+      ],
+      "stakeholder_contexts": [
+        "product",
+        "engineering"
+      ],
+      "kpi_metrics": [
+        "quality"
+      ],
+      "ownership_signals": [
+        "own",
+        "drive"
+      ]
+    },
+    {
+      "job_key": "scaleai|Senior/Staff Machine Learning Research Engineer, General Agents, Enterprise GenAI",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "staff",
+      "required_skills": [
+        "fine-tuning",
+        "lora"
+      ],
+      "preferred_skills": [
+        "llm"
+      ],
+      "all_skills": [
+        "fine-tuning",
+        "lora",
+        "llm",
+        "python",
+        "machine learning",
+        "generative ai"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "product",
+        "engineering",
+        "customers"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "scaleai|Staff Machine Learning Research Engineer, Agent Post-training - Enterprise GenAI",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "staff",
+      "required_skills": [
+        "llm"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "llm",
+        "machine learning",
+        "generative ai",
+        "multi-agent systems"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "scaleai|Staff Software Engineer, Enterprise GenAI",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "staff",
+      "required_skills": [
+        "aws",
+        "azure",
+        "kubernetes",
+        "python",
+        "sql"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "aws",
+        "azure",
+        "kubernetes",
+        "python",
+        "sql",
+        "machine learning",
+        "generative ai",
+        "vector db"
+      ],
+      "required_methods": [],
+      "preferred_methods": [],
+      "required_tools": [
+        "aws",
+        "azure",
+        "kubernetes",
+        "python",
+        "sql"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "socotec|Applied AI Engineer",
+      "role_archetype": "general_analytics",
+      "role_family": "ml_ai_engineering",
+      "seniority": "",
+      "required_skills": [
+        "aws",
+        "azure",
+        "hugging face",
+        "natural language processing",
+        "python",
+        "pytorch",
+        "scikit-learn",
+        "tensorflow"
+      ],
+      "preferred_skills": [
+        "a/b testing",
+        "docker",
+        "langchain"
+      ],
+      "all_skills": [
+        "aws",
+        "azure",
+        "hugging face",
+        "natural language processing",
+        "python",
+        "pytorch",
+        "scikit-learn",
+        "tensorflow",
+        "a/b testing",
+        "docker",
+        "langchain",
+        "machine learning",
+        "applied ai"
+      ],
+      "required_methods": [],
+      "preferred_methods": [
+        "natural language processing"
+      ],
+      "required_tools": [
+        "aws",
+        "azure",
+        "hugging face",
+        "python",
+        "pytorch",
+        "tensorflow"
+      ],
+      "preferred_tools": [
+        "docker",
+        "langchain"
+      ],
+      "required_workflows": [],
+      "preferred_workflows": [],
+      "business_contexts": [],
+      "stakeholder_contexts": [
+        "product"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    },
+    {
+      "job_key": "stripe|Senior Data Scientist",
+      "role_archetype": "data_scientist",
+      "role_family": "data_science",
+      "seniority": "senior",
+      "required_skills": [
+        "experimental design",
+        "forecasting",
+        "machine learning",
+        "python",
+        "sql"
+      ],
+      "preferred_skills": [],
+      "all_skills": [
+        "experimental design",
+        "forecasting",
+        "machine learning",
+        "python",
+        "sql",
+        "data mining"
+      ],
+      "required_methods": [
+        "statistics",
+        "statistical"
+      ],
+      "preferred_methods": [
+        "machine learning"
+      ],
+      "required_tools": [
+        "python",
+        "sql"
+      ],
+      "preferred_tools": [],
+      "required_workflows": [],
+      "preferred_workflows": [
+        "forecasting"
+      ],
+      "business_contexts": [
+        "operations"
+      ],
+      "stakeholder_contexts": [
+        "product",
+        "engineering"
+      ],
+      "kpi_metrics": [],
+      "ownership_signals": []
+    }
+  ]
+}

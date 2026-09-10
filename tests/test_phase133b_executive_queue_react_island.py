@@ -162,7 +162,12 @@ def test_queue_visual_hierarchy_and_pinned_review_contract_are_scoped():
     assert "background: var(--queue-details-surface)" in styles
     assert ".executive-queue-sort-btn.is-sorted" in styles
     assert ".executive-queue-table-card--simple" in styles
-    assert "linear-gradient(135deg, var(--queue-accent), var(--queue-accent-violet))" in styles
+    segmented = styles.split(".executive-queue-segmented button.is-active {", 1)[1].split("}", 1)[0]
+    view_toggle = styles.split(".executive-queue-view-toggle button.is-active {", 1)[1].split("}", 1)[0]
+    for active in (segmented, view_toggle):
+        assert "background: var(--app-action-primary, #56746d)" in active
+        assert "background-image: none" in active
+        assert "linear-gradient" not in active
 
 
 def test_executive_chat_offset_and_pagination_clearance_are_scoped_without_behavior_changes():

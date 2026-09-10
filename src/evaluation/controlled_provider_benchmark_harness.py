@@ -202,7 +202,26 @@ class AmbiguousTransportTimeout(RuntimeError):
 
 
 class DefinitiveTransportFailure(RuntimeError):
-    """Injected transport reports a definitive, non-retriable failure."""
+    """Injected transport reports a definitive, non-retriable failure.
+
+    ``status_code`` is optional, bounded observability only: it carries the
+    integer HTTP status the classifier already computed, so evidence can tell
+    apart rejections that share one category (400 vs 404, for example). It never
+    influences classification or retryability, and no body, message, header or
+    response object is retained.
+    """
+
+    def __init__(
+        self,
+        *args: Any,
+        status_code: int | None = None,
+        provider_error: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(*args)
+        self.status_code = None if status_code is None else int(status_code)
+        # Bounded categorical/boolean projection only; see the Groq transport
+        # adapter for how it is derived. Never provider text.
+        self.provider_error = dict(provider_error) if provider_error else None
 
 
 def _require(condition: bool, message: str) -> None:

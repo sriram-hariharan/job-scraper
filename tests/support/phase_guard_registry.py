@@ -588,6 +588,267 @@ ITEM4_PLANNING_TAILORING_OPTIONS_FILES = {
     "tests/test_item4et_tailoring_state_contract.py",
 }
 
+# Item 6 Agentic Review UI revamp: exact final frontend and focused-test
+# boundary accepted by stale registry-backed guards.
+ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES = {
+    "src/app/profile_ui.py",
+    "src/app/static/agentic_review.css",
+    "src/app/static/agentic_review.js",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
+    "tests/test_item2e_manual_provider_preview_ui.py",
+    "tests/test_item6b2_consolidated_agentic_review_queue_foundation.py",
+    "tests/test_item6b3_selected_job_review_inspector.py",
+    "tests/test_item6b45_premium_visual_correction_density.py",
+    "tests/test_item6b4_selected_job_evidence_agent_views.py",
+    "tests/test_item6b5_contextual_actions_manual_preview_integration.py",
+    "tests/test_item6b65a_review_advanced_shell_usability.py",
+    "tests/test_item6b65b_agent_trace_master_detail_search_keyboard.py",
+    "tests/test_item6b65c_extended_trace_diagnostics_master_detail.py",
+    "tests/test_item6b6_final_review_vs_advanced_changeover.py",
+    "tests/test_item6c1_extended_diagnostic_detail_layout_action_alignment.py",
+    "tests/test_item6c2_final_placement_disclosure_header_alignment.py",
+    "tests/test_item6c3_agentic_review_back_navigation_placement_visibility.py",
+    "tests/test_item6c_final_agentic_review_visual_system_micro_ux.py",
+}
+
+# Item 6.1B Agentic Review admin boundary: exact production and focused-test
+# surface accepted by historical registry-backed guards.
+ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES = {
+    "src/app/api.py",
+    "src/app/profile_ui.py",
+    "src/app/static/profile.js",
+    "tests/test_item61b_agentic_review_admin_boundary.py",
+    "tests/test_agent_trace_api.py",
+    "tests/test_phase101b_evidence_chain_api_service_readback_default_off.py",
+}
+
+# Item 6.1C Agentic Operations pure admin readback: exact production and
+# focused-test surface accepted by historical registry-backed guards.
+ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES = {
+    "src/app/api.py",
+    "src/app/services.py",
+    "tests/test_item61c_agentic_operations_readonly_backend.py",
+}
+
+# Item 6.1D Agentic Operations admin console shell: exact production and
+# focused-test surface accepted by historical registry-backed guards.
+ITEM61D_AGENTIC_OPERATIONS_CONSOLE_SHELL_FILES = {
+    "src/app/ui.py",
+    "src/app/ui_shell.py",
+    "src/app/static/shell.js",
+    "tests/test_item61d_agentic_operations_console_shell.py",
+}
+
+# Item 6.1E Agentic Operations overview UI: exact frontend, page-shell,
+# generated-bundle, and focused-test surface accepted by historical guards.
+ITEM61E_AGENTIC_OPERATIONS_OVERVIEW_UI_FILES = {
+    "src/app/ui.py",
+    "frontend/executive-kpi/src/main.tsx",
+    "frontend/executive-kpi/src/styles.css",
+    "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.tsx",
+    "frontend/executive-kpi/src/agentic/agenticOperationsModel.ts",
+    "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.test.tsx",
+    "src/app/static/build/executive-kpi/executive-kpi.css",
+    "src/app/static/build/executive-kpi/executive-kpi.js",
+    "tests/test_item61e_agentic_operations_overview_ui.py",
+}
+
+# Item 6.1F canonical agent registry and safety matrix: exact accepted
+# frontend, generated-bundle, and focused-test surface.
+ITEM61F_AGENT_REGISTRY_SAFETY_MATRIX_FILES = {
+    "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.test.tsx",
+    "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.tsx",
+    "frontend/executive-kpi/src/agentic/agenticOperationsModel.ts",
+    "frontend/executive-kpi/src/styles.css",
+    "src/app/static/build/executive-kpi/executive-kpi.css",
+    "src/app/static/build/executive-kpi/executive-kpi.js",
+    "tests/test_item61f_agent_registry_safety_matrix.py",
+}
+
+# Item 6.1G run inspector and Agentic Review integration: exact accepted
+# frontend, generated-bundle, and focused-test surface.
+ITEM61G_RUN_INSPECTOR_AGENTIC_REVIEW_INTEGRATION_FILES = {
+    "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.tsx",
+    "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.test.tsx",
+    "frontend/executive-kpi/src/styles.css",
+    "src/app/static/build/executive-kpi/executive-kpi.js",
+    "src/app/static/build/executive-kpi/executive-kpi.css",
+    "tests/test_item61g_run_inspector_agentic_review_integration.py",
+}
+
+# Item 6.1H cross-page navigation and product clarity: exact accepted
+# production, frontend, generated-bundle, and focused-test surface.
+ITEM61H_CROSS_PAGE_NAVIGATION_PRODUCT_CLARITY_FILES = {
+    "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.test.tsx",
+    "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.tsx",
+    "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.test.tsx",
+    "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx",
+    "src/app/planning_ui.py",
+    "src/app/profile_ui.py",
+    "src/app/static/build/executive-kpi/executive-kpi.js",
+    "src/app/ui_shell.py",
+    "tests/test_advanced_diagnostics_react_redesign.py",
+    "tests/test_item2_phase4_profile_corrections_and_legacy_route_retirement.py",
+    "tests/test_item61b_agentic_review_admin_boundary.py",
+    "tests/test_item61d_agentic_operations_console_shell.py",
+    "tests/test_item61g_run_inspector_agentic_review_integration.py",
+    "tests/test_item6c3_agentic_review_back_navigation_placement_visibility.py",
+}
+
+# Item 6.1H-V1 Scan Diagnostics visual polish: exact source, server-shell,
+# generated-style, and focused-test surface.
+ITEM61H_V1_SCAN_DIAGNOSTICS_VISUAL_POLISH_FILES = {
+    "frontend/executive-kpi/src/styles.css",
+    "src/app/planning_ui.py",
+    "src/app/static/build/executive-kpi/executive-kpi.css",
+    "tests/test_advanced_diagnostics_react_redesign.py",
+}
+
+# Item 7B premium account popover and attached toolbar: exact shared-shell,
+# finite cache-owner, focused compatibility, and guard-closure surface.
+ITEM7B_PREMIUM_ACCOUNT_TOOLBAR_FILES = {
+    "src/app/application_hub_ui.py",
+    "src/app/decisions_ui.py",
+    "src/app/onboarding_ui.py",
+    "src/app/planning_ui.py",
+    "src/app/profile_ui.py",
+    "src/app/static/app_redesign.css",
+    "src/app/static/shell.js",
+    "src/app/ui.py",
+    "src/app/ui_shell.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_item2_phase4_profile_corrections_and_legacy_route_retirement.py",
+    "tests/test_item2_phase4_secondary_page_headers.py",
+    "tests/test_item61d_agentic_operations_console_shell.py",
+    "tests/test_item7b_premium_account_toolbar.py",
+    "tests/test_phase132b2r3_guided_preferences_workflow.py",
+    "tests/test_phase133d_pipeline_dashboard_react_island.py",
+    "tests/test_phase1_step7_profile_ai_settings_ui.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+# Item 7.1B diagnostics runtime foundation: exact backend, owner-scoped
+# persistence, focused integration-test, and finite guard-closure surface.
+ITEM71B_SAFE_DIAGNOSTICS_RUNTIME_FOUNDATION_FILES = {
+    "src/app/api.py",
+    "src/app/services.py",
+    "src/storage/saved_scans/read_postgres.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_item71b_safe_diagnostics_runtime_foundation.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+# Item 7.1C diagnostics frontend activation: exact React source/test, server
+# initial-state owner, generated island assets, finite successor assertions,
+# and guard-closure surface. No wildcard path acceptance is permitted.
+ITEM71C_SCAN_DIAGNOSTICS_FRONTEND_ACTIVATION_FILES = {
+    "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.test.tsx",
+    "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx",
+    "frontend/executive-kpi/src/styles.css",
+    "src/app/planning_ui.py",
+    "src/app/static/build/executive-kpi/executive-kpi.css",
+    "src/app/static/build/executive-kpi/executive-kpi.js",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_item2_phase3_shared_page_header_foundation.py",
+    "tests/test_item2_phase4_secondary_page_headers.py",
+    "tests/test_item71c_scan_diagnostics_frontend_activation.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+# Item 7.1D latest-only diagnostics workflow reset: exact existing API/service
+# owners, owner-scoped subtree persistence, terminal UI control, generated
+# assets, focused proofs, and finite guard closure. No run-history surface.
+ITEM71D_LATEST_DIAGNOSTICS_WORKFLOW_RESET_FILES = {
+    "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.test.tsx",
+    "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx",
+    "frontend/executive-kpi/src/styles.css",
+    "src/app/api.py",
+    "src/app/planning_ui.py",
+    "src/app/services.py",
+    "src/app/static/build/executive-kpi/executive-kpi.css",
+    "src/app/static/build/executive-kpi/executive-kpi.js",
+    "src/storage/saved_scans/read_postgres.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_item2_phase3_shared_page_header_foundation.py",
+    "tests/test_item2_phase4_secondary_page_headers.py",
+    "tests/test_item71b_safe_diagnostics_runtime_foundation.py",
+    "tests/test_item71c_scan_diagnostics_frontend_activation.py",
+    "tests/test_item71d_latest_diagnostics_workflow_reset.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_default_off.py",
+    "tests/test_phase56b_live_tailoring_suggestion_planning_workspace_readback_ui_api_default_off.py",
+    "tests/test_phase57a_live_exact_resume_change_proposal_planning_workspace_wiring_default_off.py",
+    "tests/test_phase57b_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+# Notifications scheduler-bell bridge: exact PostgreSQL scheduler-artifact
+# reader, notification service/API boundary, focused proof, and finite guards.
+NOTIFICATIONS_SCHEDULER_BELL_BRIDGE_FILES = {
+    "src/app/api.py",
+    "src/app/services.py",
+    "src/storage/scheduler_artifacts_store.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_scheduler_notification_bell_bridge.py",
+}
+
+# Item 7.1 manual-review correction: exact-change message serialization,
+# Groq-only diagnostic adapters, focused proof, and finite guard closure.
+ITEM71_MANUAL_REVIEW_GROQ_DIAGNOSTICS_FIX_FILES = {
+    "src/agents/controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+    "src/app/services.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_item71_manual_review_groq_diagnostics_fix.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase43b_controlled_exact_resume_change_set_llm_request_packet_dry_run_command_default_off.py",
+    "tests/test_phase45a_controlled_exact_resume_change_set_provider_response_validation_default_off.py",
+    "tests/test_phase45b_controlled_exact_resume_change_set_provider_response_validation_dry_run_command_default_off.py",
+    "tests/test_phase49a_controlled_exact_resume_change_set_real_provider_runtime_adapter_default_off.py",
+    "tests/test_phase49b_controlled_exact_resume_change_set_real_provider_runtime_adapter_dry_run_command_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+# Item 7.1 Fix 8: exact Phase 42 no-op filtering, the derived Phase 43
+# dispatch-readiness field, focused proofs, and finite hash compatibility.
+ITEM71_EFFECTIVE_EXACT_CHANGE_FILTER_FILES = {
+    "src/agents/exact_resume_change_set_proposal_builder_default_off.py",
+    "src/agents/controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase42a_exact_resume_change_set_proposal_builder_default_off.py",
+    "tests/test_phase43a_controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+}
+
+# Item 7.1 Fix 9: production-quality refinement instructions, deterministic
+# final-output validation, planning runtime identity enforcement, focused
+# readback proofs, and finite guard compatibility.
+ITEM71_PRODUCTION_EXACT_CHANGE_REFINEMENT_FILES = {
+    "src/agents/controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+    "src/agents/controlled_exact_resume_change_set_provider_response_validation_default_off.py",
+    "src/app/services.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_item71b_safe_diagnostics_runtime_foundation.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase43a_controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+    "tests/test_phase45a_controlled_exact_resume_change_set_provider_response_validation_default_off.py",
+    "tests/test_phase57a_live_exact_resume_change_proposal_planning_workspace_wiring_default_off.py",
+    "tests/test_phase57b_live_exact_resume_change_proposal_planning_workspace_readback_ui_api_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
 SCRAPER_SOURCE_HEALTH_METRICS_FILES = {
     "src/config/consts.py",
     "src/discovery/crawl_scheduler.py",
@@ -1035,6 +1296,79 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         "source_yield_ui": SOURCE_YIELD_UI_FILES,
         "jobvite_location_freshness": JOBVITE_LOCATION_FRESHNESS_FILES,
         "jobvite_standalone_discovery": JOBVITE_STANDALONE_DISCOVERY_FILES,
+        "live_pipeline_ai_evaluation_reliability_lr2b": {
+            "src/ai/job_fit_evaluator.py",
+            "src/evaluation/controlled_openai_canary_transport.py",
+            "src/evaluation/controlled_production_parity_benchmark.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_controlled_openai_canary_transport.py",
+            "tests/test_controlled_production_parity_benchmark.py",
+            "tests/test_phase17b_lean_cache_first_semantic_evaluation_activation.py",
+        },
+        "live_pipeline_ai_evaluation_reliability_lr2b_lr2c": {
+            "src/ai/job_fit_evaluator.py",
+            "src/evaluation/controlled_openai_canary_transport.py",
+            "src/evaluation/controlled_production_parity_benchmark.py",
+            "src/pipeline/collector.py",
+            "tests/support/phase_guard_registry.py",
+            "tests/test_controlled_openai_canary_transport.py",
+            "tests/test_controlled_production_parity_benchmark.py",
+            "tests/test_phase17b_lean_cache_first_semantic_evaluation_activation.py",
+            "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+            "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        },
+        "live_pipeline_ai_evaluation_reliability_fvr2b_source_contracts": {
+            "tests/test_phase16b_lean_deterministic_production_orchestration_closure.py",
+            "tests/test_phase17a_lean_cache_first_jd_intelligence_activation.py",
+            "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
+            "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
+        },
+        "item61b_agentic_review_admin_boundary": (
+            ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES
+        ),
+        "item61c_agentic_operations_readonly_backend": (
+            ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES
+        ),
+        "item61d_agentic_operations_console_shell": (
+            ITEM61D_AGENTIC_OPERATIONS_CONSOLE_SHELL_FILES
+        ),
+        "item61e_agentic_operations_overview_ui": (
+            ITEM61E_AGENTIC_OPERATIONS_OVERVIEW_UI_FILES
+        ),
+        "item61f_agent_registry_safety_matrix": (
+            ITEM61F_AGENT_REGISTRY_SAFETY_MATRIX_FILES
+        ),
+        "item61g_run_inspector_agentic_review_integration": (
+            ITEM61G_RUN_INSPECTOR_AGENTIC_REVIEW_INTEGRATION_FILES
+        ),
+        "item61h_cross_page_navigation_product_clarity": (
+            ITEM61H_CROSS_PAGE_NAVIGATION_PRODUCT_CLARITY_FILES
+        ),
+        "item61h_v1_scan_diagnostics_visual_polish": (
+            ITEM61H_V1_SCAN_DIAGNOSTICS_VISUAL_POLISH_FILES
+        ),
+        "item7b_premium_account_toolbar": ITEM7B_PREMIUM_ACCOUNT_TOOLBAR_FILES,
+        "item71b_safe_diagnostics_runtime_foundation": (
+            ITEM71B_SAFE_DIAGNOSTICS_RUNTIME_FOUNDATION_FILES
+        ),
+        "item71c_scan_diagnostics_frontend_activation": (
+            ITEM71C_SCAN_DIAGNOSTICS_FRONTEND_ACTIVATION_FILES
+        ),
+        "item71d_latest_diagnostics_workflow_reset": (
+            ITEM71D_LATEST_DIAGNOSTICS_WORKFLOW_RESET_FILES
+        ),
+        "notifications_scheduler_bell_bridge": (
+            NOTIFICATIONS_SCHEDULER_BELL_BRIDGE_FILES
+        ),
+        "item71_manual_review_groq_diagnostics_fix": (
+            ITEM71_MANUAL_REVIEW_GROQ_DIAGNOSTICS_FIX_FILES
+        ),
+        "item71_effective_exact_change_filter": (
+            ITEM71_EFFECTIVE_EXACT_CHANGE_FILTER_FILES
+        ),
+        "item71_production_exact_change_refinement": (
+            ITEM71_PRODUCTION_EXACT_CHANGE_REFINEMENT_FILES
+        ),
         "config_vocabulary_scoring_change": {
             "src/config/consts.py",
             "tests/test_phase115a_applied_ai_scoring_fix.py",
@@ -2231,16 +2565,59 @@ def legacy_guard_allowlist(profile: str) -> set[str]:
         raise AssertionError(f"Unknown legacy guard allowlist profile: {profile}") from exc
 
 
+LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES = {
+    "src/ai/user_provider_runtime.py",
+    "src/evaluation/controlled_live_provider_qualification.py",
+    "tests/test_phase1_step10_recommended_provider_routing_bridge.py",
+    "tests/test_phase1_step9c7a_controlled_live_qualification_gate.py",
+    "tests/test_provider_model_recommendation_policy.py",
+    "tests/test_score_first_scan.py",
+}
+
+PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES = {
+    "src/matching/jd_intelligence_contract.py",
+    "src/matching/job_adapter.py",
+    "src/resume/evidence_builder.py",
+    "tests/fixtures/p1s3_jd_evidence/corpus_jobevidence_baseline.json",
+    "tests/fixtures/p1s3_jd_evidence/starved_jd_records.json",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_problem1_experience_skill_morphology.py",
+    "tests/test_problem1_jd_evidence_starvation.py",
+    "tests/test_problem1_jd_category_validator.py",
+    "tests/test_problem1_jd_intelligence_contract_v2.py",
+}
+
+
 def current_milestone_guard_compatibility_allowlist() -> set[str]:
     """Exact current milestone files accepted by stale registry-backed guards."""
     return (
-        STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
+        LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES
+        | PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES
+        | STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
         | STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES
         | ITEM2_MANUAL_PROVIDER_PREVIEW_JOB_IDENTITY_REPAIR_FILES
         | ITEM2_MANUAL_PROVIDER_PREVIEW_PROMPT_SCHEMA_ALIGNMENT_FILES
         | ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES
         | ITEM4_PLANNING_TAILORING_OPTIONS_FILES
+        | ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES
+        | legacy_guard_allowlist("item61b_agentic_review_admin_boundary")
+        | legacy_guard_allowlist("item61c_agentic_operations_readonly_backend")
+        | legacy_guard_allowlist("item61d_agentic_operations_console_shell")
+        | legacy_guard_allowlist("item61e_agentic_operations_overview_ui")
+        | legacy_guard_allowlist("item61f_agent_registry_safety_matrix")
+        | legacy_guard_allowlist("item61g_run_inspector_agentic_review_integration")
+        | legacy_guard_allowlist("item61h_cross_page_navigation_product_clarity")
+        | legacy_guard_allowlist("item61h_v1_scan_diagnostics_visual_polish")
+        | legacy_guard_allowlist("item7b_premium_account_toolbar")
+        | legacy_guard_allowlist("item71b_safe_diagnostics_runtime_foundation")
+        | legacy_guard_allowlist("item71c_scan_diagnostics_frontend_activation")
+        | legacy_guard_allowlist("item71d_latest_diagnostics_workflow_reset")
+        | legacy_guard_allowlist("notifications_scheduler_bell_bridge")
+        | legacy_guard_allowlist("item71_manual_review_groq_diagnostics_fix")
+        | legacy_guard_allowlist("item71_effective_exact_change_filter")
+        | legacy_guard_allowlist("item71_production_exact_change_refinement")
         | legacy_guard_allowlist("smartrecruiters_pagination")
         | legacy_guard_allowlist("workday_pagination_freshness")
         | legacy_guard_allowlist("himalayas_step2b_location_coverage")
@@ -2269,6 +2646,12 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | legacy_guard_allowlist("item2_phase4_profile_corrections_legacy_route_retirement")
         | legacy_guard_allowlist("source_yield_ui")
         | legacy_guard_allowlist("jobvite_location_freshness")
+        | legacy_guard_allowlist(
+            "live_pipeline_ai_evaluation_reliability_lr2b_lr2c"
+        )
+        | legacy_guard_allowlist(
+            "live_pipeline_ai_evaluation_reliability_fvr2b_source_contracts"
+        )
         | legacy_guard_allowlist("phase8_step3d_tailoring_llm_gate")
         | legacy_guard_allowlist("phase8_step4_dead_file_cleanup")
         | legacy_guard_allowlist("phase8_step6_canonical_agent_registry")
@@ -2485,6 +2868,20 @@ def assert_protected_hashes(
             "67a9925651d237f353f42e564e55f36f08dd7f63db8c09ce36fd4d277d6b66c6",
             # Item 4 planning & tailoring options review successor.
             "e658a10a817998be1d7573de7872047d44e1f088b1601e3a806ed2f22b396e2c",
+            # Item 6.1B Agentic Review admin boundary successor.
+            "ca8de5e0643a4c24eb6d36c0371ee4c6e422a9dfa2c7dd01ce664954b959a985",
+            # Item 6.1C Agentic Operations pure admin readback successor.
+            "d7107123ae4a98bf133f14b8593902a8c33e151660cb7024a6bec25186ea89c9",
+            # Item 7.1B safe diagnostics runtime foundation successor.
+            "1c945efff35250fbdc2b92b7a608b1acdee668694c2952d7d45aadc9d809c9fe",
+            # Bounded live tailoring parse-retry authority successor.
+            "895a72ab959d0f2a4195b7563c5e0a73d0c4e83e4f075065bd76072720c08e6a",
+            # Item 7.1D latest diagnostics workflow reset successor.
+            "c1698f3b988371a1df644c9c1f1e0906526d45b7886990842216ea76d8ad824d",
+            # Scheduler-artifact notification bell bridge successor.
+            "85247b5e2ac0987429293ff83f7d6463110fa1123c0e0bb4d0c834f546eb573b",
+            # Planning bulk suggestions and uncapped browse limit successor.
+            "b386161a6da69dc1eacfda8583846b5ee979d8dcba51ec33e83afd48c1e39c11",
         }),
         (
             "src/app/services.py",
@@ -2503,6 +2900,10 @@ def assert_protected_hashes(
             "bae6084f3be7e173e2cb9ec4bf39d085531a4f628f88508445b0a583783e0ded",
             # Item 3 floating ApplyLens AI chatbot successor.
             "90aff70ad5eb13958187dbd17f0250ec976ba8bd99a29e78f841bf4d0e8b5cbb",
+            # Item 7B premium account popover and attached toolbar successor.
+            "33471634a2f475c74016a672639c64ff2b3fb24ac7ce52bf7061ad4d95afc125",
+            # Item 7B-V1 neutral toolbar and notification-position successor.
+            "4c364771368cb781ff0c97dc227a4882fa52119c8c5f82ad24eb99f8b0bc2b5a",
         }),
         (
             "src/ai/llm_client.py",
@@ -2512,23 +2913,39 @@ def assert_protected_hashes(
             "ff2f412c4bcc3067e73d4fb78c65b53fa9d9760f56f1451d0dff6d4840386309",
             "687ce0fa50a7a7a6498dc93287489027708fe866da90a97ae2fff941f4bcae44",
             "82aa58a6062c9ed9a3923fdb27bd05dd45bd31e7ce9bf3160351ec84737c5885",
+            # Workload-scoped Groq json_object compatibility successor.
+            "27a0fd87f1be4372b78bdaced6451f5d7c4a286cf8bc6398914b5158a8d1cb20",
         }),
         (
             "src/ai/llm_client.py",
             "61100917a63b5285e7d1fa07ce5da47d73b6ee17f0bb3d3f88e6380722bc85f1",
         ): frozenset({
             "82aa58a6062c9ed9a3923fdb27bd05dd45bd31e7ce9bf3160351ec84737c5885",
+            # Workload-scoped Groq json_object compatibility successor.
+            "27a0fd87f1be4372b78bdaced6451f5d7c4a286cf8bc6398914b5158a8d1cb20",
         }),
         (
             "src/evaluation/controlled_groq_canary_transport.py",
             "89d01fe8460e7eae40e794dce808bb26aef6dbb02366e7c5d5bed268fdf00489",
         ): frozenset({
             "06bb37112326d658f9a7bcac6cac0897c3150652a8b734cff0794e1997746741",
+            # Bounded transport HTTP-status observability successor: retains the
+            # already-computed integer status on DefinitiveTransportFailure.
+            # Classification, retry, and fallback behavior are unchanged.
+            "8400de79ebe34da31300ad93b7a18b6c71c216613fc6f7e54d35b23ba1d89fe1",
+            # Bounded structural Groq error projection successor: adds
+            # allowlisted provider_error_type/code/param plus a
+            # has_failed_generation boolean. No provider text is retained.
+            "2d5652030715d9300d16244f53c6096785b2193e73d870d3bfaf3573c25a9ab9",
         }),
         (
             "src/ai/job_fit_evaluator.py",
             "3776e5ce3c098c5329d2e7631195915f6bcf098ec0303ec619e9b0e9ecf393fb",
-        ): "33a145c4d1aa640f970b698c95298600ea5903711315d44ed136174d6f27a999",
+        ): frozenset({
+            "33a145c4d1aa640f970b698c95298600ea5903711315d44ed136174d6f27a999",
+            "b58d270494f9049dbcefcd785a220cb9cfb33aad4b10b75f4c149197cb0ca56e",
+            "4c971173cd0e224b441263595e82b4f52eb6b0ed65172eb336e182a206bc5d3b",
+        }),
         (
             "src/app/api.py",
             "85bd669060be60c275c785fefdb4438dc567b6f1c40a3b2a134d1c885db4ee96",
@@ -2550,6 +2967,20 @@ def assert_protected_hashes(
             "67a9925651d237f353f42e564e55f36f08dd7f63db8c09ce36fd4d277d6b66c6",
             # Item 4 planning & tailoring options review successor.
             "e658a10a817998be1d7573de7872047d44e1f088b1601e3a806ed2f22b396e2c",
+            # Item 6.1B Agentic Review admin boundary successor.
+            "ca8de5e0643a4c24eb6d36c0371ee4c6e422a9dfa2c7dd01ce664954b959a985",
+            # Item 6.1C Agentic Operations pure admin readback successor.
+            "d7107123ae4a98bf133f14b8593902a8c33e151660cb7024a6bec25186ea89c9",
+            # Item 7.1B safe diagnostics runtime foundation successor.
+            "1c945efff35250fbdc2b92b7a608b1acdee668694c2952d7d45aadc9d809c9fe",
+            # Bounded live tailoring parse-retry authority successor.
+            "895a72ab959d0f2a4195b7563c5e0a73d0c4e83e4f075065bd76072720c08e6a",
+            # Item 7.1D latest diagnostics workflow reset successor.
+            "c1698f3b988371a1df644c9c1f1e0906526d45b7886990842216ea76d8ad824d",
+            # Scheduler-artifact notification bell bridge successor.
+            "85247b5e2ac0987429293ff83f7d6463110fa1123c0e0bb4d0c834f546eb573b",
+            # Planning bulk suggestions and uncapped browse limit successor.
+            "b386161a6da69dc1eacfda8583846b5ee979d8dcba51ec33e83afd48c1e39c11",
         }),
         (
             "src/app/services.py",
@@ -2568,6 +2999,11 @@ def assert_protected_hashes(
             "src/app/services.py",
             "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
         ): frozenset({
+            # Bounded live tailoring parse-retry authority successor.
+            "2b55cad33fc29986d36c02f18eed5dc72f785e39c95e0f7d80bc67af3002ab51",
+            # Reviewed Bulk universe projection + grounded-review/empty status
+            # work, with the historical browse_payload limit clamp restored.
+            "8e339d90d055bf15b184466487d6af23a1e062e033e3938daa073de2edcc45dc",
             "23401720ca3f4243a2b85eb03f8ac5e49e205b4f8039a8fdf86d18b9b3e1ea3d",
             "b71cf683a281bfa07de70fe41a101975f066c35179e7607af6d078f10ee35835",
             "4f9c9b7a8266d0017bdef62a1db3809fa7d9bd2b4d7d975e8f134e84fe00c386",
@@ -2589,7 +3025,61 @@ def assert_protected_hashes(
             "a9211f507cd0294d54040d45df11b846e359f815556306e64bb6785bd1e5ad41",
             # Item 4 planning & tailoring options review successor.
             "c223631f87bd6b358bdd91e732dc54b1fd55568e93ef8c86c3645d321fdf078a",
+            # Item 6.1C Agentic Operations pure admin readback successor.
+            "4b181f0ba86b03edf9e2b474c91f9121417568a2a65bdcca8dd53604385c033c",
+            # Item 7.1B safe diagnostics runtime foundation successor.
+            "43000e730db5f4c053fa0816e48b1a950daca1bb677eaa87630fd7fd79790d53",
+            # Item 7.1 manual-review Groq diagnostics successor.
+            "2293d03dbd898c66bd69dce94dda7e07930e0d399f1a9afef20c90ec3bb8791f",
+            # Item 7.1 exact-change context integration successor.
+            "dea36ee8cc9f1eb88614ebc69f707c44355332774c1d49a1b3ebece1562a934d",
+            # Item 7.1 Fix 6 structured resume-target persistence successor.
+            "0b870266eb9afb02d2f2942920c0715e632e5960dbfcde2eb984d543e422d28e",
+                # Item 7.1 Fix 7 human-reviewable exact-proposal preview successor.
+                "d5011761f36c446b96d46bf98982bad728a946260bf41319ec28b1e1e28f0219",
+                # Item 7.1 Fix 9 exact-change validation integration successor.
+                "d61b21f7ecd93538a5a188549cb77e74821792c6dc82e169d6c419052db1cb1c",
+                # Item 7.1 Fix 10 Live Tailoring Groq strict-schema successor.
+                "ed36c1a4f56aa91b695b704b936e1074fb7c404db305087c3712777900fd932c",
+                # Item 7.1 guided diagnostics bounded tailoring-readback successor.
+                "d9d6fefe5c813c62821455a32ac9afd4d1714ed43d9408c3bc1563bef97d965d",
+                # Item 7.1 Fix 11 safe Live Tailoring failure-observability successor.
+                "327aa973bb7b7da2781d4b4bf5479b5b872bb6fb3dda720dbdb51b665f440839",
+                # Item 7.1D latest diagnostics workflow reset successor.
+                "c37b51252e77d0004d50c1d819b40d828144a011fcd5742b08483d7d7bee6e63",
+                # Scheduler-artifact notification bell bridge successor.
+                "0016a2d936e16461450853a4e8bfc96ef92fdeea978424a7f126245002071e3c",
+                # Planning bulk suggestions and uncapped browse limit successor.
+                "c6d272bd777e49a12ebaaeba9eb093360b7b889589df9ca95934a66393e96c88",
+            }),
+        (
+            "src/agents/exact_resume_change_set_proposal_builder_default_off.py",
+            "fd173ea8bf3f7d746ebbdb7d6b2af7ae7df1aeaea4e66acaca52ea4fda1a9dc4",
+        ): frozenset({
+            # Item 7.1 Fix 8 effective exact-change filter successor.
+            "00efd2d788068d85c8c54e610d027b63a25b8fd985e8a844b1a787f86ccfcee8",
         }),
+        (
+            "src/agents/controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+            "acaf694a08f65a5e646d2cbcc7b83a394ea1d15416c7311e230c86536d0a6b0f",
+        ): frozenset({
+                "782cc94345e49f881c64d387025852fb29fba84f85965e7b6e9e246f2e1b0481",
+                # Item 7.1 Fix 2 Groq strict-schema successor.
+                "3f38b7b72f8d9f9217d8d1ac1c5688079144191a67bdaf1eefa6e0b8d61cc120",
+                # Item 7.1 Fix 3 nonempty exact-proposal schema successor.
+                "58ff6b03952ea9e9d49aa534d8a28db2e3c2f57d522fcec4a4a54d46159bd5a1",
+                    # Item 7.1 Fix 8 derived dispatch-readiness successor.
+                    "eefd392fe6611106e60723f6f40512b3a199d23f41042c5c4240c3c30fed0224",
+                    # Item 7.1 Fix 9 production refinement contract successor.
+                    "63c346f2efd3eeae321fc326dd20c0a939274f2bf6fca5c71d4f6ceb3cff0430",
+                }),
+            (
+                "src/agents/controlled_exact_resume_change_set_provider_response_validation_default_off.py",
+                "413ace0d64f8c1bd62726cf7ae32bc4fc8e4b88eca82826492362d9842f569ef",
+            ): frozenset({
+                # Item 7.1 Fix 9 no-op, scaffold, and identity validation successor.
+                "521c7ec24fd6ddba2d11d7454bc7dd46c0ff6828d9f831f9650ee671b5da5306",
+            }),
             (
                 "src/agents/jd_intelligence.py",
                 "3711372610b48c5762b1bc27c9cdc8182a9a3d735e5f8bade222b9bac3ef4a00",
@@ -2644,15 +3134,24 @@ def assert_protected_hashes(
                     "a7e1a834fabda1e0dedc35ac5322bc855f65863465449f2f95b95d9e4e785dcb",
                     "2a853270e1005c9a5cc7a42f44a9cd07f2ed352f6b18f99528918973b38bba33",
                     "72d18f217f66cb485e51020b9e793e180dd64f37af285d933e34689235006915",
+                    "2a9448e511a5f2076104efde4e89e1142834425ed0606e98e5c42028bf6273eb",
                 }),
         (
             "src/tailoring/llm.py",
             "6153c78e5f0eca7c78451f0d234609682e01990041deae7fccb0aa303c653920",
-        ): "bea546fda6097184041d574340c484e33e8b94c2247aefe6a15107f6110c2d7a",
+        ): frozenset({
+            "bea546fda6097184041d574340c484e33e8b94c2247aefe6a15107f6110c2d7a",
+            # Workload-scoped Groq json_object compatibility successor.
+            "01d4b57686733c40fcdb65b2a4eea648175bac3effb4c43b59068135467c2df5",
+        }),
         (
             "src/tailoring/llm.py",
             "5e9e858c6b671526eb6839d110ae05aae780d1c165a37a8bde2c1cc5bcecf31d",
-        ): "bea546fda6097184041d574340c484e33e8b94c2247aefe6a15107f6110c2d7a",
+        ): frozenset({
+            "bea546fda6097184041d574340c484e33e8b94c2247aefe6a15107f6110c2d7a",
+            # Workload-scoped Groq json_object compatibility successor.
+            "01d4b57686733c40fcdb65b2a4eea648175bac3effb4c43b59068135467c2df5",
+        }),
         (
             "src/pipeline/job_ranker.py",
             "5f7b2f360a5147ef52344e8a5cc28936ad4278cff8680e7158d065be70a94a54",
@@ -2668,6 +3167,7 @@ def assert_protected_hashes(
             "a7e1a834fabda1e0dedc35ac5322bc855f65863465449f2f95b95d9e4e785dcb",
             "2a853270e1005c9a5cc7a42f44a9cd07f2ed352f6b18f99528918973b38bba33",
             "72d18f217f66cb485e51020b9e793e180dd64f37af285d933e34689235006915",
+            "2a9448e511a5f2076104efde4e89e1142834425ed0606e98e5c42028bf6273eb",
         }),
         (
             "src/pipeline/collector.py",
@@ -2691,6 +3191,8 @@ def assert_protected_hashes(
         ): frozenset({
             "fdbd820a68a356d894ac0b904bd649d511dcf501129d32ed00d34ffc7f927fd0",
             "b84272b1e74152d0f6e93b8d79636f24179a656d9c2a0ab4b66aa722730ade13",
+            # Final approved Item 6 Agentic Review UI revamp.
+            "959d9f4cd2c33cee9104695118eff1d83d62e99d495142cc380d9b26c38b415f",
         }),
     }
     repo = Path(root)
@@ -2710,6 +3212,8 @@ def assert_protected_hashes(
             legacy_guard_allowlist(
                 "phase1_ai_provider_model_routing_hash_maintenance"
             ),
+            legacy_guard_allowlist("item71_effective_exact_change_filter"),
+            legacy_guard_allowlist("item71_production_exact_change_refinement"),
             legacy_guard_allowlist("workday_pagination_freshness"),
         )
         if profiles

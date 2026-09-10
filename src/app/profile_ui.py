@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from html import escape
 
@@ -15,6 +15,24 @@ router = APIRouter()
 def _is_resume_onboarding_query(value: str | None) -> bool:
     normalized = str(value or "").strip().rstrip("/\\")
     return normalized == "resume_upload"
+
+
+def _profile_user_from_request(request: Request) -> dict:
+    return dict(getattr(request.state, "auth_user", {}) or {}) or current_user_from_request(request)
+
+
+def _profile_user_is_admin(user: dict) -> bool:
+    access_level = str(user.get("access_level", "") or "").strip().lower()
+    return bool(user.get("is_admin", False)) or access_level == "admin"
+
+
+def _require_profile_admin_user(request: Request) -> dict:
+    user = _profile_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    if not _profile_user_is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return user
 
 
 def _preferences_section_html(*, hidden: bool = False, tab_panel: bool = False) -> str:
@@ -41,10 +59,9 @@ def _profile_navigation_icon_preloads_html() -> str:
 
 @router.get("/profile", response_class=HTMLResponse)
 def profile_page(request: Request) -> str:
-    user = dict(getattr(request.state, "auth_user", {}) or {}) or current_user_from_request(request)
+    user = _profile_user_from_request(request)
     is_resume_onboarding = _is_resume_onboarding_query(request.query_params.get("onboarding"))
-    access_level = str(user.get("access_level", "") or "").strip().lower()
-    is_admin = bool(user.get("is_admin", False)) or access_level == "admin"
+    is_admin = _profile_user_is_admin(user)
     admin_tab_html = (
         """
       <button type="button" class="profile-tab-btn" data-profile-tab-target="profileAdminUsersSection">
@@ -115,19 +132,23 @@ def profile_page(request: Request) -> str:
     )
     pipeline_runs_section_html = """
     <section class="card profile-section-card profile-pipeline-runs-section hidden" id="profilePipelineRunsSection" data-profile-tab-panel>
-      <div class="section-header">
+      <div class="section-header pipeline-runs-header">
         <div>
           <h2>Pipeline runs</h2>
           <div class="subtext" id="pipelineRunsMeta">Loading pipeline runs...</div>
         </div>
-        <div class="profile-section-header-right">
+        <div class="profile-section-header-right pipeline-runs-header-controls">
           <div class="application-pagination-inline pipeline-runs-pagination-inline" id="pipelineRunsPaginationInline">
             <div class="application-pagination-meta" id="pipelineRunsPaginationMeta">Loading...</div>
-            <div class="application-pagination-actions" id="pipelineRunsPaginationActions"></div>
           </div>
           <button type="button" class="ghost-btn btn-sm pipeline-runs-refresh-btn" id="refreshPipelineRunsBtn">
-            Refresh
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+              <path d="M20 11.5a8 8 0 1 0-.6 3.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M20 4.75v5h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>Refresh</span>
           </button>
+          <div class="application-pagination-actions pipeline-runs-pagination-actions" id="pipelineRunsPaginationActions"></div>
         </div>
       </div>
 
@@ -137,19 +158,16 @@ def profile_page(request: Request) -> str:
         <table class="pipeline-runs-table">
           <thead>
             <tr>
-              <th>Started</th>
+              <th>Run</th>
               <th>Status</th>
-              <th>Summary</th>
-              <th>Final jobs</th>
-              <th>Counts</th>
-              <th>Settings</th>
-              <th>Actions</th>
-              <th>Re-run</th>
+              <th>Output</th>
+              <th>Flow</th>
+              <th class="pipeline-runs-actions-head">Actions</th>
             </tr>
           </thead>
           <tbody id="pipelineRunsTableBody">
             <tr>
-              <td colspan="8">Loading pipeline runs...</td>
+              <td colspan="5">Loading pipeline runs...</td>
             </tr>
           </tbody>
         </table>
@@ -216,6 +234,143 @@ def profile_page(request: Request) -> str:
     navigation_html = "" if is_resume_onboarding else _profile_navigation_icon_preloads_html()
     tabs_html = "" if is_resume_onboarding else profile_tabs_html
     secondary_sections_html = "" if is_resume_onboarding else admin_users_section_html + pipeline_runs_section_html
+    upload_controls_html = """
+        <div
+          class="profile-resume-dropzone"
+          id="resumeDropzone"
+          tabindex="0"
+          role="button"
+          aria-label="Upload PDF resumes by dragging and dropping or choosing files"
+        >
+          <input
+            type="file"
+            id="resumeUploadInput"
+            accept=".pdf,application/pdf"
+            multiple
+            class="resume-upload-input"
+          />
+          <span class="profile-resume-upload-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M7.25 3.75h6l3.5 3.5v13H7.25z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+              <path d="M13.25 3.75v3.5h3.5M9.75 12h4.5M12 9.75v4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+          <div class="profile-resume-upload-copy">
+            <strong>Drag PDF files here</strong>
+            <span>or choose files from your computer</span>
+          </div>
+          <button type="button" class="profile-resume-choose-action" id="resumeBrowseBtn">Choose files</button>
+          <span class="profile-resume-upload-help">PDF only · Multiple files supported</span>
+        </div>
+"""
+    resume_section_html = (
+        f"""
+    <section class="card profile-section-card profile-resume-onboarding-card" id="resumeSection" data-profile-tab-panel>
+      <div class="section-header">
+        <div>
+          <h2>Resume upload</h2>
+          <div class="subtext" id="resumeListMeta">Loading resumes...</div>
+        </div>
+      </div>
+      <div class="profile-inline-status hidden" id="resumeStatusBanner" aria-live="polite"></div>
+      <section class="profile-resume-onboarding-uploader" aria-label="Resume upload">
+        {upload_controls_html}
+      </section>
+      <div class="resume-list profile-resume-onboarding-list" id="resumeList"></div>
+    </section>
+"""
+        if is_resume_onboarding
+        else """
+    <section class="profile-section-card profile-resume-library" id="resumeSection" data-profile-tab-panel>
+      <div class="profile-resume-library-header">
+        <div>
+          <h2>Resumes</h2>
+          <div class="subtext" id="resumeListMeta">Loading resumes...</div>
+        </div>
+        <button type="button" class="profile-resume-primary-action" id="openResumeUploadModalBtn">
+          <span aria-hidden="true">+</span> Add resume
+        </button>
+      </div>
+      <div class="profile-inline-status hidden" id="resumeStatusBanner" aria-live="polite"></div>
+      <div class="profile-planning-upload-callout hidden" id="profilePlanningUploadCallout">
+        <div>
+          <strong>Planning update available</strong>
+          <span>Review options so matching can use your latest resumes.</span>
+        </div>
+        <button type="button" class="profile-resume-callout-action" id="openProfilePlanningOptionsBtn">
+          Planning &amp; Tailoring Options
+        </button>
+      </div>
+      <div class="resume-list profile-resume-document-list" id="resumeList" aria-live="polite"></div>
+    </section>
+"""
+    )
+    resume_modals_html = (
+        ""
+        if is_resume_onboarding
+        else f"""
+  <section class="modal-backdrop profile-resume-modal hidden" id="profileResumeUploadModal" role="dialog" aria-modal="true" aria-labelledby="profileResumeUploadTitle" aria-describedby="profileResumeUploadDescription">
+    <div class="modal-card profile-resume-dialog profile-resume-upload-dialog" tabindex="-1">
+      <button type="button" class="profile-resume-dialog-close" id="closeResumeUploadModalBtn" aria-label="Close Add resumes dialog">&times;</button>
+      <div class="profile-resume-dialog-intro">
+        <span class="profile-resume-dialog-symbol" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M7.25 3.75h6l3.5 3.5v13H7.25z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+            <path d="M13.25 3.75v3.5h3.5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+          </svg>
+        </span>
+        <div>
+          <h3 id="profileResumeUploadTitle">Add resumes</h3>
+          <p id="profileResumeUploadDescription">Upload one or more PDF resumes.</p>
+        </div>
+      </div>
+      <div class="profile-resume-dialog-body">
+        {upload_controls_html}
+        <div class="profile-resume-modal-feedback hidden" id="resumeUploadFeedback" aria-live="polite"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="modal-backdrop profile-resume-modal hidden" id="profileResumeRoleModal" role="dialog" aria-modal="true" aria-labelledby="profileResumeRoleTitle" aria-describedby="profileResumeRoleDescription">
+    <div class="modal-card profile-resume-dialog profile-resume-role-dialog" tabindex="-1">
+      <button type="button" class="profile-resume-dialog-close" id="closeResumeRoleModalBtn" aria-label="Close Manage role families dialog">&times;</button>
+      <div class="profile-resume-dialog-intro">
+        <span class="profile-resume-dialog-symbol" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M5 7.25h14M5 12h14M5 16.75h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            <circle cx="8" cy="7.25" r="1.25" fill="currentColor" />
+            <circle cx="15.5" cy="12" r="1.25" fill="currentColor" />
+            <circle cx="10.5" cy="16.75" r="1.25" fill="currentColor" />
+          </svg>
+        </span>
+        <div>
+          <h3 id="profileResumeRoleTitle">Manage role families</h3>
+          <p id="profileResumeRoleDescription" title=""><span id="resumeRoleModalName">Resume</span></p>
+        </div>
+      </div>
+      <div class="profile-resume-role-scroll" id="resumeRoleModalOptions"></div>
+      <div class="profile-resume-auto-save-note" aria-live="polite">Changes save automatically.</div>
+    </div>
+  </section>
+
+  <section class="modal-backdrop profile-resume-modal hidden" id="resumeDeleteModal" role="dialog" aria-modal="true" aria-labelledby="resumeDeleteModalTitle" aria-describedby="resumeDeleteModalDescription">
+    <div class="modal-card profile-resume-dialog profile-resume-delete-dialog" tabindex="-1">
+      <button type="button" class="profile-resume-dialog-close" id="closeResumeDeleteModalBtn" aria-label="Close Delete resume dialog">&times;</button>
+      <div class="profile-resume-dialog-intro profile-resume-delete-intro">
+        <div>
+          <h3 id="resumeDeleteModalTitle">Delete resume</h3>
+          <p id="resumeDeleteModalDescription">This removes the resume from your profile.</p>
+        </div>
+      </div>
+      <div class="profile-resume-delete-name" id="resumeDeleteModalName">-</div>
+      <div class="profile-resume-delete-actions">
+        <button type="button" class="profile-resume-secondary-action" id="resumeDeleteCancelBtn">Cancel</button>
+        <button type="button" class="profile-resume-delete-action" id="resumeDeleteConfirmBtn">Delete resume</button>
+      </div>
+    </div>
+  </section>
+"""
+    )
     return f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -225,7 +380,7 @@ def profile_page(request: Request) -> str:
   <title>{page_title}</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_pipeline_run_buttons_r1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2_phase4_secondary_headers_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
 </head>
 <body{body_class}>
   {render_top_shell("/profile")}
@@ -243,101 +398,12 @@ def profile_page(request: Request) -> str:
 
     {tabs_html}
 
-    <section class="card profile-section-card" id="resumeSection" data-profile-tab-panel>
-      <div class="section-header">
-        <div>
-          <h2>{'Resume upload' if is_resume_onboarding else 'Resumes'}</h2>
-          <div class="subtext" id="resumeListMeta">Loading resumes...</div>
-        </div>
-      </div>
-
-      <div class="profile-inline-status hidden" id="resumeStatusBanner"></div>
-
-      <div class="resume-manager-grid">
-        <section class="resume-upload-panel">
-          <div
-            class="resume-dropzone"
-            id="resumeDropzone"
-            tabindex="0"
-            role="button"
-            aria-label="Upload resume PDF by dragging and dropping or browsing"
-          >
-            <input
-              type="file"
-              id="resumeUploadInput"
-              accept=".pdf,application/pdf"
-              multiple
-              class="resume-upload-input"
-            />
-
-            <div class="resume-dropzone-icon">↑</div>
-            <div class="resume-dropzone-title">Upload resume PDF</div>
-            <div class="resume-dropzone-text">
-              Drag and drop one or more PDF resumes here, or browse from your computer.
-            </div>
-
-            <div class="resume-upload-actions">
-              <button type="button" id="resumeBrowseBtn">Choose PDF</button>
-            </div>
-
-            <div class="control-help field-help-wide">
-              Uploaded files are stored securely in your profile and become available to matching and scan workflows.
-            </div>
-          </div>
-
-          <div class="profile-planning-upload-callout hidden" id="profilePlanningUploadCallout">
-            <button type="button" class="profile-planning-options-btn" id="openProfilePlanningOptionsBtn">
-              Planning &amp; Tailoring Options
-            </button>
-            <div class="control-help field-help-wide">
-              You may want to run this after uploading new resumes so planning, fallback ranking, and tailoring can use the latest files.
-            </div>
-          </div>
-        </section>
-
-        <section class="resume-list-panel">
-          <div class="resume-list" id="resumeList"></div>
-        </section>
-      </div>
-    </section>
+    {resume_section_html}
 
     {secondary_sections_html}
   </div>
 
-  <section class="modal-backdrop hidden" id="resumeDeleteModal">
-  <div class="modal-card resume-delete-modal-card">
-    <div class="modal-header">
-      <div>
-        <h3>Delete resume</h3>
-        <div class="subtext">This removes the file from the profile resume directory.</div>
-      </div>
-      <button
-        class="ghost-btn modal-close-btn resume-delete-modal-close-btn"
-        id="closeResumeDeleteModalBtn"
-        type="button"
-      >
-        Close
-      </button>
-    </div>
-
-    <div class="modal-body">
-      <div class="info-pair">
-        <span class="label">Resume</span>
-        <span id="resumeDeleteModalName">-</span>
-      </div>
-    </div>
-
-    <div class="modal-actions resume-delete-modal-actions">
-      <button
-        type="button"
-        class="resume-delete-confirm-btn"
-        id="resumeDeleteConfirmBtn"
-      >
-        Yes, delete
-      </button>
-    </div>
-  </div>
-  </section>
+  {resume_modals_html}
 
   {admin_modals_html}
 
@@ -471,30 +537,48 @@ def profile_page(request: Request) -> str:
     </div>
   </section>
 
-  <section class="modal-backdrop hidden" id="pipelineRunStatsModal">
-    <div class="modal-card pipeline-run-stats-modal-card">
-      <div class="modal-header">
-        <div>
-          <h3 id="pipelineRunStatsTitle">Pipeline run stats</h3>
-          <div class="subtext" id="pipelineRunStatsSubtitle">Persisted run details.</div>
+  <section class="modal-backdrop pipeline-run-stats-modal hidden" id="pipelineRunStatsModal" role="dialog" aria-modal="true" aria-labelledby="pipelineRunStatsTitle" aria-describedby="pipelineRunStatsSubtitle">
+    <div class="modal-card pipeline-run-stats-modal-card" tabindex="-1">
+      <header class="pipeline-run-stats-header">
+        <div class="pipeline-run-stats-heading">
+          <h3 id="pipelineRunStatsTitle">Pipeline run</h3>
+          <div class="pipeline-run-stats-date" id="pipelineRunStatsSubtitle">Loading persisted run details.</div>
+          <div class="pipeline-run-stats-run-id-row">
+            <code class="pipeline-run-stats-run-id" id="pipelineRunStatsRunId">Pipeline run ID pending</code>
+            <button class="pipeline-run-stats-copy-id" id="pipelineRunStatsCopyIdBtn" type="button" aria-label="Copy pipeline run ID" title="Copy run ID">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                <rect x="9" y="9" width="10.25" height="10.25" rx="2.4" stroke="currentColor" stroke-width="1.6" />
+                <path d="M15 6.4A2.4 2.4 0 0012.6 4H7.4A2.4 2.4 0 005 6.4v5.2A2.4 2.4 0 007.4 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              </svg>
+            </button>
+          </div>
         </div>
-        <button class="ghost-btn modal-close-btn" id="pipelineRunStatsCloseBtn" type="button">Close</button>
-      </div>
+        <button class="pipeline-run-stats-close" id="pipelineRunStatsCloseBtn" type="button" aria-label="Close pipeline run details" title="Close">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+            <path d="M6.75 6.75l10.5 10.5M17.25 6.75l-10.5 10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </button>
+      </header>
 
-      <div class="modal-body">
-        <div id="pipelineRunStatsBody" class="pipeline-run-stats-body"></div>
+      <div class="pipeline-run-stats-scroll">
+        <div id="pipelineRunStatsBody" class="pipeline-run-stats-body" aria-live="polite"></div>
       </div>
     </div>
   </section>
 
-  <section class="modal-backdrop hidden" id="pipelineRunRerunModal">
-    <div class="modal-card pipeline-run-rerun-modal-card">
-      <div class="modal-header">
-        <div>
+  <section class="modal-backdrop hidden" id="pipelineRunRerunModal" role="dialog" aria-modal="true" aria-labelledby="pipelineRunRerunTitle" aria-describedby="pipelineRunRerunSubtitle">
+    <div class="modal-card pipeline-run-rerun-modal-card" tabindex="-1">
+      <div class="modal-header pipeline-run-rerun-header">
+        <div class="pipeline-run-rerun-heading">
           <h3 id="pipelineRunRerunTitle">Re-run pipeline</h3>
-          <div class="subtext" id="pipelineRunRerunSubtitle">Review the run before starting a new one.</div>
+          <div class="pipeline-run-rerun-date" id="pipelineRunRerunSubtitle">Review the run before starting a new one.</div>
+          <code class="pipeline-run-rerun-run-id" id="pipelineRunRerunRunId"></code>
         </div>
-        <button class="ghost-btn modal-close-btn" id="pipelineRunRerunCloseBtn" type="button">Close</button>
+        <button class="modal-close-btn pipeline-run-rerun-close" id="pipelineRunRerunCloseBtn" type="button" aria-label="Close re-run confirmation" title="Close">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+            <path d="M6.75 6.75l10.5 10.5M17.25 6.75l-10.5 10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </button>
       </div>
 
       <div class="modal-body">
@@ -502,15 +586,14 @@ def profile_page(request: Request) -> str:
       </div>
 
       <div class="modal-actions pipeline-run-rerun-actions">
-        <div class="pipeline-run-rerun-question">Good to re-run?</div>
-        <button type="button" class="ghost-btn" id="pipelineRunRerunCancelBtn">No</button>
-        <button type="button" class="pipeline-run-rerun-confirm-btn" id="pipelineRunRerunConfirmBtn">Yes</button>
+        <button type="button" class="ghost-btn" id="pipelineRunRerunCancelBtn">Cancel</button>
+        <button type="button" class="pipeline-run-rerun-confirm-btn" id="pipelineRunRerunConfirmBtn">Re-run pipeline</button>
       </div>
     </div>
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
   <script src="/static/profile.js?v=item2_phase4_profile_corrections_r1"></script>
 </body>
 </html>
@@ -518,8 +601,12 @@ def profile_page(request: Request) -> str:
 
 
 @router.get("/profile/pipeline-runs/{run_id}/agentic-review", response_class=HTMLResponse)
-def pipeline_run_agentic_review_page(run_id: str) -> str:
+def pipeline_run_agentic_review_page(run_id: str, request: Request) -> str:
+    _require_profile_admin_user(request)
     safe_run_id = escape(str(run_id or "").strip())
+    from_agentic_operations = request.query_params.get("source") == "agentic-operations"
+    back_href = "/agentic-operations" if from_agentic_operations else "/profile?tab=pipeline-runs"
+    back_label = "Back to Agentic Operations" if from_agentic_operations else "Back to pipeline runs"
     return f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -529,89 +616,163 @@ def pipeline_run_agentic_review_page(run_id: str) -> str:
   <title>Agentic Review</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=agentic_review_v1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=item2e_manual_provider_preview_r1" />
-  <link rel="stylesheet" href="/static/agentic_review.css?v=agentic_review_v1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
+  <link rel="stylesheet" href="/static/agentic_review.css?v=item6c3_back_navigation_r1" />
 </head>
 <body>
 {render_top_shell("/profile")}
   <div class="page agentic-review-page" data-agentic-review-run-id="{safe_run_id}">
-    <header class="page-header agentic-review-header">
-      <div>
-        <h1>Agentic Review</h1>
-        <p class="subtext" id="agenticReviewSubtitle">Pipeline run {safe_run_id}</p>
-      </div>
-      <div class="header-actions">
-        <a class="ghost-btn" href="/profile?tab=pipeline-runs">Back to pipeline runs</a>
+    <header class="page-header app-page-header agentic-review-header">
+      <div class="app-page-header__main">
+        <a class="agentic-review-back-link" href="{back_href}">
+          <span class="agentic-review-back-link__icon" aria-hidden="true">←</span>
+          <span>{back_label}</span>
+        </a>
+        <div class="app-page-header__title-row">
+          <h1 class="app-page-header__title">Agentic Review</h1>
+          <span class="app-page-header__badge">Admin only</span>
+        </div>
+        <p class="subtext app-page-header__description" id="agenticReviewSubtitle">Pipeline run {safe_run_id}</p>
       </div>
     </header>
 
-    <section class="card agentic-review-status-card" id="agenticReviewStatusCard">
-      Loading agentic review...
+    <section class="card agentic-review-status-card" id="agenticReviewStatusCard" aria-live="polite">
+      <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Loading agentic review...</div>
     </section>
 
-    <nav class="agentic-review-tabs" aria-label="Agentic Review sections" role="tablist">
-      <button class="agentic-review-tab is-active" type="button" role="tab" aria-selected="true" data-agentic-tab-target="agenticReviewOverviewTab">Overview</button>
-      <button class="agentic-review-tab" type="button" role="tab" aria-selected="false" data-agentic-tab-target="agenticReviewAdvisoryTab">Advisory Board</button>
-      <button class="agentic-review-tab" type="button" role="tab" aria-selected="false" data-agentic-tab-target="agenticReviewTraceTab">Agent Trace</button>
-      <button class="agentic-review-tab" type="button" role="tab" aria-selected="false" data-agentic-tab-target="agenticReviewDiagnosticsTab">Artifacts / Diagnostics</button>
+    <nav class="agentic-review-tabs" aria-label="Agentic Review primary views" role="tablist">
+      <button class="agentic-review-tab is-active" id="agenticReviewReviewTabButton" type="button" role="tab" aria-selected="true" aria-controls="agenticReviewAdvisoryTab" tabindex="0" data-agentic-tab-target="agenticReviewAdvisoryTab">Review</button>
+      <button class="agentic-review-tab" id="agenticReviewAdvancedTabButton" type="button" role="tab" aria-selected="false" aria-controls="agenticReviewAdvancedTab" tabindex="-1" data-agentic-tab-target="agenticReviewAdvancedTab">Advanced</button>
     </nav>
 
     <main class="agentic-review-tab-panels">
-      <section class="agentic-review-tab-panel" id="agenticReviewOverviewTab" data-agentic-tab-panel>
-        <section id="agenticWorkflowSummaryPanel" class="card agentic-workflow-summary-card">
-          <h2>Agentic Workflow Summary</h2>
-          <div class="pipeline-runs-empty-cell">Loading workflow summary...</div>
-        </section>
-        <section id="agenticWorkflowVerificationPanel" class="card agentic-workflow-verification-card">
-          <h2>Agentic Workflow Verification</h2>
-          <div class="pipeline-runs-empty-cell">Loading workflow verification...</div>
-        </section>
-      </section>
-
-      <section class="agentic-review-tab-panel hidden" id="agenticReviewAdvisoryTab" data-agentic-tab-panel>
+      <section class="agentic-review-tab-panel" id="agenticReviewAdvisoryTab" role="tabpanel" aria-labelledby="agenticReviewReviewTabButton" aria-hidden="false" tabindex="0" data-agentic-tab-panel>
         <div class="agentic-review-board-shell">
           <div class="agentic-workflow-header">
             <div>
-              <h2>Advisory Board</h2>
-              <p>Read-only priority, tailoring, and operator review guidance. Production action fields stay unchanged.</p>
+              <h2>Review Workspace</h2>
+              <p>Review each job once across the existing priority, tailoring, and operator perspectives.</p>
             </div>
-            <span class="agentic-workflow-badge">Advisory only</span>
-          </div>
-          <div class="agentic-review-segmented" role="tablist" aria-label="Advisory Board views">
-            <button class="agentic-review-segment is-active" type="button" role="tab" aria-selected="true" data-agentic-advisory-target="agenticReviewPriorityPanel">Prioritization</button>
-            <button class="agentic-review-segment" type="button" role="tab" aria-selected="false" data-agentic-advisory-target="agenticReviewTailoringPanel">Tailoring</button>
-            <button class="agentic-review-segment" type="button" role="tab" aria-selected="false" data-agentic-advisory-target="agenticReviewOperatorPanel">Operator Review</button>
+            <span class="agentic-workflow-badge">Read-only review</span>
           </div>
 
-          <section class="card agentic-review-section" id="agenticReviewPriorityPanel" data-agentic-advisory-panel>
-            <h2>Job Prioritization</h2>
-            <div class="pipeline-runs-empty-cell">Loading prioritization details...</div>
-          </section>
+          <div class="agentic-review-workspace-grid">
+            <section class="agentic-review-queue-surface" aria-labelledby="agenticReviewQueueHeading">
+              <div class="agentic-review-workspace-heading">
+                <div>
+                  <p class="agentic-review-kicker">Review queue</p>
+                  <h3 id="agenticReviewQueueHeading">Review Queue</h3>
+                </div>
+                <span class="agentic-review-workspace-note">One job per record</span>
+              </div>
+              <div class="agentic-review-queue-controls" role="group" aria-label="Review Queue filters">
+                <label class="agentic-review-queue-control" for="agenticReviewQueueFilter">
+                  <span>Review type</span>
+                  <select id="agenticReviewQueueFilter">
+                    <option value="all">All</option>
+                    <option value="ready_to_apply">Ready</option>
+                    <option value="tailor_then_apply">Tailor first</option>
+                    <option value="review_before_action">Review needed</option>
+                    <option value="hold_or_skip">Hold / skip</option>
+                    <option value="source_watch">Source watch</option>
+                    <option value="not_fully_evaluated">Not fully evaluated</option>
+                  </select>
+                </label>
+                <label class="agentic-review-queue-control agentic-review-queue-control--search" for="agenticReviewQueueSearch">
+                  <span>Search jobs</span>
+                  <input id="agenticReviewQueueSearch" type="search" inputmode="search" autocomplete="off" placeholder="Title or company" />
+                </label>
+                <button class="agentic-review-queue-clear hidden" id="agenticReviewQueueClear" type="button" disabled>Clear</button>
+              </div>
+              <div id="agenticReviewQueuePanel" class="agentic-review-queue-panel agentic-review-queue-scroll-region" aria-label="Review Queue records" tabindex="0">
+                <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Building review queue...</div>
+              </div>
+            </section>
 
-          <section class="card agentic-review-section hidden" id="agenticReviewTailoringPanel" data-agentic-advisory-panel>
-            <h2>Tailoring Decision</h2>
-            <div class="pipeline-runs-empty-cell">Loading tailoring decision details...</div>
-          </section>
+            <aside class="agentic-review-selected-surface" id="agenticReviewSelectedJobPanel" aria-live="polite" aria-label="Selected job review inspector">
+              <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Preparing selected job review...</div>
+            </aside>
+          </div>
 
-          <section class="card agentic-review-section hidden" id="agenticReviewOperatorPanel" data-agentic-advisory-panel>
-            <h2>Operator Review</h2>
-            <div class="pipeline-runs-empty-cell">Loading operator review details...</div>
-          </section>
         </div>
       </section>
 
-      <section class="agentic-review-tab-panel hidden" id="agenticReviewTraceTab" data-agentic-tab-panel>
-        <section class="card agent-trace-panel" id="agenticReviewTracePanel">
-          <h2>Agent Trace</h2>
-          <div class="pipeline-runs-empty-cell">Loading agent trace...</div>
-        </section>
-      </section>
+      <section class="agentic-review-tab-panel hidden" id="agenticReviewAdvancedTab" role="tabpanel" aria-labelledby="agenticReviewAdvancedTabButton" aria-hidden="true" tabindex="0" data-agentic-tab-panel>
+        <div class="agentic-review-advanced-shell">
+          <div class="agentic-review-advanced-header">
+            <div>
+              <p class="agentic-review-kicker">Advanced inspection</p>
+              <h2>Run artifacts and agent diagnostics</h2>
+              <p>Overview, verification, trace, diagnostics, and original advisory sources remain available without competing with the review workflow.</p>
+            </div>
+            <span class="agentic-workflow-badge">Read-only inspection</span>
+          </div>
 
-      <section class="agentic-review-tab-panel hidden" id="agenticReviewDiagnosticsTab" data-agentic-tab-panel>
-        <section class="card agentic-review-diagnostics-card" id="agenticReviewDiagnosticsPanel">
-          <h2>Artifacts / Diagnostics</h2>
-          <div class="pipeline-runs-empty-cell">Loading artifact diagnostics...</div>
-        </section>
+          <nav class="agentic-review-advanced-tabs" aria-label="Advanced inspection views" role="tablist">
+            <button class="agentic-review-advanced-tab is-active" id="agenticReviewWorkflowTabButton" type="button" role="tab" aria-selected="true" aria-controls="agenticReviewOverviewTab" tabindex="0" data-agentic-advanced-target="agenticReviewOverviewTab">Workflow</button>
+            <button class="agentic-review-advanced-tab" id="agenticReviewTraceTabButton" type="button" role="tab" aria-selected="false" aria-controls="agenticReviewTraceTab" tabindex="-1" data-agentic-advanced-target="agenticReviewTraceTab">Agent Trace</button>
+            <button class="agentic-review-advanced-tab" id="agenticReviewDiagnosticsTabButton" type="button" role="tab" aria-selected="false" aria-controls="agenticReviewDiagnosticsTab" tabindex="-1" data-agentic-advanced-target="agenticReviewDiagnosticsTab">Diagnostics</button>
+            <button class="agentic-review-advanced-tab" id="agenticReviewSourceViewsTabButton" type="button" role="tab" aria-selected="false" aria-controls="agenticReviewSourceViewsPanel" tabindex="-1" data-agentic-advanced-target="agenticReviewSourceViewsPanel">Source Views</button>
+          </nav>
+
+          <div class="agentic-review-advanced-panels">
+            <section class="agentic-review-advanced-panel" id="agenticReviewOverviewTab" role="tabpanel" aria-labelledby="agenticReviewWorkflowTabButton" aria-hidden="false" tabindex="0" data-agentic-advanced-panel>
+              <section id="agenticWorkflowSummaryPanel" class="card agentic-workflow-summary-card">
+                <h2>Agentic Workflow Summary</h2>
+                <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Loading workflow summary...</div>
+              </section>
+              <section id="agenticWorkflowVerificationPanel" class="card agentic-workflow-verification-card">
+                <h2>Agentic Workflow Verification</h2>
+                <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Loading workflow verification...</div>
+              </section>
+            </section>
+
+            <section class="agentic-review-advanced-panel hidden" id="agenticReviewTraceTab" role="tabpanel" aria-labelledby="agenticReviewTraceTabButton" aria-hidden="true" tabindex="0" data-agentic-advanced-panel>
+              <section class="card agent-trace-panel" id="agenticReviewTracePanel">
+                <h2>Agent Trace</h2>
+                <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Loading agent trace...</div>
+              </section>
+            </section>
+
+            <section class="agentic-review-advanced-panel hidden" id="agenticReviewDiagnosticsTab" role="tabpanel" aria-labelledby="agenticReviewDiagnosticsTabButton" aria-hidden="true" tabindex="0" data-agentic-advanced-panel>
+              <section class="card agentic-review-diagnostics-card" id="agenticReviewDiagnosticsPanel">
+                <h2>Artifacts / Diagnostics</h2>
+                <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Loading artifact diagnostics...</div>
+              </section>
+            </section>
+
+            <section class="agentic-review-advanced-panel hidden" id="agenticReviewSourceViewsPanel" role="tabpanel" aria-labelledby="agenticReviewSourceViewsTabButton" aria-hidden="true" tabindex="0" data-agentic-advanced-panel>
+              <details class="agentic-review-source-views" id="agenticReviewSourceViews">
+                <summary>
+                  <span>Advisory source views</span>
+                  <small>Inspect the original stage-level tables.</small>
+                </summary>
+                <div class="agentic-review-source-views__content">
+                  <div class="agentic-review-segmented" role="tablist" aria-label="Advisory Board views">
+                    <button class="agentic-review-segment is-active" id="agenticReviewPriorityTabButton" type="button" role="tab" aria-selected="true" aria-controls="agenticReviewPriorityPanel" tabindex="0" data-agentic-advisory-target="agenticReviewPriorityPanel">Prioritization</button>
+                    <button class="agentic-review-segment" id="agenticReviewTailoringTabButton" type="button" role="tab" aria-selected="false" aria-controls="agenticReviewTailoringPanel" tabindex="-1" data-agentic-advisory-target="agenticReviewTailoringPanel">Tailoring</button>
+                    <button class="agentic-review-segment" id="agenticReviewOperatorTabButton" type="button" role="tab" aria-selected="false" aria-controls="agenticReviewOperatorPanel" tabindex="-1" data-agentic-advisory-target="agenticReviewOperatorPanel">Operator Review</button>
+                  </div>
+
+                  <section class="card agentic-review-section" id="agenticReviewPriorityPanel" role="tabpanel" aria-labelledby="agenticReviewPriorityTabButton" aria-hidden="false" tabindex="0" data-agentic-advisory-panel>
+                    <h2>Job Prioritization</h2>
+                    <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Loading prioritization details...</div>
+                  </section>
+
+                  <section class="card agentic-review-section hidden" id="agenticReviewTailoringPanel" role="tabpanel" aria-labelledby="agenticReviewTailoringTabButton" aria-hidden="true" tabindex="0" data-agentic-advisory-panel>
+                    <h2>Tailoring Decision</h2>
+                    <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Loading tailoring decision details...</div>
+                  </section>
+
+                  <section class="card agentic-review-section hidden" id="agenticReviewOperatorPanel" role="tabpanel" aria-labelledby="agenticReviewOperatorTabButton" aria-hidden="true" tabindex="0" data-agentic-advisory-panel>
+                    <h2>Operator Review</h2>
+                    <div class="pipeline-runs-empty-cell agentic-review-state agentic-review-state--loading" role="status">Loading operator review details...</div>
+                  </section>
+                </div>
+              </details>
+            </section>
+          </div>
+        </div>
       </section>
     </main>
   </div>
@@ -638,9 +799,9 @@ def pipeline_run_agentic_review_page(run_id: str) -> str:
     </div>
   </section>
 
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
   <script src="/static/profile.js?v=agentic_review_v1"></script>
-  <script src="/static/agentic_review.js?v=item2e_manual_provider_preview_r1"></script>
+  <script src="/static/agentic_review.js?v=item6_final_agentic_review_r1"></script>
 </body>
 </html>
     """.strip()
@@ -657,7 +818,7 @@ def profile_preferences_page() -> str:
   <title>Preferences · My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=preferences_toolbar_ownership_r11" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
   <link rel="stylesheet" href="/static/preferences.css?v=phase1_step8b_r1" />
 </head>
 <body class="preferences-page-shell">
@@ -668,7 +829,7 @@ def profile_preferences_page() -> str:
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
   <script src="/static/preference_location_selector.js?v=preferences_guided_parity_r9"></script>
   <script src="/static/preferences_workflow.js?v=phase1_step8b_r1"></script>
   <script src="/static/profile.js?v=preferences_guided_parity_r9"></script>
@@ -688,7 +849,7 @@ def profile_ai_settings_page() -> str:
   <title>AI Settings · My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_ai_settings_r1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_ai_settings_step7b_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
   <link rel="stylesheet" href="/static/profile_ai_settings.css?v=phase1_task_routing_ux_r3" />
 </head>
 <body class="profile-ai-settings-page-shell">
@@ -909,7 +1070,7 @@ def profile_ai_settings_page() -> str:
   {render_provider_key_guidance_templates()}
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
   <script src="/static/profile_ai_settings.js?v=item2f5_manual_preview_default_r1"></script>
 </body>
 </html>
@@ -927,7 +1088,7 @@ def saved_scans_page() -> str:
   <title>Saved Scans</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_confirm_specific_r2" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=scheduler_health_polish_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=saved_scans_library_r1&ui=runtime_truth_r1" />
 </head>
 <body>
   {render_top_shell("/profile/saved-scans")}
@@ -940,23 +1101,53 @@ def saved_scans_page() -> str:
       </div>
     </header>
 
-    <section class="card profile-section-card">
-      <div class="section-header">
-        <div>
-          <h2>Saved Scans</h2>
-          <div class="subtext" id="savedScansMeta">Loading saved scans...</div>
+    <section class="card profile-section-card profile-saved-scans-section">
+      <div class="section-header saved-scans-header">
+        <div class="saved-scans-header-titles">
+          <div class="saved-scans-title-row">
+            <h2>Saved Scans</h2>
+            <span class="saved-scans-count-badge" id="savedScansCountBadge">0</span>
+          </div>
+          <div class="subtext saved-scans-subtitle">Review and manage your saved scan reports.</div>
+          <div class="saved-scans-header-captions">
+            <span class="saved-scans-meta" id="savedScansMeta">Loading saved scans...</span>
+            <span class="saved-scans-storage-note">
+              <svg class="saved-scans-storage-note-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="12" r="8.25" stroke="currentColor" stroke-width="1.7" />
+                <path d="M12 11v5.25" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                <circle cx="12" cy="7.9" r="1.15" fill="currentColor" />
+              </svg>
+              New Scan rows now store the generated match score and review payload in Postgres.
+            </span>
+          </div>
         </div>
-        <button type="button" class="ghost-btn btn-sm" id="refreshSavedScansBtn">
-          Refresh
-        </button>
+        <div class="profile-section-header-right saved-scans-header-controls">
+          <div class="saved-scans-search">
+            <label class="saved-scans-search-label" for="savedScansSearchInput">Search saved scans</label>
+            <svg class="saved-scans-search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+              <circle cx="11" cy="11" r="6.25" stroke="currentColor" stroke-width="1.8" />
+              <path d="M15.6 15.6L20 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+            <input
+              type="search"
+              id="savedScansSearchInput"
+              class="saved-scans-search-input"
+              placeholder="Search scans, company, or role..."
+              autocomplete="off"
+            />
+          </div>
+          <button type="button" class="ghost-btn btn-sm saved-scans-refresh-btn" id="refreshSavedScansBtn">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+              <path d="M20 11.5a8 8 0 1 0-.6 3.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M20 5v5h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
-      <div class="saved-scans-note">
-        New Scan rows now store the generated match score and review payload in Postgres.
-      </div>
-
-      <div class="saved-scans-table-wrap">
-        <table class="saved-scans-table">
+      <div class="saved-scans-library-table-wrap">
+        <table class="saved-scans-library-table">
           <thead>
             <tr>
               <th>Scanned</th>
@@ -966,52 +1157,81 @@ def saved_scans_page() -> str:
               <th>Source</th>
               <th>Status</th>
               <th>Match</th>
-              <th>Action</th>
-              <th></th>
+              <th class="saved-scans-actions-head">Actions</th>
             </tr>
           </thead>
           <tbody id="savedScansTableBody">
             <tr>
-              <td colspan="9">Loading saved scans...</td>
+              <td colspan="8" class="saved-scans-empty-cell">Loading saved scans...</td>
             </tr>
           </tbody>
         </table>
       </div>
     </section>
 
-    <section class="modal-backdrop hidden" id="savedScanDeleteModal">
-      <div class="modal-card resume-delete-modal-card">
-        <div class="modal-header">
-          <div>
-            <h3>Delete saved scan?</h3>
-            <p class="subtext">This removes the selected scan row and stored report payload.</p>
+    <section
+      class="modal-backdrop hidden"
+      id="savedScanDeleteModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="savedScanDeleteTitle"
+      aria-describedby="savedScanDeleteDescription"
+    >
+      <div class="modal-card saved-scan-delete-card" tabindex="-1">
+        <button
+          type="button"
+          class="saved-scan-delete-close"
+          id="savedScanDeleteCloseBtn"
+          aria-label="Close delete saved scan dialog"
+          title="Close"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+            <path d="M6.75 6.75l10.5 10.5M17.25 6.75l-10.5 10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </button>
+        <div class="saved-scan-delete-head">
+          <span class="saved-scan-delete-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" focusable="false">
+              <path d="M4.75 7h14.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+              <path d="M9.5 7V5.4A1.4 1.4 0 0110.9 4h2.2a1.4 1.4 0 011.4 1.4V7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+              <path d="M6.75 7l.8 11.1A1.9 1.9 0 009.45 20h5.1a1.9 1.9 0 001.9-1.8L17.25 7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+              <path d="M10.6 10.75v5.5M13.4 10.75v5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            </svg>
+          </span>
+          <div class="saved-scan-delete-copy">
+            <h3 id="savedScanDeleteTitle">Delete saved scan?</h3>
+            <p id="savedScanDeleteDescription">This removes the selected scan row and stored report payload. This action cannot be undone.</p>
           </div>
+        </div>
+        <dl class="saved-scan-delete-summary">
+          <div class="saved-scan-delete-summary-row">
+            <dt>Company</dt>
+            <dd id="savedScanDeleteCompany">-</dd>
+          </div>
+          <div class="saved-scan-delete-summary-row">
+            <dt>Role</dt>
+            <dd id="savedScanDeleteRole">-</dd>
+          </div>
+          <div class="saved-scan-delete-summary-row">
+            <dt>Resume</dt>
+            <dd id="savedScanDeleteResume">-</dd>
+          </div>
+        </dl>
+        <span class="saved-scan-delete-name" id="savedScanDeleteName">this saved scan</span>
+        <div class="saved-scan-delete-actions">
           <button
             type="button"
-            class="ghost-btn modal-close-btn resume-delete-modal-close-btn"
-            id="savedScanDeleteCloseBtn"
-          >
-            Close
-          </button>
-        </div>
-        <div class="modal-body">
-          Are you sure you want to delete
-          <strong id="savedScanDeleteName">this saved scan</strong>?
-        </div>
-        <div class="modal-actions resume-delete-modal-actions">
-          <button
-            type="button"
-            class="ghost-btn resume-delete-cancel-btn"
+            class="saved-scan-delete-cancel-btn"
             id="savedScanDeleteCancelBtn"
           >
-            No
+            Cancel
           </button>
           <button
             type="button"
-            class="resume-delete-confirm-btn"
+            class="saved-scan-delete-confirm-btn"
             id="savedScanDeleteConfirmBtn"
           >
-            Yes, delete
+            Delete scan
           </button>
         </div>
       </div>
@@ -1019,8 +1239,8 @@ def saved_scans_page() -> str:
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=phase133h_r1"></script>
-  <script src="/static/profile.js?v=profile_saved_scans_e5_discard_icon_profile_resume_roles_r10"></script>
+  <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
+  <script src="/static/profile.js?v=profile_saved_scans_e5_discard_icon_profile_resume_roles_r10_saved_scans_library_r1"></script>
 </body>
 </html>
     """.strip()

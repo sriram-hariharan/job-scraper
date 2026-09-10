@@ -17,6 +17,7 @@ import {
 import { PipelineDashboard } from "./pipeline/PipelineDashboard";
 import { SchedulerHealthDashboard } from "./scheduler/SchedulerHealthDashboard";
 import { AdvancedDiagnosticsDashboard, DEFAULT_ADVANCED_DIAGNOSTICS_STATE } from "./diagnostics/AdvancedDiagnosticsDashboard";
+import { AgenticOperationsDashboard } from "./agentic/AgenticOperationsDashboard";
 import {
   DEFAULT_PLANNING_STATE,
   PLANNING_STATE_EVENT,
@@ -215,6 +216,15 @@ if (schedulerHealthMount) {
   createRoot(schedulerHealthMount).render(
     <StrictMode>
       <SchedulerHealthDashboard />
+    </StrictMode>,
+  );
+}
+
+const agenticOperationsMount = document.getElementById("agenticOperationsRoot");
+if (agenticOperationsMount) {
+  createRoot(agenticOperationsMount).render(
+    <StrictMode>
+      <AgenticOperationsDashboard />
     </StrictMode>,
   );
 }

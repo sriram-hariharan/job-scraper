@@ -15,6 +15,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Tuple
 
+from dotenv import load_dotenv
+
 from src.config.settings import (
     ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
     SCHEDULER_RUN_HISTORY_PATH,
@@ -1171,6 +1173,15 @@ def _parse_args():
 
 
 def main() -> int:
+    # The scheduler entry point owns its own configuration. Post-run summary,
+    # artifact and notification persistence all need DATABASE_URL, and without
+    # this the value was only present when a job branch happened to import
+    # job_app (live_pipeline did, agent_discovery did not), so discovery
+    # post-run persistence failed depending on which job ran. The path is
+    # anchored to this file rather than discovered from the working directory,
+    # because launchd invokes the scheduler with its own cwd.
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+
     args = _parse_args()
 
     if args.require_postgres_run_history_sync and not args.sync_postgres_run_history:

@@ -225,18 +225,20 @@ def test_no_global_shell_toolbar_markup_changed():
         ui_shell_source = (ROOT / "src/app/ui_shell.py").read_text(encoding="utf-8")
         assert '"diagnostics": (' in ui_shell_source
         assert '_icon_svg("diagnostics")' in ui_shell_source
-    assert "src/app/static/shell.js" not in changed
+    shell_js = (ROOT / "src/app/static/shell.js").read_text(encoding="utf-8")
+    assert "src/app/ui_shell.py" not in changed
+    assert "const APP_SHELL_MENU_SVG" in shell_js
+    assert "isCollapsed ? APP_SHELL_MENU_SVG : APP_SHELL_COLLAPSE_SVG" in shell_js
 
 
 # --- 18. Cache marker scoping -------------------------------------------------
 
 
 def test_new_cache_marker_appears_only_on_intended_affected_route_assets():
-    old_marker = "item2_phase3_shared_header_r1"
-    planning_marker = "planning_tailoring_workflow_polish_r1"
-    old_css = f'/static/build/executive-kpi/executive-kpi.css?v={old_marker}'
-    old_js = f'/static/build/executive-kpi/executive-kpi.js?v={old_marker}'
-    planning_css = f'/static/build/executive-kpi/executive-kpi.css?v={planning_marker}'
+    planning_marker = "planning_bulk_action_control_r1"
+    release_marker = "eucalyptus_primary_shell_r1"
+    release_css = f'/static/build/executive-kpi/executive-kpi.css?v={release_marker}'
+    release_js = f'/static/build/executive-kpi/executive-kpi.js?v={release_marker}'
 
     overview_route = _route_block(
         UI_SOURCE,
@@ -271,24 +273,24 @@ def test_new_cache_marker_appears_only_on_intended_affected_route_assets():
         '@router.get("/applications", response_class=HTMLResponse)',
     )
 
-    # Planning intentionally owns the polished stylesheet marker while its
-    # unchanged JavaScript bundle remains owned by the Phase 3 marker.
-    assert planning_css in planning_route
-    assert old_js in planning_route
-    assert old_css not in planning_route
-
-    # Every unaffected Phase 3 route retains both exact bundle references and
-    # must not acquire the Planning-only marker.
+    # Every route that renders the rebuilt shared bundle owns one deterministic
+    # marker, whether or not it also hosts SharedFilterSelect.
     for route in (
         overview_route,
         pipeline_route,
         scheduler_route,
+        planning_route,
         advanced_diagnostics_route,
         decisions_route,
         applications_route,
     ):
-        assert old_css in route
-        assert old_js in route
+        assert release_css in route
+        assert release_js in route
+
+    for route in (overview_route, scheduler_route, advanced_diagnostics_route, decisions_route):
+        assert planning_marker not in route
+
+    for route in (pipeline_route, applications_route):
         assert planning_marker not in route
 
 
@@ -305,10 +307,14 @@ def test_scan_and_tailoring_workspace_title_exceptions_remain_unchanged():
 # --- 20. No diagnostic execution enabled -------------------------------------
 
 
-def test_no_diagnostic_execution_was_enabled():
-    run_button_block = ADVANCED_DIAGNOSTICS_TSX.split('className="advanced-diagnostics-run-btn"', 1)[1].split(
-        "</button>", 1
-    )[0]
-    assert "disabled" in run_button_block
-    assert "onClick" not in run_button_block
-    assert "Execution is not enabled yet. Selections are for admin review only." in run_button_block
+def test_diagnostic_execution_requires_an_explicit_enabled_run_action():
+    explicit_provider_actions = {
+        "scanWorkspaceLiveTailoringSuggestionToggle": 'runStage("live_tailoring_suggestion")',
+        "scanWorkspaceLiveExactChangeProposalToggle": 'runStage("live_exact_resume_change_proposal")',
+    }
+    for action_id, handler in explicit_provider_actions.items():
+        button_block = ADVANCED_DIAGNOSTICS_TSX.split(f'id="{action_id}"', 1)[1].split("</button>", 1)[0]
+        assert 'type="button"' in button_block
+        assert "disabled" in button_block
+        assert "onClick" in button_block
+        assert handler in button_block

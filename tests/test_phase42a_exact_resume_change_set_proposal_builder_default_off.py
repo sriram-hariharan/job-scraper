@@ -17,6 +17,9 @@ from src.agents import exact_resume_change_set_proposal_builder_default_off as b
 from src.agents.exact_resume_change_set_proposal_builder_default_off import (
     build_exact_resume_change_set_proposal_builder_default_off,
 )
+from src.agents.controlled_exact_resume_change_set_llm_request_packet_default_off import (
+    build_controlled_exact_resume_change_set_llm_request_packet_default_off,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -417,19 +420,102 @@ def test_evidence_note_created_for_missing_jd_terms_without_resume_evidence():
     assert "Tableau" in proposal["proposed_text"]
 
 
-def test_skill_proposals_are_created_only_when_resume_evidence_supports_skill():
+def test_existing_skill_noop_is_not_emitted():
     payload = build_exact_resume_change_set_proposal_builder_default_off(
         review_queue=[_queue_item()],
-        resume_context=_resume_context(),
-        jd_context={"required_skills": ["Python"]},
-        tailoring_context={"matched_required_skills": ["Python"]},
-        proposal_policy={"allow_bullet_changes": False, "allow_summary_changes": False},
+        resume_context={"skills": ["AWS"]},
+        jd_context={"required_skills": ["AWS"]},
+        tailoring_context={"matched_required_skills": ["AWS"]},
+        proposal_policy={
+            "allow_bullet_changes": False,
+            "allow_summary_changes": False,
+            "allow_project_changes": False,
+        },
+    )
+
+    assert payload["change_proposals"] == []
+    assert payload["proposal_findings"]["skipped_terms"] == [
+        {"item_id": "queue-1", "term": "AWS", "reason": "no_effective_change"}
+    ]
+
+
+def test_noop_skill_falls_through_to_meaningful_bullet_candidate():
+    payload = build_exact_resume_change_set_proposal_builder_default_off(
+        review_queue=[_queue_item()],
+        resume_context={
+            "skills": ["AWS"],
+            "resume_bullets": [
+                {"id": "aws-bullet", "text": "Deployed services on AWS."}
+            ],
+        },
+        jd_context={"required_skills": ["AWS"]},
+        tailoring_context={"matched_required_skills": ["AWS"]},
+        proposal_policy={
+            "allow_summary_changes": False,
+            "allow_project_changes": False,
+        },
+    )
+
+    assert len(payload["change_proposals"]) == 1
+    proposal = payload["change_proposals"][0]
+    assert proposal["change_type"] == "bullet"
+    assert proposal["target_identifier"] == "aws-bullet"
+    assert builder._norm(proposal["current_text"]) != builder._norm(
+        proposal["proposed_text"]
+    )
+
+
+def test_all_editable_candidates_noop_with_normalized_text_are_skipped(monkeypatch):
+    def whitespace_only_skill(*_args, **_kwargs):
+        return {
+            "proposal_id": "phase42a-001",
+            "change_type": "skill",
+            "current_text": "  AWS  ",
+            "proposed_text": "AWS",
+        }
+
+    monkeypatch.setattr(builder, "_skill_candidate", whitespace_only_skill)
+    payload = build_exact_resume_change_set_proposal_builder_default_off(
+        review_queue=[_queue_item()],
+        resume_context={"skills": ["AWS"]},
+        jd_context={"required_skills": ["AWS"]},
+        tailoring_context={"matched_required_skills": ["AWS"]},
+        proposal_policy={
+            "allow_bullet_changes": False,
+            "allow_summary_changes": False,
+            "allow_project_changes": False,
+        },
+    )
+
+    assert payload["change_proposals"] == []
+    assert payload["change_set_summary"]["proposal_blocked"] is True
+    assert payload["proposal_findings"]["skipped_terms"][0]["reason"] == (
+        "no_effective_change"
+    )
+
+
+def test_supported_skill_absent_from_skills_remains_a_real_addition():
+    payload = build_exact_resume_change_set_proposal_builder_default_off(
+        review_queue=[_queue_item()],
+        resume_context={
+            "skills": ["Python"],
+            "resume_bullets": [{"id": "b1", "text": "Deployed services on AWS."}],
+        },
+        jd_context={"required_skills": ["AWS"]},
+        tailoring_context={"matched_required_skills": ["AWS"]},
+        proposal_policy={
+            "allow_bullet_changes": False,
+            "allow_summary_changes": False,
+            "allow_project_changes": False,
+        },
     )
 
     proposal = payload["change_proposals"][0]
     assert proposal["change_type"] == "skill"
-    assert "Python" in proposal["jd_terms_supported"]
-    assert proposal["resume_evidence_used"]
+    assert builder._norm(proposal["current_text"]) != builder._norm(
+        proposal["proposed_text"]
+    )
+    assert proposal["resume_evidence_used"] == ["Deployed services on AWS."]
 
 
 def test_bullet_proposals_are_created_only_from_supplied_existing_bullet_evidence():
@@ -451,7 +537,7 @@ def test_bullet_proposals_are_created_only_from_supplied_existing_bullet_evidenc
     assert "Built Python forecasting models" in proposal["current_text"]
 
 
-def test_summary_proposals_are_created_only_when_allowed():
+def test_noop_summary_is_not_emitted_when_allowed():
     blocked = build_exact_resume_change_set_proposal_builder_default_off(
         review_queue=[_queue_item()],
         resume_context=_resume_context(),
@@ -477,7 +563,10 @@ def test_summary_proposals_are_created_only_when_allowed():
     )
 
     assert blocked["change_proposals"] == []
-    assert allowed["change_proposals"][0]["change_type"] == "summary"
+    assert allowed["change_proposals"] == []
+    assert allowed["proposal_findings"]["skipped_terms"][0]["reason"] == (
+        "no_effective_change"
+    )
 
 
 def test_project_proposals_are_created_only_when_allowed_and_supported():
@@ -537,8 +626,36 @@ def test_before_after_text_can_be_omitted_by_policy():
     )
 
     proposal = payload["change_proposals"][0]
+    assert proposal["change_type"] == "bullet"
     assert proposal["current_text"] == ""
     assert proposal["proposed_text"] == ""
+
+
+def test_all_noop_phase42_result_blocks_phase43_provider_dispatch():
+    phase42 = build_exact_resume_change_set_proposal_builder_default_off(
+        review_queue=[_queue_item()],
+        resume_context={"skills": ["AWS"]},
+        jd_context={"required_skills": ["AWS"]},
+        tailoring_context={"matched_required_skills": ["AWS"]},
+        proposal_policy={
+            "allow_bullet_changes": False,
+            "allow_summary_changes": False,
+            "allow_project_changes": False,
+        },
+    )
+    phase43 = build_controlled_exact_resume_change_set_llm_request_packet_default_off(
+        proposal_result=phase42,
+        resume_context={"skills": ["AWS"]},
+        jd_context={"required_skills": ["AWS"]},
+        tailoring_context={"matched_required_skills": ["AWS"]},
+    )
+
+    assert phase42["change_proposals"] == []
+    assert phase43["request_packet_summary"]["included_change_proposal_count"] == 0
+    assert phase43["request_packet_summary"]["request_blocked"] is True
+    assert phase43["provider_dispatch_ready"] is False
+    assert phase43["provider_call_performed"] is False
+    assert phase43["network_call_performed"] is False
 
 
 def test_proposals_require_manual_review_and_user_acceptance():

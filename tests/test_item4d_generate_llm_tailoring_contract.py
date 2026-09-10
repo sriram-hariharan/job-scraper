@@ -100,17 +100,20 @@ def _tailoring_cmd(cmds):
     return matches[0]
 
 
-def _regenerate(regen_env, *, generate, refresh):
+def _regenerate(regen_env, *, generate, refresh, parse_retry_limit=None):
     from src.app import services
 
-    return services.regenerate_selected_resume_tailoring_payload(
-        output_dir=regen_env["output_dir"],
-        job_corpus=regen_env["job_corpus"],
-        job_doc_id="job-1",
-        selected_resume="resume_a.pdf",
-        generate_llm_tailoring=generate,
-        refresh_llm_tailoring=refresh,
-    )
+    kwargs = {
+        "output_dir": regen_env["output_dir"],
+        "job_corpus": regen_env["job_corpus"],
+        "job_doc_id": "job-1",
+        "selected_resume": "resume_a.pdf",
+        "generate_llm_tailoring": generate,
+        "refresh_llm_tailoring": refresh,
+    }
+    if parse_retry_limit is not None:
+        kwargs["parse_retry_limit"] = parse_retry_limit
+    return services.regenerate_selected_resume_tailoring_payload(**kwargs)
 
 
 # --- backend truth table --------------------------------------------------------
@@ -130,8 +133,44 @@ def test_generate_true_invokes_llm(regen_env):
     cmd = _tailoring_cmd(regen_env["cmds"])
     assert "--use-llm" in cmd
     assert "--output-llm-json" in cmd
+    retry_flag = cmd.index("--parse-retry-limit")
+    assert cmd[retry_flag + 1] == "1"
     assert result["llm_tailoring_status"] == "generated"
     assert result["tailoring_llm_json"]
+
+
+def test_explicit_zero_parse_retry_limit_reaches_subprocess_exactly(regen_env):
+    _regenerate(
+        regen_env,
+        generate=True,
+        refresh=False,
+        parse_retry_limit=0,
+    )
+    cmd = _tailoring_cmd(regen_env["cmds"])
+    retry_flag = cmd.index("--parse-retry-limit")
+    assert cmd[retry_flag + 1] == "0"
+
+
+@pytest.mark.parametrize("value", (0, 1))
+def test_service_parse_retry_limit_accepts_only_bounded_integers(value):
+    from src.app import services
+
+    assert services._normalize_tailoring_parse_retry_limit(value) == value
+
+
+@pytest.mark.parametrize(
+    "value",
+    ("0", "1", 0.0, 1.0, 0.5, 1.5, -1, 2, True, False, None),
+)
+def test_service_parse_retry_limit_rejects_non_integer_or_out_of_range_values(
+    value,
+):
+    from src.app import services
+
+    with pytest.raises(ValueError, match="parse_retry_limit must be 0 or 1"):
+        services.regenerate_selected_resume_tailoring_payload(
+            parse_retry_limit=value,
+        )
 
 
 def test_refresh_true_with_generate_true_bypasses_cache(regen_env):
@@ -162,12 +201,14 @@ def test_missing_field_backend_default_matches_explicit_false(regen_env):
     sig = inspect.signature(services.regenerate_selected_resume_tailoring_payload)
     assert sig.parameters["generate_llm_tailoring"].default is False
     assert sig.parameters["refresh_llm_tailoring"].default is False
+    assert sig.parameters["parse_retry_limit"].default == 1
 
 
 def test_api_missing_field_defaults_to_false():
     """payload.get("generate_llm_tailoring", False) -- missing field never spends LLM."""
     src = Path("src/app/api.py").read_text(encoding="utf-8")
     assert 'generate_llm_tailoring=bool(payload.get("generate_llm_tailoring", False))' in src
+    assert 'parse_retry_limit=payload.get("parse_retry_limit", 1)' in src
 
 
 # --- frontend caller intent -------------------------------------------------------

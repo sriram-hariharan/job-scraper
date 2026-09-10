@@ -20,8 +20,10 @@ from src.storage.notification_state.store import (
 NOTIFICATION_STATE_HEADERS = [
     "state_id",
     "state_timestamp",
+    "owner_user_id",
     "notification_id",
     "is_read",
+    "is_deleted",
 ]
 
 
@@ -129,7 +131,7 @@ def _build_sync_sql(csv_path: Path) -> str:
 
     copy_cmd = (
         "\\copy _notification_state_stage "
-        "(state_id, state_timestamp, notification_id, is_read) "
+        "(state_id, state_timestamp, owner_user_id, notification_id, is_read, is_deleted) "
         f"FROM '{copy_path}' WITH (FORMAT csv, HEADER true);"
     )
 
@@ -138,8 +140,10 @@ def _build_sync_sql(csv_path: Path) -> str:
             "CREATE TEMP TABLE _notification_state_stage (",
             "    state_id TEXT,",
             "    state_timestamp TIMESTAMPTZ,",
+            "    owner_user_id TEXT,",
             "    notification_id TEXT,",
-            "    is_read BOOLEAN",
+            "    is_read BOOLEAN,",
+            "    is_deleted BOOLEAN",
             ") ON COMMIT DROP;",
             "",
             copy_cmd,
@@ -148,14 +152,18 @@ def _build_sync_sql(csv_path: Path) -> str:
             "    INSERT INTO notification_state_events (",
             "        state_id,",
             "        state_timestamp,",
+            "        owner_user_id,",
             "        notification_id,",
-            "        is_read",
+            "        is_read,",
+            "        is_deleted",
             "    )",
             "    SELECT",
             "        state_id,",
             "        state_timestamp,",
+            "        owner_user_id,",
             "        notification_id,",
-            "        is_read",
+            "        is_read,",
+            "        is_deleted",
             "    FROM _notification_state_stage",
             "    ON CONFLICT (state_id) DO NOTHING",
             "    RETURNING 1",

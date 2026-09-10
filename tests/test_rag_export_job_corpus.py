@@ -9,7 +9,10 @@ import pytest
 
 class _FakeTqdm:
     def __call__(self, iterable=None, **kwargs):
-        return iterable
+        return self if iterable is None else iterable
+
+    def update(self, _count=1):
+        return None
 
     @staticmethod
     def write(*args, **kwargs):
@@ -344,3 +347,36 @@ def test_exported_document_retains_provider_attribution():
     assert row["provider_attribution_required"] is True
     assert row["provider_attribution_label"] == "Himalayas"
     assert row["provider_attribution_url"] == "https://himalayas.app"
+
+
+def test_exported_document_retains_skill_extraction_failure_outcome():
+    job = _job("skill-failure")
+    job["intelligence"] = {
+        "skills": {
+            "required": [],
+            "preferred": [],
+            "all": [],
+        },
+        "skill_extraction": {
+            "status": "failure",
+            "failure_category": "rate_limit",
+            "failure_stage": "execution",
+        },
+    }
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        output_path = Path(tmp_dir) / "corpus.jsonl"
+        exporter.export_job_corpus(
+            [job],
+            str(output_path),
+            merge_existing=False,
+            persist_postgres=False,
+        )
+        row = _read_jsonl(output_path)[0]
+
+    assert row["required_skills"] == []
+    assert row["preferred_skills"] == []
+    assert row["all_skills"] == []
+    assert row["skill_extraction_status"] == "failure"
+    assert row["skill_extraction_failure_category"] == "rate_limit"
+    assert row["skill_extraction_failure_stage"] == "execution"

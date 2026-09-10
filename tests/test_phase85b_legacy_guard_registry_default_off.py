@@ -18,6 +18,23 @@ from tests.support.phase_guard_registry import (
     ITEM2_MANUAL_PROVIDER_PREVIEW_PROMPT_SCHEMA_ALIGNMENT_FILES,
     ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES,
     ITEM4_PLANNING_TAILORING_OPTIONS_FILES,
+    ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES,
+    ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES,
+    ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES,
+    ITEM61D_AGENTIC_OPERATIONS_CONSOLE_SHELL_FILES,
+    ITEM61E_AGENTIC_OPERATIONS_OVERVIEW_UI_FILES,
+    ITEM61F_AGENT_REGISTRY_SAFETY_MATRIX_FILES,
+    ITEM61G_RUN_INSPECTOR_AGENTIC_REVIEW_INTEGRATION_FILES,
+    ITEM61H_CROSS_PAGE_NAVIGATION_PRODUCT_CLARITY_FILES,
+    ITEM61H_V1_SCAN_DIAGNOSTICS_VISUAL_POLISH_FILES,
+    ITEM7B_PREMIUM_ACCOUNT_TOOLBAR_FILES,
+    ITEM71_EFFECTIVE_EXACT_CHANGE_FILTER_FILES,
+    ITEM71_MANUAL_REVIEW_GROQ_DIAGNOSTICS_FIX_FILES,
+    ITEM71_PRODUCTION_EXACT_CHANGE_REFINEMENT_FILES,
+    ITEM71B_SAFE_DIAGNOSTICS_RUNTIME_FOUNDATION_FILES,
+    ITEM71C_SCAN_DIAGNOSTICS_FRONTEND_ACTIVATION_FILES,
+    ITEM71D_LATEST_DIAGNOSTICS_WORKFLOW_RESET_FILES,
+    NOTIFICATIONS_SCHEDULER_BELL_BRIDGE_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
     PHASE2D_B1_DEFAULT_ELIGIBILITY_OWNERSHIP_FILES,
     PHASE2D_B2_STRICT_SENIORITY_FILTER_FILES,
@@ -53,11 +70,13 @@ from tests.support.phase_guard_registry import (
     PHASE21_RELEASE_CANDIDATE_FILES,
     PHASE21R_HISTORICAL_GUARD_FILES,
     PERSONIO_SOURCE_RETIREMENT_FILES,
+    PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
     RECRUITEE_STANDALONE_DISCOVERY_FILES,
     SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES,
     SCRAPER_SOURCE_HEALTH_METRICS_FILES,
     SMARTRECRUITERS_PAGINATION_FILES,
+    LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES,
     STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES,
     STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES,
     STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES,
@@ -564,6 +583,22 @@ def test_phase2d_b2_strict_seniority_filter_surface_is_exact():
 
 
 def test_current_milestone_guard_compatibility_is_exact_registered_surface():
+    assert PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES == {
+        "src/matching/jd_intelligence_contract.py",
+        "src/matching/job_adapter.py",
+        "src/resume/evidence_builder.py",
+        "tests/fixtures/p1s3_jd_evidence/corpus_jobevidence_baseline.json",
+        "tests/fixtures/p1s3_jd_evidence/starved_jd_records.json",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_problem1_experience_skill_morphology.py",
+        "tests/test_problem1_jd_category_validator.py",
+        "tests/test_problem1_jd_evidence_starvation.py",
+        "tests/test_problem1_jd_intelligence_contract_v2.py",
+    }
+    assert not any(
+        "*" in path for path in PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES
+    )
     assert STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES == {
         "main.py",
         "src/pipeline/collector.py",
@@ -766,6 +801,90 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     )
     assert jobvite_location_freshness_profile == JOBVITE_LOCATION_FRESHNESS_FILES
     assert not any("*" in path for path in jobvite_location_freshness_profile)
+    lr2_reliability_profile = legacy_guard_allowlist(
+        "live_pipeline_ai_evaluation_reliability_lr2b_lr2c"
+    )
+    assert lr2_reliability_profile == {
+        "src/ai/job_fit_evaluator.py",
+        "src/evaluation/controlled_openai_canary_transport.py",
+        "src/evaluation/controlled_production_parity_benchmark.py",
+        "src/pipeline/collector.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_controlled_openai_canary_transport.py",
+        "tests/test_controlled_production_parity_benchmark.py",
+        "tests/test_phase17b_lean_cache_first_semantic_evaluation_activation.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    }
+    assert len(lr2_reliability_profile) == 10
+    assert not any("*" in path for path in lr2_reliability_profile)
+    assert_changed_files_allowed(
+        lr2_reliability_profile,
+        set(),
+        legacy_guard_profiles=(
+            "live_pipeline_ai_evaluation_reliability_lr2b_lr2c",
+        ),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/services.py"},
+            set(),
+            legacy_guard_profiles=(
+                "live_pipeline_ai_evaluation_reliability_lr2b_lr2c",
+            ),
+            include_current_milestone_compatibility=False,
+        )
+
+    item71_production_refinement_profile = legacy_guard_allowlist(
+        "item71_production_exact_change_refinement"
+    )
+    assert item71_production_refinement_profile == (
+        ITEM71_PRODUCTION_EXACT_CHANGE_REFINEMENT_FILES
+    )
+    assert len(item71_production_refinement_profile) == 12
+    assert not any("*" in path for path in item71_production_refinement_profile)
+    assert_changed_files_allowed(
+        item71_production_refinement_profile,
+        set(),
+        legacy_guard_profiles=("item71_production_exact_change_refinement",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/ai/llm_client.py"},
+            set(),
+            legacy_guard_profiles=("item71_production_exact_change_refinement",),
+            include_current_milestone_compatibility=False,
+        )
+    fvr2b_source_contracts_profile = legacy_guard_allowlist(
+        "live_pipeline_ai_evaluation_reliability_fvr2b_source_contracts"
+    )
+    assert fvr2b_source_contracts_profile == {
+        "tests/test_phase16b_lean_deterministic_production_orchestration_closure.py",
+        "tests/test_phase17a_lean_cache_first_jd_intelligence_activation.py",
+        "tests/test_phase83b_live_llm_invocation_contract_map_default_off.py",
+        "tests/test_phase87b_jd_intelligence_existing_output_collector_diagnostics_default_off.py",
+    }
+    assert len(fvr2b_source_contracts_profile) == 4
+    assert not any("*" in path for path in fvr2b_source_contracts_profile)
+    assert_changed_files_allowed(
+        fvr2b_source_contracts_profile,
+        set(),
+        legacy_guard_profiles=(
+            "live_pipeline_ai_evaluation_reliability_fvr2b_source_contracts",
+        ),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/services.py"},
+            set(),
+            legacy_guard_profiles=(
+                "live_pipeline_ai_evaluation_reliability_fvr2b_source_contracts",
+            ),
+            include_current_milestone_compatibility=False,
+        )
     expected_phase132_profile = {
         "src/app/api.py",
         "src/app/onboarding_ui.py",
@@ -1808,14 +1927,550 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         "*" in path for path in ITEM4_PLANNING_TAILORING_OPTIONS_FILES
     )
 
+    assert ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES == {
+        "src/app/profile_ui.py",
+        "src/app/static/agentic_review.css",
+        "src/app/static/agentic_review.js",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
+        "tests/test_item2e_manual_provider_preview_ui.py",
+        "tests/test_item6b2_consolidated_agentic_review_queue_foundation.py",
+        "tests/test_item6b3_selected_job_review_inspector.py",
+        "tests/test_item6b45_premium_visual_correction_density.py",
+        "tests/test_item6b4_selected_job_evidence_agent_views.py",
+        "tests/test_item6b5_contextual_actions_manual_preview_integration.py",
+        "tests/test_item6b65a_review_advanced_shell_usability.py",
+        "tests/test_item6b65b_agent_trace_master_detail_search_keyboard.py",
+        "tests/test_item6b65c_extended_trace_diagnostics_master_detail.py",
+        "tests/test_item6b6_final_review_vs_advanced_changeover.py",
+        "tests/test_item6c1_extended_diagnostic_detail_layout_action_alignment.py",
+        "tests/test_item6c2_final_placement_disclosure_header_alignment.py",
+        "tests/test_item6c3_agentic_review_back_navigation_placement_visibility.py",
+        "tests/test_item6c_final_agentic_review_visual_system_micro_ux.py",
+    }
+    assert not any("*" in path for path in ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES)
+
+    item61b_admin_boundary_profile = legacy_guard_allowlist(
+        "item61b_agentic_review_admin_boundary"
+    )
+    assert ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES == {
+        "src/app/api.py",
+        "src/app/profile_ui.py",
+        "src/app/static/profile.js",
+        "tests/test_item61b_agentic_review_admin_boundary.py",
+        "tests/test_agent_trace_api.py",
+        "tests/test_phase101b_evidence_chain_api_service_readback_default_off.py",
+    }
+    assert item61b_admin_boundary_profile == (
+        ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES
+    )
+    assert len(item61b_admin_boundary_profile) == 6
+    assert not any("*" in path for path in item61b_admin_boundary_profile)
+    assert_changed_files_allowed(
+        item61b_admin_boundary_profile,
+        set(),
+        legacy_guard_profiles=("item61b_agentic_review_admin_boundary",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/services.py"},
+            set(),
+            legacy_guard_profiles=("item61b_agentic_review_admin_boundary",),
+            include_current_milestone_compatibility=False,
+        )
+
+    item61c_readonly_backend_profile = legacy_guard_allowlist(
+        "item61c_agentic_operations_readonly_backend"
+    )
+    assert ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES == {
+        "src/app/api.py",
+        "src/app/services.py",
+        "tests/test_item61c_agentic_operations_readonly_backend.py",
+    }
+    assert item61c_readonly_backend_profile == (
+        ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES
+    )
+    assert len(item61c_readonly_backend_profile) == 3
+    assert not any("*" in path for path in item61c_readonly_backend_profile)
+    assert_changed_files_allowed(
+        item61c_readonly_backend_profile,
+        set(),
+        legacy_guard_profiles=("item61c_agentic_operations_readonly_backend",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/unapproved_runtime.py"},
+            set(),
+            legacy_guard_profiles=("item61c_agentic_operations_readonly_backend",),
+            include_current_milestone_compatibility=False,
+        )
+
+    item61d_console_shell_profile = legacy_guard_allowlist(
+        "item61d_agentic_operations_console_shell"
+    )
+    assert ITEM61D_AGENTIC_OPERATIONS_CONSOLE_SHELL_FILES == {
+        "src/app/ui.py",
+        "src/app/ui_shell.py",
+        "src/app/static/shell.js",
+        "tests/test_item61d_agentic_operations_console_shell.py",
+    }
+    assert item61d_console_shell_profile == (
+        ITEM61D_AGENTIC_OPERATIONS_CONSOLE_SHELL_FILES
+    )
+    assert len(item61d_console_shell_profile) == 4
+    assert not any("*" in path for path in item61d_console_shell_profile)
+    assert_changed_files_allowed(
+        item61d_console_shell_profile,
+        set(),
+        legacy_guard_profiles=("item61d_agentic_operations_console_shell",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/unapproved_runtime.py"},
+            set(),
+            legacy_guard_profiles=("item61d_agentic_operations_console_shell",),
+            include_current_milestone_compatibility=False,
+        )
+
+    item61e_overview_ui_profile = legacy_guard_allowlist(
+        "item61e_agentic_operations_overview_ui"
+    )
+    assert ITEM61E_AGENTIC_OPERATIONS_OVERVIEW_UI_FILES == {
+        "src/app/ui.py",
+        "frontend/executive-kpi/src/main.tsx",
+        "frontend/executive-kpi/src/styles.css",
+        "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.tsx",
+        "frontend/executive-kpi/src/agentic/agenticOperationsModel.ts",
+        "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.test.tsx",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "tests/test_item61e_agentic_operations_overview_ui.py",
+    }
+    assert item61e_overview_ui_profile == (
+        ITEM61E_AGENTIC_OPERATIONS_OVERVIEW_UI_FILES
+    )
+    assert len(item61e_overview_ui_profile) == 9
+    assert not any("*" in path for path in item61e_overview_ui_profile)
+    assert_changed_files_allowed(
+        item61e_overview_ui_profile,
+        set(),
+        legacy_guard_profiles=("item61e_agentic_operations_overview_ui",),
+        include_current_milestone_compatibility=False,
+    )
+    for unrelated_path in (
+        "src/app/services.py",
+        "frontend/executive-kpi/src/agentic/UnapprovedDashboard.tsx",
+        "src/app/static/build/executive-kpi/unapproved.js",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed(
+                {unrelated_path},
+                set(),
+                legacy_guard_profiles=(
+                    "item61e_agentic_operations_overview_ui",
+                ),
+                include_current_milestone_compatibility=False,
+            )
+
+    item7b_account_toolbar_profile = legacy_guard_allowlist(
+        "item7b_premium_account_toolbar"
+    )
+    assert ITEM7B_PREMIUM_ACCOUNT_TOOLBAR_FILES == {
+        "src/app/application_hub_ui.py",
+        "src/app/decisions_ui.py",
+        "src/app/onboarding_ui.py",
+        "src/app/planning_ui.py",
+        "src/app/profile_ui.py",
+        "src/app/static/app_redesign.css",
+        "src/app/static/shell.js",
+        "src/app/ui.py",
+        "src/app/ui_shell.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_item2_phase4_profile_corrections_and_legacy_route_retirement.py",
+        "tests/test_item2_phase4_secondary_page_headers.py",
+        "tests/test_item61d_agentic_operations_console_shell.py",
+        "tests/test_item7b_premium_account_toolbar.py",
+        "tests/test_phase132b2r3_guided_preferences_workflow.py",
+        "tests/test_phase133d_pipeline_dashboard_react_island.py",
+        "tests/test_phase1_step7_profile_ai_settings_ui.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert item7b_account_toolbar_profile == ITEM7B_PREMIUM_ACCOUNT_TOOLBAR_FILES
+    assert len(item7b_account_toolbar_profile) == 20
+    assert all(
+        not any(token in path for token in ("*", "?", "["))
+        and not path.endswith("/")
+        for path in item7b_account_toolbar_profile
+    )
+    assert_changed_files_allowed(
+        item7b_account_toolbar_profile,
+        set(),
+        legacy_guard_profiles=("item7b_premium_account_toolbar",),
+        include_current_milestone_compatibility=False,
+    )
+    for unrelated_path in (
+        "src/app/services.py",
+        "src/app/api.py",
+        "frontend/executive-kpi/src/UnapprovedAccountMenu.tsx",
+        "tests/test_unapproved_item7b_surface.py",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed(
+                {unrelated_path},
+                set(),
+                legacy_guard_profiles=("item7b_premium_account_toolbar",),
+                include_current_milestone_compatibility=False,
+            )
+
+    item71b_runtime_profile = legacy_guard_allowlist(
+        "item71b_safe_diagnostics_runtime_foundation"
+    )
+    assert ITEM71B_SAFE_DIAGNOSTICS_RUNTIME_FOUNDATION_FILES == {
+        "src/app/api.py",
+        "src/app/services.py",
+        "src/storage/saved_scans/read_postgres.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_item71b_safe_diagnostics_runtime_foundation.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert item71b_runtime_profile == ITEM71B_SAFE_DIAGNOSTICS_RUNTIME_FOUNDATION_FILES
+    assert len(item71b_runtime_profile) == 8
+    assert not any("*" in path for path in item71b_runtime_profile)
+    assert_changed_files_allowed(
+        item71b_runtime_profile,
+        set(),
+        legacy_guard_profiles=("item71b_safe_diagnostics_runtime_foundation",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx"},
+            set(),
+            legacy_guard_profiles=("item71b_safe_diagnostics_runtime_foundation",),
+            include_current_milestone_compatibility=False,
+        )
+
+    item71c_frontend_profile = legacy_guard_allowlist(
+        "item71c_scan_diagnostics_frontend_activation"
+    )
+    assert item71c_frontend_profile == ITEM71C_SCAN_DIAGNOSTICS_FRONTEND_ACTIVATION_FILES
+    assert len(item71c_frontend_profile) == 14
+    assert not any("*" in path for path in item71c_frontend_profile)
+    assert_changed_files_allowed(
+        item71c_frontend_profile,
+        set(),
+        legacy_guard_profiles=("item71c_scan_diagnostics_frontend_activation",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/api.py"},
+            set(),
+            legacy_guard_profiles=("item71c_scan_diagnostics_frontend_activation",),
+            include_current_milestone_compatibility=False,
+        )
+
+    item71d_reset_profile = legacy_guard_allowlist(
+        "item71d_latest_diagnostics_workflow_reset"
+    )
+    assert item71d_reset_profile == ITEM71D_LATEST_DIAGNOSTICS_WORKFLOW_RESET_FILES
+    assert len(item71d_reset_profile) == 22
+    assert not any("*" in path for path in item71d_reset_profile)
+    assert_changed_files_allowed(
+        item71d_reset_profile,
+        set(),
+        legacy_guard_profiles=("item71d_latest_diagnostics_workflow_reset",),
+        include_current_milestone_compatibility=False,
+    )
+
+    notification_bridge_profile = legacy_guard_allowlist(
+        "notifications_scheduler_bell_bridge"
+    )
+    assert notification_bridge_profile == NOTIFICATIONS_SCHEDULER_BELL_BRIDGE_FILES
+    assert len(notification_bridge_profile) == 8
+    assert not any("*" in path for path in notification_bridge_profile)
+    assert_changed_files_allowed(
+        notification_bridge_profile,
+        set(),
+        legacy_guard_profiles=("notifications_scheduler_bell_bridge",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/pipeline/scheduler.py"},
+            set(),
+            legacy_guard_profiles=("notifications_scheduler_bell_bridge",),
+            include_current_milestone_compatibility=False,
+        )
+
+    item71_groq_fix_profile = legacy_guard_allowlist(
+        "item71_manual_review_groq_diagnostics_fix"
+    )
+    assert item71_groq_fix_profile == ITEM71_MANUAL_REVIEW_GROQ_DIAGNOSTICS_FIX_FILES
+    assert item71_groq_fix_profile == {
+        "src/agents/controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+        "src/app/services.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_item71_manual_review_groq_diagnostics_fix.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase43b_controlled_exact_resume_change_set_llm_request_packet_dry_run_command_default_off.py",
+        "tests/test_phase45a_controlled_exact_resume_change_set_provider_response_validation_default_off.py",
+        "tests/test_phase45b_controlled_exact_resume_change_set_provider_response_validation_dry_run_command_default_off.py",
+        "tests/test_phase49a_controlled_exact_resume_change_set_real_provider_runtime_adapter_default_off.py",
+        "tests/test_phase49b_controlled_exact_resume_change_set_real_provider_runtime_adapter_dry_run_command_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert len(item71_groq_fix_profile) == 12
+    assert not any("*" in path for path in item71_groq_fix_profile)
+    assert_changed_files_allowed(
+        item71_groq_fix_profile,
+        set(),
+        legacy_guard_profiles=("item71_manual_review_groq_diagnostics_fix",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/ai/llm_client.py"},
+            set(),
+            legacy_guard_profiles=("item71_manual_review_groq_diagnostics_fix",),
+            include_current_milestone_compatibility=False,
+        )
+
+    item71_effective_filter_profile = legacy_guard_allowlist(
+        "item71_effective_exact_change_filter"
+    )
+    assert item71_effective_filter_profile == (
+        ITEM71_EFFECTIVE_EXACT_CHANGE_FILTER_FILES
+    )
+    assert item71_effective_filter_profile == {
+        "src/agents/exact_resume_change_set_proposal_builder_default_off.py",
+        "src/agents/controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase42a_exact_resume_change_set_proposal_builder_default_off.py",
+        "tests/test_phase43a_controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+    }
+    assert len(item71_effective_filter_profile) == 5
+    assert not any("*" in path for path in item71_effective_filter_profile)
+    assert_changed_files_allowed(
+        item71_effective_filter_profile,
+        set(),
+        legacy_guard_profiles=("item71_effective_exact_change_filter",),
+        include_current_milestone_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/services.py"},
+            set(),
+            legacy_guard_profiles=("item71_effective_exact_change_filter",),
+            include_current_milestone_compatibility=False,
+        )
+
+    item61h_v1_visual_polish_profile = legacy_guard_allowlist(
+        "item61h_v1_scan_diagnostics_visual_polish"
+    )
+    assert ITEM61H_V1_SCAN_DIAGNOSTICS_VISUAL_POLISH_FILES == {
+        "frontend/executive-kpi/src/styles.css",
+        "src/app/planning_ui.py",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "tests/test_advanced_diagnostics_react_redesign.py",
+    }
+    assert item61h_v1_visual_polish_profile == (
+        ITEM61H_V1_SCAN_DIAGNOSTICS_VISUAL_POLISH_FILES
+    )
+    assert len(item61h_v1_visual_polish_profile) == 4
+    assert all(
+        not any(token in path for token in ("*", "?", "["))
+        and not path.endswith("/")
+        for path in item61h_v1_visual_polish_profile
+    )
+    for unrelated_path in (
+        "src/app/services.py",
+        "frontend/executive-kpi/src/diagnostics/UnapprovedDiagnostics.tsx",
+        "src/app/static/build/executive-kpi/unapproved.css",
+        "tests/test_unapproved_item61h_v1_surface.py",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed(
+                {unrelated_path},
+                set(),
+                legacy_guard_profiles=(
+                    "item61h_v1_scan_diagnostics_visual_polish",
+                ),
+                include_current_milestone_compatibility=False,
+            )
+
+    item61f_registry_matrix_profile = legacy_guard_allowlist(
+        "item61f_agent_registry_safety_matrix"
+    )
+    assert ITEM61F_AGENT_REGISTRY_SAFETY_MATRIX_FILES == {
+        "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.test.tsx",
+        "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.tsx",
+        "frontend/executive-kpi/src/agentic/agenticOperationsModel.ts",
+        "frontend/executive-kpi/src/styles.css",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "tests/test_item61f_agent_registry_safety_matrix.py",
+    }
+    assert item61f_registry_matrix_profile == (
+        ITEM61F_AGENT_REGISTRY_SAFETY_MATRIX_FILES
+    )
+    assert len(item61f_registry_matrix_profile) == 7
+    assert all(
+        not any(token in path for token in ("*", "?", "["))
+        and not path.endswith("/")
+        for path in item61f_registry_matrix_profile
+    )
+    assert_changed_files_allowed(
+        item61f_registry_matrix_profile,
+        set(),
+        legacy_guard_profiles=("item61f_agent_registry_safety_matrix",),
+        include_current_milestone_compatibility=False,
+    )
+    for unrelated_path in (
+        "src/app/services.py",
+        "frontend/executive-kpi/src/agentic/UnapprovedDashboard.tsx",
+        "src/app/static/build/executive-kpi/unapproved.js",
+        "tests/test_unapproved_item61f_surface.py",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed(
+                {unrelated_path},
+                set(),
+                legacy_guard_profiles=(
+                    "item61f_agent_registry_safety_matrix",
+                ),
+                include_current_milestone_compatibility=False,
+            )
+
+    item61g_run_inspector_profile = legacy_guard_allowlist(
+        "item61g_run_inspector_agentic_review_integration"
+    )
+    assert ITEM61G_RUN_INSPECTOR_AGENTIC_REVIEW_INTEGRATION_FILES == {
+        "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.tsx",
+        "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.test.tsx",
+        "frontend/executive-kpi/src/styles.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "tests/test_item61g_run_inspector_agentic_review_integration.py",
+    }
+    assert item61g_run_inspector_profile == (
+        ITEM61G_RUN_INSPECTOR_AGENTIC_REVIEW_INTEGRATION_FILES
+    )
+    assert len(item61g_run_inspector_profile) == 6
+    assert all(
+        not any(token in path for token in ("*", "?", "["))
+        and not path.endswith("/")
+        for path in item61g_run_inspector_profile
+    )
+    assert_changed_files_allowed(
+        item61g_run_inspector_profile,
+        set(),
+        legacy_guard_profiles=(
+            "item61g_run_inspector_agentic_review_integration",
+        ),
+        include_current_milestone_compatibility=False,
+    )
+    for unrelated_path in (
+        "src/app/services.py",
+        "frontend/executive-kpi/src/agentic/UnapprovedDashboard.tsx",
+        "src/app/static/build/executive-kpi/unapproved.js",
+        "tests/test_unapproved_item61g_surface.py",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed(
+                {unrelated_path},
+                set(),
+                legacy_guard_profiles=(
+                    "item61g_run_inspector_agentic_review_integration",
+                ),
+                include_current_milestone_compatibility=False,
+            )
+
+    item61h_product_clarity_profile = legacy_guard_allowlist(
+        "item61h_cross_page_navigation_product_clarity"
+    )
+    assert ITEM61H_CROSS_PAGE_NAVIGATION_PRODUCT_CLARITY_FILES == {
+        "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.test.tsx",
+        "frontend/executive-kpi/src/agentic/AgenticOperationsDashboard.tsx",
+        "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.test.tsx",
+        "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx",
+        "src/app/planning_ui.py",
+        "src/app/profile_ui.py",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/app/ui_shell.py",
+        "tests/test_advanced_diagnostics_react_redesign.py",
+        "tests/test_item2_phase4_profile_corrections_and_legacy_route_retirement.py",
+        "tests/test_item61b_agentic_review_admin_boundary.py",
+        "tests/test_item61d_agentic_operations_console_shell.py",
+        "tests/test_item61g_run_inspector_agentic_review_integration.py",
+        "tests/test_item6c3_agentic_review_back_navigation_placement_visibility.py",
+    }
+    assert item61h_product_clarity_profile == (
+        ITEM61H_CROSS_PAGE_NAVIGATION_PRODUCT_CLARITY_FILES
+    )
+    assert len(item61h_product_clarity_profile) == 14
+    assert all(
+        not any(token in path for token in ("*", "?", "["))
+        and not path.endswith("/")
+        for path in item61h_product_clarity_profile
+    )
+    assert_changed_files_allowed(
+        item61h_product_clarity_profile,
+        set(),
+        legacy_guard_profiles=("item61h_cross_page_navigation_product_clarity",),
+        include_current_milestone_compatibility=False,
+    )
+    for unrelated_path in (
+        "src/app/services.py",
+        "frontend/executive-kpi/src/agentic/UnapprovedDashboard.tsx",
+        "src/app/static/build/executive-kpi/unapproved.js",
+        "tests/test_unapproved_item61h_surface.py",
+    ):
+        with pytest.raises(AssertionError):
+            assert_changed_files_allowed(
+                {unrelated_path},
+                set(),
+                legacy_guard_profiles=(
+                    "item61h_cross_page_navigation_product_clarity",
+                ),
+                include_current_milestone_compatibility=False,
+            )
+
     assert current_milestone_guard_compatibility_allowlist() == (
-        STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
+        LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES
+        | PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES
+        | STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
         | STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES
         | ITEM2_MANUAL_PROVIDER_PREVIEW_JOB_IDENTITY_REPAIR_FILES
         | ITEM2_MANUAL_PROVIDER_PREVIEW_PROMPT_SCHEMA_ALIGNMENT_FILES
         | ITEM3_DASHBOARD_SCOPED_CHATBOT_FILES
         | ITEM4_PLANNING_TAILORING_OPTIONS_FILES
+        | ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES
+        | item61b_admin_boundary_profile
+        | item61c_readonly_backend_profile
+        | item61d_console_shell_profile
+        | item61e_overview_ui_profile
+        | item61f_registry_matrix_profile
+        | item61g_run_inspector_profile
+        | item61h_product_clarity_profile
+        | item61h_v1_visual_polish_profile
+        | item7b_account_toolbar_profile
+        | item71b_runtime_profile
+        | item71c_frontend_profile
+        | item71d_reset_profile
+        | notification_bridge_profile
+        | item71_groq_fix_profile
+        | item71_effective_filter_profile
+        | item71_production_refinement_profile
         | smartrecruiters_pagination_profile
         | himalayas_step2b_profile
         | himalayas_step6c1_profile
@@ -1832,6 +2487,8 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | phase133ef_profile
         | source_yield_ui_profile
         | jobvite_location_freshness_profile
+        | lr2_reliability_profile
+        | fvr2b_source_contracts_profile
         | phase133h_profile
         | scheduler_admin_health_profile
         | scheduler_visual_correction_profile
@@ -2211,6 +2868,43 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         )
 
 
+def test_item61c_direct_hash_successors_are_exact_and_path_scoped():
+    root = Path(__file__).resolve().parents[1]
+    profile = ("item61c_agentic_operations_readonly_backend",)
+
+    assert_protected_hashes(
+        root,
+        {
+            "src/app/api.py": (
+                "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674"
+            ),
+            "src/app/services.py": (
+                "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74"
+            ),
+        },
+        compatibility_profiles=profile,
+    )
+    assert_protected_hashes(
+        root,
+        {
+            "src/app/api.py": (
+                "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004"
+            ),
+        },
+        compatibility_profiles=profile,
+    )
+    with pytest.raises(AssertionError):
+        assert_protected_hashes(
+            root,
+            {
+                "src/app/api.py": (
+                    "ca8de5e0643a4c24eb6d36c0371ee4c6e422a9dfa2c7dd01ce664954b959a985"
+                ),
+            },
+            compatibility_profiles=profile,
+        )
+
+
 def test_assert_protected_hashes_detects_hash_mismatch(tmp_path):
     path = tmp_path / "guarded.py"
     path.write_text("print('safe')\n", encoding="utf-8")
@@ -2227,6 +2921,13 @@ def test_assert_protected_hashes_detects_hash_mismatch(tmp_path):
 @pytest.mark.parametrize(
     ("relative_path", "historical_hash", "accepted_successors"),
     (
+        (
+            "src/app/api.py",
+            "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674",
+            (
+                "ca8de5e0643a4c24eb6d36c0371ee4c6e422a9dfa2c7dd01ce664954b959a985",
+            ),
+        ),
         (
             "src/app/services.py",
             "02d09d6f6e204183ef67a543222b4e3a4dae993f40041dfb8911397b835be7f7",

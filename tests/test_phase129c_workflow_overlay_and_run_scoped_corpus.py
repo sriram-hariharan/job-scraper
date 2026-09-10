@@ -250,6 +250,15 @@ def test_targeted_regeneration_passes_owner_scoped_env_to_both_commands(
         calls.append((list(cmd), env))
 
     monkeypatch.setattr(services, "_run_checked_cmd", fake_run)
+    monkeypatch.setattr(
+        services,
+        "_tailoring_workspace_button_state",
+        lambda row, output_dir: {
+            "tailoring_workspace_state": "ready",
+            "tailoring_actionable_replacement_count": 2,
+            "tailoring_review_replacement_count": 1,
+        },
+    )
 
     result = services.regenerate_selected_resume_tailoring_payload(
         output_dir=output_dir,
@@ -275,6 +284,9 @@ def test_targeted_regeneration_passes_owner_scoped_env_to_both_commands(
         "JOB_STACK_OWNER_USER_ID": os.environ.get("JOB_STACK_OWNER_USER_ID"),
     } == parent_before
     assert "owner_user_id" not in result
+    assert result["tailoring_workspace_state"] == "ready"
+    assert result["tailoring_actionable_replacement_count"] == 2
+    assert result["tailoring_review_replacement_count"] == 1
 
 
 def test_targeted_regeneration_explicit_false_disables_safe_rewrite_promotion(

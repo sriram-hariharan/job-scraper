@@ -19,6 +19,9 @@ from src.app import api, services
 
 ROOT = Path(__file__).resolve().parents[1]
 PLANNING_UI_SOURCE = (ROOT / "src/app/planning_ui.py").read_text(encoding="utf-8")
+EXECUTIVE_STYLES_SOURCE = (
+    ROOT / "frontend/executive-kpi/src/styles.css"
+).read_text(encoding="utf-8")
 
 ADMIN_USER = {"user_id": "admin-1", "email": "admin@example.test", "is_admin": True}
 NON_ADMIN_USER = {"user_id": "user-1", "email": "user@example.test", "is_admin": False, "access_level": "user"}
@@ -79,9 +82,24 @@ def test_admin_receives_the_react_root_and_initial_state(monkeypatch) -> None:
     client = _client_as(monkeypatch, ADMIN_USER)
     response = client.get("/advanced-diagnostics")
     assert response.status_code == 200
+    assert '<body class="advanced-diagnostics-page">' in response.text
     assert 'id="advancedDiagnosticsRoot"' in response.text
+    assert "<title>Scan Diagnostics</title>" in response.text
+    assert "Loading Scan Diagnostics..." in response.text
+    assert "/advanced-diagnostics" in response.text
     assert "window.__APPLYLENS_ADVANCED_DIAGNOSTICS_STATE__ = " in response.text
     assert '"mode": "hub"' in response.text or '"mode":"hub"' in response.text
+
+
+def test_scan_diagnostics_uses_admin_grid_and_shared_premium_combobox_styles() -> None:
+    assert ".advanced-diagnostics-page .page.scan-workspace-diagnostics-page" in EXECUTIVE_STYLES_SOURCE
+    assert "width: min(1360px, calc(100% - 56px));" in EXECUTIVE_STYLES_SOURCE
+    assert ".shared-filter-select__trigger[aria-expanded=\"true\"]" in EXECUTIVE_STYLES_SOURCE
+    assert ".shared-filter-select__search:focus-within" in EXECUTIVE_STYLES_SOURCE
+    assert ".shared-filter-select__option.is-selected" in EXECUTIVE_STYLES_SOURCE
+    # The menu is positioned and viewport-bounded by the shared primitive; a
+    # caller-specific minimum would invalidate that calculation near an edge.
+    assert ".advanced-diagnostics-scan-menu {" not in EXECUTIVE_STYLES_SOURCE
 
 
 def test_saved_scan_retrieval_remains_owner_scoped(monkeypatch) -> None:

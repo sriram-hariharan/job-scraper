@@ -779,6 +779,10 @@ def test_public_signatures_remain_compatible_with_appended_provider_client(
         "fallback_provider",
         "fallback_model",
         "provider_client",
+        # Appended, optional, defaults to None: carries workload identity so the
+        # workload-scoped Groq response-mode compatibility rule can be applied.
+        # Same additive pattern as provider_client; existing callers unaffected.
+        "workload_id",
     ]
     assert list(inspect.signature(module.run_chat_completion).parameters) == expected
     assert list(
@@ -833,3 +837,229 @@ def test_client_has_no_database_planning_graph_application_or_ats_wiring():
         "ats_action",
     ):
         assert marker not in source
+
+
+# ---------------------------------------------------------------------------
+# workload_id propagation fix.
+#
+# run_chat_completion_with_metadata already accepted workload_id and
+# _run_single_provider already forwarded it correctly to
+# _run_groq_chat_completion, but the two _run_single_provider call sites
+# inside run_chat_completion_with_metadata (primary and fallback) never
+# passed it through, so it silently became None regardless of what the
+# caller supplied. For (groq, openai/gpt-oss-120b, tailoring_generation)
+# this meant the already-authored _GROQ_WORKLOAD_JSON_OBJECT_COMPATIBILITY
+# exception never matched, and strict json_schema was used instead of the
+# intended json_object mode.
+# ---------------------------------------------------------------------------
+
+
+def test_workload_id_reaches_primary_run_single_provider(client_module):
+    module, _ = client_module
+    calls = []
+
+    def dispatch(provider_name, **kwargs):
+        calls.append((provider_name, kwargs.get("workload_id")))
+        return "bounded primary success"
+
+    module._run_single_provider = dispatch
+    payload = module.run_chat_completion_with_metadata(
+        messages=[],
+        provider="groq",
+        model="openai/gpt-oss-120b",
+        workload_id="tailoring_generation",
+    )
+    assert calls == [("groq", "tailoring_generation")]
+    assert payload["fallback_used"] is False
+
+
+def test_workload_id_reaches_fallback_run_single_provider(client_module):
+    module, _ = client_module
+    calls = []
+
+    def dispatch(provider_name, **kwargs):
+        calls.append((provider_name, kwargs.get("workload_id")))
+        if provider_name == "groq":
+            raise TimeoutError("bounded")
+        return "bounded fallback success"
+
+    module._run_single_provider = dispatch
+    payload = module.run_chat_completion_with_metadata(
+        messages=[],
+        provider="groq",
+        model="openai/gpt-oss-120b",
+        workload_id="tailoring_generation",
+        fallback_enabled=True,
+        fallback_provider="openai",
+        fallback_model="gpt-5-mini",
+    )
+    assert calls == [
+        ("groq", "tailoring_generation"),
+        ("openai", "tailoring_generation"),
+    ]
+    assert payload["fallback_used"] is True
+
+
+def test_groq_gpt_oss_120b_tailoring_generation_uses_json_object(client_module):
+    module, _ = client_module
+    captured = _install_capturing_fake(
+        module, "groq", _FakeMessage(json.dumps({"ok": True}))
+    )
+    module.run_chat_completion_with_metadata(
+        messages=[{"role": "user", "content": "bounded synthetic input"}],
+        provider="groq",
+        model="openai/gpt-oss-120b",
+        workload_id="tailoring_generation",
+        response_mime_type="application/json",
+        response_schema={"type": "object"},
+        return_parsed=True,
+    )
+    assert captured[0]["response_format"] == {"type": "json_object"}
+
+
+def test_groq_gpt_oss_120b_different_workload_stays_strict_json_schema(
+    client_module,
+):
+    module, _ = client_module
+    captured = _install_capturing_fake(
+        module, "groq", _FakeMessage(json.dumps({"ok": True}))
+    )
+    module.run_chat_completion_with_metadata(
+        messages=[{"role": "user", "content": "bounded synthetic input"}],
+        provider="groq",
+        model="openai/gpt-oss-120b",
+        workload_id="jd_intelligence",
+        response_mime_type="application/json",
+        response_schema={"type": "object"},
+        return_parsed=True,
+    )
+    request_format = captured[0]["response_format"]
+    assert request_format["type"] == "json_schema"
+    assert request_format["json_schema"]["strict"] is True
+
+
+def test_groq_gpt_oss_120b_missing_workload_id_preserves_current_general_behavior(
+    client_module,
+):
+    module, _ = client_module
+    captured = _install_capturing_fake(
+        module, "groq", _FakeMessage(json.dumps({"ok": True}))
+    )
+    module.run_chat_completion_with_metadata(
+        messages=[{"role": "user", "content": "bounded synthetic input"}],
+        provider="groq",
+        model="openai/gpt-oss-120b",
+        response_mime_type="application/json",
+        response_schema={"type": "object"},
+        return_parsed=True,
+    )
+    # No workload_id supplied: the workload-scoped exception cannot match by
+    # definition, so the model's general (non-workload-exempted) capability
+    # applies - strict json_schema, unchanged from before this fix.
+    assert captured[0]["response_format"]["type"] == "json_schema"
+
+
+def test_llama_3_3_70b_versatile_remains_on_json_object(client_module):
+    module, _ = client_module
+    captured = _install_capturing_fake(
+        module, "groq", _FakeMessage(json.dumps({"ok": True}))
+    )
+    module.run_chat_completion_with_metadata(
+        messages=[{"role": "user", "content": "bounded synthetic input"}],
+        provider="groq",
+        model="llama-3.3-70b-versatile",
+        workload_id="tailoring_generation",
+        response_mime_type="application/json",
+        response_schema={"type": "object"},
+        return_parsed=True,
+    )
+    # Unaffected by this fix: this model sits in
+    # _GROQ_MODELS_WITHOUT_JSON_SCHEMA regardless of workload_id.
+    assert captured[0]["response_format"] == {"type": "json_object"}
+
+
+def test_groq_model_workload_qualified_for_strict_schema_remains_strict(
+    client_module,
+):
+    module, _ = client_module
+    captured = _install_capturing_fake(
+        module, "groq", _FakeMessage(json.dumps({"ok": True}))
+    )
+    # openai/gpt-oss-120b on any workload other than the one exact
+    # compatibility exception continues to use strict json_schema, per the
+    # code's own comment: "openai/gpt-oss-120b supports strict JSON Schema
+    # and stays on it for every other workload (jd_intelligence is qualified
+    # that way)."
+    module.run_chat_completion_with_metadata(
+        messages=[{"role": "user", "content": "bounded synthetic input"}],
+        provider="groq",
+        model="openai/gpt-oss-20b",
+        workload_id="tailoring_generation",
+        response_mime_type="application/json",
+        response_schema={"type": "object"},
+        return_parsed=True,
+    )
+    request_format = captured[0]["response_format"]
+    assert request_format["type"] == "json_schema"
+    assert request_format["json_schema"]["strict"] is True
+
+
+def test_openai_provider_response_format_is_unaffected_by_workload_id(
+    client_module,
+):
+    module, _ = client_module
+    captured = _install_capturing_fake(
+        module, "openai", _FakeMessage(json.dumps({"ok": True}))
+    )
+    module.run_chat_completion_with_metadata(
+        messages=[{"role": "user", "content": "bounded synthetic input"}],
+        provider="openai",
+        model="gpt-5.1",
+        workload_id="tailoring_generation",
+        response_mime_type="application/json",
+        response_schema={"type": "object"},
+        return_parsed=True,
+    )
+    request_format = captured[0]["response_format"]
+    assert request_format["type"] == "json_schema"
+    assert request_format["json_schema"]["strict"] is True
+    # OpenAI's request builder has no workload_id parameter at all; nothing
+    # about it changed.
+    assert "workload_id" not in inspect.signature(module._run_openai_chat_completion).parameters
+
+
+def test_fallback_metrics_and_error_handling_are_unchanged_by_workload_id_fix(
+    client_module,
+):
+    module, _ = client_module
+    calls = []
+
+    def dispatch(provider_name, **_kwargs):
+        calls.append(provider_name)
+        if provider_name == "groq":
+            raise TimeoutError("bounded")
+        return "bounded fallback success"
+
+    module._run_single_provider = dispatch
+    module.reset_provider_metrics()
+    payload = module.run_chat_completion_with_metadata(
+        messages=[],
+        provider="groq",
+        model="openai/gpt-oss-120b",
+        workload_id="tailoring_generation",
+        fallback_enabled=True,
+        fallback_provider="openai",
+        fallback_model="gpt-5-mini",
+    )
+    assert calls == ["groq", "openai"]
+    assert payload == {
+        "content": "bounded fallback success",
+        "provider": "openai",
+        "model": "gpt-5-mini",
+        "fallback_used": True,
+    }
+    metrics = module.get_provider_metrics()
+    assert metrics["primary_attempts"] == 1
+    assert metrics["fallback_attempts"] == 1
+    assert metrics["fallback_successes"] == 1
+    assert metrics["provider_failures"] == 0

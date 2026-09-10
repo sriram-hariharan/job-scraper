@@ -67,9 +67,9 @@ def test_advanced_diagnostics_link_metadata_preserved():
     )
     assert 'id="profileAdvancedDiagnosticsLink"' in advanced_diagnostics_link
     assert 'data-admin-only="true"' in advanced_diagnostics_link
-    assert "Advanced Diagnostics" in advanced_diagnostics_link
-    assert "Admin workflow diagnostics" in advanced_diagnostics_link
-    assert 'class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>' in advanced_diagnostics_link
+    assert "Scan Diagnostics" in advanced_diagnostics_link
+    assert "profile-dropdown-nav-subtitle" not in advanced_diagnostics_link
+    assert "profile-dropdown-nav-arrow" not in advanced_diagnostics_link
 
 
 def test_scheduler_health_link_metadata_preserved():
@@ -77,7 +77,7 @@ def test_scheduler_health_link_metadata_preserved():
     assert 'id="profileSchedulerHealthLink"' in scheduler_link
     assert 'data-admin-only="true"' in scheduler_link
     assert "Scheduler Health" in scheduler_link
-    assert "Scheduled jobs, run outcomes, and persistence integrity" in scheduler_link
+    assert "profile-dropdown-nav-subtitle" not in scheduler_link
 
 
 def test_profile_menu_icon_color_uses_theme_variable_not_hardcoded_hex():
@@ -108,9 +108,13 @@ def test_advanced_diagnostics_svg_asset_no_longer_referenced_in_profile_menu():
     assert "adv_diagnostics_img.svg" not in UI_SHELL_SOURCE
 
 
-def test_profile_menu_layout_and_arrows_are_unchanged():
-    assert UI_SHELL_SOURCE.count('class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>') >= 2
-    assert 'class="profile-dropdown-nav-copy"' in UI_SHELL_SOURCE
+def test_profile_menu_uses_compact_grouped_rows_without_card_chevrons():
+    assert "profile-dropdown-nav-arrow" not in UI_SHELL_SOURCE
+    assert "profile-dropdown-nav-copy" not in UI_SHELL_SOURCE
+    assert UI_SHELL_SOURCE.count('class="profile-dropdown-section-label"') == 3
+    assert ">Workspace</div>" in UI_SHELL_SOURCE
+    assert ">Settings</div>" in UI_SHELL_SOURCE
+    assert ">Admin tools</div>" in UI_SHELL_SOURCE
 
 
 def test_floating_job_assistant_widget_preserved():
@@ -158,7 +162,13 @@ def test_pipeline_runs_pagination_meta_text_format_preserved():
     render_fn = _block(
         PROFILE_JS_SOURCE, "function renderPipelineRunsPagination()", "\nfunction "
     )
-    assert "Showing ${startRow}-${endRow} of ${totalCount} · Page ${currentPage} of ${totalPages}" in render_fn
+    # The run-history changeover moves page position into the compact
+    # "n / total" control beside the arrows, so the meta line is now a single
+    # quiet range statement. The same startRow/endRow/totalCount values are
+    # still derived from unchanged pagination state.
+    assert "Showing ${startRow}-${endRow} of ${totalCount}" in render_fn
+    assert "· Page ${currentPage} of ${totalPages}" not in render_fn
+    assert "${currentPage} / ${totalPages}" in render_fn
 
 
 def test_pipeline_runs_pagination_ids_preserved():
@@ -198,8 +208,11 @@ def test_profile_js_cache_marker_bumped_only_on_pipeline_runs_page():
 def test_other_profile_js_cache_markers_are_untouched():
     assert '/static/profile.js?v=agentic_review_v1"></script>' in PROFILE_UI_SOURCE
     assert '/static/profile.js?v=preferences_guided_parity_r9"></script>' in PROFILE_UI_SOURCE
+    # Saved Scans owns the changed renderer, so only its marker advances; the
+    # historical prefix is retained so the route stays identifiable.
     assert (
-        '/static/profile.js?v=profile_saved_scans_e5_discard_icon_profile_resume_roles_r10"></script>'
+        '/static/profile.js?v=profile_saved_scans_e5_discard_icon_profile_resume_roles_r10'
+        '_saved_scans_library_r1"></script>'
         in PROFILE_UI_SOURCE
     )
 

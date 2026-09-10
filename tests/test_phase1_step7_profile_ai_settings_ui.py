@@ -54,7 +54,9 @@ def test_account_dropdown_adds_ai_settings_without_removing_existing_links():
         "/profile/ai-settings",
     ):
         assert f'href="{href}"' in shell
-    assert "Providers, API keys, and model access" in shell
+    assert ">Settings</div>" in shell
+    assert '<span class="profile-dropdown-nav-title">AI Settings</span>' in shell
+    assert "profile-dropdown-nav-subtitle" not in shell
     assert '{_icon_svg("ai-settings")}' in UI_SHELL
 
 
@@ -743,25 +745,21 @@ def test_secret_visibility_control_uses_stable_grid_overlay_geometry():
     assert "height: 17px" in icon_rule
 
 
-def test_all_profile_dropdown_icons_share_geometry_and_owned_soft_tints():
-    base_icon_rule = APP_REDESIGN_CSS.split(".profile-dropdown-nav-icon {", 1)[1].split(
-        "}", 1
-    )[0]
+def test_all_profile_dropdown_icons_share_compact_untiled_geometry():
+    item7_css = APP_REDESIGN_CSS.split("/* Item 7B:", 1)[1]
     for geometry in (
-        "width: 44px !important",
-        "height: 44px !important",
-        "border-radius: 14px !important",
-        "align-items: center !important",
-        "justify-content: center !important",
+        "width: 20px !important",
+        "height: 20px !important",
+        "border-radius: 0 !important",
+        "background: transparent !important",
     ):
-        assert geometry in base_icon_rule
+        assert geometry in item7_css
 
     for preserved in ("scans", "profile", "preferences"):
         assert f".profile-dropdown-nav-icon--{preserved}" in APP_REDESIGN_CSS
-    for corrected in ("ai-settings", "diagnostics", "scheduler"):
+    for corrected in ("ai-settings", "diagnostics", "agentic-operations", "scheduler"):
         assert f".profile-dropdown-nav-icon--{corrected}" in APP_REDESIGN_CSS
         assert f'profile-dropdown-nav-icon--{corrected}' in UI_SHELL
-        assert f'html[data-theme="light"] .profile-dropdown-nav-icon--{corrected}' in APP_REDESIGN_CSS
 
 
 def test_ai_settings_sections_have_restrained_semantic_accent_ownership():

@@ -17,6 +17,11 @@ from tests.support.phase_guard_registry import (
     HIMALAYAS_STEP6D_B2_RETENTION_INTEGRATION_FILES,
     HIMALAYAS_STEP6D_C_SOURCE_RETIREMENT_FILES,
     HIMALAYAS_STEP6E_R1_LOCATION_ACTIVATION_FILES,
+    ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES,
+    ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES,
+    ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES,
+    ITEM61D_AGENTIC_OPERATIONS_CONSOLE_SHELL_FILES,
+    NOTIFICATIONS_SCHEDULER_BELL_BRIDGE_FILES,
     JOBVITE_LOCATION_FRESHNESS_FILES,
     JOBVITE_STANDALONE_DISCOVERY_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
@@ -164,6 +169,13 @@ def test_protected_runtime_files_are_unchanged():
             "source_yield_ui",
             "jobvite_location_freshness",
             "jobvite_standalone_discovery",
+            "item71b_safe_diagnostics_runtime_foundation",
+            "item71c_scan_diagnostics_frontend_activation",
+            "item71d_latest_diagnostics_workflow_reset",
+            "item71_manual_review_groq_diagnostics_fix",
+            "item71_effective_exact_change_filter",
+            "item71_production_exact_change_refinement",
+            "notifications_scheduler_bell_bridge",
         ),
     )
 
@@ -233,6 +245,8 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
         "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
         "src/pipeline/collector.py",
+        "tests/test_phase16b_lean_deterministic_production_orchestration_closure.py",
+        "tests/test_phase17a_lean_cache_first_jd_intelligence_activation.py",
         "tests/test_phase79b_relevance_prefilter_live_trace_wrapper_default_off.py",
         "src/agents/orchestrator_adapter_harness.py",
         "tests/test_phase79d_default_off_advisory_agent_chain_harness.py",
@@ -856,6 +870,14 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
             "personio_source_retirement",
             "recruitee_standalone_discovery",
             "jobvite_standalone_discovery",
+            "live_pipeline_ai_evaluation_reliability_lr2b",
+            "item71b_safe_diagnostics_runtime_foundation",
+            "item71c_scan_diagnostics_frontend_activation",
+            "item71d_latest_diagnostics_workflow_reset",
+            "item71_manual_review_groq_diagnostics_fix",
+            "item71_effective_exact_change_filter",
+            "item71_production_exact_change_refinement",
+            "notifications_scheduler_bell_bridge",
         ),
     )
 
@@ -1814,6 +1836,127 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    item7b_premium_account_toolbar_runtime_files = {
+        ROOT / "src/app/application_hub_ui.py",
+        ROOT / "src/app/decisions_ui.py",
+        ROOT / "src/app/onboarding_ui.py",
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/profile_ui.py",
+        ROOT / "src/app/static/app_redesign.css",
+        ROOT / "src/app/static/shell.js",
+        ROOT / "src/app/ui.py",
+        ROOT / "src/app/ui_shell.py",
+    }
+    if set(changed_runtime_files) == item7b_premium_account_toolbar_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    item71b_safe_diagnostics_runtime_files = {
+        ROOT / "src/app/api.py",
+        ROOT / "src/app/services.py",
+        ROOT / "src/storage/saved_scans/read_postgres.py",
+    }
+    if set(changed_runtime_files) == item71b_safe_diagnostics_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
+    item71c_scan_diagnostics_runtime_files = item71b_safe_diagnostics_runtime_files | {
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+    }
+    if set(changed_runtime_files) == item71c_scan_diagnostics_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git", "diff", "--unified=0", "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:] for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    item71_groq_fix_runtime_files = item71c_scan_diagnostics_runtime_files | {
+        ROOT
+        / "src/agents/controlled_exact_resume_change_set_llm_request_packet_default_off.py",
+    }
+    if set(changed_runtime_files) == item71_groq_fix_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git", "diff", "--unified=0", "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:] for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    item71_effective_exact_change_filter_runtime_files = (
+        item71_groq_fix_runtime_files
+        | {
+            ROOT
+            / "src/agents/exact_resume_change_set_proposal_builder_default_off.py",
+        }
+    )
+    if (
+        set(changed_runtime_files)
+        == item71_effective_exact_change_filter_runtime_files
+    ):
+        diff = subprocess.check_output(
+            [
+                "git", "diff", "--unified=0", "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:] for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    item71_production_exact_change_refinement_runtime_files = (
+        item71_effective_exact_change_filter_runtime_files
+        | {
+            ROOT
+            / "src/agents/controlled_exact_resume_change_set_provider_response_validation_default_off.py",
+        }
+    )
+    if (
+        set(changed_runtime_files)
+        == item71_production_exact_change_refinement_runtime_files
+    ):
+        diff = subprocess.check_output(
+            [
+                "git", "diff", "--unified=0", "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:] for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
     phase133h_shared_shell_files = {
         ROOT / "src/app/application_hub_ui.py",
         ROOT / "src/app/applied_ui.py",
@@ -2523,6 +2666,18 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in source
         return
+    live_pipeline_ai_evaluation_reliability_runtime_files = {
+        ROOT / "src/ai/job_fit_evaluator.py",
+        ROOT / "src/evaluation/controlled_openai_canary_transport.py",
+        ROOT / "src/evaluation/controlled_production_parity_benchmark.py",
+        ROOT / "src/pipeline/collector.py",
+    }
+    if set(changed_runtime_files) == live_pipeline_ai_evaluation_reliability_runtime_files:
+        for path in changed_runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in source
+        return
     item3_dashboard_scoped_chatbot_runtime_files = {
         ROOT / "src/app/services.py",
         ROOT / "src/app/static/app_redesign.css",
@@ -2575,6 +2730,281 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         added_lines = "\n".join(
             line[1:]
             for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    item6_agentic_review_ui_revamp_runtime_files = {
+        ROOT / relative_path
+        for relative_path in ITEM6_AGENTIC_REVIEW_UI_REVAMP_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == item6_agentic_review_ui_revamp_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    item61b_agentic_review_admin_boundary_runtime_files = {
+        ROOT / relative_path
+        for relative_path in ITEM61B_AGENTIC_REVIEW_ADMIN_BOUNDARY_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if (
+        set(changed_runtime_files)
+        == item61b_agentic_review_admin_boundary_runtime_files
+    ):
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    item61c_agentic_operations_readonly_backend_runtime_files = {
+        ROOT / relative_path
+        for relative_path in ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if (
+        set(changed_runtime_files)
+        == item61c_agentic_operations_readonly_backend_runtime_files
+    ):
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    item61d_agentic_operations_console_shell_runtime_files = {
+        ROOT / relative_path
+        for relative_path in ITEM61D_AGENTIC_OPERATIONS_CONSOLE_SHELL_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if (
+        set(changed_runtime_files)
+        == item61d_agentic_operations_console_shell_runtime_files
+    ):
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    item61e_agentic_operations_overview_ui_runtime_files = {
+        ROOT / "src/app/ui.py",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+    }
+    if (
+        set(changed_runtime_files)
+        == item61e_agentic_operations_overview_ui_runtime_files
+    ):
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    item61f_agent_registry_safety_matrix_runtime_files = {
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+    }
+    if (
+        set(changed_runtime_files)
+        == item61f_agent_registry_safety_matrix_runtime_files
+    ):
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    item61h_cross_page_navigation_runtime_files = {
+        ROOT / "src/app/ui_shell.py",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/profile_ui.py",
+    }
+    if set(changed_runtime_files) == item61h_cross_page_navigation_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--unified=0",
+                "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:]
+            for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    item61h_v1_scan_diagnostics_visual_runtime_files = {
+        ROOT / "src/app/ui_shell.py",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/profile_ui.py",
+    }
+    if set(changed_runtime_files) == item61h_v1_scan_diagnostics_visual_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git", "diff", "--unified=0", "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:] for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    planning_bulk_suggestions_runtime_files = {
+        ROOT / "src/agents/tailoring_generation_authoritative_graph.py",
+        ROOT / "src/ai/llm_client.py",
+        ROOT / "src/ai/user_provider_runtime.py",
+        ROOT / "src/app/api.py",
+        ROOT / "src/app/planning_ui.py",
+        ROOT / "src/app/services.py",
+        ROOT / "src/app/static/app.js",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+        ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+        ROOT / "src/app/static/planning.js",
+        ROOT / "src/app/static/styles.css",
+        ROOT / "src/evaluation/controlled_groq_canary_transport.py",
+        ROOT / "src/evaluation/controlled_live_provider_qualification.py",
+        ROOT / "src/evaluation/controlled_production_parity_benchmark.py",
+        ROOT / "src/evaluation/controlled_provider_benchmark_harness.py",
+        ROOT / "src/evaluation/provider_fixture_benchmark.py",
+        ROOT / "src/evaluation/provider_model_recommendation_policy.py",
+        ROOT / "src/tailoring/llm.py",
+    }
+    if set(changed_runtime_files) == planning_bulk_suggestions_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git", "diff", "--unified=0", "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:] for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    notification_bridge_runtime_files = {
+        ROOT / relative_path
+        for relative_path in NOTIFICATIONS_SCHEDULER_BELL_BRIDGE_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if set(changed_runtime_files) == notification_bridge_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git", "diff", "--unified=0", "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:] for line in diff.splitlines()
             if line.startswith("+") and not line.startswith("+++")
         )
         for marker in FORBIDDEN_RUNTIME_MARKERS:

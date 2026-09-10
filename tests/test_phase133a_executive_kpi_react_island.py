@@ -18,12 +18,12 @@ def test_executive_route_keeps_kpi_mount_and_uses_one_react_queue_mount():
     markup = executive_dashboard()
 
     assert markup.count('id="executiveKpiRoot"') == 1
-    # Bundle cache marker bumped to item2_phase3_shared_header_r1 when Overview's
-    # header was migrated onto the shared .app-page-header contract.
-    assert "/static/build/executive-kpi/executive-kpi.css?v=item2_phase3_shared_header_r1" in markup
+    # The shared-select delivery marker keeps the rebuilt CSS and JavaScript in
+    # lockstep on every route that renders SharedFilterSelect.
+    assert "/static/build/executive-kpi/executive-kpi.css?v=eucalyptus_primary_shell_r1" in markup
     assert (
         '<script type="module" '
-        'src="/static/build/executive-kpi/executive-kpi.js?v=item2_phase3_shared_header_r1"></script>'
+        'src="/static/build/executive-kpi/executive-kpi.js?v=eucalyptus_primary_shell_r1"></script>'
         in markup
     )
 

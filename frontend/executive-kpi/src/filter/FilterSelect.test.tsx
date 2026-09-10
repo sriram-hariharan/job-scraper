@@ -54,7 +54,10 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 it("renders an associated controlled trigger and selected checkmark", () => {
   render(<ControlledSelect />);
@@ -72,11 +75,40 @@ it("normalizes searchable text and keeps the menu viewport-bounded", () => {
   render(<ControlledSelect />);
   fireEvent.click(screen.getByRole("button", { name: "Action All actions" }));
   const menu = screen.getByRole("listbox");
+  const search = screen.getByRole("searchbox");
   expect(document.body).toContainElement(menu);
   expect(menu).toHaveStyle({ left: "100px", width: "240px" });
-  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "data-eng" } });
+  expect(search).toHaveClass("shared-filter-select__search-input");
+  expect(search.closest(".shared-filter-select__search")).not.toBeNull();
+  expect(search).not.toHaveClass("form-control");
+  expect(search.closest(".shared-filter-select__search")?.querySelector("svg")).toHaveAttribute("width", "17");
+  fireEvent.change(search, { target: { value: "data-eng" } });
   expect(screen.getByRole("option", { name: "Data Engineering" })).toBeInTheDocument();
   expect(screen.queryByRole("option", { name: "Ready for review" })).not.toBeInTheDocument();
+});
+
+it("moves keyboard focus from the integrated search row into options", async () => {
+  render(<ControlledSelect />);
+  fireEvent.click(screen.getByRole("button", { name: "Action All actions" }));
+  const search = screen.getByRole("searchbox");
+  await waitFor(() => expect(search).toHaveFocus());
+  fireEvent.keyDown(search, { key: "ArrowDown" });
+  await waitFor(() => expect(screen.getByRole("option", { name: "All actions" })).toHaveFocus());
+});
+
+it("leaves non-searchable menus without search-header markup", () => {
+  render(<ControlledSelect searchable={false} />);
+  fireEvent.click(screen.getByRole("button", { name: "Action All actions" }));
+  expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+  expect(screen.getByRole("listbox")).toHaveAttribute("data-searchable", "false");
+  expect(screen.getAllByRole("option")).toHaveLength(4);
+});
+
+it("never positions a minimum-width menu beyond a narrow viewport", () => {
+  vi.stubGlobal("innerWidth", 200);
+  render(<ControlledSelect />);
+  fireEvent.click(screen.getByRole("button", { name: "Action All actions" }));
+  expect(screen.getByRole("listbox")).toHaveStyle({ left: "12px", width: "176px" });
 });
 
 it("applies an optional portalClassName to the portaled menu without changing default behavior", () => {
@@ -141,4 +173,70 @@ it("keeps multiple selection open while toggling preferences and summarizes the 
   expect(screen.getByRole("option", { name: "Tailor first" })).toHaveAttribute("aria-selected", "true");
   fireEvent.click(screen.getByRole("option", { name: "All actions" }));
   expect(screen.getByRole("button", { name: "Action All actions" })).toHaveAttribute("aria-expanded", "true");
+});
+
+it("exposes shared open/searchable state hooks and a compact empty search row", () => {
+  const { container } = render(<ControlledSelect />);
+  const root = container.querySelector(".shared-filter-select");
+  const trigger = screen.getByRole("button", { name: "Action All actions" });
+
+  expect(root).toHaveAttribute("data-state", "closed");
+  expect(root).toHaveAttribute("data-searchable", "true");
+  fireEvent.click(trigger);
+  expect(root).toHaveClass("is-open");
+  expect(root).toHaveAttribute("data-state", "open");
+  expect(trigger).toHaveClass("is-open");
+  expect(screen.getByRole("listbox")).toHaveAttribute("data-searchable", "true");
+  expect(screen.getByRole("option", { name: "All actions" })).toHaveClass("is-all", "is-selected");
+  expect(screen.getByRole("option", { name: "Ready for review" }).querySelector(".shared-filter-select__dot--ready")).toBeInTheDocument();
+
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "no-match-here" } });
+  expect(screen.queryAllByRole("option")).toHaveLength(0);
+  expect(screen.getByText("No options found")).toHaveClass("shared-filter-select__empty");
+});
+
+it("supports Arrow, Home, End, Space, and Tab without changing selection semantics", async () => {
+  render(<ControlledSelect searchable={false} />);
+  const trigger = screen.getByRole("button", { name: "Action All actions" });
+
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+  const options = screen.getAllByRole("option");
+  const lastOption = options[options.length - 1];
+  await waitFor(() => expect(options[0]).toHaveFocus());
+  fireEvent.keyDown(options[0], { key: "End" });
+  await waitFor(() => expect(lastOption).toHaveFocus());
+  fireEvent.keyDown(lastOption, { key: "Home" });
+  await waitFor(() => expect(options[0]).toHaveFocus());
+  fireEvent.keyDown(options[0], { key: "ArrowUp" });
+  await waitFor(() => expect(lastOption).toHaveFocus());
+  fireEvent.keyDown(lastOption, { key: " " });
+  await waitFor(() => expect(trigger).toHaveFocus());
+  expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+  fireEvent.click(trigger);
+  const firstOption = screen.getAllByRole("option")[0];
+  fireEvent.keyDown(firstOption, { key: "Tab" });
+  expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+});
+
+it("preserves viewport-aware top placement and bounded portal sizing", () => {
+  vi.stubGlobal("innerHeight", 800);
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+    x: 100,
+    y: 740,
+    top: 740,
+    left: 100,
+    right: 320,
+    bottom: 780,
+    width: 220,
+    height: 40,
+    toJSON: () => ({}),
+  });
+
+  render(<ControlledSelect searchable={false} />);
+  fireEvent.click(screen.getByRole("button", { name: "Action All actions" }));
+  const menu = screen.getByRole("listbox");
+  expect(document.body).toContainElement(menu);
+  expect(menu).toHaveAttribute("data-placement", "top");
+  expect(menu).toHaveStyle({ left: "100px", bottom: "66px", width: "240px", maxHeight: "320px" });
 });

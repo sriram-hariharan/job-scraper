@@ -5,7 +5,15 @@ from typing import List, Dict, Any
 from src.utils.logging import get_logger
 from src.utils.skill_normalizer import normalize_skills
 
-from src.ai.skill_llm_enricher import enrich_skills_with_llm
+from src.ai.skill_llm_enricher import (
+    SKILL_EXTRACTION_FAILURE_CATEGORIES,
+    SKILL_EXTRACTION_FAILURE_STAGES,
+    SKILL_EXTRACTION_STATUS_FAILURE,
+    SKILL_EXTRACTION_STATUS_SUCCESS_EMPTY,
+    SKILL_EXTRACTION_STATUS_SUCCESS_NONEMPTY,
+    SKILL_EXTRACTION_STATUSES,
+    enrich_skills_with_llm,
+)
 from src.ai.hybrid_skill_extractor import (
     extract_skills_deterministic,
     extract_skills_hybrid,
@@ -19,6 +27,51 @@ SKILL_EXTRACTION_BACKEND = os.getenv("SKILL_EXTRACTION_BACKEND", "groq_first").s
 _VALID_BACKENDS = {"groq_first", "deterministic", "hybrid"}
 AI_EVALUATION_SKIP_STAGE = "ai_evaluation_filter"
 SKIPPED_NO_DESCRIPTION = "SKIPPED_NO_DESCRIPTION"
+
+
+def _skill_extraction_metadata(
+    skill_result: Dict[str, Any],
+    *,
+    has_skills: bool,
+) -> Dict[str, str]:
+    status = str(skill_result.get("extraction_status") or "").strip()
+    if status not in SKILL_EXTRACTION_STATUSES:
+        status = (
+            SKILL_EXTRACTION_STATUS_SUCCESS_NONEMPTY
+            if has_skills
+            else SKILL_EXTRACTION_STATUS_SUCCESS_EMPTY
+        )
+    elif status != SKILL_EXTRACTION_STATUS_FAILURE:
+        status = (
+            SKILL_EXTRACTION_STATUS_SUCCESS_NONEMPTY
+            if has_skills
+            else SKILL_EXTRACTION_STATUS_SUCCESS_EMPTY
+        )
+
+    if status != SKILL_EXTRACTION_STATUS_FAILURE:
+        return {
+            "status": status,
+            "failure_category": "",
+            "failure_stage": "",
+        }
+
+    failure_category = str(
+        skill_result.get("failure_category") or "unknown"
+    ).strip()
+    if failure_category not in SKILL_EXTRACTION_FAILURE_CATEGORIES:
+        failure_category = "unknown"
+
+    failure_stage = str(
+        skill_result.get("failure_stage") or "unknown"
+    ).strip()
+    if failure_stage not in SKILL_EXTRACTION_FAILURE_STAGES:
+        failure_stage = "unknown"
+
+    return {
+        "status": status,
+        "failure_category": failure_category,
+        "failure_stage": failure_stage,
+    }
 
 
 def _extract_skills(description: str) -> Dict[str, List[str]]:
@@ -47,6 +100,9 @@ def _extract_skills(description: str) -> Dict[str, List[str]]:
         "required_skills": required_skills,
         "preferred_skills": preferred_skills,
         "all_skills": required_skills + [s for s in preferred_skills if s not in required_skills],
+        "extraction_status": llm_result.get("extraction_status", ""),
+        "failure_category": llm_result.get("failure_category", ""),
+        "failure_stage": llm_result.get("failure_stage", ""),
     }
 
 
@@ -65,6 +121,11 @@ def build_job_intelligence(job: Dict[str, Any]) -> Dict[str, Any]:
                 "required": [],
                 "preferred": [],
                 "all": [],
+            },
+            "skill_extraction": {
+                "status": SKILL_EXTRACTION_STATUS_FAILURE,
+                "failure_category": "configuration",
+                "failure_stage": "input",
             },
             "visa_sponsorship": None
         }
@@ -102,6 +163,12 @@ def build_job_intelligence(job: Dict[str, Any]) -> Dict[str, Any]:
             "preferred": preferred_skills,
             "all": all_skills,
         },
+        "skill_extraction": _skill_extraction_metadata(
+            skill_result,
+            has_skills=bool(
+                required_skills or preferred_skills or all_skills
+            ),
+        ),
         "visa_sponsorship": visa_signal
     }
 

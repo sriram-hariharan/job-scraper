@@ -100,6 +100,9 @@ def _bounded_optional_string(value: object, maximum_length: int) -> str:
 def build_job_document(job: Dict[str, Any]) -> Dict[str, Any]:
     intelligence = job.get("intelligence", {}) or {}
     skills = intelligence.get("skills", {}) or {}
+    skill_extraction = intelligence.get("skill_extraction", {}) or {}
+    if not isinstance(skill_extraction, dict):
+        skill_extraction = {}
 
     required_skills = skills.get("required", []) or []
     preferred_skills = skills.get("preferred", []) or []
@@ -129,6 +132,18 @@ def build_job_document(job: Dict[str, Any]) -> Dict[str, Any]:
         "required_skills": required_skills,
         "preferred_skills": preferred_skills,
         "all_skills": all_skills,
+        "skill_extraction_status": _bounded_optional_string(
+            skill_extraction.get("status"),
+            32,
+        ),
+        "skill_extraction_failure_category": _bounded_optional_string(
+            skill_extraction.get("failure_category"),
+            64,
+        ),
+        "skill_extraction_failure_stage": _bounded_optional_string(
+            skill_extraction.get("failure_stage"),
+            32,
+        ),
         "ai_flags": intelligence.get("ai_flags", {}) or {},
         "visa_sponsorship": intelligence.get("visa_sponsorship", "unknown"),
         "ai_fit_score": job.get("ai_fit_score"),

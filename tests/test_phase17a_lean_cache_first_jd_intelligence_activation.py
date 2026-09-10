@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import contextlib
 from copy import deepcopy
 import importlib
+import logging
 from pathlib import Path
 import sys
 import types
@@ -359,6 +361,13 @@ def test_production_jd_cache_hit_makes_zero_provider_and_cache_write_calls(
     )
     monkeypatch.setattr(
         skill_enricher,
+        "resolve_recommended_user_provider_route",
+        lambda *_args, **_kwargs: pytest.fail(
+            "cache hit must not resolve a recommended route"
+        ),
+    )
+    monkeypatch.setattr(
+        skill_enricher,
         "store_cached_llm_skills",
         lambda **kwargs: stores.append(kwargs),
     )
@@ -371,6 +380,13 @@ def test_production_jd_cache_hit_makes_zero_provider_and_cache_write_calls(
     assert set(
         result["intelligent_jobs"][0]["intelligence"]["skills"]["all"]
     ) == {"python", "sql", "airflow"}
+    assert result["intelligent_jobs"][0]["intelligence"][
+        "skill_extraction"
+    ] == {
+        "status": "success_nonempty",
+        "failure_category": "",
+        "failure_stage": "",
+    }
     assert provider_calls == []
     assert stores == []
     assert skill_enricher.get_skill_cache_metrics()["cache_hits"] == 1
@@ -417,6 +433,45 @@ def test_production_jd_cache_miss_uses_one_injected_provider_and_one_store(
     assert metrics["cache_stores"] == 1
 
 
+def test_production_jd_empty_cache_hit_remains_successful_empty(
+    monkeypatch,
+):
+    skill_enricher, job_intelligence = _production_modules(monkeypatch)
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda _key: {
+            "required_skills": [],
+            "preferred_skills": [],
+        },
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("cache hit must not call provider"),
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "store_cached_llm_skills",
+        lambda **_kwargs: pytest.fail("cache hit must not write"),
+    )
+
+    intelligent_job = job_intelligence.build_job_intelligence(
+        deepcopy(_jobs()[0])
+    )
+
+    assert intelligent_job["intelligence"]["skills"] == {
+        "required": [],
+        "preferred": [],
+        "all": [],
+    }
+    assert intelligent_job["intelligence"]["skill_extraction"] == {
+        "status": "success_empty",
+        "failure_category": "",
+        "failure_stage": "",
+    }
+
+
 def test_production_malformed_cached_shape_preserves_existing_empty_recovery(
     monkeypatch,
 ):
@@ -445,6 +500,11 @@ def test_production_malformed_cached_shape_preserves_existing_empty_recovery(
         "required": [],
         "preferred": [],
         "all": [],
+    }
+    assert graph["intelligence"]["skill_extraction"] == {
+        "status": "failure",
+        "failure_category": "schema_or_parse",
+        "failure_stage": "cache",
     }
     assert provider_calls == []
 
@@ -478,6 +538,11 @@ def test_production_provider_failure_preserves_existing_empty_fallback(
 
     assert calls == [1]
     assert graph["intelligence"]["skills"]["all"] == []
+    assert graph["intelligence"]["skill_extraction"] == {
+        "status": "failure",
+        "failure_category": "unknown",
+        "failure_stage": "execution",
+    }
     assert skill_enricher.get_skill_cache_metrics()["live_failures"] == 1
 
 
@@ -514,6 +579,11 @@ def test_production_structured_validation_failure_uses_existing_parse_retry(
 
     assert calls == [1, 1]
     assert graph["intelligence"]["skills"]["all"] == []
+    assert graph["intelligence"]["skill_extraction"] == {
+        "status": "failure",
+        "failure_category": "schema_or_parse",
+        "failure_stage": "response",
+    }
 
 
 def _skill_job_text() -> str:
@@ -531,6 +601,223 @@ def _skill_response() -> str:
         '{"required_skills":["python","sql"],'
         '"preferred_skills":["airflow"]}'
     )
+
+
+def _adjacent_skill_section_job_text() -> str:
+    return (
+        "Required Qualifications:\n"
+        "- Python\n"
+        "- SQL\n"
+        "- Apache Spark\n\n"
+        "Preferred Qualifications:\n"
+        "- Airflow\n"
+        "- Databricks"
+    )
+
+
+def test_skill_context_bucket_respects_adjacent_explicit_section_spans(
+    monkeypatch,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    job_text = _adjacent_skill_section_job_text()
+
+    assert (
+        skill_enricher._context_bucket_for_skill("python", job_text)
+        == "required"
+    )
+    assert (
+        skill_enricher._context_bucket_for_skill("sql", job_text)
+        == "required"
+    )
+    assert (
+        skill_enricher._context_bucket_for_skill("apache spark", job_text)
+        == "required"
+    )
+    assert (
+        skill_enricher._context_bucket_for_skill("airflow", job_text)
+        == "preferred"
+    )
+    assert (
+        skill_enricher._context_bucket_for_skill("databricks", job_text)
+        == "preferred"
+    )
+
+
+def test_skill_context_reassignment_repairs_all_preferred_model_buckets(
+    monkeypatch,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+
+    required, preferred = skill_enricher._reassign_skills_by_context(
+        [],
+        ["python", "sql", "apache spark", "airflow", "databricks"],
+        _adjacent_skill_section_job_text(),
+    )
+
+    assert required == ["apache spark", "python", "sql"]
+    assert preferred == ["airflow", "databricks"]
+
+
+def test_skill_context_reassignment_prefers_required_for_duplicate_context(
+    monkeypatch,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    job_text = (
+        "Required Qualifications:\n- Python\n\n"
+        "Preferred Qualifications:\n- Python\n- Airflow"
+    )
+
+    required, preferred = skill_enricher._reassign_skills_by_context(
+        [],
+        ["python", "airflow"],
+        job_text,
+    )
+
+    assert required == ["python"]
+    assert preferred == ["airflow"]
+
+
+@pytest.mark.parametrize(
+    ("job_text", "expected"),
+    [
+        (
+            "Required Qualifications:\n- Python\n- SQL\n"
+            "Preferred Qualifications:\n- Airflow",
+            {"python": "required", "sql": "required", "airflow": "preferred"},
+        ),
+        (
+            "Required Qualifications:\n- Python\n- Kubernetes is a plus",
+            {"python": "required", "kubernetes": "preferred"},
+        ),
+        (
+            "Preferred Qualifications:\n- Databricks\n- Airflow",
+            {"databricks": "preferred", "airflow": "preferred"},
+        ),
+        (
+            "Required Qualifications:\n- Python\n\n"
+            "Preferred Qualifications:\n- Python\n- Airflow",
+            {"python": "required", "airflow": "preferred"},
+        ),
+        (
+            "Required Qualifications:\n- Python\n"
+            "Preferred Qualifications:\n- Airflow",
+            {"python": "required"},
+        ),
+        (
+            "Required Qualifications:\n- Python preferred",
+            {"python": "preferred"},
+        ),
+    ],
+)
+def test_skill_context_bucket_boundaries_and_inline_preferred_override(
+    monkeypatch,
+    job_text,
+    expected,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+
+    assert {
+        skill: skill_enricher._context_bucket_for_skill(skill, job_text)
+        for skill in expected
+    } == expected
+
+
+def test_full_skill_finalization_repairs_all_preferred_model_buckets(
+    monkeypatch,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    provider_calls = []
+    stores = []
+    monkeypatch.delenv("JOB_STACK_OWNER_USER_ID", raising=False)
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda _key: None,
+    )
+
+    def provider(**kwargs):
+        provider_calls.append(kwargs)
+        return (
+            '{"required_skills":[],"preferred_skills":['
+            '"python","sql","apache spark","airflow","databricks"]}'
+        )
+
+    monkeypatch.setattr(skill_enricher, "run_chat_completion", provider)
+    monkeypatch.setattr(
+        skill_enricher,
+        "store_cached_llm_skills",
+        lambda **kwargs: stores.append(kwargs),
+    )
+
+    result = skill_enricher.enrich_skills_with_llm(
+        _adjacent_skill_section_job_text()
+    )
+
+    assert result == {
+        "required_skills": ["apache spark", "python", "sql"],
+        "preferred_skills": ["airflow", "databricks"],
+        "extraction_status": "success_nonempty",
+        "failure_category": "",
+        "failure_stage": "",
+    }
+    assert len(provider_calls) == 1
+    assert len(stores) == 1
+
+
+def test_owner_skill_cache_hit_repairs_buckets_without_provider_or_store(
+    monkeypatch,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    cached = {
+        "required_skills": [],
+        "preferred_skills": [
+            "python",
+            "sql",
+            "apache spark",
+            "airflow",
+            "databricks",
+        ],
+    }
+    cache_keys = []
+    stores = []
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda key: cache_keys.append(key) or cached,
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "store_cached_llm_skills",
+        lambda **kwargs: stores.append(kwargs),
+    )
+    _forbid_owner_skill_execution(monkeypatch, skill_enricher)
+
+    result = skill_enricher.enrich_skills_with_llm(
+        _adjacent_skill_section_job_text(),
+        owner_user_id="owner-a",
+    )
+
+    assert result is cached
+    assert result == {
+        "required_skills": ["apache spark", "python", "sql"],
+        "preferred_skills": ["airflow", "databricks"],
+        "extraction_status": "success_nonempty",
+        "failure_category": "",
+        "failure_stage": "",
+    }
+    assert cache_keys == [
+        skill_enricher.build_skill_cache_key(
+            _adjacent_skill_section_job_text()
+        )
+    ]
+    assert stores == []
+    assert skill_enricher.get_skill_cache_metrics() == {
+        "cache_hits": 1,
+        "cache_misses": 0,
+        "cache_stores": 0,
+        "cache_only_skips": 0,
+        "live_failures": 0,
+    }
 
 
 def _forbid_owner_skill_execution(monkeypatch, skill_enricher):
@@ -571,9 +858,54 @@ def test_owner_skill_cache_hit_returns_before_route_or_provider(monkeypatch):
     )
 
     assert result is cached
+    assert result["extraction_status"] == "success_nonempty"
+    assert result["failure_category"] == ""
+    assert result["failure_stage"] == ""
     assert cache_keys == [
         skill_enricher.build_skill_cache_key(_skill_job_text())
     ]
+    assert skill_enricher.get_skill_cache_metrics() == {
+        "cache_hits": 1,
+        "cache_misses": 0,
+        "cache_stores": 0,
+        "cache_only_skips": 0,
+        "live_failures": 0,
+    }
+
+
+def test_owner_empty_skill_cache_hit_is_successful_empty_without_provider(
+    monkeypatch,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    cached = {
+        "required_skills": [],
+        "preferred_skills": [],
+    }
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda _key: cached,
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "store_cached_llm_skills",
+        lambda **_kwargs: pytest.fail("cache hit must not write"),
+    )
+    _forbid_owner_skill_execution(monkeypatch, skill_enricher)
+
+    result = skill_enricher.enrich_skills_with_llm(
+        _skill_job_text(),
+        owner_user_id="owner-a",
+    )
+
+    assert result is cached
+    assert result == {
+        "required_skills": [],
+        "preferred_skills": [],
+        "extraction_status": "success_empty",
+        "failure_category": "",
+        "failure_stage": "",
+    }
     assert skill_enricher.get_skill_cache_metrics() == {
         "cache_hits": 1,
         "cache_misses": 0,
@@ -600,7 +932,10 @@ def test_owner_skill_cache_only_miss_stops_before_route_or_provider(
         owner_user_id="owner-a",
     )
 
-    assert result == skill_enricher.get_empty_skill_result()
+    assert result == skill_enricher.get_empty_skill_result(
+        failure_category="configuration",
+        failure_stage="cache",
+    )
     assert skill_enricher.get_skill_cache_metrics() == {
         "cache_hits": 0,
         "cache_misses": 1,
@@ -634,6 +969,13 @@ def test_owner_skill_live_miss_executes_exact_route_once_and_stores_model(
             "model": "gpt-5-mini",
             "effective_selection_source": "user_override",
         },
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_recommended_user_provider_route",
+        lambda *_args, **_kwargs: pytest.fail(
+            "owner execution must not resolve the ownerless recommendation"
+        ),
     )
     monkeypatch.setattr(
         skill_enricher,
@@ -679,6 +1021,9 @@ def test_owner_skill_live_miss_executes_exact_route_once_and_stores_model(
     assert result == {
         "required_skills": ["python", "sql"],
         "preferred_skills": ["airflow"],
+        "extraction_status": "success_nonempty",
+        "failure_category": "",
+        "failure_stage": "",
     }
     assert stores == [
         {
@@ -793,7 +1138,10 @@ def test_owner_skill_route_failure_is_bounded_and_increments_live_failure(
     )
 
     assert resolver_calls == [("owner-a", "skill_extraction")]
-    assert result == skill_enricher.get_empty_skill_result()
+    assert result == skill_enricher.get_empty_skill_result(
+        failure_category="unknown",
+        failure_stage="route",
+    )
     assert skill_enricher.get_skill_cache_metrics()["live_failures"] == 1
 
 
@@ -835,7 +1183,10 @@ def test_owner_skill_provider_failure_has_no_legacy_fallback(monkeypatch):
     )
 
     assert len(user_calls) == 1
-    assert result == skill_enricher.get_empty_skill_result()
+    assert result == skill_enricher.get_empty_skill_result(
+        failure_category="unknown",
+        failure_stage="execution",
+    )
     assert skill_enricher.get_skill_cache_metrics()["live_failures"] == 1
 
 
@@ -883,7 +1234,7 @@ def test_skill_owner_falls_back_to_existing_pipeline_environment(monkeypatch):
     assert result["required_skills"] == ["python", "sql"]
 
 
-def test_blank_owner_skill_cache_miss_preserves_legacy_model_execution(
+def test_blank_owner_skill_cache_miss_uses_recommended_route_explicitly(
     monkeypatch,
 ):
     skill_enricher, _job_intelligence = _production_modules(monkeypatch)
@@ -897,6 +1248,15 @@ def test_blank_owner_skill_cache_miss_preserves_legacy_model_execution(
         skill_enricher,
         "resolve_effective_user_provider_route",
         lambda *_args, **_kwargs: pytest.fail("resolver must not execute"),
+    )
+    recommendation_calls = []
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_recommended_user_provider_route",
+        lambda workload: recommendation_calls.append(workload) or {
+            "provider": "sentinel-qualified-provider",
+            "model": "sentinel-qualified-model",
+        },
     )
     monkeypatch.setattr(
         skill_enricher,
@@ -918,10 +1278,76 @@ def test_blank_owner_skill_cache_miss_preserves_legacy_model_execution(
 
     result = skill_enricher.enrich_skills_with_llm(_skill_job_text())
 
+    assert recommendation_calls == ["skill_extraction"]
     assert len(legacy_calls) == 1
-    assert legacy_calls[0]["model"] == skill_enricher.MODEL
+    assert legacy_calls[0]["provider"] == "sentinel-qualified-provider"
+    assert legacy_calls[0]["model"] == "sentinel-qualified-model"
+    assert legacy_calls[0]["workload_id"] == "skill_extraction"
+    assert legacy_calls[0]["fallback_enabled"] is False
     assert result["required_skills"] == ["python", "sql"]
-    assert stores[0]["model"] == skill_enricher.MODEL
+    assert stores[0]["model"] == "sentinel-qualified-model"
+
+
+@pytest.mark.parametrize(
+    "route_result",
+    [
+        RuntimeError("bounded recommendation failure"),
+        {"provider": "", "model": "sentinel-model"},
+        {"provider": "sentinel-provider", "model": ""},
+    ],
+)
+def test_blank_owner_skill_route_failure_is_bounded_without_provider_call(
+    monkeypatch,
+    route_result,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    monkeypatch.delenv("JOB_STACK_OWNER_USER_ID", raising=False)
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda _key: None,
+    )
+
+    def resolve_route(_workload):
+        if isinstance(route_result, Exception):
+            raise route_result
+        return route_result
+
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_recommended_user_provider_route",
+        resolve_route,
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_effective_user_provider_route",
+        lambda *_args, **_kwargs: pytest.fail(
+            "owner routing must not execute"
+        ),
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not execute"),
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("provider runtime must not execute"),
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "store_cached_llm_skills",
+        lambda **_kwargs: pytest.fail("route failure must not write cache"),
+    )
+
+    result = skill_enricher.enrich_skills_with_llm(_skill_job_text())
+
+    assert result == skill_enricher.get_empty_skill_result(
+        failure_category="unknown",
+        failure_stage="route",
+    )
+    assert skill_enricher.get_skill_cache_metrics()["live_failures"] == 1
 
 
 def test_owner_skill_live_only_bypasses_cache_and_store(monkeypatch):
@@ -1016,6 +1442,9 @@ def test_owner_skill_section_parser_remains_before_json_retry(monkeypatch):
     assert result == {
         "required_skills": ["python", "sql"],
         "preferred_skills": ["airflow"],
+        "extraction_status": "success_nonempty",
+        "failure_category": "",
+        "failure_stage": "",
     }
 
 
@@ -1029,12 +1458,32 @@ def test_collector_preserves_details_jd_filter_semantic_and_scoring_order():
     eligibility = source.index(
         "evaluable_jobs = filter_jobs_for_ai_evaluation(intelligent_jobs)"
     )
-    semantic = source.index("ai_jobs = evaluate_jobs(evaluable_jobs)")
+    semantic = source.index(
+        "evaluate_jobs_with_progress = _wrap_ai_evaluator_with_runtime_progress(",
+        eligibility,
+    )
+    semantic_graph = source.index(
+        "_maybe_execute_authoritative_semantic_evaluation_graph(",
+        semantic,
+    )
+    evaluated_jobs_available = source.index(
+        'logger.info(f"AI evaluated {len(ai_jobs)} jobs")',
+        semantic_graph,
+    )
     final_scoring = source.index(
-        "_maybe_execute_authoritative_final_scoring_graph(jobs=ai_jobs)"
+        "_maybe_execute_authoritative_final_scoring_graph(jobs=ai_jobs)",
+        evaluated_jobs_available,
     )
 
-    assert details < graph_call < eligibility < semantic < final_scoring
+    assert (
+        details
+        < graph_call
+        < eligibility
+        < semantic
+        < semantic_graph
+        < evaluated_jobs_available
+        < final_scoring
+    )
 
 
 def test_gate_off_collector_path_keeps_direct_jd_owner_call():
@@ -1076,7 +1525,20 @@ def test_semantic_evaluation_remains_at_existing_filtered_caller():
         "src/agents/jd_intelligence_authoritative_graph.py"
     ).read_text(encoding="utf-8")
 
-    assert "ai_jobs = evaluate_jobs(evaluable_jobs)" in source
+    assert "from src.ai.job_fit_evaluator import evaluate_jobs" in source
+    assert (
+        "evaluate_jobs_with_progress = _wrap_ai_evaluator_with_runtime_progress("
+        in source
+    )
+    assert "jobs=evaluable_jobs" in source
+    assert "evaluate_jobs_func=evaluate_jobs_with_progress" in source
+    assert source.count(
+        "ai_jobs = evaluate_jobs_with_progress(evaluable_jobs)"
+    ) == 1
+    assert (
+        'ai_jobs = semantic_evaluation_graph_result["evaluated_jobs"]'
+        in source
+    )
     assert "evaluate_jobs" not in graph_source
     assert "job_fit_evaluator" not in graph_source
 
@@ -1086,3 +1548,714 @@ def test_run006_remains_absent():
         path.name.lower().replace("_", "-").startswith("run-006")
         for path in Path(".").rglob("*")
     )
+
+
+# ---------------------------------------------------------------------------
+# Bounded live skill-extraction failure diagnostics (observability only).
+# ---------------------------------------------------------------------------
+
+
+class _BoundedLogCapture(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__(level=logging.DEBUG)
+        self.messages: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.messages.append(record.getMessage())
+
+
+@contextlib.contextmanager
+def _captured_enricher_logs(skill_enricher):
+    handler = _BoundedLogCapture()
+    enricher_logger = skill_enricher.logger
+    previous_level = enricher_logger.level
+    enricher_logger.addHandler(handler)
+    enricher_logger.setLevel(logging.DEBUG)
+    try:
+        yield handler.messages
+    finally:
+        enricher_logger.removeHandler(handler)
+        enricher_logger.setLevel(previous_level)
+
+
+_SANITIZED_TRANSPORT_FAILURE = (
+    "LLM provider invocation failed "
+    "(stage=primary, category=rate_limit, "
+    "provider=groq, model=openai/gpt-oss-20b)"
+)
+
+_SECRET_MARKER = "VERY_SECRET_DIAGNOSTIC_VALUE"
+
+
+class _InjectedConfigurationError(RuntimeError):
+    """Mirrors UserProviderRuntimeConfigurationError's bounded .category."""
+
+    def __init__(self, category: str, message: str) -> None:
+        self.category = category
+        super().__init__(message)
+
+
+def _qualified_owner_route(monkeypatch, skill_enricher):
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda _key: None,
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_effective_user_provider_route",
+        lambda _owner, _workload: {
+            "provider": "groq",
+            "model": "openai/gpt-oss-20b",
+        },
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_chat_completion",
+        lambda **_kwargs: pytest.fail("legacy runtime must not execute"),
+    )
+
+
+def _forbid_store(monkeypatch, skill_enricher):
+    monkeypatch.setattr(
+        skill_enricher,
+        "store_cached_llm_skills",
+        lambda **_kwargs: pytest.fail("failed output must not be cached"),
+    )
+
+
+def _run_owner_failure(monkeypatch, skill_enricher, exc):
+    calls = []
+
+    def fail_user_runtime(**kwargs):
+        calls.append(kwargs)
+        raise exc
+
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_user_chat_completion_with_metadata",
+        fail_user_runtime,
+    )
+    with _captured_enricher_logs(skill_enricher) as messages:
+        result = skill_enricher.enrich_skills_with_llm(
+            _skill_job_text(),
+            owner_user_id="owner-a",
+        )
+    return calls, result, messages
+
+
+@pytest.mark.parametrize(
+    "category",
+    ["timeout", "rate_limit", "provider_5xx"],
+)
+def test_owner_execution_failure_preserves_bounded_outcome_metadata(
+    monkeypatch,
+    category,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    _qualified_owner_route(monkeypatch, skill_enricher)
+    _forbid_store(monkeypatch, skill_enricher)
+
+    calls, result, messages = _run_owner_failure(
+        monkeypatch,
+        skill_enricher,
+        RuntimeError(
+            "LLM provider invocation failed "
+            f"(stage=primary, category={category}, "
+            "provider=groq, model=openai/gpt-oss-20b)"
+        ),
+    )
+
+    assert len(calls) == 1
+    assert result["required_skills"] == []
+    assert result["preferred_skills"] == []
+    assert result["extraction_status"] == "failure"
+    assert result["failure_category"] == category
+    assert result["failure_stage"] == "execution"
+    failure = next(
+        message
+        for message in messages
+        if "LLM skill extraction owner execution failed" in message
+    )
+    assert f"category={category}" in failure
+
+
+def test_skill_extraction_outcome_survives_intelligence_collector_and_corpus(
+    monkeypatch,
+):
+    skill_enricher, job_intelligence = _production_modules(monkeypatch)
+    from src.rag.job_document_builder import build_job_document
+
+    monkeypatch.setattr(
+        job_intelligence,
+        "enrich_skills_with_llm",
+        lambda _description: {
+            "required_skills": [],
+            "preferred_skills": [],
+            "extraction_status": "failure",
+            "failure_category": "timeout",
+            "failure_stage": "execution",
+        },
+    )
+
+    intelligent_job = job_intelligence.build_job_intelligence(
+        deepcopy(_jobs()[0])
+    )
+    assert intelligent_job["intelligence"]["skills"] == {
+        "required": [],
+        "preferred": [],
+        "all": [],
+    }
+    assert intelligent_job["intelligence"]["skill_extraction"] == {
+        "status": "failure",
+        "failure_category": "timeout",
+        "failure_stage": "execution",
+    }
+
+    signals = collector._job_intelligence_skill_signals(intelligent_job)
+    assert signals["skill_extraction_status"] == "failure"
+    assert signals["skill_extraction_failure_category"] == "timeout"
+    assert signals["skill_extraction_failure_stage"] == "execution"
+
+    document = build_job_document(intelligent_job)
+    assert document["required_skills"] == []
+    assert document["preferred_skills"] == []
+    assert document["all_skills"] == []
+    assert document["skill_extraction_status"] == "failure"
+    assert document["skill_extraction_failure_category"] == "timeout"
+    assert document["skill_extraction_failure_stage"] == "execution"
+
+
+def test_provider_secret_is_absent_from_intelligence_and_corpus_metadata(
+    monkeypatch,
+):
+    skill_enricher, job_intelligence = _production_modules(monkeypatch)
+    from src.rag.job_document_builder import build_job_document
+
+    monkeypatch.setenv("JOB_STACK_OWNER_USER_ID", "owner-a")
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda _key: None,
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_effective_user_provider_route",
+        lambda _owner, _workload: {
+            "provider": "groq",
+            "model": "openai/gpt-oss-20b",
+        },
+    )
+
+    def fail_with_secret(**_kwargs):
+        raise RuntimeError(f"provider body {_SECRET_MARKER}")
+
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_user_chat_completion_with_metadata",
+        fail_with_secret,
+    )
+    _forbid_store(monkeypatch, skill_enricher)
+
+    intelligent_job = job_intelligence.build_job_intelligence(
+        deepcopy(_jobs()[0])
+    )
+    document = build_job_document(intelligent_job)
+
+    assert intelligent_job["intelligence"]["skill_extraction"] == {
+        "status": "failure",
+        "failure_category": "unknown",
+        "failure_stage": "execution",
+    }
+    assert _SECRET_MARKER not in str(intelligent_job["intelligence"])
+    assert _SECRET_MARKER not in str(document)
+
+
+def test_owner_execution_failure_preserves_calls_result_cache_and_metrics(
+    monkeypatch,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    _qualified_owner_route(monkeypatch, skill_enricher)
+    _forbid_store(monkeypatch, skill_enricher)
+
+    calls, result, _messages = _run_owner_failure(
+        monkeypatch,
+        skill_enricher,
+        RuntimeError(_SANITIZED_TRANSPORT_FAILURE),
+    )
+
+    assert len(calls) == 1
+    assert result == skill_enricher.get_empty_skill_result(
+        failure_category="rate_limit",
+        failure_stage="execution",
+    )
+    assert skill_enricher.get_skill_cache_metrics() == {
+        "cache_hits": 0,
+        "cache_misses": 1,
+        "cache_stores": 0,
+        "cache_only_skips": 0,
+        "live_failures": 1,
+    }
+
+
+def test_owner_execution_failure_logs_bounded_transport_diagnostic(
+    monkeypatch,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    _qualified_owner_route(monkeypatch, skill_enricher)
+    _forbid_store(monkeypatch, skill_enricher)
+
+    _calls, _result, messages = _run_owner_failure(
+        monkeypatch,
+        skill_enricher,
+        RuntimeError(_SANITIZED_TRANSPORT_FAILURE),
+    )
+
+    failures = [
+        message
+        for message in messages
+        if "LLM skill extraction owner execution failed" in message
+    ]
+    assert len(failures) == 1
+    failure = failures[0]
+    assert "provider=groq" in failure
+    assert "model=openai/gpt-oss-20b" in failure
+    assert "category=rate_limit" in failure
+    assert "stage=primary" in failure
+    assert "error_type=RuntimeError" in failure
+
+
+def test_owner_execution_failure_log_never_leaks_exception_message(
+    monkeypatch,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    _qualified_owner_route(monkeypatch, skill_enricher)
+    _forbid_store(monkeypatch, skill_enricher)
+
+    _calls, _result, messages = _run_owner_failure(
+        monkeypatch,
+        skill_enricher,
+        RuntimeError(
+            f"connection reset while calling provider: {_SECRET_MARKER}"
+        ),
+    )
+
+    assert messages
+    for message in messages:
+        assert _SECRET_MARKER not in message
+    failure = next(
+        message
+        for message in messages
+        if "LLM skill extraction owner execution failed" in message
+    )
+    assert "category=unknown" in failure
+    assert "stage=unknown" in failure
+    assert "error_type=RuntimeError" in failure
+
+
+def test_owner_execution_failure_reports_runtime_configuration_category(
+    monkeypatch,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    _qualified_owner_route(monkeypatch, skill_enricher)
+    _forbid_store(monkeypatch, skill_enricher)
+
+    _calls, result, messages = _run_owner_failure(
+        monkeypatch,
+        skill_enricher,
+        _InjectedConfigurationError(
+            "credential_not_configured",
+            f"arbitrary runtime detail {_SECRET_MARKER}",
+        ),
+    )
+
+    assert result == skill_enricher.get_empty_skill_result(
+        failure_category="credential_not_configured",
+        failure_stage="execution",
+    )
+    assert _SECRET_MARKER not in str(result)
+    failure = next(
+        message
+        for message in messages
+        if "LLM skill extraction owner execution failed" in message
+    )
+    assert "category=credential_not_configured" in failure
+    assert "error_type=_InjectedConfigurationError" in failure
+    for message in messages:
+        assert _SECRET_MARKER not in message
+
+
+def test_owner_route_failure_keeps_stable_prefix_and_bounded_fields(
+    monkeypatch,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    monkeypatch.setattr(
+        skill_enricher,
+        "get_cached_llm_skills",
+        lambda _key: None,
+    )
+
+    def fail_route(_owner, _workload):
+        raise _InjectedConfigurationError(
+            "settings_unavailable",
+            f"route detail {_SECRET_MARKER}",
+        )
+
+    monkeypatch.setattr(
+        skill_enricher,
+        "resolve_effective_user_provider_route",
+        fail_route,
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: pytest.fail("user runtime must not execute"),
+    )
+    _forbid_store(monkeypatch, skill_enricher)
+
+    with _captured_enricher_logs(skill_enricher) as messages:
+        result = skill_enricher.enrich_skills_with_llm(
+            _skill_job_text(),
+            owner_user_id="owner-a",
+        )
+
+    assert result == skill_enricher.get_empty_skill_result(
+        failure_category="settings_unavailable",
+        failure_stage="route",
+    )
+    assert result["failure_stage"] == "route"
+    assert skill_enricher.get_skill_cache_metrics()["live_failures"] == 1
+    route_message = next(
+        message
+        for message in messages
+        if message.startswith("LLM skill extraction owner route unavailable")
+    )
+    assert "error_type=_InjectedConfigurationError" in route_message
+    assert "category=settings_unavailable" in route_message
+    for message in messages:
+        assert _SECRET_MARKER not in message
+
+
+def test_bounded_diagnostic_rejects_unknown_category_tokens(monkeypatch):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+
+    diagnostic = skill_enricher._bounded_live_failure_diagnostic(
+        RuntimeError("failed (stage=primary, category=totally_made_up)")
+    )
+
+    assert diagnostic == {
+        "error_type": "RuntimeError",
+        "category": "unknown",
+        "stage": "primary",
+    }
+
+
+def _postfilter_job_text() -> str:
+    return (
+        "Required Qualifications:\n- Python\n"
+        "Responsibilities:\n"
+        + ("Maintain reliable reporting workflows in Python. " * 6)
+    )
+
+
+def _run_owner_success(monkeypatch, skill_enricher, job_text, content):
+    stores = []
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_user_chat_completion_with_metadata",
+        lambda **_kwargs: {
+            "content": content,
+            "provider": "groq",
+            "model": "openai/gpt-oss-20b",
+            "fallback_used": False,
+        },
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "store_cached_llm_skills",
+        lambda **kwargs: stores.append(kwargs),
+    )
+    with _captured_enricher_logs(skill_enricher) as messages:
+        result = skill_enricher.enrich_skills_with_llm(
+            job_text,
+            owner_user_id="owner-a",
+        )
+    return result, stores, messages
+
+
+def test_model_empty_extraction_logs_source_model_and_stays_cacheable(
+    monkeypatch,
+):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    _qualified_owner_route(monkeypatch, skill_enricher)
+
+    result, stores, messages = _run_owner_success(
+        monkeypatch,
+        skill_enricher,
+        _skill_job_text(),
+        '{"required_skills":[],"preferred_skills":[]}',
+    )
+
+    assert result == {
+        "required_skills": [],
+        "preferred_skills": [],
+        "extraction_status": "success_empty",
+        "failure_category": "",
+        "failure_stage": "",
+    }
+    assert stores == [
+        {
+            "cache_key": skill_enricher.build_skill_cache_key(
+                _skill_job_text()
+            ),
+            "model": "openai/gpt-oss-20b",
+            "required_skills": [],
+            "preferred_skills": [],
+        }
+    ]
+    assert skill_enricher.get_skill_cache_metrics()["cache_stores"] == 1
+    assert (
+        "LLM skill extraction finalized empty | source=model" in messages
+    )
+    assert (
+        "LLM skill extraction finalized empty | source=postfilter"
+        not in messages
+    )
+
+
+def test_postfilter_empty_extraction_logs_source_postfilter(monkeypatch):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    _qualified_owner_route(monkeypatch, skill_enricher)
+
+    result, stores, messages = _run_owner_success(
+        monkeypatch,
+        skill_enricher,
+        _postfilter_job_text(),
+        '{"required_skills":["kubernetes"],"preferred_skills":[]}',
+    )
+
+    assert result == {
+        "required_skills": [],
+        "preferred_skills": [],
+        "extraction_status": "success_empty",
+        "failure_category": "",
+        "failure_stage": "",
+    }
+    assert len(stores) == 1
+    assert stores[0]["required_skills"] == []
+    assert stores[0]["preferred_skills"] == []
+    assert (
+        "LLM skill extraction finalized empty | source=postfilter" in messages
+    )
+    assert (
+        "LLM skill extraction finalized empty | source=model" not in messages
+    )
+
+
+def test_nonempty_extraction_logs_finalized_nonempty(monkeypatch):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    _qualified_owner_route(monkeypatch, skill_enricher)
+
+    result, stores, messages = _run_owner_success(
+        monkeypatch,
+        skill_enricher,
+        _skill_job_text(),
+        _skill_response(),
+    )
+
+    assert result == {
+        "required_skills": ["python", "sql"],
+        "preferred_skills": ["airflow"],
+        "extraction_status": "success_nonempty",
+        "failure_category": "",
+        "failure_stage": "",
+    }
+    assert stores == [
+        {
+            "cache_key": skill_enricher.build_skill_cache_key(
+                _skill_job_text()
+            ),
+            "model": "openai/gpt-oss-20b",
+            "required_skills": ["python", "sql"],
+            "preferred_skills": ["airflow"],
+        }
+    ]
+    assert "LLM skill extraction finalized nonempty" in messages
+    assert not [
+        message for message in messages if "finalized empty" in message
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Candidate low-reasoning skill_extraction task contract (offline only).
+# ---------------------------------------------------------------------------
+
+
+def test_candidate_skill_extraction_sends_zero_thinking_budget(monkeypatch):
+    skill_enricher, _job_intelligence = _production_modules(monkeypatch)
+    _qualified_owner_route(monkeypatch, skill_enricher)
+    runtime_calls = []
+
+    monkeypatch.setattr(
+        skill_enricher,
+        "run_user_chat_completion_with_metadata",
+        lambda **kwargs: runtime_calls.append(kwargs) or {
+            "content": _skill_response(),
+            "provider": "groq",
+            "model": "openai/gpt-oss-20b",
+            "fallback_used": False,
+        },
+    )
+    monkeypatch.setattr(
+        skill_enricher,
+        "store_cached_llm_skills",
+        lambda **_kwargs: None,
+    )
+
+    skill_enricher.enrich_skills_with_llm(
+        _skill_job_text(),
+        owner_user_id="owner-a",
+    )
+
+    assert len(runtime_calls) == 1
+    call = runtime_calls[0]
+    assert call["thinking_budget"] == 0
+    assert call["thinking_budget"] == (
+        skill_enricher.SKILL_EXTRACTION_THINKING_BUDGET
+    )
+    # Unchanged inference surface.
+    assert call["max_tokens"] == 500
+    assert call["temperature"] == 0
+    assert call["provider"] == "groq"
+    assert call["model"] == "openai/gpt-oss-20b"
+    assert "fallback_enabled" not in call
+    assert "reasoning_effort" not in call
+    assert "response_mime_type" not in call
+
+
+def test_existing_transport_maps_zero_budget_to_low_reasoning_effort():
+    """The mapping stays owned by llm_client; the enricher must not duplicate it."""
+
+    from src.ai import llm_client
+    from src.ai import skill_llm_enricher
+
+    captured = {}
+
+    class _Client:
+        def __init__(self):
+            outer = self
+
+            class _Completions:
+                def create(self, **kwargs):
+                    captured.update(kwargs)
+                    raise _StopRequest()
+
+            class _Chat:
+                completions = _Completions()
+
+            self.chat = _Chat()
+
+    class _StopRequest(Exception):
+        pass
+
+    messages = [{"role": "system", "content": "s"}, {"role": "user", "content": "u"}]
+    try:
+        llm_client._run_groq_chat_completion(
+            messages=messages,
+            model="openai/gpt-oss-20b",
+            temperature=skill_llm_enricher.SKILL_EXTRACTION_TEMPERATURE,
+            max_tokens=skill_llm_enricher.SKILL_EXTRACTION_MAX_TOKENS,
+            thinking_budget=skill_llm_enricher.SKILL_EXTRACTION_THINKING_BUDGET,
+            provider_client=_Client(),
+        )
+    except _StopRequest:
+        pass
+
+    assert captured["reasoning_effort"] == "low"
+    assert captured["include_reasoning"] is False
+    assert captured["max_completion_tokens"] == 500
+    assert captured["temperature"] == 0
+    assert captured["model"] == "openai/gpt-oss-20b"
+    assert "response_format" not in captured
+
+    # The enricher may *document* the mapping, but must never construct the
+    # provider SDK reasoning/token fields itself. Compare code only.
+    enricher_code = "\n".join(
+        line
+        for line in Path(skill_llm_enricher.__file__)
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if not line.lstrip().startswith("#")
+    )
+    for provider_sdk_field in (
+        "reasoning_effort",
+        "include_reasoning",
+        "max_completion_tokens",
+    ):
+        assert provider_sdk_field not in enricher_code
+
+
+def test_candidate_contract_fingerprints_reasoning_and_context_versions():
+    from src.evaluation import production_task_contract_fingerprints as fingerprints
+    from src.ai import skill_llm_enricher
+
+    material = (
+        skill_llm_enricher
+        .build_skill_extraction_production_task_contract_material()
+    )
+    assert material["task_parameters"] == {
+        "temperature": 0,
+        "max_tokens": 500,
+        "thinking_budget": 0,
+    }
+    assert material["deterministic_transformation_contract"][
+        "context_reassignment"
+    ] == "section-bounded-context-v2"
+    assert material["task_contract_version"] == "v6_postfilter_cleanup"
+
+    candidate = fingerprints.production_task_contract_sha256("skill_extraction")
+    frozen_tested = (
+        "c7b9f541743b6967924583029036952b639c1f8117d00b68e152c24ac8405bb4"
+    )
+    assert candidate != frozen_tested
+
+
+def test_candidate_contract_preserves_prompt_parser_and_retry_ordering():
+    from src.ai import skill_llm_enricher
+
+    source = Path(skill_llm_enricher.__file__).read_text(encoding="utf-8")
+    assert "response = _call_live_llm(prompt)" in source
+    assert "retry_response = _call_live_llm(retry_prompt)" in source
+    assert "prompt = _build_skill_extraction_user_prompt(extraction_text)" in source
+    assert "retry_prompt = _build_skill_extraction_retry_prompt(prompt)" in source
+    assert source.index("extract_json_from_response(response)") < source.index(
+        "_parse_sectioned_skill_response(response)"
+    )
+    assert source.index("_parse_sectioned_skill_response(response)") < source.index(
+        "retry_response = _call_live_llm(retry_prompt)"
+    )
+
+    material = (
+        skill_llm_enricher
+        .build_skill_extraction_production_task_contract_material()
+    )
+    assert material["output_contract"]["parsers"] == [
+        "json_object_extraction",
+        "sectioned_skill_lists",
+        "json_retry",
+    ]
+
+
+def test_frozen_qualification_authority_is_unchanged_by_candidate_contract():
+    from src.evaluation import provider_model_recommendation_policy as policy
+
+    frozen = policy._FROZEN_RECOMMENDATIONS["skill_extraction"]
+    assert frozen["provider"] == "groq"
+    assert frozen["model"] == "openai/gpt-oss-20b"
+    assert frozen["task_contract_sha256"] == (
+        "c7b9f541743b6967924583029036952b639c1f8117d00b68e152c24ac8405bb4"
+    )
+    assert frozen["evidence_sha256"] == (
+        "09019474b9f0ae6cf383ae0fb638d489eda1303d4b5185aa9f5a6e850b570432"
+    )
+    assert frozen["review_sha256"] is None

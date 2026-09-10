@@ -15,23 +15,39 @@ const SCAN_WORKSPACE_MODES = ["new_scan", "processing", "review", "compare"];
 const SCAN_WORKSPACE_PROCESSING_STAGES = [
   {
     key: "prepare",
+    icon: "clipboard",
     title: "Prepare request",
     description: "Validate the scan inputs and package the request payload.",
   },
   {
     key: "resume",
+    icon: "file",
     title: "Load resume",
     description: "Resolve the saved resume or pasted resume content for scan processing.",
   },
   {
-    key: "job_description",
-    title: "Parse job description",
-    description: "Normalize the pasted job description and extract scan-ready signals.",
+    key: "ai_analysis",
+    icon: "spark",
+    title: "Analyze job with AI",
+    description: "Use the configured JD intelligence model to extract structured signals.",
+  },
+  {
+    key: "validate_score",
+    icon: "shield",
+    title: "Validate and score match",
+    description: "Ground the AI signals, build evidence, and run deterministic scoring.",
   },
   {
     key: "review_payload",
+    icon: "review",
     title: "Build review payload",
     description: "Generate the optimization review structure for the next screen.",
+  },
+  {
+    key: "persist",
+    icon: "database",
+    title: "Save report",
+    description: "Persist the completed score and review payload as one Saved Scan.",
   },
 ];
 
@@ -53,10 +69,12 @@ const scanWorkspaceSavedResumeState = {
 
 const scanWorkspaceProcessingState = {
   status: "idle",
+  progressValue: 0,
   currentStageKey: "prepare",
   note: "",
   intakeDraft: null,
   pendingReviewPayload: null,
+  resultMeta: null,
 };
 
 const scanWorkspacePreviewState = {
@@ -95,6 +113,7 @@ const scanWorkspacePersistenceState = {
   lastError: "",
   hydratedSignature: "",
   manualBulletEdits: {},
+  hydrationTrace: [],
 };
 
 const scanWorkspacePhraseState = {
@@ -1699,11 +1718,18 @@ function getScanWorkspaceContext() {
     packetJsonPath: String(root.dataset.packetJsonPath || "").trim(),
     packetJsonKey: String(root.dataset.packetJsonKey || "").trim(),
     planningOutputDir: String(root.dataset.planningOutputDir || "").trim(),
+    pipelineRunId: String(root.dataset.pipelineRunId || "").trim(),
   };
 }
 
 function getScanWorkspaceArtifactKey(context) {
-  return String(context?.tailoringJsonKey || context?.tailoringJsonPath || "").trim();
+  return String(
+    context?.tailoringJsonKey ||
+    context?.tailoringJsonPath ||
+    context?.packetJsonKey ||
+    context?.packetJsonPath ||
+    ""
+  ).trim();
 }
 
 function getScanWorkspaceBasePacketKey(context) {
@@ -2001,6 +2027,12 @@ function renderScanWorkspaceIntakeValidation(validation) {
 
 function updateScanWorkspaceIntakeActions() {
   const startBtn = getScanWorkspaceInput("scanWorkspaceStartScanBtn");
+  const characterCount = getScanWorkspaceInput("scanWorkspaceJobDescriptionCount");
+  const jobDescriptionInput = getScanWorkspaceInput("scanWorkspaceJobDescriptionInput");
+  if (characterCount) {
+    const count = String(jobDescriptionInput?.value || "").length;
+    characterCount.textContent = `${count.toLocaleString("en-US")} ${count === 1 ? "character" : "characters"}`;
+  }
   if (!startBtn) return;
 
   const draft = readScanWorkspaceIntakeDraft();
@@ -2121,44 +2153,209 @@ function getScanWorkspaceProcessingStageIndex(stageKey) {
   return SCAN_WORKSPACE_PROCESSING_STAGES.findIndex((stage) => stage.key === stageKey);
 }
 
+function buildScanWorkspaceProcessingIconSvg(iconName, className = "") {
+  const paths = {
+    scan: '<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H14l6 6v4"/><path d="M14 2v6h6"/><circle cx="14.5" cy="16.5" r="3.5"/><path d="m17 19 3 3"/>',
+    building: '<path d="M4 21V5l8-3 8 3v16"/><path d="M2 21h20M8 7h1M8 11h1M8 15h1M15 7h1M15 11h1M15 15h1"/>',
+    briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 12v2h4v-2"/>',
+    file: '<path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5M9 12h6M9 16h6"/>',
+    list: '<path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
+    link: '<path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.1-1.1"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+    clipboard: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4a3 3 0 0 1 6 0v2H9zM9 12h6M9 16h4"/>',
+    spark: '<path d="m12 3 1.3 4.2L17.5 9l-4.2 1.8L12 15l-1.3-4.2L6.5 9l4.2-1.8L12 3Z"/><path d="m18.5 15 .7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3-2.3-.7 2.3-.7.7-2.3Z"/>',
+    shield: '<path d="M12 2 20 5v6c0 5-3.4 9-8 11-4.6-2-8-6-8-11V5z"/><path d="m8.5 12 2.2 2.2 4.8-5"/>',
+    review: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/>',
+    database: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/>',
+    check: '<path d="m5 12 4 4L19 6"/>',
+  };
+  const safeClass = String(className || "").trim();
+  return `<svg${safeClass ? ` class="${safeClass}"` : ""} viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[iconName] || paths.file}</svg>`;
+}
+
+function formatScanWorkspaceProviderName(value) {
+  const provider = String(value || "").trim();
+  if (!provider) return "";
+  return provider
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => {
+      const normalized = part.toLowerCase();
+      if (normalized.length > 2 && normalized.endsWith("ai")) {
+        const prefix = normalized.slice(0, -2);
+        return prefix.charAt(0).toUpperCase() + prefix.slice(1) + "AI";
+      }
+      return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+    })
+    .join(" ");
+}
+
+function getScanWorkspaceProcessingLlmPresentation() {
+  const result = scanWorkspaceProcessingState.resultMeta || {};
+  const status = String(result.llmAnalysisStatus || "").trim().toLowerCase();
+  const provider = result.llmCallAttempted
+    ? formatScanWorkspaceProviderName(result.provider)
+    : "";
+  const model = result.llmCallAttempted ? String(result.model || "").trim() : "";
+  const providerModel = [provider, model].filter(Boolean).join(" / ");
+
+  if (status === "succeeded") {
+    return {
+      status,
+      label: "AI analysis succeeded",
+      toneClass: "is-succeeded",
+      providerModel,
+    };
+  }
+  if (status === "fallback") {
+    return {
+      status,
+      label: "AI unavailable · deterministic fallback used",
+      toneClass: "is-fallback",
+      providerModel,
+    };
+  }
+  if (status === "disabled") {
+    return {
+      status,
+      label: "AI analysis disabled",
+      toneClass: "is-disabled",
+      providerModel: "",
+    };
+  }
+  if (scanWorkspaceProcessingState.status === "running") {
+    return {
+      status: "running",
+      label: "AI analysis pending",
+      toneClass: "is-running",
+      providerModel: "",
+    };
+  }
+  if (scanWorkspaceProcessingState.status === "error") {
+    return {
+      status: "failed",
+      label: "AI analysis not completed",
+      toneClass: "is-fallback",
+      providerModel: "",
+    };
+  }
+  return {
+    status: status || "pending",
+    label: "AI analysis pending",
+    toneClass: "is-pending",
+    providerModel: "",
+  };
+}
+
+function buildScanWorkspaceProcessingSummaryItemHtml({ icon, label, value, className = "", title = "", valueHtml = "" }) {
+  return `
+    <div class="scan-workspace-processing-summary-item ${scanWorkspaceEscapeHtml(className)}">
+      <span class="scan-workspace-processing-summary-item-icon" aria-hidden="true">
+        ${buildScanWorkspaceProcessingIconSvg(icon)}
+      </span>
+      <div class="scan-workspace-processing-summary-item-copy">
+        <div class="scan-workspace-processing-summary-label">${scanWorkspaceEscapeHtml(label)}</div>
+        <div class="scan-workspace-processing-summary-value"${title ? ` title="${scanWorkspaceEscapeHtml(title)}"` : ""}>${valueHtml || scanWorkspaceEscapeHtml(value)}</div>
+      </div>
+    </div>
+  `;
+}
+
 function buildScanWorkspaceProcessingSummaryHtml(draft) {
   if (!draft) return "";
 
   const resumeSource = draft.savedResumeName
-    ? `Saved resume: ${draft.savedResumeName}`
+    ? `Saved resume · ${draft.savedResumeName}`
     : "Missing";
 
   const jobDescriptionValue = draft.jobDescriptionText
-    ? `${draft.jobDescriptionText.length} chars`
+    ? `${draft.jobDescriptionText.length.toLocaleString("en-US")} ${draft.jobDescriptionText.length === 1 ? "character" : "characters"}`
     : "Missing";
 
   const companyValue = draft.company || "Not set";
   const roleValue = draft.role || "Not set";
-  const jobUrlValue = draft.jobUrl ? "Provided" : "Not provided";
+  const llm = getScanWorkspaceProcessingLlmPresentation();
+  const scanTimestamp = String(scanWorkspaceProcessingState.resultMeta?.scanTimestamp || "").trim();
+  const scannedOn = scanTimestamp ? formatScanWorkspaceSavedAt(scanTimestamp) : "";
+  const postingValueHtml = draft.jobUrl
+    ? `Provided <span class="scan-workspace-processing-provided-check" aria-label="provided">${buildScanWorkspaceProcessingIconSvg("check")}</span>`
+    : "";
+  const secondaryItems = [
+    buildScanWorkspaceProcessingSummaryItemHtml({
+      icon: "file",
+      label: "Resume source",
+      value: resumeSource,
+      title: resumeSource,
+      className: "is-resume",
+    }),
+    buildScanWorkspaceProcessingSummaryItemHtml({
+      icon: "list",
+      label: "Job description",
+      value: jobDescriptionValue,
+    }),
+    buildScanWorkspaceProcessingSummaryItemHtml({
+      icon: "link",
+      label: "Posting URL",
+      value: draft.jobUrl ? "Provided" : "Not provided",
+      valueHtml: postingValueHtml,
+    }),
+    scannedOn
+      ? buildScanWorkspaceProcessingSummaryItemHtml({
+          icon: "calendar",
+          label: "Scanned on",
+          value: scannedOn,
+        })
+      : "",
+  ].filter(Boolean).join("");
 
-  const cards = [
-    { label: "Resume source", value: resumeSource },
-    { label: "Job description", value: jobDescriptionValue },
-    { label: "Company", value: companyValue },
-    { label: "Role", value: roleValue },
-    { label: "Posting URL", value: jobUrlValue },
-  ];
-
-  return cards
-    .map(
-      (item) => `
-        <div class="scan-workspace-processing-summary-card">
-          <div class="scan-workspace-processing-summary-label">${scanWorkspaceEscapeHtml(item.label)}</div>
-          <div class="scan-workspace-processing-summary-value">${scanWorkspaceEscapeHtml(item.value)}</div>
+  return `
+    <section class="scan-workspace-processing-summary-surface" aria-label="Scan summary">
+      <header class="scan-workspace-processing-summary-header">
+        <div class="scan-workspace-processing-summary-heading">
+          <span class="scan-workspace-processing-summary-icon" aria-hidden="true">
+            ${buildScanWorkspaceProcessingIconSvg("scan")}
+          </span>
+          <div>
+            <h2>Scan summary</h2>
+            <p>Overview of the inputs used for this scan and AI analysis details.</p>
+          </div>
         </div>
-      `
-    )
-    .join("");
+        <div class="scan-workspace-processing-ai-status ${scanWorkspaceEscapeHtml(llm.toneClass)}" data-llm-analysis-status="${scanWorkspaceEscapeHtml(llm.status)}">
+          <div class="scan-workspace-processing-ai-status-badge">
+            ${buildScanWorkspaceProcessingIconSvg(llm.status === "succeeded" ? "check" : "spark")}
+            <span>${scanWorkspaceEscapeHtml(llm.label)}</span>
+          </div>
+          ${llm.providerModel ? `<div class="scan-workspace-processing-provider-model">${scanWorkspaceEscapeHtml(llm.providerModel)}</div>` : ""}
+        </div>
+      </header>
+
+      <div class="scan-workspace-processing-summary-primary">
+        ${buildScanWorkspaceProcessingSummaryItemHtml({
+          icon: "building",
+          label: "Company",
+          value: companyValue,
+          className: "is-company",
+        })}
+        ${buildScanWorkspaceProcessingSummaryItemHtml({
+          icon: "briefcase",
+          label: "Role",
+          value: roleValue,
+          title: roleValue,
+          className: "is-role",
+        })}
+      </div>
+
+      <div class="scan-workspace-processing-summary-secondary">
+        ${secondaryItems}
+      </div>
+    </section>
+  `;
 }
 
 function buildScanWorkspaceProcessingStepsHtml(currentStageKey) {
   const currentIndex = getScanWorkspaceProcessingStageIndex(currentStageKey);
   const isFinished = scanWorkspaceProcessingState.status === "complete";
+  const isError = scanWorkspaceProcessingState.status === "error";
 
   return SCAN_WORKSPACE_PROCESSING_STAGES.map((stage, index) => {
     let stateClass = "";
@@ -2168,12 +2365,15 @@ function buildScanWorkspaceProcessingStepsHtml(currentStageKey) {
       stateClass = "is-complete";
       stateLabel = "Complete";
     } else if (index === currentIndex) {
-      stateClass = "is-current";
-      stateLabel = "Current";
+      stateClass = isError ? "is-error" : "is-current";
+      stateLabel = isError ? "Stopped" : "Current";
     }
 
     return `
       <div class="scan-workspace-processing-step ${stateClass}">
+        <span class="scan-workspace-processing-step-icon" aria-hidden="true">
+          ${buildScanWorkspaceProcessingIconSvg(isFinished || index < currentIndex ? "check" : stage.icon)}
+        </span>
         <div class="scan-workspace-processing-step-copy">
           <div class="scan-workspace-processing-step-title">${scanWorkspaceEscapeHtml(stage.title)}</div>
           <div class="scan-workspace-processing-step-text">${scanWorkspaceEscapeHtml(stage.description)}</div>
@@ -2192,22 +2392,85 @@ function updateScanWorkspaceProcessingView() {
   const stepList = getScanWorkspaceInput("scanWorkspaceProcessingStepList");
   const note = getScanWorkspaceInput("scanWorkspaceProcessingNote");
   const complete = getScanWorkspaceInput("scanWorkspaceProcessingComplete");
+  const completeTitle = getScanWorkspaceInput("scanWorkspaceProcessingCompleteTitle");
+  const completeCopy = getScanWorkspaceInput("scanWorkspaceProcessingCompleteCopy");
+  const progressBar = getScanWorkspaceInput("scanWorkspaceProcessingBar");
+  const progressLabel = getScanWorkspaceInput("scanWorkspaceProcessingProgressLabel");
 
   const stage = getScanWorkspaceProcessingStage(scanWorkspaceProcessingState.currentStageKey);
   const draft = scanWorkspaceProcessingState.intakeDraft;
+  const status = scanWorkspaceProcessingState.status;
   const isComplete = scanWorkspaceProcessingState.status === "complete";
+  const isError = status === "error";
 
-  if (badge) badge.textContent = isComplete ? "Complete" : stage.title;
-  if (title) title.textContent = isComplete ? "Scan report ready" : "Structuring your content with AI";
-  if (subtitle) subtitle.textContent = isComplete ? "Review the generated match report when you are ready." : stage.description;
+  if (badge) badge.textContent = isComplete ? "Complete" : isError ? "Error" : stage.title;
+  if (title) title.textContent = isComplete ? "Scan report ready" : isError ? "Scan could not be completed" : "Building your scan report";
+  if (subtitle) subtitle.textContent = isComplete
+    ? "Review the generated match report when you are ready."
+    : isError
+      ? "The request stopped before a saved report was confirmed."
+      : "The server is generating the report and confirming persistence.";
   if (summary) summary.innerHTML = buildScanWorkspaceProcessingSummaryHtml(draft);
   if (stepList) stepList.innerHTML = buildScanWorkspaceProcessingStepsHtml(stage.key);
-  if (complete) complete.hidden = !isComplete;
+  if (complete) {
+    complete.hidden = !isComplete;
+    complete.dataset.llmAnalysisStatus = String(
+      scanWorkspaceProcessingState.resultMeta?.llmAnalysisStatus || "unknown"
+    );
+  }
+
+  if (isComplete) {
+    const result = scanWorkspaceProcessingState.resultMeta || {};
+    const llmStatus = String(result.llmAnalysisStatus || "").trim().toLowerCase();
+    const shortScanId = String(result.scanId || "").trim().slice(0, 10);
+    if (completeTitle) {
+      completeTitle.textContent = llmStatus === "succeeded"
+        ? "AI-assisted match report ready"
+        : "Match report ready";
+    }
+    if (completeCopy) {
+      completeCopy.textContent = llmStatus === "fallback"
+        ? "AI analysis was unavailable, so ApplyLens used deterministic fallback."
+        : llmStatus === "disabled"
+          ? "AI analysis was disabled for this scan. A deterministic report was created and saved."
+          : shortScanId
+            ? `Saved scan ${shortScanId} has been created successfully.`
+            : "The saved match report has been created successfully.";
+    }
+  }
+
+  if (progressBar) {
+    const progressValue = Math.max(0, Math.min(100, Number(scanWorkspaceProcessingState.progressValue) || 0));
+    progressBar.dataset.progressState = status;
+    progressBar.setAttribute("aria-busy", status === "running" ? "true" : "false");
+    if (status === "running") {
+      progressBar.removeAttribute("aria-valuenow");
+      progressBar.setAttribute("aria-valuetext", "Scan running; progress percentage unavailable");
+    } else {
+      progressBar.setAttribute("aria-valuenow", String(progressValue));
+      progressBar.setAttribute(
+        "aria-valuetext",
+        isComplete ? "Scan complete" : isError ? "Scan stopped before completion" : "Scan not started"
+      );
+    }
+    progressBar.style.setProperty("--scan-progress", `${progressValue}%`);
+  }
+
+  if (progressLabel) {
+    progressLabel.textContent = isComplete
+      ? "100% complete"
+      : isError
+        ? "Not completed"
+        : status === "running"
+          ? "In progress"
+          : "Not started";
+  }
 
   if (note) {
+    note.hidden = isComplete;
     note.textContent =
       scanWorkspaceProcessingState.note ||
-      "Waiting for the real scan runner. This phase adds the processing shell and stage model only.";
+      "Ready to submit the scan request.";
   }
 }
 
@@ -2314,17 +2577,16 @@ async function beginScanWorkspaceProcessing() {
   const draft = readScanWorkspaceIntakeDraft();
 
   scanWorkspaceProcessingState.status = "running";
+  scanWorkspaceProcessingState.progressValue = 0;
   scanWorkspaceProcessingState.currentStageKey = "prepare";
   scanWorkspaceProcessingState.intakeDraft = { ...draft };
+  scanWorkspaceProcessingState.resultMeta = null;
   scanWorkspaceProcessingState.note =
     "Generating the scan report and saving it to Postgres...";
 
   setScanWorkspaceMode("processing");
 
   try {
-    scanWorkspaceProcessingState.currentStageKey = "resume";
-    updateScanWorkspaceProcessingView();
-
     const response = await fetch("/planning/start-scan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2356,11 +2618,29 @@ async function beginScanWorkspaceProcessing() {
     }
 
     scanWorkspaceProcessingState.status = "complete";
-    scanWorkspaceProcessingState.currentStageKey = "review_payload";
-    scanWorkspaceProcessingState.note = scanId
-      ? `Saved scan ${scanId.slice(0, 10)}. Match report ready.`
-      : "Saved scan. Match report ready.";
+    scanWorkspaceProcessingState.progressValue = 100;
+    scanWorkspaceProcessingState.currentStageKey = "persist";
+    const llmAnalysisStatus = String(data?.llm_analysis_status || "").trim().toLowerCase();
     const pendingPayload = data?.scan_review_payload || data?.preload_payload || null;
+    const llmReadback = data?.jd_llm_extraction_readback
+      || pendingPayload?.jd_llm_extraction_readback
+      || pendingPayload?.jd_llm_extraction
+      || {};
+    scanWorkspaceProcessingState.resultMeta = {
+      scanId,
+      scanTimestamp: String(data?.scan?.scan_timestamp || "").trim(),
+      llmAnalysisStatus,
+      llmCallAttempted: llmReadback?.llm_call_attempted === true,
+      provider: String(llmReadback?.provider || "").trim(),
+      model: String(llmReadback?.model || "").trim(),
+    };
+    scanWorkspaceProcessingState.note = llmAnalysisStatus === "fallback"
+      ? "AI analysis was unavailable. A deterministic fallback report was generated and saved."
+      : llmAnalysisStatus === "disabled"
+        ? "AI analysis was explicitly disabled. A deterministic report was generated and saved."
+        : scanId
+          ? `Saved scan ${scanId.slice(0, 10)}. AI-assisted match report ready.`
+          : "Saved scan. AI-assisted match report ready.";
     scanWorkspaceProcessingState.pendingReviewPayload =
       pendingPayload && typeof pendingPayload === "object"
         ? {
@@ -2385,6 +2665,7 @@ async function beginScanWorkspaceProcessing() {
   } catch (err) {
     scanWorkspaceProcessingState.status = "error";
     scanWorkspaceProcessingState.pendingReviewPayload = null;
+    scanWorkspaceProcessingState.resultMeta = null;
     scanWorkspaceProcessingState.note =
       err instanceof Error ? err.message : "Failed to save scan intake.";
     updateScanWorkspaceProcessingView();
@@ -2451,6 +2732,7 @@ function applyNewScanWorkspaceReviewPayload(payload) {
   }
 
   scanWorkspaceState.preloadPayload = payload;
+  captureScanWorkspacePersistenceCheckpoint("A: immediately after preload assignment");
   const root = getScanWorkspacePageRoot();
   if (root) {
     const company = firstNonEmptyScanWorkspaceText(
@@ -2561,7 +2843,6 @@ function applyNewScanWorkspaceReviewPayload(payload) {
     }
   }, 0);
 
-  loadScanWorkspaceDraftState();
 }
 
 async function loadSavedScanWorkspaceReviewPayload() {
@@ -2603,6 +2884,7 @@ async function loadSavedScanWorkspaceReviewPayload() {
           }
         : null
     );
+    await loadScanWorkspaceDraftState();
     return true;
   } catch (err) {
     const summary = document.getElementById("scanWorkspaceInteractiveSummary");
@@ -2629,8 +2911,9 @@ function bindScanWorkspaceProcessingShell() {
   const okBtn = getScanWorkspaceInput("scanWorkspaceProcessingOkBtn");
   if (okBtn && okBtn.dataset.bound !== "true") {
     okBtn.dataset.bound = "true";
-    okBtn.addEventListener("click", () => {
+    okBtn.addEventListener("click", async () => {
       applyNewScanWorkspaceReviewPayload(scanWorkspaceProcessingState.pendingReviewPayload);
+      await loadScanWorkspaceDraftState();
     });
   }
 }
@@ -2924,6 +3207,9 @@ function getEffectiveAcceptedCompareCandidateIds() {
   if (scanWorkspaceAnnotationState.markers.length > 0) {
     return liveIds;
   }
+  if (typeof getScanWorkspaceSelectedCandidateIds === "function") {
+    return getScanWorkspaceSelectedCandidateIds();
+  }
   return getSavedSelectedPatchCandidateIds();
 }
 
@@ -2942,6 +3228,12 @@ function setScanWorkspaceMarkerDecision(markerId, decision) {
 
 function buildScanWorkspaceRewriteReviewDecisionsPayload() {
   const decisionMap = {};
+
+  if (!scanWorkspaceAnnotationState.markers.length) {
+    return typeof getScanWorkspaceCurrentReviewDecisionMap === "function"
+      ? getScanWorkspaceCurrentReviewDecisionMap()
+      : decisionMap;
+  }
 
   scanWorkspaceAnnotationState.markers.forEach((marker) => {
     const decision = normalizeScanWorkspaceAnnotationDecision(marker?.decision);
@@ -2987,6 +3279,7 @@ function buildScanWorkspacePersistencePayload() {
   return {
     tailoring_json_path: getScanWorkspaceArtifactKey(context),
     selected_resume: context.resumeName,
+    pipeline_run_id: context.pipelineRunId,
     selected_patch_candidate_ids: getEffectiveAcceptedCompareCandidateIds(),
     manual_bullet_edits: getScanWorkspaceManualBulletEdits(),
     rewrite_review_decisions: buildScanWorkspaceRewriteReviewDecisionsPayload(),
@@ -3194,6 +3487,168 @@ function getSavedScanWorkspacePersistenceSignature() {
   );
 }
 
+function getScanWorkspacePersistenceFieldSnapshot(payload = {}) {
+  const signature = buildScanWorkspacePersistenceSignature(
+    payload.selected_patch_candidate_ids || [],
+    payload.rewrite_review_decisions || {},
+    payload.manual_bullet_edits || {},
+    payload.excluded_scan_issue_ids || [],
+    payload.personal_details || {}
+  );
+  try {
+    return JSON.parse(signature);
+  } catch {
+    return {};
+  }
+}
+
+function captureScanWorkspacePersistenceCheckpoint(checkpoint) {
+  const label = String(checkpoint || "").trim();
+  if (label.startsWith("A:")) {
+    scanWorkspacePersistenceState.hydrationTrace = [];
+  }
+
+  const currentPayload = buildScanWorkspacePersistencePayload() || {};
+  const savedPayload = scanWorkspacePersistenceState.loadResponse?.draft || {};
+  const currentFields = getScanWorkspacePersistenceFieldSnapshot(currentPayload);
+  const savedFields = getScanWorkspacePersistenceFieldSnapshot(savedPayload);
+  const fieldNames = [
+    "selected_patch_candidate_ids",
+    "rewrite_review_decisions",
+    "manual_bullet_edits",
+    "excluded_scan_issue_ids",
+    "personal_details",
+  ];
+  const differences = {};
+  fieldNames.forEach((field) => {
+    if (JSON.stringify(currentFields[field]) !== JSON.stringify(savedFields[field])) {
+      differences[field] = {
+        current: currentFields[field],
+        saved: savedFields[field],
+      };
+    }
+  });
+
+  const context = getScanWorkspaceContext();
+  const savedScanId = String(getScanWorkspacePageRoot()?.dataset?.savedScanId || "").trim();
+  const canPersist = Boolean(
+    savedScanId || (getScanWorkspaceArtifactKey(context) && context?.resumeName)
+  );
+  const currentSignature = getCurrentScanWorkspacePersistenceSignature();
+  const hydratedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
+  scanWorkspacePersistenceState.hydrationTrace.push({
+    checkpoint: label,
+    current_payload: currentPayload,
+    saved_payload: savedPayload,
+    current_signature: currentSignature,
+    hydrated_signature: hydratedSignature,
+    differences,
+    can_persist: canPersist,
+    is_dirty: Boolean(canPersist && currentSignature !== hydratedSignature),
+  });
+}
+
+function hydrateScanWorkspacePersistenceStateFromDraft(
+  draftPayload = {},
+  { captureTrace = true } = {}
+) {
+  const rawDraft = draftPayload && typeof draftPayload === "object" ? draftPayload : {};
+  scanWorkspacePersistenceState.loadResponse = {
+    ...(scanWorkspacePersistenceState.loadResponse || {}),
+    draft: rawDraft,
+  };
+  if (captureTrace) captureScanWorkspacePersistenceCheckpoint("B: after saved draft load");
+
+  if (typeof setScanWorkspaceExcludedIssueIds === "function") {
+    setScanWorkspaceExcludedIssueIds(rawDraft.excluded_scan_issue_ids || []);
+  }
+  if (captureTrace) captureScanWorkspacePersistenceCheckpoint("C: after excluded issue IDs hydration");
+
+  const sourcePersonalDetails = getSourceScanWorkspacePersonalDetails();
+  const savedPersonalDetails = normalizeScanWorkspacePersistencePersonalDetails(
+    rawDraft.personal_details || {}
+  );
+  const hydratedPersonalDetails = mergeScanWorkspacePersonalDetails(
+    sourcePersonalDetails,
+    savedPersonalDetails
+  );
+  if (typeof setScanWorkspacePersonalDetails === "function") {
+    setScanWorkspacePersonalDetails(hydratedPersonalDetails);
+  }
+  if (captureTrace) captureScanWorkspacePersistenceCheckpoint("D: after personal details hydration");
+
+  if (typeof normalizeTailoringWorkspaceReviewDecisionMap === "function") {
+    scanWorkspaceState.rewriteReviewDecisions = normalizeTailoringWorkspaceReviewDecisionMap(
+      rawDraft.rewrite_review_decisions || {}
+    );
+  }
+  if (captureTrace) captureScanWorkspacePersistenceCheckpoint("E: after rewrite decisions hydration");
+
+  scanWorkspacePersistenceState.manualBulletEdits = {
+    ...(rawDraft.manual_bullet_edits && typeof rawDraft.manual_bullet_edits === "object"
+      ? rawDraft.manual_bullet_edits
+      : {}),
+  };
+  if (captureTrace) captureScanWorkspacePersistenceCheckpoint("F: after manual bullet edits hydration");
+
+  if (
+    typeof normalizeScanWorkspaceSelectedCandidateIds === "function" &&
+    scanWorkspaceState.preloadPayload
+  ) {
+    scanWorkspaceState.selectedCandidateIds = normalizeScanWorkspaceSelectedCandidateIds(
+      scanWorkspaceState.preloadPayload,
+      rawDraft.selected_patch_candidate_ids || []
+    );
+  }
+  if (captureTrace) captureScanWorkspacePersistenceCheckpoint("G: after selected candidate IDs hydration");
+
+  const canonicalDraft = {
+    ...rawDraft,
+    selected_patch_candidate_ids:
+      typeof getScanWorkspaceSelectedCandidateIds === "function"
+        ? getScanWorkspaceSelectedCandidateIds()
+        : rawDraft.selected_patch_candidate_ids || [],
+    rewrite_review_decisions:
+      typeof getScanWorkspaceCurrentReviewDecisionMap === "function"
+        ? getScanWorkspaceCurrentReviewDecisionMap()
+        : rawDraft.rewrite_review_decisions || {},
+    manual_bullet_edits: { ...scanWorkspacePersistenceState.manualBulletEdits },
+    excluded_scan_issue_ids: getCurrentScanWorkspaceExcludedIssueIds(),
+    personal_details: getCurrentScanWorkspacePersonalDetails(),
+  };
+  scanWorkspacePersistenceState.loadResponse = {
+    ...(scanWorkspacePersistenceState.loadResponse || {}),
+    draft: canonicalDraft,
+  };
+  applySavedDraftStateToScanMarkers();
+  scanWorkspacePersistenceState.hydratedSignature = getSavedScanWorkspacePersistenceSignature();
+  if (captureTrace) captureScanWorkspacePersistenceCheckpoint("H: when hydrated signature is assigned");
+}
+
+function assertScanWorkspacePersistenceResponseMatchesRequest(response, requestPayload) {
+  if (!response || response.ok !== true || response.has_saved_draft !== true) {
+    throw new Error("Scan decisions were not confirmed as persisted.");
+  }
+  if (!response.draft || typeof response.draft !== "object") {
+    throw new Error("Saved scan response did not include the persisted draft.");
+  }
+
+  const requestedFields = getScanWorkspacePersistenceFieldSnapshot(requestPayload || {});
+  const persistedFields = getScanWorkspacePersistenceFieldSnapshot(response.draft);
+  const mismatchedFields = [
+    "selected_patch_candidate_ids",
+    "rewrite_review_decisions",
+    "manual_bullet_edits",
+    "excluded_scan_issue_ids",
+    "personal_details",
+  ].filter(
+    (field) => JSON.stringify(requestedFields[field]) !== JSON.stringify(persistedFields[field])
+  );
+  if (mismatchedFields.length) {
+    throw new Error(`Saved scan response did not verify: ${mismatchedFields.join(", ")}.`);
+  }
+}
+
 function applySavedDraftStateToScanMarkers() {
   const draft = scanWorkspacePersistenceState.loadResponse?.draft || {};
   const selectedSet = new Set(
@@ -3275,18 +3730,23 @@ function renderScanWorkspacePersistenceStatus() {
   const isSavedNewScan = Boolean(savedScanId && entrySource === "scan_workspace_new_scan");
   const currentSignature = getCurrentScanWorkspacePersistenceSignature();
   const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
-  const canPersist = hasContext || isSavedNewScan;
+  const canPersist = hasContext || Boolean(savedScanId);
   const isDirty = Boolean(canPersist && currentSignature !== savedSignature);
   const noChangesLabel = "No changes made";
   const syncDisabledHelp = (button, disabled, enabledLabel) => {
     if (!button) return;
     const wrapper = button.closest(".scan-workspace-disabled-action-wrap");
     button.setAttribute("aria-disabled", disabled ? "true" : "false");
-    button.title = disabled ? noChangesLabel : enabledLabel;
+    const helpLabel = disabled ? noChangesLabel : enabledLabel;
+    // The wrapper pseudo-tooltip is the single visual help surface in both
+    // states. Native title text would create a second browser tooltip.
+    button.removeAttribute("title");
+    button.setAttribute("aria-label", helpLabel);
     button.dataset.disabledReason = disabled ? noChangesLabel : "";
     if (wrapper) {
-      wrapper.title = disabled ? noChangesLabel : "";
-      wrapper.setAttribute("aria-label", disabled ? noChangesLabel : enabledLabel);
+      wrapper.removeAttribute("title");
+      wrapper.setAttribute("aria-label", helpLabel);
+      wrapper.setAttribute("data-scan-help", helpLabel);
       if (disabled) {
         wrapper.setAttribute("tabindex", "0");
       } else {
@@ -3349,10 +3809,10 @@ function renderScanWorkspacePersistenceStatus() {
     syncScanWorkspacePremiumActionState(saveBtn, {
       disabled: isSaveDisabled,
       loading: isSaveLoading,
-      idleLabel: "Continue",
+      idleLabel: "Save",
       loadingLabel: "Saving...",
     });
-    syncDisabledHelp(saveBtn, isSaveDisabled, "Continue");
+    syncDisabledHelp(saveBtn, isSaveDisabled, "Save changes");
     saveBtn.classList.toggle("has-unsaved-changes", isDirty);
   }
 
@@ -3417,8 +3877,6 @@ function updateScanWorkspaceDecisionSummaryUi() {
   const redoBtn = getScanWorkspaceInput("scanWorkspaceRedoBtn");
   const aiSuggestionStepLabel = getScanWorkspaceInput("scanWorkspaceAiSuggestionStepLabel");
   const editStep = getScanWorkspaceInput("scanWorkspaceEditStep");
-  const scoreValue = getScanWorkspaceInput("scanWorkspaceScoreValue");
-
   const hasMarkers = scanWorkspaceAnnotationState.markers.length > 0;
   const savedAcceptedIds = getSavedSelectedPatchCandidateIds();
 
@@ -3493,17 +3951,6 @@ function updateScanWorkspaceDecisionSummaryUi() {
     editStep.title = hasGuidance
       ? "Open an orange guidance item to edit the surfaced bullet and preview the score."
       : "Edit unlocks when manual guidance rows are available.";
-  }
-
-  if (scoreValue) {
-    const scoreSource = String(scoreValue.dataset.scanScoreSource || "").trim();
-    if (scoreSource !== "backend" && counts.actionableTotal > 0) {
-      scoreValue.textContent = String(Math.round((counts.accepted / counts.actionableTotal) * 100));
-      scoreValue.setAttribute(
-        "aria-label",
-        `${counts.accepted} of ${counts.actionableTotal} replacement suggestions accepted`
-      );
-    }
   }
 
   renderScanWorkspacePersistenceStatus();
@@ -3586,6 +4033,8 @@ function getCurrentScanWorkspaceExclusionAdjustedScore() {
 }
 
 function coerceScanWorkspaceScore100(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && !value.trim()) return null;
   const score = Number(value);
   if (!Number.isFinite(score)) return null;
   const displayScore = score >= 0 && score <= 1 ? score * 100 : score;
@@ -3594,6 +4043,10 @@ function coerceScanWorkspaceScore100(value) {
 
 function getScanWorkspaceLoadedScanScorePoints() {
   const preload = getScanWorkspacePreloadPayloadForSurface() || {};
+  if (typeof resolveScanWorkspaceBaselineScorePoints === "function") {
+    return resolveScanWorkspaceBaselineScorePoints(preload);
+  }
+
   const scanScore = preload?.scan_score && typeof preload.scan_score === "object"
     ? preload.scan_score
     : {};
@@ -4471,13 +4924,9 @@ async function loadScanWorkspaceDraftState() {
       draft,
       score_preview: scanWorkspaceState.preloadPayload?.score_preview || {},
     };
-    scanWorkspacePersistenceState.manualBulletEdits = {
-      ...(draft?.manual_bullet_edits && typeof draft.manual_bullet_edits === "object"
-        ? draft.manual_bullet_edits
-        : {}),
-    };
-    scanWorkspacePersistenceState.hydratedSignature = getSavedScanWorkspacePersistenceSignature();
+    hydrateScanWorkspacePersistenceStateFromDraft(draft);
     renderScanWorkspacePersistenceStatus();
+    captureScanWorkspacePersistenceCheckpoint("I: after final initial persistence render");
     return;
   }
 
@@ -4498,6 +4947,7 @@ async function loadScanWorkspaceDraftState() {
             {
               tailoring_json_path: payload.tailoring_json_key || payload.tailoring_json_path,
               selected_resume: payload.selected_resume,
+              pipeline_run_id: payload.pipeline_run_id,
             },
             15000
           )
@@ -4507,6 +4957,7 @@ async function loadScanWorkspaceDraftState() {
             body: JSON.stringify({
               tailoring_json_path: payload.tailoring_json_key || payload.tailoring_json_path,
               selected_resume: payload.selected_resume,
+              pipeline_run_id: payload.pipeline_run_id,
             }),
           }).then(async (res) => {
             if (!res.ok) {
@@ -4534,27 +4985,7 @@ async function loadScanWorkspaceDraftState() {
         },
       };
     }
-    scanWorkspacePersistenceState.manualBulletEdits = {
-      ...(
-        response?.draft?.manual_bullet_edits &&
-        typeof response.draft.manual_bullet_edits === "object"
-          ? response.draft.manual_bullet_edits
-          : {}
-      ),
-    };
-    scanWorkspacePersistenceState.hydratedSignature = getSavedScanWorkspacePersistenceSignature();
-
-    if (typeof setScanWorkspaceExcludedIssueIds === "function") {
-      setScanWorkspaceExcludedIssueIds(response?.draft?.excluded_scan_issue_ids || []);
-    }
-    const savedPersonalDetails = response?.draft?.personal_details || {};
-    if (
-      typeof setScanWorkspacePersonalDetails === "function" &&
-      hasScanWorkspacePersonalDetailsValue(savedPersonalDetails)
-    ) {
-      setScanWorkspacePersonalDetails(savedPersonalDetails);
-    }
-    applySavedDraftStateToScanMarkers();
+    hydrateScanWorkspacePersistenceStateFromDraft(response?.draft || {});
 
     scanWorkspacePreviewState.documentPreviewPayload = null;
     scanWorkspacePreviewState.scorePreviewPayload = response?.score_preview || null;
@@ -4577,6 +5008,7 @@ async function loadScanWorkspaceDraftState() {
   } finally {
     scanWorkspacePersistenceState.isLoading = false;
     renderScanWorkspacePersistenceStatus();
+    captureScanWorkspacePersistenceCheckpoint("I: after final initial persistence render");
   }
 }
 
@@ -4645,6 +5077,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
           workflow_readiness_artifact_id: getScanWorkspaceWorkflowReadinessArtifactId(),
         }
       : payload;
+
     const response =
       typeof postJsonWithTimeout === "function"
         ? await postJsonWithTimeout(saveUrl, requestPayload, 20000)
@@ -4666,6 +5099,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
             return res.json();
           });
 
+    assertScanWorkspacePersistenceResponseMatchesRequest(response, requestPayload);
     scanWorkspacePersistenceState.loadResponse = response;
     renderScanWorkspaceTailoringLlmReadback(response);
     renderScanWorkspaceExactChangeLlmReadback(response);
@@ -4681,26 +5115,7 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
     renderScanWorkspaceWorkflowReadinessCheckpointReadback(response);
     renderScanWorkspaceAgenticWorkflowIntegrationReadback(response);
     renderScanWorkspaceProductionReadinessCheckpoint(response);
-    scanWorkspacePersistenceState.manualBulletEdits = {
-      ...getScanWorkspaceManualBulletEdits(),
-      ...(
-        response?.draft?.manual_bullet_edits &&
-        typeof response.draft.manual_bullet_edits === "object"
-          ? response.draft.manual_bullet_edits
-          : {}
-      ),
-    };
-    if (typeof setScanWorkspaceExcludedIssueIds === "function") {
-      setScanWorkspaceExcludedIssueIds(response?.draft?.excluded_scan_issue_ids || []);
-    }
-    const savedPersonalDetails = response?.draft?.personal_details || {};
-    if (
-      typeof setScanWorkspacePersonalDetails === "function" &&
-      hasScanWorkspacePersonalDetailsValue(savedPersonalDetails)
-    ) {
-      setScanWorkspacePersonalDetails(savedPersonalDetails);
-    }
-    scanWorkspacePersistenceState.hydratedSignature = getCurrentScanWorkspacePersistenceSignature();
+    hydrateScanWorkspacePersistenceStateFromDraft(response.draft, { captureTrace: false });
     scanWorkspacePersistenceState.lastError = "";
     renderScanWorkspacePersistenceStatus();
 
@@ -4771,7 +5186,7 @@ async function exportScanWorkspaceDraft(format = "pdf") {
 
   try {
     if (isDirty) {
-      scanWorkspacePersistenceState.lastError = "Click Continue to save scan decisions before exporting.";
+      scanWorkspacePersistenceState.lastError = "Click Save to save scan decisions before exporting.";
       renderScanWorkspacePersistenceStatus();
       return false;
     }
@@ -6513,7 +6928,7 @@ function bindScanWorkspacePersistenceControls() {
   if (saveBtn && saveBtn.dataset.bound !== "true") {
     saveBtn.dataset.bound = "true";
     saveBtn.addEventListener("click", async () => {
-      await continueScanWorkspaceAfterReview();
+      await saveScanWorkspaceDraftState();
     });
   }
 
@@ -6592,9 +7007,10 @@ function bindScanWorkspacePersistenceControls() {
 function maybeWarnBeforeUnload(event) {
   const context = getScanWorkspaceContext();
   const hasContext = Boolean(getScanWorkspaceArtifactKey(context) && context?.resumeName);
+  const savedScanId = String(getScanWorkspacePageRoot()?.dataset?.savedScanId || "").trim();
   const currentSignature = getCurrentScanWorkspacePersistenceSignature();
   const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
-  const isDirty = Boolean(hasContext && currentSignature !== savedSignature);
+  const isDirty = Boolean((hasContext || savedScanId) && currentSignature !== savedSignature);
 
   if (!isDirty || scanWorkspacePersistenceState.isSaving) {
     return;
@@ -6650,9 +7066,13 @@ function bindScanWorkspaceGlobalShortcuts() {
   window.addEventListener("beforeunload", maybeWarnBeforeUnload);
 }
 
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
   const root = getScanWorkspacePageRoot();
   if (!root) return;
+
+  if (window.scanWorkspacePlanningInitialization) {
+    await window.scanWorkspacePlanningInitialization;
+  }
 
   bindScanWorkspaceModeButtons();
   bindScanWorkspaceIntakeForm();
@@ -6663,10 +7083,6 @@ window.addEventListener("DOMContentLoaded", () => {
   bindScanWorkspaceGlobalShortcuts();
   updateScanWorkspaceProcessingView();
   loadScanWorkspaceSavedResumes();
-
-  setScanWorkspaceMode(getScanWorkspaceInitialMode());
-  loadSavedScanWorkspaceReviewPayload();
-  loadScanWorkspaceDraftState();
 
   window.scanWorkspacePhase1 = {
     setMode: setScanWorkspaceMode,
@@ -6696,6 +7112,8 @@ window.addEventListener("DOMContentLoaded", () => {
     getCurrentExcludedIssueIds: () => getScanWorkspacePersistenceExcludedIssueIds(),
     getSavedExcludedIssueIds: () => getSavedScanWorkspaceExcludedIssueIds(),
     getSavedPersonalDetails: () => getSavedScanWorkspacePersonalDetails(),
+    getPersistenceTrace: () =>
+      scanWorkspacePersistenceState.hydrationTrace.map((entry) => ({ ...entry })),
     getAnnotationState: () => ({
       markers: scanWorkspaceAnnotationState.markers.map((marker) => ({ ...marker })),
       activeMarkerId: scanWorkspaceAnnotationState.activeMarkerId,
@@ -6703,6 +7121,15 @@ window.addEventListener("DOMContentLoaded", () => {
       acceptedCandidateIds: getEffectiveAcceptedCompareCandidateIds(),
     }),
   };
+
+  if (scanWorkspaceState.preloadPayload && typeof syncScanWorkspaceAnnotationMarkers === "function") {
+    syncScanWorkspaceAnnotationMarkers(scanWorkspaceState.preloadPayload);
+  }
+  setScanWorkspaceMode(getScanWorkspaceInitialMode());
+  const restoredSavedScan = await loadSavedScanWorkspaceReviewPayload();
+  if (!restoredSavedScan) {
+    await loadScanWorkspaceDraftState();
+  }
 });
 
 

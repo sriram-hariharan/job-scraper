@@ -140,9 +140,11 @@ def test_enabled_valid_provider_response_adds_structured_jd_signals(monkeypatch)
     signals = _metadata(payload)["structured_jd_signals"]
     assert signals["required_skills"] == ["Python", "SQL"]
     assert "dbt" in signals["tools"]
-    assert "Airflow" in signals["tools"]
+    assert "Airflow" not in signals["tools"]
+    assert _metadata(payload)["grounding_rejections"]["tools"] == ["Airflow"]
     assert "data pipelines" in signals["responsibilities"]
-    assert signals["seniority"] == "senior scope"
+    assert signals["seniority"] is None
+    assert _metadata(payload)["grounding_rejections"]["seniority"] == ["senior scope"]
     assert signals["confidence"] == 0.91
     assert payload["scan"]["payload_json"]["jd_llm_extraction"]["structured_jd_signals"] == signals
 
@@ -161,7 +163,7 @@ def test_provider_invalid_json_falls_back_safely(monkeypatch):
     assert metadata["fallback_used"] is True
     assert metadata["validation_status"] == "fallback"
     assert metadata["structured_jd_signals"] == {}
-    assert "provider_callable_error:ValueError" in metadata["validation_errors"]
+    assert "invalid_json_response" in metadata["validation_errors"]
 
 
 def test_provider_exception_falls_back_safely(monkeypatch):
@@ -197,9 +199,13 @@ def test_existing_deterministic_scan_output_and_score_remain_present(monkeypatch
         assert review["scan_score"]["source"] == "new_scan_match_score"
         assert isinstance(review["scan_issue_contract"], dict)
         assert isinstance(review["score_preview"], dict)
-    assert enabled["scan_review_payload"]["scan_score"] == disabled[
-        "scan_review_payload"
-    ]["scan_score"]
+    assert enabled["scan_review_payload"]["scan_score"]["source"] == (
+        disabled["scan_review_payload"]["scan_score"]["source"]
+    )
+    assert enabled["scan_review_payload"]["selected_jd_record"]["required_skills"] == [
+        "Python",
+        "SQL",
+    ]
 
 
 def test_no_scoring_formula_weight_or_mutation_side_effects(monkeypatch):
@@ -225,7 +231,7 @@ def test_no_scoring_formula_weight_or_mutation_side_effects(monkeypatch):
         assert metadata[key] is False
 
 
-def test_api_route_remains_default_off_unless_explicit_enable(monkeypatch):
+def test_api_route_defaults_on_and_retains_explicit_disable(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.setattr(api, "auth_guard_response", lambda request: None)
     monkeypatch.setattr(api, "_auth_owner_user_id", lambda request: "test-owner")
@@ -233,26 +239,37 @@ def test_api_route_remains_default_off_unless_explicit_enable(monkeypatch):
     calls = []
     monkeypatch.setattr(
         services,
-        "_live_jd_intelligence_provider_adapter",
-        lambda request: calls.append(request) or _valid_provider_payload(),
+        "resolve_effective_user_provider_route",
+        lambda owner_user_id, workload_id: {
+            "workload_id": workload_id,
+            "provider": "fake-provider",
+            "model": "fake-model",
+            "effective_selection_source": "applylens_recommended",
+        },
+    )
+    monkeypatch.setattr(
+        services,
+        "_configured_planning_scan_jd_provider_adapter",
+        lambda *, adapter_input, **_kwargs: calls.append(adapter_input)
+        or _valid_provider_payload(),
     )
     client = TestClient(api.app)
 
     default_response = client.post("/planning/start-scan", json=_request_payload())
-    enabled_response = client.post(
+    disabled_response = client.post(
         "/planning/start-scan",
-        json={**_request_payload(), "scan_id": "phase55a-api-enabled", "enable_jd_llm_extraction": True},
+        json={**_request_payload(), "scan_id": "phase55a-api-disabled", "enable_jd_llm_extraction": False},
     )
 
     assert default_response.status_code == 200
     assert default_response.json()["scan_review_payload"]["jd_llm_extraction"][
         "validation_status"
-    ] == "disabled"
-    assert enabled_response.status_code == 200
-    assert calls
-    assert enabled_response.json()["scan_review_payload"]["jd_llm_extraction"][
-        "validation_status"
     ] == "valid"
+    assert calls
+    assert disabled_response.status_code == 200
+    assert disabled_response.json()["scan_review_payload"]["jd_llm_extraction"][
+        "validation_status"
+    ] == "disabled"
 
 
 def test_docs_capture_live_jd_llm_scan_wiring_and_safety():

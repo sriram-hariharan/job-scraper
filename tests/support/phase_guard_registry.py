@@ -2853,11 +2853,17 @@ def assert_protected_hashes(
         ): frozenset({
             "75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3",
             "d396bfd09de172954a0bfd652aceb25c0def1f64081b46067a337f4ebe06714c",
+            # Repository hygiene dependency cleanup successor.
+            "95d85cd190cecd6cf0e5d1436dfa310ec384e53896fcd2c9d3ed39285e2c08a8",
         }),
         (
             "requirements.txt",
             "75d10d919dd53cdc3e55056abe28503b5b0bde38d5e61d944beb794562886cc3",
-        ): "d396bfd09de172954a0bfd652aceb25c0def1f64081b46067a337f4ebe06714c",
+        ): frozenset({
+            "d396bfd09de172954a0bfd652aceb25c0def1f64081b46067a337f4ebe06714c",
+            # Repository hygiene dependency cleanup successor.
+            "95d85cd190cecd6cf0e5d1436dfa310ec384e53896fcd2c9d3ed39285e2c08a8",
+        }),
         (
             "src/app/api.py",
             "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",

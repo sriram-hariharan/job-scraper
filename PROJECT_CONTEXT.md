@@ -428,9 +428,8 @@ The manual guarded APIs under `/api/manual-*` implement previews, request record
 
 ## 11.1 Backend composition
 
-- `src/app/api.py` creates FastAPI, mounts static assets, registers APIs, starts background RAG warmup, and applies authentication guards.
+- `src/app/api.py` creates FastAPI, mounts static assets, registers APIs, defines current API request models, starts background RAG warmup, and applies authentication guards.
 - `src/app/services.py` is the shared service layer for pipelines, planning, Scan, artifacts, profile state, RAG, scheduler readbacks, and guarded agent operations.
-- `src/app/schemas.py` defines request contracts.
 - `src/app/ui.py` and `src/app/ui_shell.py` own core pages and shell/navigation.
 - `auth_ui.py`, `onboarding_ui.py`, `profile_ui.py`, `planning_ui.py`, `decisions_ui.py`, and `application_hub_ui.py` own page-specific HTML/routes.
 
@@ -720,7 +719,7 @@ The project combines `asyncio`, connector/semaphore bounds, thread pools, sequen
 
 ## 19.3 Root developer/analysis utilities
 
-The `analyze_*` scripts, `benchmark_skill_extractors.py`, skill seed generators/merger, `jd_resume_diff_helper.py`, `run_matching_smoke.py`, `run_evidence_chain_shadow.py`, all root controlled/default-off dry-run launchers, `skill_eval.txt`, and `test.py` support analysis, seeds, smoke tests, shadow evidence, or controlled dry runs. They are not web features or default collector stages.
+The `analyze_*` scripts, `benchmark_skill_extractors.py`, skill seed generators/merger, `jd_resume_diff_helper.py`, `run_matching_smoke.py`, `run_evidence_chain_shadow.py`, all root controlled/default-off dry-run launchers, and `skill_eval.txt` support analysis, seeds, smoke tests, shadow evidence, or controlled dry runs. They are not web features or default collector stages.
 
 ## 19.4 Other top-level families
 

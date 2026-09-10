@@ -23,9 +23,9 @@ Guidance for Claude Code when working in this repository.
 # Repository map (high-level, verified ownership boundaries)
 - `main.py` — pipeline CLI entrypoint.
 - `run_api.py` — launches the API via `uvicorn src.app.api:app`.
-- `src/app/` — FastAPI application: `api.py` (app instance, `/static` mount, UI routers, and
-  `/api/*` routes), `services.py`, `schemas.py`, per-page `*_ui.py` routers, and classic-script
-  browser bridges under `src/app/static/`.
+- `src/app/` — FastAPI application: `api.py` (app instance, `/static` mount, UI routers,
+  `/api/*` routes, and current API request models), `services.py`, per-page `*_ui.py` routers,
+  and classic-script browser bridges under `src/app/static/`.
 - `src/pipeline/` — pipeline stages and runtime orchestration.
 - `src/agents/` — agent, evidence-chain, and LLMops modules (many are default-off / dry-run /
   read-only by design; do not enable them implicitly).

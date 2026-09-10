@@ -25,7 +25,7 @@ OWNER_PATH = (
 FIXED_TIME = "2026-07-25T00:00:00Z"
 EXPECTED_MODEL_COUNTS = {
     "groq/openai/gpt-oss-20b": 12,
-    "groq/openai/gpt-oss-120b": 10,
+    "groq/openai/gpt-oss-120b": 11,
     "openai/gpt-5-mini": 12,
     "openai/gpt-5.1": 10,
 }
@@ -160,16 +160,16 @@ def test_complete_run_accepts_groq_and_openai_through_one_evidence_path(
     evidence, transport = completed_evidence
     summaries = evidence["grading_summaries"]
 
-    assert len(transport.calls) == 44
+    assert len(transport.calls) == 45
     assert evidence["execution_status"] == "completed"
     assert evidence["state_counts"] == {
-        "completed": 44,
+        "completed": 45,
         "blocked": 0,
         "ambiguous": 0,
         "pending": 0,
     }
     assert {row["provider"] for row in summaries} == {"groq", "openai"}
-    assert len(summaries) == 44
+    assert len(summaries) == 45
     assert all(row["quality_gate_passed"] for row in summaries)
     assert evidence["all_executed_quality_gates_passed"] is True
 
@@ -180,15 +180,15 @@ def test_exact_usage_latency_and_call_aggregates_are_preserved(
     evidence, _transport = completed_evidence
     aggregate = evidence["aggregate_usage"]
 
-    assert aggregate["transport_calls"] == 44
-    assert aggregate["input_tokens"] == 44 * 11
-    assert aggregate["output_tokens"] == 44 * 7
-    assert aggregate["latency_ms"] == 44 * 5.0
-    assert aggregate["by_provider"] == {"groq": 22, "openai": 22}
+    assert aggregate["transport_calls"] == 45
+    assert aggregate["input_tokens"] == 45 * 11
+    assert aggregate["output_tokens"] == 45 * 7
+    assert aggregate["latency_ms"] == 45 * 5.0
+    assert aggregate["by_provider"] == {"groq": 23, "openai": 22}
     assert aggregate["by_model"] == EXPECTED_MODEL_COUNTS
     assert evidence["authority_invariants"]["mutation_count"] == 0
     assert evidence["checkpoint"]["authority_invariants"] == {
-        "provider_call_count": 44,
+        "provider_call_count": 45,
         "fallback_activation_count": 0,
         "retry_count": 0,
         "mutation_count": 0,
@@ -399,7 +399,7 @@ def test_workload_quality_failure_is_retained_and_stops_later_rows(
     assert evidence["checkpoint"]["stop_reason"] == "hard_safety_failure"
     assert evidence["grading_summaries"][0]["quality_gate_passed"] is False
     assert any(evidence["grading_summaries"][0]["hard_failures"].values())
-    assert evidence["state_counts"]["pending"] == 43
+    assert evidence["state_counts"]["pending"] == 44
 
 
 @pytest.mark.parametrize(
@@ -439,7 +439,7 @@ def test_bounded_transport_failure_outcome_hard_stops_once(
     assert len(calls) == 1
     assert evidence["checkpoint"]["stop_reason"] == stop_reason
     assert evidence["state_counts"]["blocked"] == 1
-    assert evidence["state_counts"]["pending"] == 43
+    assert evidence["state_counts"]["pending"] == 44
 
 
 def test_missing_usage_stops_and_is_never_silently_zero(controlled_inputs):
@@ -539,12 +539,12 @@ def test_evidence_digest_changes_when_executed_model_evidence_changes(
     groq_only = _execute(
         controlled_inputs,
         GoldenTransport(outputs),
-        maximum_schedule_items=22,
+        maximum_schedule_items=23,
     )
     with_openai = _execute(
         controlled_inputs,
         GoldenTransport(outputs),
-        maximum_schedule_items=23,
+        maximum_schedule_items=24,
     )
     kwargs = {
         "plan": controlled_inputs[0],
@@ -689,16 +689,16 @@ def test_passed_run_evidence_is_not_qualification_or_human_review_decision(
     )
 
 
-def test_step9c1_plan_remains_44_cells_and_live_default_off(controlled_inputs):
+def test_current_plan_has_45_cells_and_remains_live_default_off(controlled_inputs):
     plan = controlled_inputs[0]
 
-    assert plan["request_counts"]["maximum_total_requests"] == 44
+    assert plan["request_counts"]["maximum_total_requests"] == 45
     assert plan["request_counts"]["by_model"] == EXPECTED_MODEL_COUNTS
-    assert not any(
+    assert sum(
         row["workload_id"] == "skill_extraction"
         and row["model"] == "openai/gpt-oss-120b"
         for row in plan["staged_matrix"]
-    )
+    ) == 1
     assert plan["authority_invariants"]["live_execution_authorized"] is False
     assert plan["authority_invariants"]["provider_calls_allowed"] is False
     assert plan["authority_invariants"]["routing_change_allowed"] is False

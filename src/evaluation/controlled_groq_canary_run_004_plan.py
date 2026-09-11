@@ -11,8 +11,10 @@ from typing import Any, Dict, Iterable, Mapping
 from src.evaluation.controlled_provider_benchmark_plan import (
     CONTROLLED_PLAN_VERSION,
     build_controlled_provider_benchmark_plan,
+    current_case_alias,
     load_run_plan_fixture,
     validate_controlled_provider_benchmark_plan,
+    validate_current_case_ownership,
 )
 from src.evaluation.controlled_groq_provider_canary import (
     build_controlled_groq_canary_contract,
@@ -50,14 +52,18 @@ HISTORICAL_TARGET_ALIASES = {
     "jd_intelligence": "case_db0a584dd7f8653ca842281f",
     "tailoring_generation": "case_ece85e9411ca52b579359fb8",
 }
+# Durable, corpus-independent identities of the approved target cases. The
+# current RAW aliases are deliberately not pinned here: they mix the global
+# corpus digest, so an unrelated workload's fixture edit moves them without
+# these cases changing.
 CURRENT_TARGET_OWNERSHIP = {
     "jd_intelligence": {
-        "case_alias": "case_c4f73240ce6ff98809579b5d",
+        "stable_case_alias": "case_2f47393a4efcbe220d325519",
         "case_id": "jd_intelligence_signals_v1",
         "schema_id": "jd_intelligence_result_v1",
     },
     "tailoring_generation": {
-        "case_alias": "case_3dddc5f43be918e0932d3bb2",
+        "stable_case_alias": "case_ff24f23eeb3e0bed33bfaefa",
         "case_id": "tailoring_generation_evidence_bound_v1",
         "schema_id": "tailoring_generation_result_v1",
     },
@@ -299,9 +305,16 @@ def _committed_ownership() -> tuple[
         )
         review, case = matches[0]
         current_target = CURRENT_TARGET_OWNERSHIP[workload]
-        _require(
-            review["case_alias"] == current_target["case_alias"],
-            f"current {workload} case alias changed",
+        # Bind current ownership to the workload-stable case identity and derive
+        # the expected raw alias from the current corpus, so unrelated workload
+        # churn cannot invalidate this historical canary while a substituted,
+        # renamed or removed target case still fails closed.
+        validate_current_case_ownership(
+            workload_id=workload,
+            case_id=current_target["case_id"],
+            expected_stable_case_alias=current_target["stable_case_alias"],
+            observed_case_alias=review["case_alias"],
+            corpus=corpus,
         )
         _require(
             review["wholly_synthetic"] is True

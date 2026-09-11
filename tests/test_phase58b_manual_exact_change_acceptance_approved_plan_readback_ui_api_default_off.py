@@ -15,6 +15,12 @@ from tests.test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_def
     _stored_scan_payload,
     _valid_provider_payload as _valid_tailoring_provider_payload,
 )
+from tests.test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off import (
+    KNOWN_PROPOSAL_ID,
+    SECOND_KNOWN_PROPOSAL_ID,
+    _two_candidate_stored_payload,
+    _two_proposal_provider_payload,
+)
 from tests.test_phase57a_live_exact_resume_change_proposal_planning_workspace_wiring_default_off import (
     _valid_exact_provider_payload,
 )
@@ -54,18 +60,6 @@ def _post_state(client: TestClient, payload: dict) -> dict:
     return response.json()
 
 
-def _two_proposal_provider_payload() -> dict:
-    payload = deepcopy(_valid_exact_provider_payload())
-    payload["refined_change_proposals"].append(
-        {
-            **payload["refined_change_proposals"][0],
-            "proposal_id": "phase57-proposal-002",
-            "target_identifier": "bullet-2",
-        }
-    )
-    return payload
-
-
 def test_default_off_api_readback_does_not_create_approved_plan(monkeypatch):
     calls = []
     _patch_storage(monkeypatch, stored_payload=_stored_scan_payload())
@@ -79,7 +73,7 @@ def test_default_off_api_readback_does_not_create_approved_plan(monkeypatch):
         _client(monkeypatch),
         {
             **_state_request(),
-            "accepted_exact_change_proposal_ids": ["phase57-proposal-001"],
+            "accepted_exact_change_proposal_ids": ["phase42a-001"],
         },
     )
     readback = payload["manual_exact_change_acceptance_readback"]
@@ -107,7 +101,7 @@ def test_enabled_api_readback_exposes_manual_acceptance_plan_fields(monkeypatch)
             **_state_request(),
             "enable_live_exact_resume_change_proposal": True,
             "enable_manual_exact_change_acceptance": True,
-            "accepted_exact_change_proposal_ids": ["phase57-proposal-001"],
+            "accepted_exact_change_proposal_ids": ["phase42a-001"],
         },
     )
     readback = payload["manual_exact_change_acceptance_readback"]
@@ -115,8 +109,8 @@ def test_enabled_api_readback_exposes_manual_acceptance_plan_fields(monkeypatch)
     assert readback["manual_acceptance_enabled"] is True
     assert readback["manual_acceptance_performed"] is True
     assert readback["accepted_proposal_count"] == 1
-    assert readback["accepted_proposal_ids"] == ["phase57-proposal-001"]
-    assert readback["stable_accepted_proposal_keys"] == ["phase57-proposal-001"]
+    assert readback["accepted_proposal_ids"] == ["phase42a-001"]
+    assert readback["stable_accepted_proposal_keys"] == ["phase42a-001"]
     assert readback["approved_change_plan_created"] is True
     assert readback["approved_change_plan_id"]
     assert readback["stable_plan_key"] == readback["approved_change_plan_id"]
@@ -128,7 +122,8 @@ def test_enabled_api_readback_exposes_manual_acceptance_plan_fields(monkeypatch)
 
 
 def test_accepted_ids_appear_and_unaccepted_ids_are_not_approved(monkeypatch):
-    _patch_storage(monkeypatch, stored_payload=_stored_scan_payload())
+    # Two genuinely KNOWN upstream candidates; no invented provider id.
+    _patch_storage(monkeypatch, stored_payload=_two_candidate_stored_payload())
     monkeypatch.setattr(
         services,
         "_live_exact_resume_change_proposal_provider_adapter",
@@ -141,15 +136,15 @@ def test_accepted_ids_appear_and_unaccepted_ids_are_not_approved(monkeypatch):
             **_state_request(),
             "enable_live_exact_resume_change_proposal": True,
             "enable_manual_exact_change_acceptance": True,
-            "accepted_exact_change_proposal_ids": ["phase57-proposal-001"],
+            "accepted_exact_change_proposal_ids": ["phase42a-001"],
         },
     )
     readback = payload["manual_exact_change_acceptance_readback"]
     approved = readback["approved_change_plan_packet"]["approved_changes"]
 
-    assert [row["proposal_id"] for row in approved] == ["phase57-proposal-001"]
-    assert "phase57-proposal-002" not in readback["accepted_proposal_ids"]
-    assert readback["skipped_proposal_ids"] == ["phase57-proposal-002"]
+    assert [row["proposal_id"] for row in approved] == ["phase42a-001"]
+    assert SECOND_KNOWN_PROPOSAL_ID not in readback["accepted_proposal_ids"]
+    assert readback["skipped_proposal_ids"] == [SECOND_KNOWN_PROPOSAL_ID]
     assert readback["rejected_proposal_count"] == 1
     assert readback["manual_acceptance_metadata"]["skipped_proposal_count"] == 1
 
@@ -232,7 +227,7 @@ def test_no_live_provider_call_is_made_by_manual_acceptance_readback(monkeypatch
     readback = services._planning_workspace_manual_exact_change_acceptance_payload(
         live_exact_change_readback=phase57_payload["live_exact_resume_change_proposal_readback"],
         enabled=True,
-        accepted_proposal_ids=["phase57-proposal-001"],
+        accepted_proposal_ids=["phase42a-001"],
     )
 
     assert provider_calls == []
@@ -252,7 +247,7 @@ def test_phase55_phase56_phase57_and_phase58a_readbacks_remain_intact(monkeypatc
         enable_live_exact_resume_change_proposal=True,
         live_exact_resume_change_proposal_adapter=lambda _request: _valid_exact_provider_payload(),
         enable_manual_exact_change_acceptance=True,
-        accepted_exact_change_proposal_ids=["phase57-proposal-001"],
+        accepted_exact_change_proposal_ids=["phase42a-001"],
     )
     stored_review = _stored_scan_payload()["scan"]["payload_json"]["scan_review_payload"]
 
@@ -272,7 +267,7 @@ def test_no_mutation_artifact_application_submission_or_scoring_side_effects(mon
         enable_live_exact_resume_change_proposal=True,
         live_exact_resume_change_proposal_adapter=lambda _request: _valid_exact_provider_payload(),
         enable_manual_exact_change_acceptance=True,
-        accepted_exact_change_proposal_ids=["phase57-proposal-001"],
+        accepted_exact_change_proposal_ids=["phase42a-001"],
     )
 
     safety = payload["manual_exact_change_acceptance_readback"]["safety"]

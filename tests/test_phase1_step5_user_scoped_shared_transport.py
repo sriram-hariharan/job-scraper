@@ -401,7 +401,10 @@ def test_provider_client_is_appended_to_all_shared_transport_signatures(
         "run_chat_completion",
     ):
         parameters = list(inspect.signature(getattr(module, function_name)).parameters)
-        assert parameters[-1] == "provider_client"
+        # The contract is that every shared transport entry point accepts the
+        # owner-scoped provider_client. Its position is not the contract:
+        # workload_id was appended after it at 562a8859 / 340be82c.
+        assert "provider_client" in parameters
 
 
 @pytest.mark.parametrize(
@@ -512,6 +515,9 @@ def test_user_runtime_accepts_every_exact_catalog_pair_and_delegates_once(
             "thinking_budget": 0,
             "fallback_enabled": False,
             "provider_client": client,
+            # Appended with the shared transport workload binding (562a8859);
+            # None here because this synthetic call names no workload.
+            "workload_id": None,
         }
     ]
     assert result == {

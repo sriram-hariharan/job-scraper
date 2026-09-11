@@ -15,7 +15,7 @@ import os
 from pathlib import Path
 import stat
 import tempfile
-from typing import Any, Dict, Mapping
+from typing import Any, Dict, Mapping, Sequence
 
 from src.evaluation.controlled_provider_benchmark_evidence_runtime import (
     normalize_execution_timestamp,
@@ -31,6 +31,8 @@ from src.evaluation.controlled_provider_benchmark_human_review import (
 )
 from src.evaluation.controlled_provider_benchmark_plan import (
     controlled_provider_benchmark_plan_sha256,
+    legacy_case_alias_map,
+    stable_case_alias,
     validate_controlled_provider_benchmark_plan,
 )
 from src.evaluation.controlled_provider_qualification_evidence_adapter import (
@@ -2197,3 +2199,536 @@ def replace_provider_qualification_registry_atomic(
     )
     _require(loaded == registry, "atomic registry replacement changed payload")
     return path
+
+
+# ---------------------------------------------------------------------------
+# Renderer-bound V2 authority.
+#
+# V1 remains frozen above: its contract/schema versions, cell schema, binding
+# payload and serialized digest keep their historical meaning so existing
+# artifacts stay auditable and rollback stays possible.
+#
+# V2 exists because the V1 binding is globally contaminated.  It mixes
+# whole-Step8L provenance (the benchmark-contract pair) and corpus-derived
+# identities (``qualification_schedule_keys`` / ``qualification_case_aliases``)
+# into workload authority, so an unrelated workload's fixture change silently
+# invalidates a workload that did not change.  V2 binds workload-local
+# authority instead and persists corpus-independent stable case coverage, which
+# lets recommendation validation verify artifact integrity without a plan.
+# ---------------------------------------------------------------------------
+
+RENDERER_BOUND_V2_REGISTRY_CONTRACT_VERSION = (
+    "controlled-provider-qualification-registry-renderer-bound-v2"
+)
+RENDERER_BOUND_V2_REGISTRY_SCHEMA_VERSION = (
+    "controlled-provider-qualification-registry-artifact-renderer-bound-v2"
+)
+RENDERER_BOUND_V2_QUALIFICATION_SEMANTICS_GENERATION = "renderer_bound_v2"
+# A V1 generation token is deliberately absent: a V1 cell must never validate
+# inside a V2 artifact, and a V2 cell must never validate inside a V1 artifact.
+QUALIFICATION_SEMANTICS_GENERATIONS_V2 = (
+    LEGACY_QUALIFICATION_SEMANTICS_GENERATION,
+    RENDERER_BOUND_V2_QUALIFICATION_SEMANTICS_GENERATION,
+)
+RENDERER_BOUND_V2_SKILL_REGISTRY_ARTIFACT_PATH = Path(
+    "src/evaluation/renderer_bound_v2_skill_qualification_registry.json"
+)
+RENDERER_BOUND_V2_JOB_FIT_REGISTRY_ARTIFACT_PATH = Path(
+    "src/evaluation/renderer_bound_v2_job_fit_qualification_registry.json"
+)
+_RENDERER_BOUND_V2_CELL_ADDED_FIELDS = _RENDERER_BOUND_CELL_ADDED_FIELDS | {
+    "qualification_stable_case_aliases"
+}
+_STABLE_CASE_ALIAS_PREFIX = "case_"
+_STABLE_CASE_ALIAS_BODY_LENGTH = 24
+
+
+def _is_stable_case_alias(value: Any) -> bool:
+    """Return True for an exact ``stable_case_alias`` identity."""
+
+    if not isinstance(value, str) or not value.startswith(
+        _STABLE_CASE_ALIAS_PREFIX
+    ):
+        return False
+    body = value[len(_STABLE_CASE_ALIAS_PREFIX):]
+    return len(body) == _STABLE_CASE_ALIAS_BODY_LENGTH and all(
+        character in "0123456789abcdef" for character in body
+    )
+
+
+def _renderer_bound_v2_qualification_binding_payload(
+    cell: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Return only workload-local material that may invalidate V2 authority.
+
+    Deliberately absent, and retained on the cell as provenance only:
+
+    * ``current/tested_benchmark_contract_sha256`` - whole-Step8L provenance.
+      ``workload_qualification_semantics`` already binds the workload-scoped
+      Step8L projection, so binding the global pair would re-import every
+      unrelated workload's semantics.
+    * ``current/tested_controlled_plan_sha256`` - global plan digest.
+    * ``schedule_key`` / ``case_alias`` / ``qualification_schedule_keys`` /
+      ``qualification_case_aliases`` - all derived from the global corpus
+      digest, so they move when an unrelated workload's fixtures move.
+
+    ``qualification_stable_case_aliases`` replaces that raw coverage with
+    corpus-independent, workload-scoped identities, so dropped, added or
+    substituted coverage still changes the binding.
+    """
+
+    return {
+        "workload_id": cell["workload_id"],
+        "provider": cell["provider"],
+        "model": cell["model"],
+        "status": cell["status"],
+        "current_model_catalog_snapshot_sha256": cell[
+            "current_model_catalog_snapshot_sha256"
+        ],
+        "tested_model_catalog_snapshot_sha256": cell[
+            "tested_model_catalog_snapshot_sha256"
+        ],
+        "current_task_contract_sha256": cell["current_task_contract_sha256"],
+        "tested_task_contract_sha256": cell["tested_task_contract_sha256"],
+        "qualification_semantics_generation": cell[
+            "qualification_semantics_generation"
+        ],
+        "current_workload_qualification_semantics_sha256": cell[
+            "current_workload_qualification_semantics_sha256"
+        ],
+        "tested_workload_qualification_semantics_sha256": cell[
+            "tested_workload_qualification_semantics_sha256"
+        ],
+        "qualification_stable_case_aliases": cell[
+            "qualification_stable_case_aliases"
+        ],
+        "evidence_sha256": cell["evidence_sha256"],
+        "review_sha256": cell["review_sha256"],
+    }
+
+
+def renderer_bound_v2_qualification_binding_sha256(
+    cell: Mapping[str, Any],
+) -> str:
+    """Return the renderer-bound V2 qualification binding digest for one cell."""
+
+    return sha256(
+        _canonical_json(
+            _renderer_bound_v2_qualification_binding_payload(cell)
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def migrate_renderer_bound_cell_to_v2(
+    cell: Mapping[str, Any],
+    *,
+    stable_case_aliases: Sequence[str] | None = None,
+) -> Dict[str, Any]:
+    """Project one renderer-bound V1 cell into the V2 generation.
+
+    Pure.  Stable coverage is never derived from current code: the caller must
+    supply the identities proven for the reviewed qualification event, because
+    the raw aliases on the cell were minted against a historical corpus digest
+    and no longer resolve through the current corpus.
+    """
+
+    expected_fields = set(_CELL_FIELDS) | _RENDERER_BOUND_CELL_ADDED_FIELDS
+    _require(
+        isinstance(cell, Mapping) and set(cell) == expected_fields,
+        "V2 migration requires an exact renderer-bound V1 cell",
+    )
+    generation = cell["qualification_semantics_generation"]
+    _require(
+        generation in QUALIFICATION_SEMANTICS_GENERATIONS,
+        "unsupported renderer-bound V1 generation",
+    )
+    migrated = {field: deepcopy(cell[field]) for field in expected_fields}
+
+    if generation == LEGACY_QUALIFICATION_SEMANTICS_GENERATION:
+        # Legacy rejected/stale evidence is carried forward unchanged. It never
+        # earns V2 qualification authority merely because the schema moved.
+        _require(
+            not stable_case_aliases,
+            "legacy cell must not be given renderer-bound stable coverage",
+        )
+        migrated["qualification_stable_case_aliases"] = []
+    else:
+        migrated["qualification_semantics_generation"] = (
+            RENDERER_BOUND_V2_QUALIFICATION_SEMANTICS_GENERATION
+        )
+        aliases = list(stable_case_aliases or [])
+        _require(
+            bool(aliases),
+            "renderer-bound V2 cell requires proven stable case coverage",
+        )
+        _require(
+            len(aliases) == len(cell["qualification_case_aliases"]),
+            "stable coverage must restate exactly the observed raw coverage",
+        )
+        _require(
+            all(_is_stable_case_alias(alias) for alias in aliases),
+            "stable case alias is malformed",
+        )
+        _require(
+            len(aliases) == len(set(aliases)),
+            "stable case coverage contains duplicates",
+        )
+        migrated["qualification_stable_case_aliases"] = aliases
+
+    migrated["qualification_binding_sha256"] = (
+        renderer_bound_v2_qualification_binding_sha256(migrated)
+    )
+    return migrated
+
+
+def migrate_renderer_bound_registry_to_v2(
+    registry: Mapping[str, Any],
+    *,
+    stable_case_aliases_by_identity: Mapping[tuple, Sequence[str]],
+) -> Dict[str, Any]:
+    """Project a validated renderer-bound V1 registry into the V2 generation."""
+
+    payload = deepcopy(dict(registry))
+    validate_renderer_bound_qualification_registry(payload)
+    migrated = {
+        field: deepcopy(payload[field])
+        for field in payload
+        if field != "cells"
+    }
+    migrated["registry_schema_version"] = (
+        RENDERER_BOUND_V2_REGISTRY_SCHEMA_VERSION
+    )
+    migrated["registry_contract_version"] = (
+        RENDERER_BOUND_V2_REGISTRY_CONTRACT_VERSION
+    )
+    migrated["qualification_semantics_generations"] = list(
+        QUALIFICATION_SEMANTICS_GENERATIONS_V2
+    )
+    cells = []
+    for cell in payload["cells"]:
+        identity = (cell["workload_id"], cell["provider"], cell["model"])
+        cells.append(
+            migrate_renderer_bound_cell_to_v2(
+                cell,
+                stable_case_aliases=stable_case_aliases_by_identity.get(
+                    identity
+                ),
+            )
+        )
+    migrated["cells"] = cells
+    validate_renderer_bound_v2_qualification_registry(migrated)
+    return migrated
+
+
+def validate_renderer_bound_v2_qualification_registry(
+    registry: Dict[str, Any],
+    *,
+    plan: Dict[str, Any] | None = None,
+    corpus: Dict[str, Any] | None = None,
+) -> bool:
+    """Validate the renderer-bound V2 representation, failing closed.
+
+    Without a plan this still cryptographically validates artifact integrity,
+    including exact stable case coverage, which is what production
+    recommendation validation relies on.  When a plan is supplied the raw
+    provenance coverage is additionally checked against plan authority, and
+    when a corpus is also supplied the stored stable coverage is checked
+    against the identities derived from that corpus.
+    """
+
+    expected_fields = set(_REGISTRY_FIELDS) | {
+        "qualification_semantics_generations"
+    }
+    _require(
+        isinstance(registry, dict) and set(registry) == expected_fields,
+        "renderer-bound V2 registry fields must match the exact schema",
+    )
+    _require(
+        not _contains_prohibited_key(registry),
+        "renderer-bound V2 registry contains prohibited provider or routing data",
+    )
+    _require(
+        registry["registry_schema_version"]
+        == RENDERER_BOUND_V2_REGISTRY_SCHEMA_VERSION
+        and registry["registry_contract_version"]
+        == RENDERER_BOUND_V2_REGISTRY_CONTRACT_VERSION
+        and registry["registry_scope"] == REGISTRY_SCOPE,
+        "renderer-bound V2 registry version or scope mismatch",
+    )
+    _require(
+        registry["qualification_statuses"] == list(QUALIFICATION_STATUSES),
+        "qualification status vocabulary changed",
+    )
+    _require(
+        registry["qualification_semantics_generations"]
+        == list(QUALIFICATION_SEMANTICS_GENERATIONS_V2),
+        "renderer-bound V2 semantics generation vocabulary changed",
+    )
+    expected_cell_fields = (
+        set(_CELL_FIELDS) | _RENDERER_BOUND_V2_CELL_ADDED_FIELDS
+    )
+    cells = registry["cells"]
+    _require(
+        isinstance(cells, list) and bool(cells),
+        "renderer-bound V2 cells are invalid",
+    )
+    identities = []
+    for cell in cells:
+        _require(
+            isinstance(cell, dict) and set(cell) == expected_cell_fields,
+            "renderer-bound V2 cell fields must match the exact schema",
+        )
+        _require(
+            cell["status"] in QUALIFICATION_STATUSES,
+            "renderer-bound V2 cell status is invalid",
+        )
+        _require(
+            all(
+                isinstance(cell[field], str) and bool(cell[field].strip())
+                for field in ("workload_id", "provider", "model")
+            ),
+            "renderer-bound V2 cell identity is invalid",
+        )
+        reasons = cell["status_reasons"]
+        _require(
+            isinstance(reasons, list)
+            and bool(reasons)
+            and reasons == _renderer_bound_ordered_reasons(set(reasons))
+            and len(reasons) == len(set(reasons)),
+            "renderer-bound V2 cell reasons are invalid",
+        )
+        generation = cell["qualification_semantics_generation"]
+        _require(
+            generation in QUALIFICATION_SEMANTICS_GENERATIONS_V2,
+            "renderer-bound V2 cell generation is invalid",
+        )
+        _require(
+            _is_sha256(cell["current_workload_qualification_semantics_sha256"]),
+            "renderer-bound V2 current workload semantics digest is invalid",
+        )
+        tested_semantics = cell[
+            "tested_workload_qualification_semantics_sha256"
+        ]
+        stable_aliases = cell["qualification_stable_case_aliases"]
+        schedule_keys = cell["qualification_schedule_keys"]
+        case_aliases = cell["qualification_case_aliases"]
+        _require(
+            isinstance(schedule_keys, list)
+            and isinstance(case_aliases, list)
+            and isinstance(stable_aliases, list)
+            and len(schedule_keys) == len(case_aliases)
+            and len(schedule_keys) == len(set(schedule_keys))
+            and len(case_aliases) == len(set(case_aliases))
+            and all(
+                isinstance(value, str) and bool(value.strip())
+                for value in schedule_keys + case_aliases
+            ),
+            "renderer-bound V2 raw coverage provenance is malformed",
+        )
+        _require(
+            all(_is_stable_case_alias(alias) for alias in stable_aliases),
+            "renderer-bound V2 stable case alias is malformed",
+        )
+        _require(
+            len(stable_aliases) == len(set(stable_aliases)),
+            "renderer-bound V2 stable case coverage contains duplicates",
+        )
+        if generation == LEGACY_QUALIFICATION_SEMANTICS_GENERATION:
+            _require(
+                tested_semantics is None,
+                "legacy cell must not carry a tested workload semantics digest",
+            )
+            _require(
+                cell["status"] != "qualified",
+                "legacy cell must not claim renderer-bound qualification",
+            )
+            _require(
+                not schedule_keys
+                and not case_aliases
+                and not stable_aliases,
+                "legacy cell must not claim renderer-bound case coverage",
+            )
+        else:
+            _require(
+                _is_sha256(tested_semantics),
+                "renderer-bound V2 tested workload semantics digest is invalid",
+            )
+            _require(
+                bool(stable_aliases),
+                "renderer-bound V2 cell must record stable case coverage",
+            )
+            _require(
+                len(stable_aliases) == len(case_aliases),
+                "renderer-bound V2 stable coverage must restate raw coverage",
+            )
+        _require(
+            set(cell["status_reasons"]).issubset(
+                _RENDERER_BOUND_STATUS_REASONS
+            ),
+            "renderer-bound V2 cell reasons are invalid",
+        )
+        _require(
+            cell["qualification_binding_sha256"]
+            == renderer_bound_v2_qualification_binding_sha256(cell),
+            "renderer-bound V2 qualification binding digest mismatch",
+        )
+        identities.append(
+            (cell["workload_id"], cell["provider"], cell["model"])
+        )
+    _require(
+        len(identities) == len(set(identities)),
+        "renderer-bound V2 registry contains duplicate candidate cells",
+    )
+    if plan is not None:
+        controlled_plan = deepcopy(plan)
+        validate_controlled_provider_benchmark_plan(controlled_plan)
+        schedule = build_execution_schedule(
+            plan=controlled_plan,
+            authorization={
+                "approved_request_matrix": deepcopy(
+                    controlled_plan["staged_matrix"]
+                ),
+                "maximum_request_count": controlled_plan["request_counts"][
+                    "maximum_total_requests"
+                ],
+            },
+        )
+        required_by_identity = {}
+        for row in schedule:
+            identity = (row["workload_id"], row["provider"], row["model"])
+            required_by_identity.setdefault(identity, []).append(row)
+        _require(
+            identities == list(required_by_identity),
+            "renderer-bound V2 registry candidate universe changed",
+        )
+        case_ids_by_alias = None
+        if corpus is not None:
+            case_ids_by_alias = {
+                alias: case_id
+                for case_id, alias in legacy_case_alias_map(corpus).items()
+            }
+        for cell in cells:
+            if (
+                cell["qualification_semantics_generation"]
+                == LEGACY_QUALIFICATION_SEMANTICS_GENERATION
+            ):
+                continue
+            identity = (cell["workload_id"], cell["provider"], cell["model"])
+            required = required_by_identity[identity]
+            representative = required[0]
+            _require(
+                cell["execution_order"] == representative["execution_order"]
+                and cell["schedule_key"] == representative["schedule_key"]
+                and cell["case_alias"] == representative["case_alias"],
+                "renderer-bound V2 candidate representative schedule is invalid",
+            )
+            required_pairs = [
+                (row["schedule_key"], row["case_alias"]) for row in required
+            ]
+            observed_pairs = list(
+                zip(
+                    cell["qualification_schedule_keys"],
+                    cell["qualification_case_aliases"],
+                )
+            )
+            _require(
+                observed_pairs
+                == [pair for pair in required_pairs if pair in observed_pairs],
+                "renderer-bound V2 candidate coverage is outside plan authority",
+            )
+            if cell["status"] == "qualified":
+                _require(
+                    observed_pairs == required_pairs,
+                    "qualified renderer-bound V2 candidate coverage is incomplete",
+                )
+            if case_ids_by_alias is not None:
+                expected_stable = []
+                for _schedule_key, raw_alias in observed_pairs:
+                    case_id = case_ids_by_alias.get(raw_alias)
+                    _require(
+                        bool(case_id),
+                        "renderer-bound V2 raw coverage alias is unresolved",
+                    )
+                    expected_stable.append(
+                        stable_case_alias(cell["workload_id"], case_id)
+                    )
+                _require(
+                    cell["qualification_stable_case_aliases"]
+                    == expected_stable,
+                    "renderer-bound V2 stable coverage does not match the corpus",
+                )
+    return True
+
+
+def serialize_renderer_bound_v2_qualification_registry(
+    registry: Dict[str, Any],
+) -> str:
+    payload = deepcopy(registry)
+    validate_renderer_bound_v2_qualification_registry(payload)
+    return _canonical_json(payload)
+
+
+def renderer_bound_v2_qualification_registry_sha256(
+    registry: Dict[str, Any],
+) -> str:
+    return sha256(
+        serialize_renderer_bound_v2_qualification_registry(registry).encode(
+            "utf-8"
+        )
+    ).hexdigest()
+
+
+def load_renderer_bound_v2_skill_qualification_registry(
+    artifact_path: str | Path,
+    *,
+    repository_root: str | Path,
+) -> Dict[str, Any]:
+    """Load the versioned Skill-only renderer-bound V2 authority artifact."""
+
+    path = _prepare_registry_path(
+        artifact_path,
+        repository_root=repository_root,
+        require_existing=True,
+        approved_relative_path=RENDERER_BOUND_V2_SKILL_REGISTRY_ARTIFACT_PATH,
+    )
+    _require(
+        not stat.S_IMODE(path.stat().st_mode) & (stat.S_IWGRP | stat.S_IWOTH),
+        "renderer-bound V2 Skill registry permissions are unsafe",
+    )
+    try:
+        registry = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        raise ValueError(
+            "persisted renderer-bound V2 Skill registry is malformed"
+        ) from None
+    validate_renderer_bound_v2_qualification_registry(registry)
+    return deepcopy(registry)
+
+
+def load_renderer_bound_v2_job_fit_qualification_registry(
+    artifact_path: str | Path,
+    *,
+    repository_root: str | Path,
+) -> Dict[str, Any]:
+    """Load the versioned Job Fit-only renderer-bound V2 authority artifact."""
+
+    path = _prepare_registry_path(
+        artifact_path,
+        repository_root=repository_root,
+        require_existing=True,
+        approved_relative_path=(
+            RENDERER_BOUND_V2_JOB_FIT_REGISTRY_ARTIFACT_PATH
+        ),
+    )
+    _require(
+        not stat.S_IMODE(path.stat().st_mode) & (stat.S_IWGRP | stat.S_IWOTH),
+        "renderer-bound V2 Job Fit registry permissions are unsafe",
+    )
+    try:
+        registry = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        raise ValueError(
+            "persisted renderer-bound V2 Job Fit registry is malformed"
+        ) from None
+    validate_renderer_bound_v2_qualification_registry(registry)
+    return deepcopy(registry)

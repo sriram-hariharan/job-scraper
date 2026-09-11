@@ -173,10 +173,14 @@ def test_existing_back_navigation_uses_agentic_page_header_content_region_and_ro
     )
     header = profile[header_start : profile.index("</header>", header_start)]
 
+    # The back href became context-aware (agentic-operations vs pipeline-runs),
+    # so it is now an f-string variable. Pin the control and BOTH approved
+    # routes rather than a single hard-coded href literal.
+    assert '<a class="agentic-review-back-link" href="{back_href}">' in header
     assert (
-        '<a class="agentic-review-back-link" href="/profile?tab=pipeline-runs">'
-        in header
-    )
+        'back_href = "/agentic-operations" if from_agentic_operations '
+        'else "/profile?tab=pipeline-runs"'
+    ) in profile
     assert header.index('class="app-page-header__main"') < header.index(
         'class="agentic-review-back-link"'
     )

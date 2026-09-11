@@ -45,10 +45,14 @@ def test_source_yield_styles_and_generated_mount_cover_theme_and_responsiveness(
 
 def test_source_button_uses_muted_token_surface_without_a_gradient():
     redesign = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
-    scoped = redesign[
-        redesign.index("body .source-yield-source-button {"):
-        redesign.index("\ninput,", redesign.index("body .source-yield-source-button {"))
-    ]
+    # Span every source-yield rule (base, hover, focus, and both dark-theme
+    # variants). The old "\ninput," end marker no longer follows this block
+    # after the CSS consolidation, so bound it on the last rule instead.
+    _start = redesign.index("body .source-yield-source-button {")
+    _last = redesign.index(
+        'html[data-theme="dark"] body .source-yield-source-button:not(:disabled):hover'
+    )
+    scoped = redesign[_start : redesign.index("}", _last) + 1]
     assert "linear-gradient" not in scoped
     assert "var(--app-surface-3)" in scoped
     assert "var(--app-border-2)" in scoped

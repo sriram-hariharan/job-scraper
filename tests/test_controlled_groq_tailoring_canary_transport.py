@@ -34,7 +34,7 @@ OWNER = (
     / "src/evaluation/controlled_groq_tailoring_canary_transport.py"
 )
 GENERIC_SHA = (
-    "d7a35d798804b7ab8f04be0cb808fa472ee55b5eccb2a843c3a5ef14f204d1b7"
+    "d073090cc1bee8da664322c67813dfb4fe51aabbd6a0c3c1a75b50b08f4d68e2"
 )
 PROTECTED_FILE_SHAS = {
     "src/app/services.py": (

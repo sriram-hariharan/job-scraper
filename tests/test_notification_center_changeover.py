@@ -243,25 +243,61 @@ def test_dark_theme_overrides_exist_for_the_notification_center():
     assert 'html[data-theme="dark"] .notification-center__text-btn' in STYLES
 
 
-def test_generic_button_gradient_cannot_repaint_notification_controls():
-    """app_redesign.css paints every non-excluded button with !important."""
+NOTIFICATION_CONTROLS = (
+    ".notification-btn",
+    ".notification-chip",
+    ".notification-center__icon-btn",
+    ".notification-center__text-btn",
+    ".notification-row__action",
+)
 
-    chain = REDESIGN[REDESIGN.index("button:not(.agentic-review-tab)"):]
-    rule = chain[: chain.index("}")]
-    # The rule really is the blue/violet gradient, applied with !important.
-    assert ":not(.notification-btn)" in rule
 
-    gradient = REDESIGN[
-        REDESIGN.index("background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;") - 4000 :
-        REDESIGN.index("background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;")
+def _generic_shared_button_rules(sheet):
+    """Every rule whose selector is the shared app-wide button chain."""
+
+    import re
+
+    return [
+        (match.group(1), match.group(2))
+        for match in re.finditer(r"([^{}]+)\{([^{}]*)\}", sheet)
+        if "button:not(.agentic-review-tab)" in match.group(1)
     ]
-    selector = gradient[gradient.rindex("button:not(.agentic-review-tab)"):]
-    for control in (
-        ".notification-chip",
-        ".notification-center__text-btn",
-        ".notification-row__action",
-    ):
-        assert f":not({control})" in selector, control
+
+
+def test_generic_button_paint_cannot_repaint_notification_controls():
+    """Shared button paint rules must exclude every notification control.
+
+    The old blue/violet gradient was intentionally deleted (``--app-violet``
+    was retired in favour of ``--app-secondary``), so this no longer pins that
+    rule. The surviving invariant is what actually protects the notification
+    centre: any app-wide button rule that paints a BACKGROUND must exclude all
+    notification controls, or those controls get repainted.
+    """
+
+    # The generic primary/violet button gradient itself is gone; --app-violet
+    # survives as a design token used by narrowly scoped rules only.
+    assert (
+        "linear-gradient(135deg, var(--app-primary), var(--app-violet))"
+        not in REDESIGN
+    ), "retired generic button gradient reintroduced"
+
+    generic = _generic_shared_button_rules(REDESIGN)
+    assert generic, "shared app-wide button chain disappeared"
+
+    painting = []
+    for selector, body in generic:
+        declarations = {
+            declaration.split(":", 1)[0].strip()
+            for declaration in body.split(";")
+            if ":" in declaration
+        }
+        if declarations & {"background", "background-image", "background-color"}:
+            painting.append((selector, body))
+    assert painting, "no shared button background rule left to guard"
+
+    for selector, _body in painting:
+        for control in NOTIFICATION_CONTROLS:
+            assert f":not({control})" in selector, (control, selector[:80])
 
     # No rule that paints buttons app-wide may still match the notification
     # controls, in either stylesheet. This is the invariant that broke twice:

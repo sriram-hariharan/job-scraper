@@ -1,21 +1,21 @@
 {
   "application_authority_allowed": false,
   "approved_case_aliases": [
-    "case_eff6ed2fb3643d23b87bab48",
-    "case_8e43ca2af1d94798ae9d5167",
-    "case_c4f73240ce6ff98809579b5d",
-    "case_3dddc5f43be918e0932d3bb2"
+    "case_ab6a1757752b2853f320aebf",
+    "case_9ff5012359ce08993c5abbae",
+    "case_baefa03bcbbc35c198c87846",
+    "case_8c3fe2c6f36357f0aa1713ef"
   ],
   "approved_schedule_keys": [
-    "canary_9c6a5ef970de552a6f830054e635ecd4",
-    "canary_8443c4b254128440d76bab0163f78454",
-    "canary_d57f61cec14a93f0e9658ae9e04f18bb",
-    "canary_38aa2602e052b5c5ae84772abee84708"
+    "canary_66cad0f38a2a1a712a00e49d1d4cd4f5",
+    "canary_c8f68420b285692fbddfa75186237ef6",
+    "canary_a631fab1cc7fd61b34d3358cadb297bd",
+    "canary_2b7d20338488e4bf12c2f7a245ae97ac"
   ],
   "ats_authority_allowed": false,
   "authorization_template_version": "controlled-groq-provider-canary-authorization-template-v1",
   "authorization_version": "controlled-groq-provider-canary-authorization-v1",
-  "canary_sha256": "d8ac3d5852a1bfdecd5ad87bcca924dd4bc818af5fb33180b460f8bff2bd2326",
+  "canary_sha256": "0308d3619c561649453a7f53a5e532ab05a415ba9888a6e2e675e36fae181c79",
   "canary_version": "controlled-groq-provider-canary-v1",
   "candidate_provider_models": [
     {
@@ -27,12 +27,12 @@
       "provider": "groq"
     }
   ],
-  "controlled_full_plan_sha256": "f2dcf5345442009915819432a9c1fc9342de40561eb6824c1518dcd31e99d3bf",
+  "controlled_full_plan_sha256": "bacc7eaa4524199ba293e2d50232f5a8c6cf61014ad8dc89c3dd30d334654162",
   "expires_at_utc": null,
   "fallback_allowed": false,
-  "fixture_corpus_sha256": "b4dea8bfccf39da87221755777d88f35427b1f4b772f3730fcd48cbdb5842b5f",
+  "fixture_corpus_sha256": "59180e4064dd74759c6ecd8630478225b191f942b68fb1880e172fe07ee80aec",
   "gemini_allowed": false,
-  "harness_sha256": "5b34fa84c18c673d08ec97d09a1ff88ba2df60afae06a5a8d508b34b99b7a034",
+  "harness_sha256": "dd11fb799427b61adaf52da26d9653d391b3c3a9ad09511fa7f63456f908efbd",
   "maximum_observed_cost_per_model": {
     "groq/openai/gpt-oss-120b": null,
     "groq/openai/gpt-oss-20b": null

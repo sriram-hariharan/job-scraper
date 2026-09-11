@@ -223,9 +223,22 @@ def test_stage7a_legacy_and_transient_authority_fail_closed(monkeypatch):
         "job_fit_evaluation"
     )["qualified_options"] == [WINNER]
 
+    # Production loads the V2 authority artifact, so a missing V2 artifact is
+    # what must block the route. Patching the retained V1 loader must NOT
+    # block it: production no longer reads V1, and silently falling back to
+    # V1 authority is exactly what this migration forbids.
     monkeypatch.setattr(
         routing.qualification_registry,
         "load_renderer_bound_job_fit_qualification_registry",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(FileNotFoundError()),
+    )
+    assert routing.read_provider_model_routing_status(
+        "job_fit_evaluation"
+    )["recommendation_status"] == "recommended"
+
+    monkeypatch.setattr(
+        routing.qualification_registry,
+        "load_renderer_bound_v2_job_fit_qualification_registry",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(FileNotFoundError()),
     )
     blocked = routing.read_provider_model_routing_status("job_fit_evaluation")

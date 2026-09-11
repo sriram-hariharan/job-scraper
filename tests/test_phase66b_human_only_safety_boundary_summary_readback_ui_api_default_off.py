@@ -11,6 +11,11 @@ from tests.test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_def
     _state_request,
     _stored_scan_payload,
 )
+from tests.test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off import (
+    KNOWN_PROPOSAL_ID,
+    SECOND_KNOWN_PROPOSAL_ID,
+    _two_candidate_stored_payload,
+)
 from tests.test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off import (
     _two_proposal_provider_payload,
 )
@@ -40,7 +45,7 @@ def test_default_off_api_readback_does_not_create_safety_summary_packets(
     monkeypatch,
 ):
     calls = []
-    _patch_storage(monkeypatch, stored_payload=_stored_scan_payload())
+    _patch_storage(monkeypatch, stored_payload=_two_candidate_stored_payload())
     monkeypatch.setattr(
         services,
         "_live_exact_resume_change_proposal_provider_adapter",

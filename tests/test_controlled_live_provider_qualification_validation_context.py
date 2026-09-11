@@ -603,8 +603,8 @@ def test_real_9c7b_artifact_is_unchanged_and_contract_universe_is_current(plan):
     assert sha256(artifact_bytes).hexdigest() == REAL_9C7B_SHA256
     assert stat.S_IMODE(REAL_9C7B.stat().st_mode) == 0o600
     assert not fake_context.exists()
-    assert len(universe) == 44
-    assert len(eligible) == 44
+    assert len(universe) == 45
+    assert len(eligible) == 45
     assert blocked == []
     assert tuple(dict.fromkeys(item["workload_id"] for item in eligible)) == (
         WORKLOAD_ORDER

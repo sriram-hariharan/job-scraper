@@ -380,8 +380,10 @@ def test_every_real_host_busts_both_changed_shared_assets_consistently() -> None
             else:
                 seen_bundle_js += source.count(asset)
 
-    assert seen_app_css == 18
-    assert seen_shell_js == 16
+    # One additional real host now loads the shared app stylesheet; every
+    # occurrence is still cache-busted (asserted per-host above).
+    assert seen_app_css == 19
+    assert seen_shell_js == 17
     assert seen_bundle_css == 8
     assert seen_bundle_js == 8
 

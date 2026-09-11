@@ -1498,7 +1498,7 @@ STAGE4K_FUTURE_PLAN_SHA256 = (
     "ba7adfa64766afc938a2c5aea0215d4a2e42e2c7d0667025ee24cc75010862bc"
 )
 STAGE4K_FUTURE_SKILL_SEMANTICS = (
-    "8f81e825876bf2bf3f81cd05be53dcc7ab2f203af8d133ccbf53ad18f07efe91"
+    "3e1c457b9636d5ec648b6e24a823df006bad790641b1f831d3bebb34b2ddc362"
 )
 STAGE4K_SKILL_TASK_CONTRACT = (
     "73784a99de4913b95e2d2a1e8a1b10a9eee1665fd83a179be34a4fe31b82fa4c"
@@ -2122,7 +2122,8 @@ def _stage5g_current_skill_cell(
     model,
     evidence_sha256,
     evaluated_at_utc,
-    expected_binding_sha256,
+    corpus,
+    expected_v2_binding_sha256,
 ):
     rows = [
         row
@@ -2166,7 +2167,31 @@ def _stage5g_current_skill_cell(
     cell["qualification_binding_sha256"] = (
         registry.renderer_bound_qualification_binding_sha256(cell)
     )
-    assert cell["qualification_binding_sha256"] == expected_binding_sha256
+    # The V1 binding is deliberately NOT pinned here. It mixes the global
+    # benchmark-contract pair and corpus-derived raw coverage into workload
+    # authority, so it drifts whenever an unrelated workload's fixtures move
+    # even though Skill semantics are unchanged. Pinning that transient value
+    # is what this migration exists to stop.
+    from src.evaluation.controlled_provider_benchmark_plan import (
+        legacy_case_alias_map,
+        stable_case_alias,
+    )
+
+    case_ids_by_alias = {
+        alias: case_id
+        for case_id, alias in legacy_case_alias_map(corpus).items()
+    }
+    stable_aliases = [
+        stable_case_alias("skill_extraction", case_ids_by_alias[alias])
+        for alias in cell["qualification_case_aliases"]
+    ]
+    migrated = registry.migrate_renderer_bound_cell_to_v2(
+        cell,
+        stable_case_aliases=stable_aliases,
+    )
+    # The V2 binding is workload-local and corpus-independent, so it equals the
+    # durable reviewed authority no matter which corpus reconstructed the cell.
+    assert migrated["qualification_binding_sha256"] == expected_v2_binding_sha256
     return cell
 
 
@@ -2184,8 +2209,9 @@ def test_stage5g_current_skill_winner_pin_preserves_qualified_alternative():
             "ca727553032f24749b3ea161188b6c2cd4f7ab4c877b8e7dc7d896a0f186e5ac"
         ),
         evaluated_at_utc="2026-08-31T05:43:16.000000Z",
-        expected_binding_sha256=(
-            "598e7c21db170a1bcb5fab0d925781bdceac5c17c877012ab60bed910862aea5"
+        corpus=_corpus,
+        expected_v2_binding_sha256=(
+            "12b2e716ba4c9dffafb4da68344a4b603f8d36eabb9fbd1ed6fdda12f0b2a2e2"
         ),
     )
     current_120b = _stage5g_current_skill_cell(
@@ -2197,8 +2223,9 @@ def test_stage5g_current_skill_winner_pin_preserves_qualified_alternative():
             "79e89f604a16f38ea6803bf2669c004b4631ebaf5fd9ef005b3fe57e9f59c6ec"
         ),
         evaluated_at_utc="2026-08-31T05:58:34.000000Z",
-        expected_binding_sha256=(
-            "08e769ef2e73ceab4b61ee322f2801d907157b70984a780f94b8e1aa885f7991"
+        corpus=_corpus,
+        expected_v2_binding_sha256=(
+            "85b33f3b9289f3aeadacd847a754306aa13fb70154a2dc5e856498bfbbf1564e"
         ),
     )
     source = _stage2a_on_disk_registry()
@@ -2226,21 +2253,48 @@ def test_stage5g_current_skill_winner_pin_preserves_qualified_alternative():
             expanded_cells.append(current_120b)
     projected["cells"] = expanded_cells
 
+    # The V1 representation still parses and validates: V1 meaning is retained.
     assert registry.validate_renderer_bound_qualification_registry(
         projected, plan=plan
     )
-    pin = policy.build_finalized_skill_extraction_renderer_bound_pin()
-    assert policy.validate_renderer_bound_workload_recommendation(
-        projected, pin=pin
+    # The V1 winner pin can no longer validate this reconstruction, because the
+    # V1 binding absorbed an unrelated workload's corpus change. That failure is
+    # the defect V2 fixes, so recommendation authority is asserted under V2.
+    v1_pin = policy.build_finalized_skill_extraction_renderer_bound_pin()
+    with pytest.raises(ValueError):
+        policy.validate_renderer_bound_workload_recommendation(
+            projected, pin=v1_pin
+        )
+
+    from src.evaluation.controlled_provider_benchmark_plan import (
+        legacy_case_alias_map,
+        stable_case_alias,
     )
-    prospective = policy.build_prospective_renderer_bound_recommendation_policy(
+
+    case_ids_by_alias = {
+        alias: case_id
+        for case_id, alias in legacy_case_alias_map(_corpus).items()
+    }
+    stable_by_identity = {
+        ("skill_extraction", cell["provider"], cell["model"]): [
+            stable_case_alias("skill_extraction", case_ids_by_alias[alias])
+            for alias in cell["qualification_case_aliases"]
+        ]
+        for cell in (current_20b, current_120b)
+    }
+    migrated = registry.migrate_renderer_bound_registry_to_v2(
         projected,
-        pins_by_workload={"skill_extraction": pin},
+        stable_case_aliases_by_identity=stable_by_identity,
     )
-    selected = next(
-        row
-        for row in prospective["workloads"]
-        if row["workload_id"] == "skill_extraction"
+    assert registry.validate_renderer_bound_v2_qualification_registry(
+        migrated, plan=plan, corpus=_corpus
+    )
+    pin = policy.build_finalized_skill_extraction_renderer_bound_v2_pin()
+    assert policy.validate_renderer_bound_v2_workload_recommendation(
+        migrated, pin=pin
+    )
+    selected = policy.build_renderer_bound_v2_workload_recommendation(
+        migrated, pin=pin
     )
     assert (selected["provider"], selected["model"]) == (
         "groq",
@@ -2270,7 +2324,7 @@ def test_stage5g_current_skill_winner_pin_preserves_qualified_alternative():
     )
     assert all(
         value is False
-        for value in prospective["authority_invariants"].values()
+        for value in migrated["authority_invariants"].values()
     )
 
 
@@ -2303,3 +2357,506 @@ def test_stage6b_durable_skill_registry_loads_exact_bounded_authority():
         ),
         ("skill_extraction", "openai", "gpt-5-mini", "stale"),
     ]
+
+
+# ---------------------------------------------------------------------------
+# Step 5: renderer-bound V2 authority.
+#
+# The V1 negative tests above are preserved unchanged. These add the V2
+# fail-closed surface and prove the cross-workload isolation that V1 lacked.
+# ---------------------------------------------------------------------------
+
+V2_SKILL_ARTIFACT = ROOT / registry.RENDERER_BOUND_V2_SKILL_REGISTRY_ARTIFACT_PATH
+V2_JOB_FIT_ARTIFACT = (
+    ROOT / registry.RENDERER_BOUND_V2_JOB_FIT_REGISTRY_ARTIFACT_PATH
+)
+
+
+def _v2_skill_authority():
+    return registry.load_renderer_bound_v2_skill_qualification_registry(
+        V2_SKILL_ARTIFACT,
+        repository_root=ROOT,
+    )
+
+
+def _v2_job_fit_authority():
+    return registry.load_renderer_bound_v2_job_fit_qualification_registry(
+        V2_JOB_FIT_ARTIFACT,
+        repository_root=ROOT,
+    )
+
+
+def _v2_winner(payload):
+    return next(
+        cell
+        for cell in payload["cells"]
+        if cell["status"] == "qualified"
+    )
+
+
+def _rebind_v2(cell):
+    cell["qualification_binding_sha256"] = (
+        registry.renderer_bound_v2_qualification_binding_sha256(cell)
+    )
+
+
+def test_step5_v2_durable_artifacts_load_and_preserve_reviewed_selections():
+    skill = _v2_skill_authority()
+    job_fit = _v2_job_fit_authority()
+    assert skill["registry_schema_version"] == (
+        registry.RENDERER_BOUND_V2_REGISTRY_SCHEMA_VERSION
+    )
+    assert skill["registry_contract_version"] == (
+        registry.RENDERER_BOUND_V2_REGISTRY_CONTRACT_VERSION
+    )
+    qualified = [
+        (cell["provider"], cell["model"])
+        for cell in skill["cells"]
+        if cell["status"] == "qualified"
+    ]
+    assert qualified == [
+        ("groq", "openai/gpt-oss-20b"),
+        ("groq", "openai/gpt-oss-120b"),
+    ]
+    assert [
+        (cell["provider"], cell["model"])
+        for cell in job_fit["cells"]
+        if cell["status"] == "qualified"
+    ] == [("groq", "openai/gpt-oss-20b")]
+    # Legacy rejected candidates stay legacy: the schema migration never
+    # promotes them into renderer-bound V2 qualification authority.
+    legacy = [
+        cell
+        for cell in job_fit["cells"]
+        if cell["qualification_semantics_generation"]
+        == registry.LEGACY_QUALIFICATION_SEMANTICS_GENERATION
+    ]
+    assert len(legacy) == 3
+    assert all(cell["status"] == "rejected" for cell in legacy)
+    assert all(
+        not cell["qualification_stable_case_aliases"] for cell in legacy
+    )
+
+
+def test_step5_v2_stable_coverage_is_exact_and_workload_scoped():
+    skill = _v2_skill_authority()
+    for cell in skill["cells"]:
+        if cell["status"] != "qualified":
+            continue
+        assert cell["qualification_stable_case_aliases"] == [
+            "case_adb75e8f4222598d01c96632",
+            "case_ca4d896b8d25c5f6a33131e6",
+            "case_c679d81feddcd209e0923b23",
+            "case_155361f163b8a1857f1ea709",
+            "case_2e2c04e49f9cdaa7ab5b6422",
+        ]
+        # Raw provenance is retained but is no longer authority.
+        assert len(cell["qualification_case_aliases"]) == 5
+        assert len(cell["qualification_schedule_keys"]) == 5
+    assert _v2_winner(_v2_job_fit_authority())[
+        "qualification_stable_case_aliases"
+    ] == ["case_d2afa978996c4d69af1f538b"]
+
+
+def test_step5_v2_rejects_wrong_schema_version():
+    payload = _v2_skill_authority()
+    payload["registry_schema_version"] = (
+        registry.RENDERER_BOUND_REGISTRY_SCHEMA_VERSION
+    )
+    with pytest.raises(ValueError):
+        registry.validate_renderer_bound_v2_qualification_registry(payload)
+
+
+def test_step5_v2_rejects_wrong_contract_version():
+    payload = _v2_skill_authority()
+    payload["registry_contract_version"] = (
+        registry.RENDERER_BOUND_REGISTRY_CONTRACT_VERSION
+    )
+    with pytest.raises(ValueError):
+        registry.validate_renderer_bound_v2_qualification_registry(payload)
+
+
+def test_step5_v1_artifact_is_rejected_by_the_v2_validator():
+    v1 = registry.load_renderer_bound_skill_qualification_registry(
+        ROOT / registry.RENDERER_BOUND_SKILL_REGISTRY_ARTIFACT_PATH,
+        repository_root=ROOT,
+    )
+    with pytest.raises(ValueError):
+        registry.validate_renderer_bound_v2_qualification_registry(v1)
+
+
+def test_step5_v2_artifact_is_rejected_by_the_v1_validator():
+    with pytest.raises(ValueError):
+        registry.validate_renderer_bound_qualification_registry(
+            _v2_skill_authority()
+        )
+
+
+def test_step5_v2_rejects_missing_stable_coverage_field():
+    payload = _v2_skill_authority()
+    del _v2_winner(payload)["qualification_stable_case_aliases"]
+    with pytest.raises(ValueError):
+        registry.validate_renderer_bound_v2_qualification_registry(payload)
+
+
+def test_step5_v2_rejects_empty_stable_coverage_on_qualified_candidate():
+    payload = _v2_skill_authority()
+    cell = _v2_winner(payload)
+    cell["qualification_stable_case_aliases"] = []
+    _rebind_v2(cell)
+    with pytest.raises(ValueError):
+        registry.validate_renderer_bound_v2_qualification_registry(payload)
+
+
+def test_step5_v2_rejects_duplicate_stable_alias():
+    payload = _v2_skill_authority()
+    cell = _v2_winner(payload)
+    aliases = cell["qualification_stable_case_aliases"]
+    cell["qualification_stable_case_aliases"] = [aliases[0]] * len(aliases)
+    _rebind_v2(cell)
+    with pytest.raises(ValueError):
+        registry.validate_renderer_bound_v2_qualification_registry(payload)
+
+
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        "case_NOTHEX4222598d01c96632",
+        "case_adb75e8f4222598d01c9663",
+        "case_adb75e8f4222598d01c966322",
+        "adb75e8f4222598d01c96632",
+        "",
+    ],
+)
+def test_step5_v2_rejects_malformed_stable_alias(malformed):
+    payload = _v2_skill_authority()
+    cell = _v2_winner(payload)
+    cell["qualification_stable_case_aliases"][0] = malformed
+    _rebind_v2(cell)
+    with pytest.raises(ValueError):
+        registry.validate_renderer_bound_v2_qualification_registry(payload)
+
+
+def test_step5_v2_rejects_removed_stable_alias():
+    payload = _v2_skill_authority()
+    cell = _v2_winner(payload)
+    cell["qualification_stable_case_aliases"].pop()
+    _rebind_v2(cell)
+    with pytest.raises(ValueError):
+        registry.validate_renderer_bound_v2_qualification_registry(payload)
+
+
+def test_step5_v2_rejects_added_unauthorized_stable_alias():
+    payload = _v2_skill_authority()
+    cell = _v2_winner(payload)
+    cell["qualification_stable_case_aliases"].append("case_" + "f" * 24)
+    _rebind_v2(cell)
+    with pytest.raises(ValueError):
+        registry.validate_renderer_bound_v2_qualification_registry(payload)
+
+
+def test_step5_v2_substituted_stable_alias_changes_the_binding():
+    payload = _v2_skill_authority()
+    cell = _v2_winner(payload)
+    original = cell["qualification_binding_sha256"]
+    cell["qualification_stable_case_aliases"][2] = "case_" + "a" * 24
+    with pytest.raises(ValueError):
+        registry.validate_renderer_bound_v2_qualification_registry(payload)
+    _rebind_v2(cell)
+    # Even after an honest rebind the substitution is visible: the binding moved.
+    assert cell["qualification_binding_sha256"] != original
+    from src.evaluation import provider_model_recommendation_policy as policy
+
+    with pytest.raises(ValueError):
+        policy.validate_finalized_skill_extraction_renderer_bound_v2_authority(
+            payload
+        )
+
+
+@pytest.mark.parametrize(
+    "field,replacement",
+    [
+        ("workload_id", "job_fit_evaluation"),
+        ("provider", "openai"),
+        ("model", "gpt-5.1"),
+        ("current_task_contract_sha256", "c" * 64),
+        ("tested_task_contract_sha256", "d" * 64),
+        ("current_workload_qualification_semantics_sha256", "e" * 64),
+        ("tested_workload_qualification_semantics_sha256", "f" * 64),
+        ("evidence_sha256", "1" * 64),
+        ("review_sha256", "2" * 64),
+    ],
+)
+def test_step5_v2_authority_field_mutation_fails_closed(field, replacement):
+    from src.evaluation import provider_model_recommendation_policy as policy
+
+    payload = _v2_skill_authority()
+    cell = _v2_winner(payload)
+    cell[field] = replacement
+    # Without an honest rebind the stored binding no longer matches.
+    with pytest.raises(ValueError):
+        registry.validate_renderer_bound_v2_qualification_registry(payload)
+    # With an honest rebind the mutation is still caught by pinned authority.
+    _rebind_v2(cell)
+    with pytest.raises(ValueError):
+        policy.validate_finalized_skill_extraction_renderer_bound_v2_authority(
+            payload
+        )
+
+
+def test_step5_v2_rejects_binding_mutation():
+    payload = _v2_skill_authority()
+    _v2_winner(payload)["qualification_binding_sha256"] = "9" * 64
+    with pytest.raises(ValueError):
+        registry.validate_renderer_bound_v2_qualification_registry(payload)
+
+
+def test_step5_v2_rejects_registry_digest_mutation():
+    from src.evaluation import provider_model_recommendation_policy as policy
+
+    payload = _v2_skill_authority()
+    # A structurally valid but non-pinned registry must not pass finalized
+    # authority: the whole-registry digest is part of that authority.
+    cell = _v2_winner(payload)
+    cell["evaluated_at_utc"] = "2026-08-31T05:43:17.000000Z"
+    _rebind_v2(cell)
+    assert registry.validate_renderer_bound_v2_qualification_registry(payload)
+    assert (
+        registry.renderer_bound_v2_qualification_registry_sha256(payload)
+        != policy.FINALIZED_SKILL_EXTRACTION_RENDERER_BOUND_V2_REGISTRY_SHA256
+    )
+    with pytest.raises(ValueError):
+        policy.validate_finalized_skill_extraction_renderer_bound_v2_authority(
+            payload
+        )
+
+
+def _step5_full_universe_v2_registry():
+    """Build a complete-universe V2 registry so plan-aware rules can apply.
+
+    Plan-aware validation checks the whole candidate universe against the
+    execution schedule, so it needs every workload's cells, not one workload's
+    durable slice.
+    """
+
+    from src.evaluation.controlled_provider_benchmark_plan import (
+        legacy_case_alias_map,
+        stable_case_alias,
+    )
+
+    corpus, plan, schedule, semantics = _stage4k_future_context()
+    case_ids_by_alias = {
+        alias: case_id
+        for case_id, alias in legacy_case_alias_map(corpus).items()
+    }
+    source = _stage2a_on_disk_registry()
+    projected = registry.project_registry_to_renderer_bound_generation(
+        source,
+        current_workload_qualification_semantics_sha256_by_workload={
+            cell["workload_id"]: semantics[cell["workload_id"]]
+            for cell in source["cells"]
+        },
+    )
+    skill_cells = []
+    for model, evidence, evaluated in (
+        (
+            "openai/gpt-oss-20b",
+            "ca727553032f24749b3ea161188b6c2cd4f7ab4c877b8e7dc7d896a0f186e5ac",
+            "2026-08-31T05:43:16.000000Z",
+        ),
+        (
+            "openai/gpt-oss-120b",
+            "79e89f604a16f38ea6803bf2669c004b4631ebaf5fd9ef005b3fe57e9f59c6ec",
+            "2026-08-31T05:58:34.000000Z",
+        ),
+    ):
+        skill_cells.append(
+            _stage5g_current_skill_cell(
+                plan=plan,
+                schedule=schedule,
+                semantics=semantics["skill_extraction"],
+                model=model,
+                evidence_sha256=evidence,
+                evaluated_at_utc=evaluated,
+                corpus=corpus,
+                expected_v2_binding_sha256=(
+                    "12b2e716ba4c9dffafb4da68344a4b603f8d36eabb9fbd1ed6fdda12f0b2a2e2"
+                    if model == "openai/gpt-oss-20b"
+                    else "85b33f3b9289f3aeadacd847a754306aa13fb70154a2dc5e856498bfbbf1564e"
+                ),
+            )
+        )
+    expanded = []
+    for cell in projected["cells"]:
+        identity = (cell["workload_id"], cell["provider"], cell["model"])
+        if identity == ("skill_extraction", "groq", "openai/gpt-oss-20b"):
+            expanded.extend(skill_cells)
+        else:
+            expanded.append(cell)
+    projected["cells"] = expanded
+    stable_by_identity = {
+        ("skill_extraction", cell["provider"], cell["model"]): [
+            stable_case_alias("skill_extraction", case_ids_by_alias[alias])
+            for alias in cell["qualification_case_aliases"]
+        ]
+        for cell in skill_cells
+    }
+    migrated = registry.migrate_renderer_bound_registry_to_v2(
+        projected,
+        stable_case_aliases_by_identity=stable_by_identity,
+    )
+    return migrated, plan, corpus
+
+
+def test_step5_v2_plan_aware_raw_provenance_mismatch_fails_closed():
+    payload, plan, corpus = _step5_full_universe_v2_registry()
+    assert registry.validate_renderer_bound_v2_qualification_registry(
+        payload, plan=plan, corpus=corpus
+    )
+    broken = deepcopy(payload)
+    cell = _v2_winner(broken)
+    cell["qualification_schedule_keys"][1] = "schedule_" + "0" * 32
+    _rebind_v2(cell)
+    with pytest.raises(ValueError):
+        registry.validate_renderer_bound_v2_qualification_registry(
+            broken, plan=plan, corpus=corpus
+        )
+
+
+def test_step5_v2_plan_aware_stable_coverage_mismatch_fails_closed():
+    payload, plan, corpus = _step5_full_universe_v2_registry()
+    broken = deepcopy(payload)
+    cell = _v2_winner(broken)
+    coverage = cell["qualification_stable_case_aliases"]
+    coverage[0], coverage[1] = coverage[1], coverage[0]
+    _rebind_v2(cell)
+    # Reordered coverage is a different coverage claim: order is authoritative.
+    with pytest.raises(ValueError):
+        registry.validate_renderer_bound_v2_qualification_registry(
+            broken, plan=plan, corpus=corpus
+        )
+
+
+def _step5_current_corpus_v2_skill_registry():
+    """Rebuild the Skill V2 authority from the CURRENT corpus.
+
+    The durable artifact was minted from the historical qualification corpus.
+    Rebuilding from the current corpus yields different raw provenance but must
+    yield identical stable coverage and an identical V2 binding.
+    """
+
+    from src.evaluation.controlled_provider_benchmark_plan import (
+        legacy_case_alias_map,
+        stable_case_alias,
+    )
+
+    corpus, plan, schedule, semantics = _stage4k_future_context()
+    case_ids_by_alias = {
+        alias: case_id
+        for case_id, alias in legacy_case_alias_map(corpus).items()
+    }
+    payload = _v2_skill_authority()
+    for cell in payload["cells"]:
+        if cell["status"] != "qualified":
+            continue
+        rows = [
+            row
+            for row in schedule
+            if row["workload_id"] == "skill_extraction"
+            and row["provider"] == cell["provider"]
+            and row["model"] == cell["model"]
+        ]
+        representative = rows[0]
+        cell["execution_order"] = representative["execution_order"]
+        cell["schedule_key"] = representative["schedule_key"]
+        cell["case_alias"] = representative["case_alias"]
+        cell["qualification_schedule_keys"] = [
+            row["schedule_key"] for row in rows
+        ]
+        cell["qualification_case_aliases"] = [
+            row["case_alias"] for row in rows
+        ]
+        cell["qualification_stable_case_aliases"] = [
+            stable_case_alias("skill_extraction", case_ids_by_alias[row["case_alias"]])
+            for row in rows
+        ]
+        cell["current_workload_qualification_semantics_sha256"] = semantics[
+            "skill_extraction"
+        ]
+        cell["tested_workload_qualification_semantics_sha256"] = semantics[
+            "skill_extraction"
+        ]
+        _rebind_v2(cell)
+    return payload, corpus
+
+
+def test_step5_v2_binding_survives_an_unrelated_workload_corpus_change():
+    """Cross-workload isolation: the defect V2 exists to fix.
+
+    The durable Skill authority was minted against the historical corpus. The
+    current corpus differs because an unrelated workload's fixtures changed.
+    V1 bindings move under that change; V2 bindings must not.
+    """
+
+    durable = _v2_skill_authority()
+    rebuilt, _corpus = _step5_current_corpus_v2_skill_registry()
+
+    durable_by_identity = {
+        (cell["provider"], cell["model"]): cell for cell in durable["cells"]
+    }
+    moved_raw = 0
+    for cell in rebuilt["cells"]:
+        if cell["status"] != "qualified":
+            continue
+        original = durable_by_identity[(cell["provider"], cell["model"])]
+        # Raw provenance genuinely moved with the unrelated corpus change...
+        if cell["qualification_case_aliases"] != (
+            original["qualification_case_aliases"]
+        ):
+            moved_raw += 1
+        # ...while stable coverage and V2 authority did not.
+        assert cell["qualification_stable_case_aliases"] == (
+            original["qualification_stable_case_aliases"]
+        )
+        assert cell["qualification_binding_sha256"] == (
+            original["qualification_binding_sha256"]
+        )
+    assert moved_raw == 2
+
+
+def test_step5_v1_skill_binding_moves_under_the_same_unrelated_change():
+    """Control: prove the V1 binding really is contaminated.
+
+    Without this the isolation test above could pass vacuously.
+    """
+
+    v1 = registry.load_renderer_bound_skill_qualification_registry(
+        ROOT / registry.RENDERER_BOUND_SKILL_REGISTRY_ARTIFACT_PATH,
+        repository_root=ROOT,
+    )
+    _corpus, _plan, schedule, semantics = _stage4k_future_context()
+    for cell in v1["cells"]:
+        if cell["status"] != "qualified":
+            continue
+        rows = [
+            row
+            for row in schedule
+            if row["workload_id"] == "skill_extraction"
+            and row["provider"] == cell["provider"]
+            and row["model"] == cell["model"]
+        ]
+        rebuilt = deepcopy(cell)
+        rebuilt["qualification_schedule_keys"] = [
+            row["schedule_key"] for row in rows
+        ]
+        rebuilt["qualification_case_aliases"] = [
+            row["case_alias"] for row in rows
+        ]
+        # Workload semantics are unchanged, so only unrelated-corpus material
+        # differs - yet the V1 binding still moves.
+        assert rebuilt[
+            "current_workload_qualification_semantics_sha256"
+        ] == semantics["skill_extraction"]
+        assert registry.renderer_bound_qualification_binding_sha256(
+            rebuilt
+        ) != cell["qualification_binding_sha256"]

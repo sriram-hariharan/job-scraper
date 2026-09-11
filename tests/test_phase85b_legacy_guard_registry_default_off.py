@@ -71,6 +71,9 @@ from tests.support.phase_guard_registry import (
     PHASE21R_HISTORICAL_GUARD_FILES,
     PERSONIO_SOURCE_RETIREMENT_FILES,
     PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES,
+    STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES,
+    STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES,
+    STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
     RECRUITEE_STANDALONE_DISCOVERY_FILES,
     SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES,
@@ -2447,6 +2450,9 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     assert current_milestone_guard_compatibility_allowlist() == (
         LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES
         | PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES
+        | STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES
+        | STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES
+        | STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES
         | STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
         | STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES
@@ -3028,3 +3034,554 @@ def test_ast_forbidden_call_helper_blocks_real_mutation_call(tmp_path):
         assert_false_safety_metadata_allowed_but_real_mutation_blocked(path)
 
     assert "database_write" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# Step 11: Phase20d / Phase21a legacy guard compatibility for the Step 1 +
+# renderer-bound V2 stabilization. These prove the compatibility extension is
+# exact and still fails closed.
+# ---------------------------------------------------------------------------
+
+STEP11_ROOT = Path(__file__).resolve().parents[1]
+STEP11_GUARD_TESTS = (
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+)
+
+
+def test_step1_renderer_bound_v2_stabilization_surface_is_exact():
+    assert STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES == {
+        "src/app/provider_model_routing_service.py",
+        "src/evaluation/controlled_provider_benchmark_plan.py",
+        "src/evaluation/controlled_provider_qualification_registry.py",
+        "src/evaluation/job_fit_provider_model_qualification_overlay.py",
+        "src/evaluation/provider_benchmark_contract.py",
+        "src/evaluation/provider_model_recommendation_policy.py",
+        "src/evaluation/renderer_bound_v2_job_fit_qualification_registry.json",
+        "src/evaluation/renderer_bound_v2_skill_qualification_registry.json",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_controlled_provider_benchmark_plan.py",
+        "tests/test_controlled_provider_qualification_evidence_adapter.py",
+        "tests/test_controlled_provider_qualification_registry.py",
+        "tests/test_phase1_step10_recommended_provider_routing_bridge.py",
+        "tests/test_phase1_step9c7a_controlled_live_qualification_gate.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_provider_benchmark_contract.py",
+        "tests/test_stage7a_job_fit_renderer_bound_activation.py",
+    }
+    # No globs, no prefixes, no directory allowances.
+    for path in STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES:
+        assert "*" not in path
+        assert not path.endswith("/")
+    # The durable V1 authority artifacts are never part of this surface.
+    assert not any(
+        path.endswith("renderer_bound_skill_qualification_registry.json")
+        or path.endswith("renderer_bound_job_fit_qualification_registry.json")
+        for path in STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES
+    )
+
+
+def test_step1_stabilization_surface_is_accepted_by_the_guard_allowlist():
+    assert_changed_files_allowed(
+        STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES,
+        set(),
+    )
+
+
+def test_step1_stabilization_surface_plus_unauthorized_file_is_rejected():
+    with pytest.raises(AssertionError) as exc:
+        assert_changed_files_allowed(
+            set(STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES)
+            | {"src/app/application_execution_queue.py"},
+            set(),
+        )
+    assert "src/app/application_execution_queue.py" in str(exc.value)
+
+
+def test_step1_stabilization_surface_still_rejects_duplicate_artifacts():
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            set(STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES)
+            | {"src/evaluation/provider_benchmark_contract 2.py"},
+            set(),
+        )
+
+
+def test_api_py_historical_identity_and_current_successor_are_accepted():
+    profile = ("phase1_ai_provider_model_routing_hash_maintenance",)
+    # 1. the historical expectation still resolves through its old identity
+    assert_protected_hashes(
+        STEP11_ROOT,
+        {
+            "src/app/api.py": (
+                "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674"
+            ),
+        },
+        compatibility_profiles=(
+            "item71d_latest_diagnostics_workflow_reset",
+        ),
+    )
+    # 2. the exact current committed successor is accepted
+    from hashlib import sha256
+
+    actual = sha256((STEP11_ROOT / "src/app/api.py").read_bytes()).hexdigest()
+    assert actual == (
+        "55c91a9182951e2cbedd1e0c5b588676f4541249086288011daf025e4ed9fb99"
+    )
+    assert profile
+
+
+def test_arbitrary_api_py_hash_is_still_rejected():
+    # 3. an unknown hash never becomes an approved successor.
+    for arbitrary in (
+        "0" * 64,
+        "deadbeef" * 8,
+        "1111111111111111111111111111111111111111111111111111111111111111",
+    ):
+        with pytest.raises(AssertionError):
+            assert_protected_hashes(
+                STEP11_ROOT,
+                {"src/app/api.py": arbitrary},
+                compatibility_profiles=(
+                    "phase1_ai_provider_model_routing_hash_maintenance",
+                ),
+            )
+
+
+def _step11_marker_scan_branch(relative_test_path: str, function_name: str):
+    """Return the stabilization branch node from a guard test function."""
+
+    import ast
+
+    module = ast.parse(
+        (STEP11_ROOT / relative_test_path).read_text(encoding="utf-8")
+    )
+    function = next(
+        node
+        for node in module.body
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    )
+    branch = next(
+        node
+        for node in ast.walk(function)
+        if isinstance(node, ast.If)
+        and "step1_renderer_bound_v2_stabilization_runtime_files"
+        in ast.dump(node.test)
+    )
+    return function, branch
+
+
+STEP11_MARKER_GUARDS = (
+    (
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "test_no_changed_runtime_file_introduces_forbidden_automation_markers",
+    ),
+    (
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "test_changed_runtime_files_add_no_autonomous_application_markers",
+    ),
+)
+
+
+@pytest.mark.parametrize("relative_test_path,function_name", STEP11_MARKER_GUARDS)
+def test_step11_marker_guard_scans_added_lines_and_has_no_unconditional_bypass(
+    relative_test_path,
+    function_name,
+):
+    import ast
+
+    function, branch = _step11_marker_scan_branch(
+        relative_test_path,
+        function_name,
+    )
+    # The branch is reachable only on an EXACT changed-runtime-file set match.
+    assert isinstance(branch.test, ast.Compare)
+    assert any(isinstance(op, ast.Eq) for op in branch.test.ops)
+
+    # It must scan added diff lines against every forbidden marker before
+    # returning: a bare `return` without the scan would be a bypass.
+    marker_loops = [
+        node
+        for node in ast.walk(branch)
+        if isinstance(node, ast.For)
+        and "FORBIDDEN_RUNTIME_MARKERS" in ast.dump(node.iter)
+    ]
+    assert len(marker_loops) == 1
+    assert any(
+        isinstance(node, ast.Assert) for node in ast.walk(marker_loops[0])
+    )
+    returns = [node for node in ast.walk(branch) if isinstance(node, ast.Return)]
+    assert len(returns) == 1
+    branch_body_dump = ast.dump(ast.Module(body=branch.body, type_ignores=[]))
+    assert branch_body_dump.index("FORBIDDEN_RUNTIME_MARKERS") < (
+        branch_body_dump.rindex("Return")
+    )
+
+    # The strict historical fallthrough assertion must still exist, so an
+    # unrecognised runtime combination still fails closed.
+    fallthrough_asserts = [
+        node
+        for node in function.body
+        if isinstance(node, ast.Assert)
+        and "changed_runtime_files" in ast.dump(node.test)
+    ]
+    assert fallthrough_asserts
+
+    # ...and the function must still end with the whole-file marker sweep that
+    # every non-early-returning combination is subjected to.
+    final_statement = function.body[-1]
+    assert isinstance(final_statement, ast.For)
+    final_dump = ast.dump(final_statement)
+    assert "FORBIDDEN_RUNTIME_MARKERS" in final_dump
+    assert any(
+        isinstance(node, ast.Assert) for node in ast.walk(final_statement)
+    )
+
+
+def test_step11_current_stabilization_runtime_additions_have_no_forbidden_marker():
+    import subprocess
+
+    from tests.test_phase20d_no_auto_apply_safety_checkpoint_default_off import (
+        FORBIDDEN_RUNTIME_MARKERS as PHASE20D_MARKERS,
+    )
+    from tests.test_phase21a_manual_review_workflow_boundary_default_off import (
+        FORBIDDEN_RUNTIME_MARKERS as PHASE21A_MARKERS,
+    )
+
+    runtime_suffixes = {".py", ".js", ".html", ".css"}
+    runtime_files = sorted(
+        path
+        for path in STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES
+        if path.startswith("src/") and Path(path).suffix in runtime_suffixes
+    )
+    assert runtime_files == [
+        "src/app/provider_model_routing_service.py",
+        "src/evaluation/controlled_provider_benchmark_plan.py",
+        "src/evaluation/controlled_provider_qualification_registry.py",
+        "src/evaluation/job_fit_provider_model_qualification_overlay.py",
+        "src/evaluation/provider_benchmark_contract.py",
+        "src/evaluation/provider_model_recommendation_policy.py",
+    ]
+    diff = subprocess.check_output(
+        ["git", "diff", "--unified=0", "--", *runtime_files],
+        cwd=STEP11_ROOT,
+        text=True,
+    )
+    added_lines = "\n".join(
+        line[1:]
+        for line in diff.splitlines()
+        if line.startswith("+") and not line.startswith("+++")
+    )
+    assert added_lines.strip()
+    for marker in set(PHASE20D_MARKERS) | set(PHASE21A_MARKERS):
+        assert marker not in added_lines
+
+
+@pytest.mark.parametrize(
+    "marker",
+    ("autoApply", "submitApplication", "autonomousApplicationExecution"),
+)
+def test_step11_injected_forbidden_marker_trips_the_same_scan(marker):
+    """The scan predicate itself must reject an injected automation marker."""
+
+    from tests.test_phase20d_no_auto_apply_safety_checkpoint_default_off import (
+        FORBIDDEN_RUNTIME_MARKERS as PHASE20D_MARKERS,
+    )
+
+    injected_diff = (
+        "diff --git a/src/app/provider_model_routing_service.py"
+        " b/src/app/provider_model_routing_service.py\n"
+        "--- a/src/app/provider_model_routing_service.py\n"
+        "+++ b/src/app/provider_model_routing_service.py\n"
+        "@@ -1,0 +2 @@\n"
+        f"+    {marker}(job)\n"
+    )
+    added_lines = "\n".join(
+        line[1:]
+        for line in injected_diff.splitlines()
+        if line.startswith("+") and not line.startswith("+++")
+    )
+    assert marker in PHASE20D_MARKERS
+    with pytest.raises(AssertionError):
+        for candidate in PHASE20D_MARKERS:
+            assert candidate not in added_lines
+
+
+def test_step14_controlled_canary_ownership_surface_is_exact():
+    assert STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES == {
+        "src/evaluation/controlled_groq_canary_run_003_plan.py",
+        "src/evaluation/controlled_groq_canary_run_004_plan.py",
+        "src/evaluation/controlled_groq_canary_run_005_plan.py",
+        "src/evaluation/controlled_groq_canary_run_evidence_runtime.py",
+        "src/evaluation/controlled_groq_provider_canary.py",
+        "src/evaluation/controlled_provider_benchmark_plan.py",
+        "tests/fixtures/provider_benchmark/groq_canary_authorization_template.json",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_controlled_groq_canary_evidence_runtime.py",
+        "tests/test_controlled_groq_canary_run_003_plan.py",
+        "tests/test_controlled_groq_canary_run_005_plan.py",
+        "tests/test_controlled_groq_canary_run_identity.py",
+        "tests/test_controlled_groq_canary_transport.py",
+        "tests/test_controlled_groq_provider_canary.py",
+        "tests/test_controlled_groq_tailoring_canary_transport.py",
+        "tests/test_controlled_live_provider_qualification_validation_context.py",
+        "tests/test_controlled_openai_canary_transport.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    for path in STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES:
+        assert "*" not in path
+        assert not path.endswith("/")
+
+
+def test_step14_canary_surface_plus_unauthorized_file_is_rejected():
+    with pytest.raises(AssertionError) as exc:
+        assert_changed_files_allowed(
+            set(STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES)
+            | {"src/app/application_execution_queue.py"},
+            set(),
+        )
+    assert "src/app/application_execution_queue.py" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# Step 14D: legacy protected-hash successor compatibility.
+#
+# Each entry is an exact (path, historical_hash) -> exact committed successor.
+# The historical expectation is never replaced, and nothing is accepted merely
+# because it matches the current worktree.
+# ---------------------------------------------------------------------------
+
+STEP14D_SUCCESSORS = (
+    (
+        "src/tailoring/llm.py",
+        "6153c78e5f0eca7c78451f0d234609682e01990041deae7fccb0aa303c653920",
+        "dbed9c7fe48c6df294911f97ba434da70c0df5238ac6e53a512f68dd763c991c",
+    ),
+    (
+        "src/tailoring/llm.py",
+        "5e9e858c6b671526eb6839d110ae05aae780d1c165a37a8bde2c1cc5bcecf31d",
+        "dbed9c7fe48c6df294911f97ba434da70c0df5238ac6e53a512f68dd763c991c",
+    ),
+    (
+        "src/pipeline/collector.py",
+        "7f4d8cc6571f0aa16f722fac43569ddba0a24e518889ca3864a1e46df7fe4cea",
+        "4e5c6b5a3bc4d3979b7299557f4a8bf940bb1c99135c23898dbddedde666ed30",
+    ),
+    (
+        "generate_tailoring_suggestions.py",
+        "570d47a62385b736eadbf107e8f28a35aa3818e864f4d950fcb7a6c54e326a3d",
+        "4372ee6a7e12e7d55140a03e7a5432b9bd93f0b09226eb839fd4bce3df9160e7",
+    ),
+    (
+        "src/app/services.py",
+        "02d09d6f6e204183ef67a543222b4e3a4dae993f40041dfb8911397b835be7f7",
+        "29732353a50e4451f2b18d50124439e9b636fce6f9bca9060fb59634dd77e2ee",
+    ),
+    (
+        "src/ai/llm_client.py",
+        "61100917a63b5285e7d1fa07ce5da47d73b6ee17f0bb3d3f88e6380722bc85f1",
+        "5a7581c7f1a049c19953c4e41f0b8ad8f68ac77104af3262e4e08fd2d8c7e663",
+    ),
+    (
+        "src/ai/llm_client.py",
+        "830866d616c8d2d5d6b2147cd6a17b19f049f8a064592d78c2b7170d4e49ffc2",
+        "5a7581c7f1a049c19953c4e41f0b8ad8f68ac77104af3262e4e08fd2d8c7e663",
+    ),
+    (
+        "src/evaluation/controlled_groq_canary_transport.py",
+        "89d01fe8460e7eae40e794dce808bb26aef6dbb02366e7c5d5bed268fdf00489",
+        "af56f5aee197c888766e5a38fb6dd7314efb7d8048eab74622ba0352fdcabf4a",
+    ),
+    (
+        "src/ai/job_fit_evaluator.py",
+        "3776e5ce3c098c5329d2e7631195915f6bcf098ec0303ec619e9b0e9ecf393fb",
+        "957be166d3e40915734025be2824463d2a52fac0e16b565547f2d09d7da4a5d1",
+    ),
+)
+
+
+def _step14d_compatibility_map():
+    import ast as _ast
+
+    source = (STEP11_ROOT / "tests/support/phase_guard_registry.py").read_text(
+        encoding="utf-8"
+    )
+    tree = _ast.parse(source)
+    function = next(
+        node
+        for node in _ast.walk(tree)
+        if isinstance(node, _ast.FunctionDef)
+        and node.name == "assert_protected_hashes"
+    )
+    assignment = next(
+        node
+        for node in function.body
+        if isinstance(node, _ast.Assign)
+        and getattr(node.targets[0], "id", "")
+        == "phase88b_runtime_hash_compatibility"
+    )
+    namespace = {"frozenset": frozenset}
+    exec(  # noqa: S102 - reading the registry's own literal table
+        compile(
+            _ast.Module(body=[assignment], type_ignores=[]), "<registry>", "exec"
+        ),
+        namespace,
+    )
+    return namespace["phase88b_runtime_hash_compatibility"]
+
+
+def test_step14d_successors_are_exact_committed_head_content():
+    """Every successor must equal committed HEAD, never a local edit."""
+
+    import subprocess
+    from hashlib import sha256
+
+    compatibility = _step14d_compatibility_map()
+    for relative_path, historical, successor in STEP14D_SUCCESSORS:
+        path = STEP11_ROOT / relative_path
+        worktree = sha256(path.read_bytes()).hexdigest()
+        head = subprocess.run(
+            ["git", "show", f"HEAD:{relative_path}"],
+            cwd=STEP11_ROOT,
+            capture_output=True,
+            check=True,
+        ).stdout
+        # The successor registered must be the committed HEAD content, and the
+        # worktree must not have drifted away from it.
+        assert sha256(head).hexdigest() == worktree
+        registered = compatibility[(relative_path, historical)]
+        registered = (
+            set(registered)
+            if isinstance(registered, (set, frozenset, tuple, list))
+            else {registered}
+        )
+        assert worktree in registered
+        # The DECLARED successor must be the real committed hash, not a
+        # placeholder: this is what stops a fabricated value being registered.
+        assert successor == worktree
+        assert successor in registered
+        # The historical expectation itself is never replaced.
+        assert (relative_path, historical) in compatibility
+        assert historical not in registered
+
+
+@pytest.mark.parametrize(
+    "relative_path,historical,successor", STEP14D_SUCCESSORS
+)
+def test_step14d_historical_and_successor_accepted_third_hash_rejected(
+    tmp_path,
+    monkeypatch,
+    relative_path,
+    historical,
+    successor,
+):
+    from hashlib import sha256
+
+    guarded = tmp_path / relative_path
+    guarded.parent.mkdir(parents=True, exist_ok=True)
+    guarded.write_text("guarded\n", encoding="utf-8")
+    current = sha256(
+        (STEP11_ROOT / relative_path).read_bytes()
+    ).hexdigest()
+
+    class StubDigest:
+        def __init__(self, digest):
+            self._digest = digest
+
+        def hexdigest(self):
+            return self._digest
+
+    # 1. the historical expectation still resolves through its own identity
+    monkeypatch.setattr(
+        phase_guard_registry,
+        "sha256",
+        lambda _data, digest=historical: StubDigest(digest),
+    )
+    assert_protected_hashes(tmp_path, {relative_path: historical})
+
+    # 2. the exact approved committed successor is accepted
+    monkeypatch.setattr(
+        phase_guard_registry,
+        "sha256",
+        lambda _data, digest=current: StubDigest(digest),
+    )
+    assert_protected_hashes(tmp_path, {relative_path: historical})
+
+    # 3. an arbitrary third hash is still rejected
+    for arbitrary in ("0" * 64, "deadbeef" * 8):
+        monkeypatch.setattr(
+            phase_guard_registry,
+            "sha256",
+            lambda _data, digest=arbitrary: StubDigest(digest),
+        )
+        with pytest.raises(AssertionError):
+            assert_protected_hashes(tmp_path, {relative_path: historical})
+
+
+def test_step14d_unregistered_path_and_unknown_lineage_still_fail_closed():
+    compatibility = _step14d_compatibility_map()
+    # An unauthorized path never gains compatibility from another path's entry.
+    assert ("src/app/application_execution_queue.py", "0" * 64) not in compatibility
+    for relative_path, historical, _successor in STEP14D_SUCCESSORS:
+        # A successor is bound to its exact lineage, not to the bare path.
+        assert (relative_path, "1" * 64) not in compatibility
+        assert (relative_path, historical) in compatibility
+
+
+def test_step14d_worktree_only_hash_is_not_auto_accepted(tmp_path, monkeypatch):
+    """A hash that merely exists on disk is not a durable successor."""
+
+    from hashlib import sha256
+
+    relative_path = "src/tailoring/llm.py"
+    historical = (
+        "6153c78e5f0eca7c78451f0d234609682e01990041deae7fccb0aa303c653920"
+    )
+    guarded = tmp_path / relative_path
+    guarded.parent.mkdir(parents=True, exist_ok=True)
+    guarded.write_text("locally edited\n", encoding="utf-8")
+    local_only = sha256(b"locally edited\n").hexdigest()
+    compatibility = _step14d_compatibility_map()
+    registered = set(compatibility[(relative_path, historical)])
+    assert local_only not in registered
+
+    class StubDigest:
+        def __init__(self, digest):
+            self._digest = digest
+
+        def hexdigest(self):
+            return self._digest
+
+    monkeypatch.setattr(
+        phase_guard_registry,
+        "sha256",
+        lambda _data, digest=local_only: StubDigest(digest),
+    )
+    with pytest.raises(AssertionError):
+        assert_protected_hashes(tmp_path, {relative_path: historical})
+
+
+def test_step14f_ui_static_contract_surface_is_exact():
+    assert STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES == {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_eucalyptus_primary_shell_design_system.py",
+        "tests/test_notification_center_changeover.py",
+        "tests/test_phase63b_operator_approved_artifact_application_readiness_packet_readback_ui_api_default_off.py",
+        "tests/test_phase64a_human_only_manual_application_handoff_packet_wiring_default_off.py",
+        "tests/test_phase64b_human_only_manual_application_handoff_packet_readback_ui_api_default_off.py",
+        "tests/test_phase65a_human_only_handoff_audit_trail_wiring_default_off.py",
+        "tests/test_phase65b_human_only_handoff_audit_trail_readback_ui_api_default_off.py",
+        "tests/test_phase66a_human_only_safety_boundary_summary_wiring_default_off.py",
+        "tests/test_phase66b_human_only_safety_boundary_summary_readback_ui_api_default_off.py",
+        "tests/test_phase67a_human_only_workflow_readiness_checkpoint_wiring_default_off.py",
+        "tests/test_phase67b_human_only_workflow_readiness_checkpoint_readback_ui_api_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    # Test-only surface: no production or static UI owner may appear here.
+    for path in STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES:
+        assert path.startswith("tests/")
+        assert "*" not in path and not path.endswith("/")

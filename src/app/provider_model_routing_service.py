@@ -32,18 +32,18 @@ from src.evaluation import (
     controlled_provider_qualification_registry as qualification_registry,
 )
 from src.evaluation.provider_model_recommendation_policy import (
-    build_finalized_job_fit_renderer_bound_pin,
-    build_finalized_skill_extraction_renderer_bound_pin,
+    build_finalized_job_fit_renderer_bound_v2_pin,
+    build_finalized_skill_extraction_renderer_bound_v2_pin,
     build_provider_model_recommendation_policy,
-    build_renderer_bound_workload_recommendation,
+    build_renderer_bound_v2_workload_recommendation,
     read_provider_model_recommendation,
-    validate_finalized_job_fit_renderer_bound_authority,
-    validate_finalized_skill_extraction_renderer_bound_authority,
+    validate_finalized_job_fit_renderer_bound_v2_authority,
+    validate_finalized_skill_extraction_renderer_bound_v2_authority,
     validate_provider_model_recommendation_policy_source,
 )
 from src.evaluation.job_fit_provider_model_qualification_overlay import (
     build_job_fit_provider_model_qualification_overlay,
-    build_renderer_bound_job_fit_overlay,
+    build_renderer_bound_v2_job_fit_overlay,
 )
 from src.storage.user_ai_settings.store import (
     list_user_ai_task_model_selections_payload,
@@ -107,14 +107,14 @@ def _load_authoritative_qualification_registry() -> Dict[str, Any]:
 def _load_authoritative_skill_renderer_bound_registry() -> Dict[str, Any]:
     registry_payload = (
         qualification_registry
-        .load_renderer_bound_skill_qualification_registry(
+        .load_renderer_bound_v2_skill_qualification_registry(
             _REPOSITORY_ROOT
             / qualification_registry
-            .RENDERER_BOUND_SKILL_REGISTRY_ARTIFACT_PATH,
+            .RENDERER_BOUND_V2_SKILL_REGISTRY_ARTIFACT_PATH,
             repository_root=_REPOSITORY_ROOT,
         )
     )
-    validate_finalized_skill_extraction_renderer_bound_authority(
+    validate_finalized_skill_extraction_renderer_bound_v2_authority(
         registry_payload
     )
     return registry_payload
@@ -122,8 +122,8 @@ def _load_authoritative_skill_renderer_bound_registry() -> Dict[str, Any]:
 
 def _build_authoritative_skill_renderer_bound_route() -> Dict[str, Any]:
     registry_payload = _load_authoritative_skill_renderer_bound_registry()
-    pin = build_finalized_skill_extraction_renderer_bound_pin()
-    recommendation = build_renderer_bound_workload_recommendation(
+    pin = build_finalized_skill_extraction_renderer_bound_v2_pin()
+    recommendation = build_renderer_bound_v2_workload_recommendation(
         registry_payload,
         pin=pin,
     )
@@ -153,21 +153,21 @@ def _build_blocked_skill_renderer_bound_route() -> Dict[str, Any]:
 def _load_authoritative_job_fit_renderer_bound_registry() -> Dict[str, Any]:
     registry_payload = (
         qualification_registry
-        .load_renderer_bound_job_fit_qualification_registry(
+        .load_renderer_bound_v2_job_fit_qualification_registry(
             _REPOSITORY_ROOT
             / qualification_registry
-            .RENDERER_BOUND_JOB_FIT_REGISTRY_ARTIFACT_PATH,
+            .RENDERER_BOUND_V2_JOB_FIT_REGISTRY_ARTIFACT_PATH,
             repository_root=_REPOSITORY_ROOT,
         )
     )
-    validate_finalized_job_fit_renderer_bound_authority(registry_payload)
+    validate_finalized_job_fit_renderer_bound_v2_authority(registry_payload)
     return registry_payload
 
 
 def _build_authoritative_job_fit_renderer_bound_route() -> Dict[str, Any]:
     registry_payload = _load_authoritative_job_fit_renderer_bound_registry()
-    pin = build_finalized_job_fit_renderer_bound_pin()
-    return build_renderer_bound_job_fit_overlay(
+    pin = build_finalized_job_fit_renderer_bound_v2_pin()
+    return build_renderer_bound_v2_job_fit_overlay(
         registry_payload,
         pin=pin,
     )

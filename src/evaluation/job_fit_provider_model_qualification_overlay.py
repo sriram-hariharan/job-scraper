@@ -189,3 +189,93 @@ def build_renderer_bound_job_fit_overlay(
             ],
         }
     )
+
+
+RENDERER_BOUND_V2_JOB_FIT_OVERLAY_VERSION = (
+    "job-fit-provider-model-qualification-overlay-renderer-bound-v2"
+)
+
+
+def validate_renderer_bound_v2_job_fit_overlay(
+    renderer_bound_registry: Dict[str, Any],
+    *,
+    pin: Dict[str, Any],
+) -> bool:
+    """Validate a Job Fit selection against renderer-bound V2 authority."""
+
+    from src.evaluation.provider_model_recommendation_policy import (
+        RENDERER_BOUND_V2_RECOMMENDATION_PIN_VERSION,
+        validate_renderer_bound_v2_workload_recommendation,
+    )
+
+    _require(
+        isinstance(pin, dict)
+        and pin.get("pin_version")
+        == RENDERER_BOUND_V2_RECOMMENDATION_PIN_VERSION,
+        "renderer-bound V2 Job Fit pin version mismatch",
+    )
+    _require(
+        pin.get("workload_id") == _WORKLOAD_ID,
+        "renderer-bound V2 Job Fit pin workload mismatch",
+    )
+    universe = pin.get("expected_candidate_universe")
+    _require(
+        isinstance(universe, list) and len(universe) == 4,
+        "renderer-bound V2 Job Fit pin must bind the complete candidate set",
+    )
+    # Workload-local by construction: only Job Fit cells are consulted.
+    validate_renderer_bound_v2_workload_recommendation(
+        renderer_bound_registry,
+        pin=pin,
+    )
+    return True
+
+
+def build_renderer_bound_v2_job_fit_overlay(
+    renderer_bound_registry: Dict[str, Any],
+    *,
+    pin: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Return the Job Fit V2 overlay entry from an explicit pin only."""
+
+    from src.evaluation.provider_model_recommendation_policy import (
+        build_renderer_bound_v2_workload_recommendation,
+    )
+
+    validate_renderer_bound_v2_job_fit_overlay(
+        renderer_bound_registry,
+        pin=pin,
+    )
+    entry = build_renderer_bound_v2_workload_recommendation(
+        renderer_bound_registry,
+        pin=pin,
+    )
+    return deepcopy(
+        {
+            "overlay_version": RENDERER_BOUND_V2_JOB_FIT_OVERLAY_VERSION,
+            "workload_id": _WORKLOAD_ID,
+            "recommendation_status": entry["recommendation_status"],
+            "provider": entry["provider"],
+            "model": entry["model"],
+            "selection_basis": entry["selection_basis"],
+            "qualification_semantics_generation": (
+                entry["qualification_semantics_generation"]
+            ),
+            "qualification_binding_sha256": (
+                entry["qualification_binding_sha256"]
+            ),
+            "qualification_stable_case_aliases": deepcopy(
+                entry["qualification_stable_case_aliases"]
+            ),
+            "evidence_sha256": entry["evidence_sha256"],
+            "review_sha256": entry["review_sha256"],
+            "qualified_options": [
+                {
+                    "provider": candidate["provider"],
+                    "model": candidate["model"],
+                }
+                for candidate in pin["expected_candidate_universe"]
+                if candidate["status"] == "qualified"
+            ],
+        }
+    )

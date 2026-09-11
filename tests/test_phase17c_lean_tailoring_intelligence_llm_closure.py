@@ -506,7 +506,26 @@ def test_graph_import_boundary_has_no_provider_cache_or_persistence_owner():
     source = inspect.getsource(graph_owner)
 
     assert "src.ai.llm_client" not in source
-    assert "src.tailoring.llm" not in source
+    # 340be82c added a bounded parse-retry binding. The boundary rule is that
+    # the graph owns no provider, cache or persistence behaviour - not that the
+    # module name never appears - so allow exactly that pure constant plus its
+    # validator, and nothing else, from src.tailoring.llm.
+    import re as _re
+
+    _imports = _re.findall(r"from src\.tailoring\.llm import \(([^)]*)\)", source)
+    _names = {
+        name.strip().rstrip(",")
+        for block in _imports
+        for name in block.split()
+        if name.strip().rstrip(",")
+    }
+    assert _names <= {
+        "LIVE_LLM_DEFAULT_PARSE_RETRY_LIMIT",
+        "normalize_live_llm_parse_retry_limit",
+    }, _names
+    assert "from src.tailoring.llm import" not in source.replace(
+        "from src.tailoring.llm import (", "", 1
+    )
     assert "load_dotenv" not in source
     assert "write_text" not in source
     assert "run_chat_completion" not in source

@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from src.app import api, services
+from tests.support.phase_guard_registry import assert_protected_hashes
 from tests.test_phase55a_live_jd_llm_extraction_planning_scan_wiring_default_off import (
     _request_payload,
     _valid_provider_payload as _valid_jd_provider_payload,
@@ -232,8 +233,11 @@ def test_ui_readback_exposes_completion_without_fetch_or_creation():
 
 
 def test_no_scoring_formula_or_weight_changes():
-    for relative, expected in PROTECTED_HASHES.items():
-        assert _sha256(ROOT / relative) == expected
+    # Historical expectations in PROTECTED_HASHES are never replaced. They are
+    # routed through the shared finite protected-hash compatibility layer so the
+    # already-authenticated committed successors (registered in Step 14D) are
+    # accepted, while any other content still fails closed.
+    assert_protected_hashes(ROOT, PROTECTED_HASHES)
 
 
 def test_docs_include_phase69b_markers():

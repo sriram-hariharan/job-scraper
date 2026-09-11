@@ -212,8 +212,10 @@ def test_existing_theme_notification_and_logout_lifecycles_are_preserved() -> No
         "document.documentElement.dataset.bsTheme = safeTheme",
         "document.documentElement.style.colorScheme = safeTheme",
         'themeToggleBtn.setAttribute("aria-pressed",',
-        'fetchJson("/notifications/unread-count")',
-        'fetchJson(`/notifications?${params.toString()}`)',
+        # These two calls gained request options (no-store cache + abort
+        # signal) at ea3f597a; pin the call itself, not the old arity.
+        'fetchJson("/notifications/unread-count"',
+        'fetchJson(`/notifications?${params.toString()}`',
         'fetchJson("/notifications/read-state", {',
         'fetchJson("/auth/logout", {',
         'method: "POST"',

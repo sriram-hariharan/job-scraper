@@ -50,7 +50,7 @@ def _case_and_review():
     matches = [
         (review, case)
         for review, case in zip(plan["transmission_review"], corpus["cases"])
-        if review["case_alias"] == owner.CURRENT_TARGET_CASE_ALIAS
+        if review["case_alias"] == owner.current_target_case_alias()
     ]
     assert len(matches) == 1
     return matches[0]
@@ -134,7 +134,12 @@ def test_exact_one_row_schedule_and_fresh_key():
 
 def test_target_is_exactly_one_eligible_synthetic_case():
     review, case = _case_and_review()
-    assert review["case_alias"] == "case_eff6ed2fb3643d23b87bab48"
+    # The durable authority is the corpus-independent stable identity; the raw
+    # alias is derived provenance that moves with unrelated corpus churn.
+    assert base_plan.stable_case_alias(
+        owner.TARGET_WORKLOAD, owner.TARGET_CASE_ID
+    ) == owner.CURRENT_TARGET_STABLE_CASE_ALIAS
+    assert review["case_alias"] == owner.current_target_case_alias()
     assert review["workload_id"] == "skill_extraction"
     assert review["wholly_synthetic"] is True
     assert review["eligible_for_later_controlled_transmission"] is True

@@ -69,7 +69,17 @@ def test_existing_overview_remains_the_only_agentic_operations_api_owner() -> No
     assert '"canonical_agents": deepcopy(canonical_payload["agents"])' in overview_source
     assert "agentic_operations_canonical_agents_payload()" in overview_source
     assert api_source.count(f'@app.get("{OVERVIEW_PATH}")') == 1
-    assert api_source.count('/profile/admin/agentic-operations/') == 1
+    # Route uniqueness is asserted on actual FastAPI route REGISTRATIONS. The
+    # overview path also appears in an authenticated-route allowlist, which is
+    # not an endpoint, so raw path-string counting is not a valid proxy.
+    import re as _re
+
+    _registrations = _re.findall(
+        r'@app\.(?:get|post|put|patch|delete)\(\s*"'
+        r'(/profile/admin/agentic-operations/[^"]*)"',
+        api_source,
+    )
+    assert _registrations == [OVERVIEW_PATH]
 
 
 def test_registry_and_matrix_reuse_the_single_get_without_mutation_networks() -> None:

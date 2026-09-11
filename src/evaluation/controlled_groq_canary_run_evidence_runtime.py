@@ -26,6 +26,7 @@ from src.evaluation.controlled_groq_canary_run_identity import (
 from src.evaluation.controlled_groq_provider_canary import (
     AUTHORIZATION_VERSION,
     build_controlled_groq_canary_contract,
+    canary_schedule_key,
     build_operator_authorization_template,
     pricing_table_sha256,
     validate_controlled_groq_canary_contract,
@@ -34,6 +35,7 @@ from src.evaluation.controlled_groq_provider_canary import (
 from src.evaluation.controlled_provider_benchmark_plan import (
     build_controlled_provider_benchmark_plan,
     validate_controlled_provider_benchmark_plan,
+    validate_current_case_ownership,
 )
 from src.evaluation.provider_fixture_benchmark import (
     load_fixture_case_corpus,
@@ -122,7 +124,7 @@ _CURRENT_SEMANTIC_OWNERSHIP = {
         "workload_id": "skill_extraction",
         "provider": "groq",
         "model": "openai/gpt-oss-20b",
-        "case_alias": "case_eff6ed2fb3643d23b87bab48",
+        "stable_case_alias": "case_adb75e8f4222598d01c96632",
         "base_schedule_key": "canary_9c6a5ef970de552a6f830054e635ecd4",
         "case_id": "skill_extraction_required_preferred_v1",
         "schema_id": "skill_extraction_result_v1",
@@ -132,7 +134,7 @@ _CURRENT_SEMANTIC_OWNERSHIP = {
         "workload_id": "grounded_rag_answer",
         "provider": "groq",
         "model": "openai/gpt-oss-20b",
-        "case_alias": "case_8e43ca2af1d94798ae9d5167",
+        "stable_case_alias": "case_048da1d288d7075f11982f4a",
         "base_schedule_key": "canary_8443c4b254128440d76bab0163f78454",
         "case_id": "grounded_rag_synthetic_transmission_safe_v1",
         "schema_id": "grounded_rag_answer_result_v1",
@@ -142,7 +144,7 @@ _CURRENT_SEMANTIC_OWNERSHIP = {
         "workload_id": "jd_intelligence",
         "provider": "groq",
         "model": "openai/gpt-oss-120b",
-        "case_alias": "case_c4f73240ce6ff98809579b5d",
+        "stable_case_alias": "case_2f47393a4efcbe220d325519",
         "base_schedule_key": "canary_d57f61cec14a93f0e9658ae9e04f18bb",
         "case_id": "jd_intelligence_signals_v1",
         "schema_id": "jd_intelligence_result_v1",
@@ -152,7 +154,7 @@ _CURRENT_SEMANTIC_OWNERSHIP = {
         "workload_id": "tailoring_generation",
         "provider": "groq",
         "model": "openai/gpt-oss-120b",
-        "case_alias": "case_3dddc5f43be918e0932d3bb2",
+        "stable_case_alias": "case_ff24f23eeb3e0bed33bfaefa",
         "base_schedule_key": "canary_38aa2602e052b5c5ae84772abee84708",
         "case_id": "tailoring_generation_evidence_bound_v1",
         "schema_id": "tailoring_generation_result_v1",
@@ -369,16 +371,35 @@ def _identity_maps():
         matches = [
             (review, case)
             for review, case in zip(reviews, cases)
-            if review["case_alias"] == target["case_alias"]
-            and case["case_id"] == target["case_id"]
+            if case["case_id"] == target["case_id"]
+            and review["workload_id"] == target["workload_id"]
         ]
         _require(len(matches) == 1, "current semantic case ownership changed")
         review, case = matches[0]
+        # Bind current ownership to the workload-stable identity and derive the
+        # expected raw alias from the current corpus. The raw alias and the base
+        # schedule key both carry the GLOBAL corpus/plan digest, so pinning them
+        # made an unrelated workload's fixture edit invalidate this canary.
+        validate_current_case_ownership(
+            workload_id=target["workload_id"],
+            case_id=target["case_id"],
+            expected_stable_case_alias=target["stable_case_alias"],
+            observed_case_alias=review["case_alias"],
+            corpus=corpus,
+        )
         base_matches = [
             row
             for row in base_rows
-            if row["schedule_key"] == target["base_schedule_key"]
-            and row["case_alias"] == target["case_alias"]
+            if row["case_alias"] == review["case_alias"]
+            and row["workload_id"] == target["workload_id"]
+            and row["schedule_key"]
+            == canary_schedule_key(
+                full_plan_sha256=base["controlled_full_plan_sha256"],
+                execution_order=row["execution_order"],
+                case_alias=row["case_alias"],
+                provider=row["provider"],
+                model=row["model"],
+            )
         ]
         _require(len(base_matches) == 1, "current semantic base row changed")
         base_row = base_matches[0]

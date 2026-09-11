@@ -2589,11 +2589,88 @@ PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES = {
 }
 
 
+# Step 1 cross-workload qualification-semantics repair plus the renderer-bound
+# V2 qualification authority migration. Exact stabilization surface only: the
+# durable V1 artifacts are untouched, and the guard files below are the ones
+# this stabilization itself had to teach about the new milestone.
+STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES = {
+    "src/app/provider_model_routing_service.py",
+    "src/evaluation/controlled_provider_benchmark_plan.py",
+    "src/evaluation/controlled_provider_qualification_registry.py",
+    "src/evaluation/job_fit_provider_model_qualification_overlay.py",
+    "src/evaluation/provider_benchmark_contract.py",
+    "src/evaluation/provider_model_recommendation_policy.py",
+    "src/evaluation/renderer_bound_v2_job_fit_qualification_registry.json",
+    "src/evaluation/renderer_bound_v2_skill_qualification_registry.json",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_controlled_provider_benchmark_plan.py",
+    "tests/test_controlled_provider_qualification_evidence_adapter.py",
+    "tests/test_controlled_provider_qualification_registry.py",
+    "tests/test_phase1_step10_recommended_provider_routing_bridge.py",
+    "tests/test_phase1_step9c7a_controlled_live_qualification_gate.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_provider_benchmark_contract.py",
+    "tests/test_stage7a_job_fit_renderer_bound_activation.py",
+}
+
+
+# Step 14 controlled-canary current-case ownership repair. The historical canary
+# aliases, schedule keys and evidence stay immutable; only the CURRENT
+# compatibility checks move from corpus-derived raw aliases to the workload
+# stable identity, so unrelated corpus churn stops invalidating them.
+STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES = {
+    "src/evaluation/controlled_groq_canary_run_003_plan.py",
+    "src/evaluation/controlled_groq_canary_run_004_plan.py",
+    "src/evaluation/controlled_groq_canary_run_005_plan.py",
+    "src/evaluation/controlled_groq_canary_run_evidence_runtime.py",
+    "src/evaluation/controlled_groq_provider_canary.py",
+    "src/evaluation/controlled_provider_benchmark_plan.py",
+    "tests/fixtures/provider_benchmark/groq_canary_authorization_template.json",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_controlled_groq_canary_evidence_runtime.py",
+    "tests/test_controlled_groq_canary_run_003_plan.py",
+    "tests/test_controlled_groq_canary_run_005_plan.py",
+    "tests/test_controlled_groq_canary_run_identity.py",
+    "tests/test_controlled_groq_canary_transport.py",
+    "tests/test_controlled_groq_provider_canary.py",
+    "tests/test_controlled_groq_tailoring_canary_transport.py",
+    "tests/test_controlled_live_provider_qualification_validation_context.py",
+    "tests/test_controlled_openai_canary_transport.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+
+# Step 14E/14F stale UI-static and workflow-fixture contract repairs. Test-only:
+# every production/static UI owner stayed byte-identical to committed HEAD.
+STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES = {
+    "tests/support/phase_guard_registry.py",
+    "tests/test_eucalyptus_primary_shell_design_system.py",
+    "tests/test_notification_center_changeover.py",
+    "tests/test_phase63b_operator_approved_artifact_application_readiness_packet_readback_ui_api_default_off.py",
+    "tests/test_phase64a_human_only_manual_application_handoff_packet_wiring_default_off.py",
+    "tests/test_phase64b_human_only_manual_application_handoff_packet_readback_ui_api_default_off.py",
+    "tests/test_phase65a_human_only_handoff_audit_trail_wiring_default_off.py",
+    "tests/test_phase65b_human_only_handoff_audit_trail_readback_ui_api_default_off.py",
+    "tests/test_phase66a_human_only_safety_boundary_summary_wiring_default_off.py",
+    "tests/test_phase66b_human_only_safety_boundary_summary_readback_ui_api_default_off.py",
+    "tests/test_phase67a_human_only_workflow_readiness_checkpoint_wiring_default_off.py",
+    "tests/test_phase67b_human_only_workflow_readiness_checkpoint_readback_ui_api_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+
 def current_milestone_guard_compatibility_allowlist() -> set[str]:
     """Exact current milestone files accepted by stale registry-backed guards."""
     return (
         LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES
         | PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES
+        | STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES
+        | STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES
+        | STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES
         | STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
         | STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES
@@ -2868,6 +2945,8 @@ def assert_protected_hashes(
             "src/app/api.py",
             "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
         ): frozenset({
+            # Premium ApplyLens App Guide successor (current committed HEAD).
+            "55c91a9182951e2cbedd1e0c5b588676f4541249086288011daf025e4ed9fb99",
             "0b9923e4a7df78ca4f0e4983b1718e42c6d827785f83fbed78b0150547353012",
             "f5babdc02fa0f6df589e60b02cb6fa4eba4d073db14cdb95b2f5be550fd43a68",
             "3497214cd9f379a58687739117c40b420f04f17622a4b5d1a5e7d982b0a8e1f6",
@@ -2901,6 +2980,8 @@ def assert_protected_hashes(
             "src/app/static/app_redesign.css",
             "e4c15f04c6c63a28cfa59784134a69cd3832d7f85169fea31add02a3e76d7828",
         ): frozenset({
+            # Premium ApplyLens App Guide successor (current committed HEAD).
+            "dcd36688732bf917742ad6c1cca973b379c01baffe2fb54fc9d7f5d521bd174a",
             "f544310044957fcd28c74e9375093695a0b94814e2473435ff1fdefe7fc93df5",
             "8f2ab896d709e95a6ae0300004a799e9206e8c20af1c82fa08d9414bd85ef06a",
             "bae6084f3be7e173e2cb9ec4bf39d085531a4f628f88508445b0a583783e0ded",
@@ -2913,8 +2994,18 @@ def assert_protected_hashes(
         }),
         (
             "src/ai/llm_client.py",
+            "82aa58a6062c9ed9a3923fdb27bd05dd45bd31e7ce9bf3160351ec84737c5885",
+        ): frozenset({
+            # Tailoring generation and workspace state stabilization successor
+            # (current committed HEAD, 562a88590e37).
+            "5a7581c7f1a049c19953c4e41f0b8ad8f68ac77104af3262e4e08fd2d8c7e663",
+        }),
+        (
+            "src/ai/llm_client.py",
             "830866d616c8d2d5d6b2147cd6a17b19f049f8a064592d78c2b7170d4e49ffc2",
         ): frozenset({
+            # Tailoring generation and workspace state stabilization successor (current committed HEAD).
+            "5a7581c7f1a049c19953c4e41f0b8ad8f68ac77104af3262e4e08fd2d8c7e663",
             "61100917a63b5285e7d1fa07ce5da47d73b6ee17f0bb3d3f88e6380722bc85f1",
             "ff2f412c4bcc3067e73d4fb78c65b53fa9d9760f56f1451d0dff6d4840386309",
             "687ce0fa50a7a7a6498dc93287489027708fe866da90a97ae2fff941f4bcae44",
@@ -2926,6 +3017,8 @@ def assert_protected_hashes(
             "src/ai/llm_client.py",
             "61100917a63b5285e7d1fa07ce5da47d73b6ee17f0bb3d3f88e6380722bc85f1",
         ): frozenset({
+            # Tailoring generation and workspace state stabilization successor (current committed HEAD).
+            "5a7581c7f1a049c19953c4e41f0b8ad8f68ac77104af3262e4e08fd2d8c7e663",
             "82aa58a6062c9ed9a3923fdb27bd05dd45bd31e7ce9bf3160351ec84737c5885",
             # Workload-scoped Groq json_object compatibility successor.
             "27a0fd87f1be4372b78bdaced6451f5d7c4a286cf8bc6398914b5158a8d1cb20",
@@ -2934,6 +3027,8 @@ def assert_protected_hashes(
             "src/evaluation/controlled_groq_canary_transport.py",
             "89d01fe8460e7eae40e794dce808bb26aef6dbb02366e7c5d5bed268fdf00489",
         ): frozenset({
+            # Job Fit model routing qualification successor (current committed HEAD).
+            "af56f5aee197c888766e5a38fb6dd7314efb7d8048eab74622ba0352fdcabf4a",
             "06bb37112326d658f9a7bcac6cac0897c3150652a8b734cff0794e1997746741",
             # Bounded transport HTTP-status observability successor: retains the
             # already-computed integer status on DefinitiveTransportFailure.
@@ -2948,6 +3043,8 @@ def assert_protected_hashes(
             "src/ai/job_fit_evaluator.py",
             "3776e5ce3c098c5329d2e7631195915f6bcf098ec0303ec619e9b0e9ecf393fb",
         ): frozenset({
+            # Problem 4 LLM routing and tailoring reliability successor (current committed HEAD).
+            "957be166d3e40915734025be2824463d2a52fac0e16b565547f2d09d7da4a5d1",
             "33a145c4d1aa640f970b698c95298600ea5903711315d44ed136174d6f27a999",
             "b58d270494f9049dbcefcd785a220cb9cfb33aad4b10b75f4c149197cb0ca56e",
             "4c971173cd0e224b441263595e82b4f52eb6b0ed65172eb336e182a206bc5d3b",
@@ -2987,11 +3084,15 @@ def assert_protected_hashes(
             "85247b5e2ac0987429293ff83f7d6463110fa1123c0e0bb4d0c834f546eb573b",
             # Planning bulk suggestions and uncapped browse limit successor.
             "b386161a6da69dc1eacfda8583846b5ee979d8dcba51ec33e83afd48c1e39c11",
+            # Premium ApplyLens App Guide successor (current committed HEAD).
+            "55c91a9182951e2cbedd1e0c5b588676f4541249086288011daf025e4ed9fb99",
         }),
         (
             "src/app/services.py",
             "02d09d6f6e204183ef67a543222b4e3a4dae993f40041dfb8911397b835be7f7",
         ): frozenset({
+            # Bulk rerun and Scan review reliability successor (current committed HEAD).
+            "29732353a50e4451f2b18d50124439e9b636fce6f9bca9060fb59634dd77e2ee",
             "351721d166d4a1538ed3084e169365ffdd2b8e822b399f82298418493581e963",
             "aab9f26ebe70b458fb706cfeee7f9b6ae76a9bef5303b1d5c150b9773323d20e",
             "0512c0cd141947dbc6f48565b424920393f84fb9fc426dfc2816c504b03f33ce",
@@ -3005,6 +3106,9 @@ def assert_protected_hashes(
             "src/app/services.py",
             "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
         ): frozenset({
+            # Bulk rerun and Scan review reliability successor
+            # (current committed HEAD).
+            "29732353a50e4451f2b18d50124439e9b636fce6f9bca9060fb59634dd77e2ee",
             # Bounded live tailoring parse-retry authority successor.
             "2b55cad33fc29986d36c02f18eed5dc72f785e39c95e0f7d80bc67af3002ab51",
             # Reviewed Bulk universe projection + grounded-review/empty status
@@ -3141,11 +3245,25 @@ def assert_protected_hashes(
                     "2a853270e1005c9a5cc7a42f44a9cd07f2ed352f6b18f99528918973b38bba33",
                     "72d18f217f66cb485e51020b9e793e180dd64f37af285d933e34689235006915",
                     "2a9448e511a5f2076104efde4e89e1142834425ed0606e98e5c42028bf6273eb",
+                    # Reliable Skill Extraction model qualification successor
+                    # (current committed HEAD).
+                    "4e5c6b5a3bc4d3979b7299557f4a8bf940bb1c99135c23898dbddedde666ed30",
                 }),
+        (
+            "generate_tailoring_suggestions.py",
+            "570d47a62385b736eadbf107e8f28a35aa3818e864f4d950fcb7a6c54e326a3d",
+        ): frozenset({
+            # Hardened live AI tailoring and bulk suggestion generation
+            # successor (current committed HEAD). Adds a BOUNDED
+            # parse-retry allowance only; 0 still forbids a second attempt.
+            "4372ee6a7e12e7d55140a03e7a5432b9bd93f0b09226eb839fd4bce3df9160e7",
+        }),
         (
             "src/tailoring/llm.py",
             "6153c78e5f0eca7c78451f0d234609682e01990041deae7fccb0aa303c653920",
         ): frozenset({
+            # Problem 4 LLM routing and tailoring reliability successor (current committed HEAD).
+            "dbed9c7fe48c6df294911f97ba434da70c0df5238ac6e53a512f68dd763c991c",
             "bea546fda6097184041d574340c484e33e8b94c2247aefe6a15107f6110c2d7a",
             # Workload-scoped Groq json_object compatibility successor.
             "01d4b57686733c40fcdb65b2a4eea648175bac3effb4c43b59068135467c2df5",
@@ -3154,6 +3272,8 @@ def assert_protected_hashes(
             "src/tailoring/llm.py",
             "5e9e858c6b671526eb6839d110ae05aae780d1c165a37a8bde2c1cc5bcecf31d",
         ): frozenset({
+            # Problem 4 LLM routing and tailoring reliability successor (current committed HEAD).
+            "dbed9c7fe48c6df294911f97ba434da70c0df5238ac6e53a512f68dd763c991c",
             "bea546fda6097184041d574340c484e33e8b94c2247aefe6a15107f6110c2d7a",
             # Workload-scoped Groq json_object compatibility successor.
             "01d4b57686733c40fcdb65b2a4eea648175bac3effb4c43b59068135467c2df5",
@@ -3170,6 +3290,8 @@ def assert_protected_hashes(
             "src/pipeline/collector.py",
             "7f4d8cc6571f0aa16f722fac43569ddba0a24e518889ca3864a1e46df7fe4cea",
         ): frozenset({
+            # Reliable Skill Extraction model qualification successor (current committed HEAD).
+            "4e5c6b5a3bc4d3979b7299557f4a8bf940bb1c99135c23898dbddedde666ed30",
             "a7e1a834fabda1e0dedc35ac5322bc855f65863465449f2f95b95d9e4e785dcb",
             "2a853270e1005c9a5cc7a42f44a9cd07f2ed352f6b18f99528918973b38bba33",
             "72d18f217f66cb485e51020b9e793e180dd64f37af285d933e34689235006915",

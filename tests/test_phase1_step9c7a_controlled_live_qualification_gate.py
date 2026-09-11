@@ -1571,10 +1571,10 @@ def test_existing_controlled_transport_executes_parity_once_with_fresh_client(
 
 
 FUTURE_CORPUS_SHA256 = (
-    "1f11a262af93ec2b1a6eb7fee337e5802cf9f15719618c072b6691613a37d071"
+    "34a583f29750fe3e1fdc7c951db2c37b39d7561219c0031ac328ae5b0d45f9f2"
 )
 FUTURE_PLAN_SHA256 = (
-    "f074eaa9f4db1e4d58b0f1530503217c76142477548c07a15fc1f2d9fc4e7fae"
+    "ba7adfa64766afc938a2c5aea0215d4a2e42e2c7d0667025ee24cc75010862bc"
 )
 FUTURE_SKILL_SEMANTICS_SHA256 = (
     "3e1c457b9636d5ec648b6e24a823df006bad790641b1f831d3bebb34b2ddc362"
@@ -1666,13 +1666,13 @@ def test_stage4e_current_universe_matches_the_validated_plan():
     plan = build_controlled_provider_benchmark_plan()
     universe = live.build_live_qualification_universe(plan)
 
-    assert len(universe) == len(plan["staged_matrix"]) == 44
+    assert len(universe) == len(plan["staged_matrix"]) == 45
     assert [
         row["live_qualification_eligible"] for row in universe
     ] == _stage4e_expected_eligible(universe)
     assert sum(
         row["live_qualification_eligible"] for row in universe
-    ) == 44
+    ) == 45
     assert not [
         row for row in universe if not row["live_qualification_eligible"]
     ]
@@ -1712,7 +1712,7 @@ def test_stage4e_future_universe_accepts_a_larger_validated_plan():
     skill_rows = [
         row for row in universe if row["workload_id"] == "skill_extraction"
     ]
-    assert len(skill_rows) == 10
+    assert len(skill_rows) == 15
     assert all(row["live_qualification_eligible"] for row in skill_rows)
     assert all(
         row["production_task_contract_sha256"] == SKILL_TASK_CONTRACT_SHA256
@@ -1926,8 +1926,8 @@ def _stage4i_skill_rows(plan, future):
 @pytest.mark.parametrize(
     ("provider", "expected_schedule_key"),
     [
-        ("groq", "schedule_f568003f29c5adb0627851f367bd60c7"),
-        ("openai", "schedule_d8b9797dddaec99c41ac8569d76473d1"),
+        ("groq", "schedule_fdab1d27ae7b4e41db4fb3304fe2e18c"),
+        ("openai", "schedule_dc67b5b1ade1677fd5f2819a1be44933"),
     ],
 )
 def test_stage4p_default_dispatch_threads_future_corpus_to_real_transport(
@@ -2533,8 +2533,8 @@ def test_stage4n_stage4m_shape_retains_bounded_unknown_diagnostic(
         plan, future, rows
     )
     keys = [row["schedule_key"] for row in rows]
-    assert len(keys) == 10
-    assert keys[0] == "schedule_f568003f29c5adb0627851f367bd60c7"
+    assert len(keys) == 15
+    assert keys[0] == "schedule_fdab1d27ae7b4e41db4fb3304fe2e18c"
 
     class OpaqueProviderError(Exception):
         pass

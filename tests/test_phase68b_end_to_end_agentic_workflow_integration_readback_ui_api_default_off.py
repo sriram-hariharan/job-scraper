@@ -114,7 +114,16 @@ def test_api_exposes_workflow_automatic_core_llm_policy(monkeypatch):
 
 
 def test_jd_skills_requirements_evidence_scoring_and_ranking_are_separate(monkeypatch):
-    payload = _post_scan(_client(monkeypatch))
+    # This test is about responsibility SEPARATION, not JD extraction outcome.
+    # enable_jd_llm_extraction now defaults ON (e57b90ae), so an omitted flag
+    # makes the status depend on provider availability ("fallback" with no
+    # provider, "valid" with one). Pin the flag off so the separation assertions
+    # stay deterministic; the enabled path is covered by the test above and by
+    # the Phase55 owner tests.
+    payload = _post_scan(
+        _client(monkeypatch),
+        {**_request_payload(), "enable_jd_llm_extraction": False},
+    )
     readback = payload["agentic_workflow_integration_readback"]
     boundaries = readback["responsibility_boundaries"]
 

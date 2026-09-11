@@ -693,7 +693,7 @@ def test_fingerprint_owner_uses_semantic_json_not_files_or_runtime_capabilities(
     )
 
 
-def test_canonical_fingerprints_keep_all_44_registry_cells_pending():
+def test_canonical_fingerprints_keep_all_45_registry_cells_pending():
     plan = build_controlled_provider_benchmark_plan()
     current = fingerprints.build_all_production_task_contract_fingerprints()
     payload = build_provider_qualification_registry(
@@ -701,7 +701,7 @@ def test_canonical_fingerprints_keep_all_44_registry_cells_pending():
         current_task_contract_sha256_by_workload=current,
     )
 
-    assert len(payload["cells"]) == 44
+    assert len(payload["cells"]) == 45
     assert {cell["status"] for cell in payload["cells"]} == {"pending"}
     assert all(
         cell["current_task_contract_sha256"] == current[cell["workload_id"]]

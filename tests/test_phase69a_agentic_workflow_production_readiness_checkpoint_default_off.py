@@ -95,10 +95,31 @@ def test_checkpoint_exposes_completed_agentic_workflow_status(monkeypatch):
 def test_core_llm_inference_is_workflow_automatic_inside_user_started_scan(
     monkeypatch,
 ):
+    # The planning-scan path injects its provider through
+    # _configured_planning_scan_jd_provider_adapter; _live_jd_intelligence_
+    # provider_adapter belongs to the separate manual dry-run path, so stubbing
+    # it left the scan attempting a real (credential-less) call and falling back.
     monkeypatch.setattr(
         services,
-        "_live_jd_intelligence_provider_adapter",
-        lambda _request: _valid_jd_provider_payload(),
+        "_configured_planning_scan_jd_provider_adapter",
+        lambda adapter_input, **_kwargs: _valid_jd_provider_payload(),
+    )
+    # _client() removes DATABASE_URL so no test touches a database. Owner-scoped
+    # routing is settings-backed, so without it the route resolves "unavailable"
+    # and the scan installs its safe fallback adapter instead of the configured
+    # one. That is correct production behaviour; it only looked order-dependent
+    # because an earlier scan in the same process changed when the settings read
+    # happened. Pin the route deterministically so this test exercises the
+    # provider wiring it is actually about - still no database and no network.
+    monkeypatch.setattr(
+        services,
+        "resolve_effective_user_provider_route",
+        lambda _owner, _workload: {
+            "workload_id": services.PLANNING_SCAN_JD_INTELLIGENCE_WORKLOAD_ID,
+            "provider": "openai",
+            "model": "gpt-5-mini",
+            "effective_selection_source": "applylens_recommended",
+        },
     )
     payload = _post_scan(
         _client(monkeypatch),

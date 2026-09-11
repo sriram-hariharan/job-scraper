@@ -279,6 +279,9 @@ def test_dependency_files_match_phase8i_checkpoint():
     assert _aggregate_hash(paths) in {
         "3b54d41c0408145340ca8849f47ee70ae9a8c321db4e5f960f63399a37e201fb",
         "9da0afccca4fbeddec6c97f4ee4790f6742575cb761329702416c70198f3a75a",
+        # Approved dependency cleanup (3f84e381) removed pandas, openpyxl
+        # and schedule. Nothing was added; pgvector is still absent.
+        "90e9a401af344c0c7f7a7d23feb10b1ac36013263d96d5132caca3a42350c571",
     }
 
 
@@ -297,6 +300,11 @@ def test_storage_schema_and_migration_files_match_phase8i_checkpoint():
     assert _aggregate_hash(paths) in {
         "7dba8092148c9c401ff56f779adff7dc4363dfec3f67f1502ed549a437a8b4f6",
         "4c1e00dd2325e258feaa9556679409fab12b768536ebb1f2e1d3678d7cf402bb",
+        # Approved committed storage evolution unrelated to pgvector:
+        # bulk_generation/schema.sql added (41b0a742) and
+        # notification_state/schema.sql updated (ea3f597a).
+        # vector_evidence/schema.sql is excluded above and is unchanged.
+        "cdf15b61b376ab71fd9ba2e16230a55de5e425e3c2f705b609ebc44a99385e6d",
     }
 
 

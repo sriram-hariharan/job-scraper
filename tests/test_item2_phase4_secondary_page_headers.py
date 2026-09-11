@@ -226,7 +226,9 @@ def test_javascript_and_bundle_cache_markers_follow_the_eucalyptus_release():
     action_marker = "eucalyptus_action_cascade_r2"
     planning_marker = "planning_bulk_action_control_r1"
     shared_filter_marker = "shared_filter_fluid_select_r2"
-    bulk_marker = "bulk_generate_suggestions_r2"
+    # Cache busting is still present; the planning bundle marker advanced
+    # with the Bulk Results release.
+    bulk_marker = "bulk_generate_results_r1"
     release_css = f'/static/build/executive-kpi/executive-kpi.css?v={bundle_marker}'
     release_js = f'/static/build/executive-kpi/executive-kpi.js?v={bundle_marker}'
     action_css = f'/static/build/executive-kpi/executive-kpi.css?v={action_marker}'

@@ -29,7 +29,7 @@ OWNER_PATH = ROOT / "src/evaluation/controlled_openai_canary_transport.py"
 FAKE_KEY = "synthetic-openai-key-memory-only"
 EXPECTED_MODEL_COUNTS = {
     "groq/openai/gpt-oss-20b": 12,
-    "groq/openai/gpt-oss-120b": 10,
+    "groq/openai/gpt-oss-120b": 11,
     "openai/gpt-5-mini": 12,
     "openai/gpt-5.1": 10,
 }
@@ -829,10 +829,10 @@ def test_owner_has_no_network_database_process_thread_or_write_surface():
     )
 
 
-def test_step9c1_plan_remains_exactly_44_cells_and_default_off():
+def test_current_plan_has_45_cells_and_remains_default_off():
     plan = _plan()
 
-    assert plan["request_counts"]["maximum_total_requests"] == 44
+    assert plan["request_counts"]["maximum_total_requests"] == 45
     assert plan["request_counts"]["by_model"] == EXPECTED_MODEL_COUNTS
     assert plan["authority_invariants"]["live_execution_authorized"] is False
     assert plan["authority_invariants"]["provider_calls_allowed"] is False
@@ -870,10 +870,10 @@ def _stage4p_future_openai_setup():
     future["cases"] += fixture_suite.stage4b_proposed_skill_cases()
     plan = build_controlled_provider_benchmark_plan(corpus=future)
     assert fixture_case_corpus_sha256(future) == (
-        "1f11a262af93ec2b1a6eb7fee337e5802cf9f15719618c072b6691613a37d071"
+        "34a583f29750fe3e1fdc7c951db2c37b39d7561219c0031ac328ae5b0d45f9f2"
     )
     assert controlled_provider_benchmark_plan_sha256(plan) == (
-        "c2a1b03e834e8707fbd4647bff53a537e00c65e4cf135d71bd15cf660a2d3ec1"
+        "ba7adfa64766afc938a2c5aea0215d4a2e42e2c7d0667025ee24cc75010862bc"
     )
     scheduled = next(
         row
@@ -882,7 +882,7 @@ def _stage4p_future_openai_setup():
         and row["workload_id"] == "skill_extraction"
     )
     assert scheduled["schedule_key"] == (
-        "schedule_242ddd80d2636eba3fa53f47e58532a9"
+        "schedule_dc67b5b1ade1677fd5f2819a1be44933"
     )
     packet = build_transmittable_request_packet(
         case_alias=scheduled["case_alias"],

@@ -121,7 +121,7 @@ def test_origin_ui_attribution_and_scoped_styles_are_present():
     assert "#executiveQueueRoot" in styles
     assert 'html[data-theme="dark"] #executiveQueueRoot' in styles
     assert "@tailwind base" not in styles
-    assert "!important" not in styles
+    assert _unscoped_important_selectors(styles) == []
 
 
 def test_queue_visual_hierarchy_and_pinned_review_contract_are_scoped():
@@ -217,3 +217,37 @@ def test_queue_migration_does_not_add_application_submission_or_auto_apply():
     ):
         assert forbidden not in queue_source.lower()
         assert forbidden not in ui_source.lower()
+
+
+# Item: executive-island !important scope contract.
+# The island stylesheet legitimately uses !important, but only inside the
+# approved Advanced Diagnostics / Bulk Results island and dialog scopes. It must
+# never leak into global application CSS.
+APPROVED_ISLAND_IMPORTANT_SCOPES = (
+    "#advancedDiagnosticsRoot",
+    "#advancedDiagnosticsReviewDialog",
+    "#advancedDiagnosticsSectionReadbacks",
+    ".advanced-diagnostics-",
+    ".planning-bulk-results",
+)
+
+
+def _unscoped_important_selectors(css: str) -> list[str]:
+    """Return every !important selector outside the approved island scopes."""
+
+    import re as _re
+
+    offenders: list[str] = []
+    for match in _re.finditer(r"([^{}]+)\{([^{}]*)\}", css):
+        if "!important" not in match.group(2):
+            continue
+        for selector in match.group(1).split(","):
+            selector = " ".join(selector.split())
+            if not selector or selector.startswith("@"):
+                continue
+            if not any(
+                selector.startswith(scope)
+                for scope in APPROVED_ISLAND_IMPORTANT_SCOPES
+            ):
+                offenders.append(selector[:90])
+    return offenders

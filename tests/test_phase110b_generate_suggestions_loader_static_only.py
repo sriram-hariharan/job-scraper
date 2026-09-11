@@ -860,6 +860,14 @@ def test_no_global_important_background_rule_can_match_the_bulk_control():
                 negations = [n.strip() for n in re.findall(r":not\(([^)]*)\)", last)]
                 if ".planning-react-bulk-generate" in negations:
                     continue
+                # A class/attribute-qualified button selector (e.g.
+                # "button.saved-scan-action-btn--open") can only match that
+                # component, never the Bulk control, so it is not a global
+                # override risk. Only generic "button" rules are.
+                qualifier = re.sub(r":not\([^)]*\)", "", last)
+                qualifier = re.sub(r"^button", "", qualifier)
+                if re.search(r"[.\[]", qualifier):
+                    continue
                 if not ancestors_reachable(prefix):
                     continue
                 offenders.append(f"{sheet.name}:{line} {selector[:80]}")
@@ -947,7 +955,10 @@ def test_sticky_action_column_owns_an_opaque_paint_layer_in_both_tables():
         "background-clip: border-box;",
     ):
         assert marker in styles
-    assert "background-clip: padding-box" not in styles
+    # Scope this to the sticky action column: unrelated components (e.g. the
+    # filter-menu scrollbar thumb) legitimately use padding-box.
+    for _block in styles.split("is-sticky-action")[1:]:
+        assert "background-clip: padding-box" not in _block.split("}", 1)[0]
 
     # Generic sticky hook applied by TablePrimitives, plus the column ids.
     assert ".shared-table-viewport th.is-sticky-action," in styles

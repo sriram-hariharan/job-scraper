@@ -436,7 +436,13 @@ def test_no_resume_mutation_artifact_application_or_scoring_side_effects(monkeyp
 def test_phase55_and_phase56_request_flags_remain_intact():
     api_source = (ROOT / "src/app/api.py").read_text(encoding="utf-8")
     services_source = (ROOT / "src/app/services.py").read_text(encoding="utf-8")
-    assert "enable_jd_llm_extraction: bool = False" in api_source
+    # enable_jd_llm_extraction was intentionally defaulted ON at e57b90ae
+    # ("feat: polish scan workflows and shared UI"), which added
+    # tests/test_scan_llm_default_on.py and updated its Phase55 owner tests to
+    # exercise the explicit opt-out path. This phase does not own that flag; it
+    # only records the approved current default so drift is still visible.
+    assert "enable_jd_llm_extraction: bool = True" in api_source
+    # These two ARE this phase's own default-off gates and must stay False.
     assert "enable_live_tailoring_suggestion: bool = False" in api_source
     assert "enable_live_exact_resume_change_proposal: bool = False" in api_source
     assert "live_tailoring_suggestion_readback" in services_source

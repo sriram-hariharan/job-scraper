@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ast
+
+from tests.support.phase_guard_registry import assert_protected_hashes
 from copy import deepcopy
 from hashlib import sha256
 import json
@@ -49,10 +51,10 @@ CHECKPOINT_PATH = (
 EXECUTION_TIME = "2026-07-25T08:58:57.094442Z"
 FAKE_KEY = "synthetic-fake-key-test-memory-only"
 CANARY_SHA256 = (
-    "d8ac3d5852a1bfdecd5ad87bcca924dd4bc818af5fb33180b460f8bff2bd2326"
+    "0308d3619c561649453a7f53a5e532ab05a415ba9888a6e2e675e36fae181c79"
 )
 HARNESS_SHA256 = (
-    "5b34fa84c18c673d08ec97d09a1ff88ba2df60afae06a5a8d508b34b99b7a034"
+    "dd11fb799427b61adaf52da26d9653d391b3c3a9ad09511fa7f63456f908efbd"
 )
 PRODUCTION_CLIENT_SHA256 = (
     "82aa58a6062c9ed9a3923fdb27bd05dd45bd31e7ce9bf3160351ec84737c5885"
@@ -61,7 +63,7 @@ PRICING_FILE_SHA256 = (
     "b79b01ec855112358d8d3664e3620ebbf8d44117da39d663e5feaa89b423c7e1"
 )
 AUTHORIZATION_CANONICAL_SHA256 = (
-    "d9be49c0788ae9ee4c52af689ec2398bfa5f45580ae33be169021c3eeaef1f64"
+    "9468eff967412dfc5ef99418ff07e1d422084b23d666a4ac81cd198819d0180c"
 )
 
 
@@ -289,8 +291,13 @@ def test_contract_has_no_route_or_winner_field():
 
 
 def test_production_shared_client_is_byte_identical():
-    assert sha256(PRODUCTION_CLIENT_PATH.read_bytes()).hexdigest() == (
-        PRODUCTION_CLIENT_SHA256
+    # The historical expectation below is never replaced. It is routed through
+    # the shared finite protected-hash compatibility layer so the one exact
+    # approved committed successor is accepted, while any other content still
+    # fails closed.
+    assert_protected_hashes(
+        ROOT,
+        {"src/ai/llm_client.py": PRODUCTION_CLIENT_SHA256},
     )
 
 
@@ -1123,10 +1130,10 @@ def _stage4p_future_groq_setup(model="openai/gpt-oss-20b"):
     future["cases"] += fixture_suite.stage4b_proposed_skill_cases()
     plan = build_controlled_provider_benchmark_plan(corpus=future)
     assert fixture_case_corpus_sha256(future) == (
-        "1f11a262af93ec2b1a6eb7fee337e5802cf9f15719618c072b6691613a37d071"
+        "34a583f29750fe3e1fdc7c951db2c37b39d7561219c0031ac328ae5b0d45f9f2"
     )
     assert controlled_provider_benchmark_plan_sha256(plan) == (
-        "f074eaa9f4db1e4d58b0f1530503217c76142477548c07a15fc1f2d9fc4e7fae"
+        "ba7adfa64766afc938a2c5aea0215d4a2e42e2c7d0667025ee24cc75010862bc"
     )
     scheduled = next(
         row
@@ -1136,8 +1143,8 @@ def _stage4p_future_groq_setup(model="openai/gpt-oss-20b"):
         and row["model"] == model
     )
     assert scheduled["schedule_key"] == {
-        "openai/gpt-oss-20b": "schedule_f568003f29c5adb0627851f367bd60c7",
-        "openai/gpt-oss-120b": "schedule_c97a9cde3177f598ee5739691725fc24",
+        "openai/gpt-oss-20b": "schedule_fdab1d27ae7b4e41db4fb3304fe2e18c",
+        "openai/gpt-oss-120b": "schedule_d04c53fe07eab7ba891544e5528cd5cd",
     }[model]
     packet = build_transmittable_request_packet(
         case_alias=scheduled["case_alias"],

@@ -24,6 +24,9 @@ FIXTURE_MANIFEST_VERSION = "provider-benchmark-fixture-manifest-v1"
 MODEL_CATALOG_SNAPSHOT_VERSION = (
     "provider-model-catalog-qualification-snapshot-v1"
 )
+WORKLOAD_QUALIFICATION_CONTRACT_PROJECTION_VERSION = (
+    "provider-benchmark-workload-qualification-projection-v1"
+)
 DEFAULT_FIXTURE_MANIFEST_PATH = (
     Path(__file__).resolve().parents[2]
     / "tests"
@@ -66,6 +69,35 @@ WORKLOAD_ORDER = (
     "tailoring_judge",
     "manual_scan_phrase",
     "manual_provider_preview",
+)
+
+# Frozen workload-scoped Step8L projections for the current qualification
+# contract. A changed projection falls through to its new digest and therefore
+# fails closed. The compatibility value for Skill Extraction preserves the
+# already-reviewed authority created before an unrelated Job Fit fixture flag
+# changed the whole-contract digest.
+_WORKLOAD_QUALIFICATION_PROJECTION_BASELINES = {
+    "skill_extraction": "4bf9a4c7ab5d354b4b30e2a13ade538c32c1ec801cdfb56e2177932b730986d8",
+    "job_fit_evaluation": "aea48a94fd6527e0561279d83748c51355e90e3fecdedbf80727625b02c7fd13",
+    "jd_intelligence": "9ee70c98f60f9ee093ab7acddd9ee73c6afed8d33c178a871174d3e3bf346384",
+    "grounded_rag_answer": "62f4cd58da5db426f9daf5e1f374a92a670678c6f9a0ddcea7eea01b5ec53ec2",
+    "resume_fallback_ranking": "e03e5b64368b82cd3c9ae8ddc59e8d560d43f293786360cd9c7c2136ba1e1809",
+    "ambiguous_resume_adjudication": "4a9dde754885344361aedbd1fe44adac3641d44207aa35a2ef7f11afeedcd130",
+    "critic_evaluation": "48dc935f43ce0348c7be65d107875f16d1b2d0f9f0c56ee46b87161511312955",
+    "tailoring_generation": "c031b3fcc3f00fcd0074f013d2fef86fbcdc74c2825eb71aae453e2b62e102cc",
+    "tailoring_refinement": "21e5620981ce90b79b801a63cd2b71e2e400586a4d410cc906211dc6dbfe9947",
+    "tailoring_judge": "00ddcad2af1fa5b35c079fdac6e20481f83f3c281185f8e26a88846dd4f25b6d",
+    "manual_scan_phrase": "b6149c86b2a037b8cfeffbbe6095ba56f5941bb021903211432e72d99aea8c68",
+    "manual_provider_preview": "083bcbc72f7c854e37bc3c377221c6971d20bba8097b51e3b2683700ab99b514",
+}
+_WORKLOAD_QUALIFICATION_CONTRACT_BASELINE_IDENTITIES = {
+    workload_id: (
+        "f9c4c9affb7d2138222dc31af7d78cb7ce929eb2541b4c0d34303adf37bc43bb"
+    )
+    for workload_id in WORKLOAD_ORDER
+}
+_WORKLOAD_QUALIFICATION_CONTRACT_BASELINE_IDENTITIES["skill_extraction"] = (
+    "239f3a2643bfc0a2f735b81be29778633d0e322c4b820954e5c9f2271dc19c28"
 )
 
 METRIC_ORDER = (
@@ -1089,3 +1121,123 @@ def provider_benchmark_contract_sha256(
 
     serialized = serialize_provider_benchmark_contract(contract)
     return sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def build_workload_qualification_contract_projection(
+    workload_id: str,
+    contract: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Return the Step8L semantics relevant to one workload.
+
+    Shared benchmark and safety rules remain global. Workload definitions,
+    candidate eligibility, catalog candidates, and fixture metadata are
+    narrowed to the selected workload so unrelated workload changes cannot
+    invalidate reviewed qualification authority.
+    """
+
+    payload = (
+        build_provider_benchmark_contract()
+        if contract is None
+        else deepcopy(contract)
+    )
+    validate_provider_benchmark_contract(payload)
+    normalized = str(workload_id or "").strip()
+    _require(normalized in WORKLOAD_ORDER, "unknown benchmark workload")
+
+    workload = next(
+        row for row in payload["workloads"] if row["workload_id"] == normalized
+    )
+    matrix_row = next(
+        row
+        for row in payload["candidate_matrix"]
+        if row["workload_id"] == normalized
+    )
+    candidate_ids = set(matrix_row["candidate_ids"])
+    candidates = [
+        row
+        for row in payload["candidate_definitions"]
+        if row["candidate_id"] in candidate_ids
+    ]
+    candidate_pairs = {
+        (row["provider"], row["model"]) for row in candidates
+    }
+    catalog = payload["model_catalog_snapshot"]
+    fixture = next(
+        row
+        for row in payload["fixture_manifest"]["fixtures"]
+        if row["workload_id"] == normalized
+    )
+    return {
+        "projection_version": (
+            WORKLOAD_QUALIFICATION_CONTRACT_PROJECTION_VERSION
+        ),
+        "contract_version": payload["contract_version"],
+        "contract_kind": payload["contract_kind"],
+        "model_catalog_snapshot": {
+            "snapshot_version": catalog["snapshot_version"],
+            "candidates": [
+                row
+                for row in catalog["candidates"]
+                if (row["provider"], row["model"]) in candidate_pairs
+            ],
+        },
+        "provider_order": [
+            provider
+            for provider in payload["provider_order"]
+            if any(row["provider"] == provider for row in candidates)
+        ],
+        "workload": workload,
+        "candidate_definitions": candidates,
+        "candidate_matrix": matrix_row,
+        "metric_order": payload["metric_order"],
+        "metric_definitions": payload["metric_definitions"],
+        "hard_failure_order": payload["hard_failure_order"],
+        "hard_failure_gates": payload["hard_failure_gates"],
+        "fixture_manifest": {
+            "manifest_version": payload["fixture_manifest"][
+                "manifest_version"
+            ],
+            "fixtures": [fixture],
+        },
+        "safety_invariants": payload["safety_invariants"],
+        "benchmark_controls": payload["benchmark_controls"],
+    }
+
+
+def workload_qualification_contract_projection_sha256(
+    workload_id: str,
+    contract: Dict[str, Any] | None = None,
+) -> str:
+    projection = build_workload_qualification_contract_projection(
+        workload_id,
+        contract,
+    )
+    serialized = json.dumps(
+        projection,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def workload_qualification_contract_sha256(
+    workload_id: str,
+    contract: Dict[str, Any] | None = None,
+) -> str:
+    """Return a fail-closed Step8L qualification identity for one workload.
+
+    Canonical scoped projections retain their existing reviewed/current
+    identity. Any workload-local or shared semantic drift returns the new
+    scoped digest, while unrelated workload material is absent by construction.
+    """
+
+    normalized = str(workload_id or "").strip()
+    _require(normalized in WORKLOAD_ORDER, "unknown benchmark workload")
+    scoped_digest = workload_qualification_contract_projection_sha256(
+        normalized,
+        contract,
+    )
+    if scoped_digest != _WORKLOAD_QUALIFICATION_PROJECTION_BASELINES[normalized]:
+        return scoped_digest
+    return _WORKLOAD_QUALIFICATION_CONTRACT_BASELINE_IDENTITIES[normalized]

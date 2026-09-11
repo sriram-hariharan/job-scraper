@@ -20,6 +20,7 @@ from src.evaluation.provider_benchmark_contract import (
     WORKLOAD_ORDER,
     build_provider_benchmark_contract,
     provider_benchmark_contract_sha256,
+    workload_qualification_contract_sha256,
 )
 from src.evaluation.provider_fixture_benchmark import (
     CASE_CORPUS_VERSION,
@@ -418,6 +419,8 @@ def build_workload_plan_projection(
                     for member in _GLOBAL_TOKEN_POLICY_FIELDS
                 }
                 if field == "token_budget_schema"
+                else workload_qualification_contract_sha256(normalized)
+                if field == "step8l_contract_sha256"
                 else deepcopy(controlled_plan[field])
             )
             for field in _GLOBAL_ENVELOPE_PLAN_FIELDS
@@ -1636,3 +1639,83 @@ def validate_operator_authorization(
         "authorization is expired or not yet valid",
     )
     return True
+
+
+# ---------------------------------------------------------------------------
+# Current-case ownership compatibility for the controlled canary generations.
+#
+# ``_case_alias`` mixes the GLOBAL corpus digest into every case identity, so an
+# unrelated workload's fixture edit moves every raw alias in the corpus. A
+# historical canary must stay pinned to the raw alias it actually executed
+# against - that is immutable execution evidence - but its CURRENT compatibility
+# check must not fail merely because a different workload's material moved.
+#
+# These helpers let a canary bind current ownership to the workload-stable case
+# identity while still deriving (rather than pinning) the current raw alias, so
+# the review row is still proven to be the exact approved case.
+# ---------------------------------------------------------------------------
+
+CURRENT_CASE_OWNERSHIP_VERSION = (
+    "controlled-provider-benchmark-current-case-ownership-v1"
+)
+
+
+def current_case_alias(
+    workload_id: str,
+    case_id: str,
+    *,
+    corpus: Dict[str, Any] | None = None,
+) -> str:
+    """Return the raw alias one approved case carries in the CURRENT corpus.
+
+    Derived, never pinned: the value moves whenever the global corpus digest
+    moves, which is exactly why it is unsuitable as durable authority.
+    """
+
+    payload = load_fixture_case_corpus() if corpus is None else deepcopy(corpus)
+    workload = str(workload_id or "").strip()
+    case = str(case_id or "").strip()
+    _require(bool(workload) and bool(case), "current case identity is invalid")
+    matches = [
+        row
+        for row in payload["cases"]
+        if row["case_id"] == case and row["workload_id"] == workload
+    ]
+    _require(
+        len(matches) == 1,
+        "current corpus does not contain exactly one matching approved case",
+    )
+    return _case_alias(case, fixture_case_corpus_sha256(payload))
+
+
+def validate_current_case_ownership(
+    *,
+    workload_id: str,
+    case_id: str,
+    expected_stable_case_alias: str,
+    observed_case_alias: str,
+    corpus: Dict[str, Any] | None = None,
+) -> str:
+    """Fail closed unless the observed review row is the approved case.
+
+    ``expected_stable_case_alias`` is the durable, corpus-independent identity a
+    canary pins. The observed raw alias is compared against the alias that same
+    case carries in the current corpus, so a substituted, renamed or removed
+    case still fails, while unrelated workload churn does not.
+    """
+
+    stable = stable_case_alias(workload_id, case_id)
+    _require(
+        stable == expected_stable_case_alias,
+        "current case stable identity changed",
+    )
+    expected_alias = current_case_alias(
+        workload_id,
+        case_id,
+        corpus=corpus,
+    )
+    _require(
+        observed_case_alias == expected_alias,
+        "current case alias does not match the approved case",
+    )
+    return expected_alias

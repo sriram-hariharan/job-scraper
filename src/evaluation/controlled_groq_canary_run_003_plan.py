@@ -11,9 +11,11 @@ from typing import Any, Dict, Iterable, Mapping
 from src.evaluation.controlled_provider_benchmark_plan import (
     CONTROLLED_PLAN_VERSION,
     build_controlled_provider_benchmark_plan,
+    current_case_alias,
     controlled_provider_benchmark_plan_sha256,
     load_run_plan_fixture,
     validate_controlled_provider_benchmark_plan,
+    validate_current_case_ownership,
 )
 from src.evaluation.provider_benchmark_contract import (
     CONTRACT_VERSION as BENCHMARK_CONTRACT_VERSION,
@@ -40,7 +42,10 @@ RUN_003_CONTRACT_KIND = (
 )
 
 TARGET_CASE_ALIAS = "case_fb2b069aa9340571b60e1fb5"
-CURRENT_TARGET_CASE_ALIAS = "case_eff6ed2fb3643d23b87bab48"
+# Durable, corpus-independent identity of the approved target case. The current
+# RAW alias is deliberately not pinned here: it mixes the global corpus digest,
+# so an unrelated workload's fixture edit moves it without this case changing.
+CURRENT_TARGET_STABLE_CASE_ALIAS = "case_adb75e8f4222598d01c96632"
 TARGET_CASE_ID = "skill_extraction_required_preferred_v1"
 TARGET_WORKLOAD = "skill_extraction"
 TARGET_SCHEMA_ID = "skill_extraction_result_v1"
@@ -202,6 +207,16 @@ def _contains_prohibited_packet_key(value: Any) -> bool:
 
 
 @lru_cache(maxsize=1)
+def current_target_case_alias(corpus: Dict[str, Any] | None = None) -> str:
+    """Return the target case's raw alias in the CURRENT corpus.
+
+    Current provenance only. It is derived rather than pinned because the raw
+    alias carries the global corpus digest.
+    """
+
+    return current_case_alias(TARGET_WORKLOAD, TARGET_CASE_ID, corpus=corpus)
+
+
 def _committed_ownership() -> tuple[
     Dict[str, Any],
     Dict[str, Any],
@@ -237,9 +252,16 @@ def _committed_ownership() -> tuple[
         "run-003 requires exactly one eligible skill-extraction case",
     )
     review, case = matches[0]
-    _require(
-        review["case_alias"] == CURRENT_TARGET_CASE_ALIAS,
-        "current skill-extraction case alias changed",
+    # Bind current ownership to the workload-stable case identity and derive the
+    # expected raw alias from the current corpus, so unrelated workload churn
+    # cannot invalidate this historical canary while a substituted, renamed or
+    # removed target case still fails closed.
+    validate_current_case_ownership(
+        workload_id=TARGET_WORKLOAD,
+        case_id=TARGET_CASE_ID,
+        expected_stable_case_alias=CURRENT_TARGET_STABLE_CASE_ALIAS,
+        observed_case_alias=review["case_alias"],
+        corpus=corpus,
     )
     _require(
         review["wholly_synthetic"] is True

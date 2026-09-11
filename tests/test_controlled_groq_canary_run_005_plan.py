@@ -5,6 +5,11 @@ import pytest
 from src.evaluation import controlled_groq_canary_run_005_plan as owner
 from src.evaluation.controlled_provider_benchmark_plan import (
     build_transmittable_request_packet,
+    current_case_alias,
+    stable_case_alias,
+)
+from src.evaluation.controlled_groq_provider_canary import (
+    canary_schedule_key,
 )
 from src.evaluation.controlled_groq_canary_transport import (
     build_groq_chat_completion_arguments,
@@ -67,7 +72,14 @@ def test_selected_fixture_is_exactly_one_transmission_safe_synthetic_case():
     assert len(rows) == 1
     review = rows[0]["review"]
     case = rows[0]["case"]
-    assert review["case_alias"] == "case_3dddc5f43be918e0932d3bb2"
+    # The durable authority is the corpus-independent stable identity; the raw
+    # alias is derived provenance that moves with unrelated corpus churn.
+    assert stable_case_alias(
+        owner.TARGET_WORKLOADS[0], owner.TARGET_CASE_ID
+    ) == owner.CURRENT_TARGET_STABLE_CASE_ALIAS
+    assert review["case_alias"] == current_case_alias(
+        owner.TARGET_WORKLOADS[0], owner.TARGET_CASE_ID
+    )
     assert review["eligible_for_later_controlled_transmission"] is True
     assert review["wholly_synthetic"] is True
     assert review["requires_additional_redaction"] is False
@@ -107,8 +119,19 @@ def test_current_semantic_transport_compatibility_is_exact():
     )
     review = rows[0]["review"]
     base = rows[0]["base_transport_row"]
-    assert review["case_alias"] == "case_3dddc5f43be918e0932d3bb2"
-    assert base["schedule_key"] == "canary_38aa2602e052b5c5ae84772abee84708"
+    assert review["case_alias"] == current_case_alias(
+        owner.TARGET_WORKLOADS[0], owner.TARGET_CASE_ID
+    )
+    # Historical base transport key stays pinned as immutable evidence; the
+    # current key is recomputed from the validated canary contract.
+    assert owner.EXPECTED_BASE_TRANSPORT_KEY == BASE_KEY
+    assert base["schedule_key"] == canary_schedule_key(
+        full_plan_sha256=_canary["controlled_full_plan_sha256"],
+        execution_order=base["execution_order"],
+        case_alias=base["case_alias"],
+        provider=base["provider"],
+        model=base["model"],
+    )
     packet = build_transmittable_request_packet(
         case_alias=review["case_alias"],
         provider=base["provider"],

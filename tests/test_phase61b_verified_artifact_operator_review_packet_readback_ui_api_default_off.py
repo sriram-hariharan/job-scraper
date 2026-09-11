@@ -18,6 +18,11 @@ from tests.test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_def
 from tests.test_phase57a_live_exact_resume_change_proposal_planning_workspace_wiring_default_off import (
     _valid_exact_provider_payload,
 )
+from tests.test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off import (
+    KNOWN_PROPOSAL_ID,
+    SECOND_KNOWN_PROPOSAL_ID,
+    _two_candidate_stored_payload,
+)
 from tests.test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off import (
     _two_proposal_provider_payload,
 )
@@ -133,7 +138,7 @@ def test_valid_verified_artifact_metadata_shows_packet_metadata_in_api(monkeypat
             **_state_request(),
             "enable_live_exact_resume_change_proposal": True,
             "enable_manual_exact_change_acceptance": True,
-            "accepted_exact_change_proposal_ids": ["phase57-proposal-001"],
+            "accepted_exact_change_proposal_ids": ["phase42a-001"],
         },
     )
     plan_id = first["manual_exact_change_acceptance_readback"]["approved_change_plan_id"]
@@ -143,7 +148,7 @@ def test_valid_verified_artifact_metadata_shows_packet_metadata_in_api(monkeypat
             **_state_request(),
             "enable_live_exact_resume_change_proposal": True,
             "enable_manual_exact_change_acceptance": True,
-            "accepted_exact_change_proposal_ids": ["phase57-proposal-001"],
+            "accepted_exact_change_proposal_ids": ["phase42a-001"],
             "enable_guarded_resume_copy_artifact_creation": True,
             "approved_change_plan_id": plan_id,
         },
@@ -155,7 +160,7 @@ def test_valid_verified_artifact_metadata_shows_packet_metadata_in_api(monkeypat
             **_state_request(),
             "enable_live_exact_resume_change_proposal": True,
             "enable_manual_exact_change_acceptance": True,
-            "accepted_exact_change_proposal_ids": ["phase57-proposal-001"],
+            "accepted_exact_change_proposal_ids": ["phase42a-001"],
             "enable_guarded_resume_copy_artifact_creation": True,
             "approved_change_plan_id": plan_id,
             "enable_guarded_resume_copy_artifact_verification": True,
@@ -300,7 +305,7 @@ def test_no_live_llm_or_provider_calls_are_made(monkeypatch):
 
 
 def test_phase58_59_60_and_61a_readbacks_remain_intact(monkeypatch):
-    _patch_storage(monkeypatch, stored_payload=_stored_scan_payload())
+    _patch_storage(monkeypatch, stored_payload=_two_candidate_stored_payload())
     base = services.save_saved_scan_state_payload(
         scan_id="phase56a-scan",
         **_state_request(),
@@ -309,7 +314,7 @@ def test_phase58_59_60_and_61a_readbacks_remain_intact(monkeypatch):
         enable_live_exact_resume_change_proposal=True,
         live_exact_resume_change_proposal_adapter=lambda _request: _two_proposal_provider_payload(),
         enable_manual_exact_change_acceptance=True,
-        accepted_exact_change_proposal_ids=["phase57-proposal-001"],
+        accepted_exact_change_proposal_ids=["phase42a-001"],
     )
     plan_id = base["manual_exact_change_acceptance_readback"]["approved_change_plan_id"]
     artifact_payload = services.save_saved_scan_state_payload(
@@ -320,7 +325,7 @@ def test_phase58_59_60_and_61a_readbacks_remain_intact(monkeypatch):
         enable_live_exact_resume_change_proposal=True,
         live_exact_resume_change_proposal_adapter=lambda _request: _two_proposal_provider_payload(),
         enable_manual_exact_change_acceptance=True,
-        accepted_exact_change_proposal_ids=["phase57-proposal-001"],
+        accepted_exact_change_proposal_ids=["phase42a-001"],
         enable_guarded_resume_copy_artifact_creation=True,
         approved_change_plan_id=plan_id,
     )
@@ -333,7 +338,7 @@ def test_phase58_59_60_and_61a_readbacks_remain_intact(monkeypatch):
         enable_live_exact_resume_change_proposal=True,
         live_exact_resume_change_proposal_adapter=lambda _request: _two_proposal_provider_payload(),
         enable_manual_exact_change_acceptance=True,
-        accepted_exact_change_proposal_ids=["phase57-proposal-001"],
+        accepted_exact_change_proposal_ids=["phase42a-001"],
         enable_guarded_resume_copy_artifact_creation=True,
         approved_change_plan_id=plan_id,
         enable_guarded_resume_copy_artifact_verification=True,

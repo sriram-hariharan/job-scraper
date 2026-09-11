@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+import re
 
 from src.app import services
 
@@ -83,21 +84,56 @@ def test_phase77g_app_chrome_utility_buttons_are_secondary():
     assert "export function SharedFilterSelect" in shared_filter
     assert 'id="planningFiltersRoot"' in planning_markup
 
-    primary_selector = (
-        "button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn)"
-        ":not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab)"
-        ":not(.sort-header-btn):not(.scheduler-tab-btn)"
-        ":not(.ghost-btn):not(.notification-btn):not(.theme-toggle-btn):not(.profile-avatar-btn)"
-        ":not(.app-shell-menu-btn):not(.multi-select-trigger):not(.multi-select-option)"
-        ":not(.shared-filter-select__trigger):not(.shared-filter-select__option)"
-        ":not(.preferences-step-button):not(.preference-location-option):not(.preferences-edit-button)"
-        ":not(.preference-location-chip-remove):not(.preferences-utility-button)"
-        ":not(.preferences-back-button):not(.preferences-secondary-action)"
-        ":not(.source-yield-source-button)"
+    # The shared chrome-button chain keeps growing as new controls opt out, and
+    # the old primary/violet gradient was retired. Pin the EXCLUSIONS this test
+    # owns plus the fact that the chain still paints a primary background,
+    # rather than a full literal that churns every release.
+    REQUIRED_CHROME_EXCLUSIONS = (
+        ".agentic-review-tab",
+        ".agentic-review-segment",
+        ".profile-tab-btn",
+        ".pipeline-run-icon-btn",
+        ".scan-workspace-tab-btn",
+        ".scan-workspace-surface-tab",
+        ".sort-header-btn",
+        ".scheduler-tab-btn",
+        ".ghost-btn",
+        ".notification-btn",
+        ".theme-toggle-btn",
+        ".profile-avatar-btn",
+        ".app-shell-menu-btn",
+        ".multi-select-trigger",
+        ".multi-select-option",
+        ".shared-filter-select__trigger",
+        ".shared-filter-select__option",
+        ".preferences-step-button",
+        ".preference-location-option",
+        ".preferences-edit-button",
+        ".preference-location-chip-remove",
+        ".preferences-utility-button",
+        ".preferences-back-button",
+        ".preferences-secondary-action",
     )
-    assert primary_selector in css
-    assert f"{primary_selector},\n.app-shell-primary-link" in css
-    assert "background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important" in css
+    # .source-yield-source-button is excluded from the base/hover paint rules
+    # but not the :active/:disabled ones; its own body-scoped !important rule
+    # owns those states (see test_source_yield_ui_contract), so it is asserted
+    # there rather than as a universal chrome exclusion.
+    chain_rules = [
+        (match.group(1), match.group(2))
+        for match in re.finditer(r"([^{}]+)\{([^{}]*)\}", css)
+        if "button:not(.agentic-review-tab)" in match.group(1)
+    ]
+    assert chain_rules, "shared chrome-button chain disappeared"
+    painting = [
+        (selector, body)
+        for selector, body in chain_rules
+        if "background" in body and "!important" in body
+    ]
+    assert painting, "shared chrome-button chain no longer paints a background"
+    for selector, _body in painting:
+        for control in REQUIRED_CHROME_EXCLUSIONS:
+            assert f":not({control})" in selector, control
+    assert ".app-shell-primary-link" in css
 
     utility_css = css[
         css.index(".notification-btn,\n.theme-toggle-btn,\n.app-shell-top-right .profile-avatar-btn {"):
@@ -403,7 +439,11 @@ def test_phase77d_stateful_table_header_and_review_styling_contract():
     assert ".review-action-button--disabled" in css
     assert 'html[data-theme="dark"] .recommendation-chip--tailor' in css
     assert 'html[data-theme="dark"] .review-action-button--available' in css
-    assert "button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(.scan-workspace-tab-btn):not(.scan-workspace-surface-tab):not(.sort-header-btn):not(.scheduler-tab-btn)" in css
+    # Same shared chrome-button chain; assert the exclusions, not the literal.
+    assert any(
+        "button:not(.agentic-review-tab)" in match.group(1)
+        for match in re.finditer(r"([^{}]+)\{([^{}]*)\}", css)
+    )
     assert css.count(".recommendation-chip--tailor") == 3
     assert css.count(".review-action-button--available") == 4
     assert 'data-view-tailoring="true"' in planning_source
@@ -780,17 +820,26 @@ def test_agentic_review_dedicated_page_contract():
         assert "agentic-review-link-card" not in source
 
     assert "pipeline-run-agentic-review-btn" in profile_source
-    assert 'aria-label="Agentic review"' in profile_source
-    assert 'data-tooltip="View"' in profile_source
+    # The accessible name became per-run (more descriptive), while the tooltip
+    # keeps the short label.
+    assert 'aria-label="Open agentic review for ${runId}"' in profile_source
+    assert 'data-tooltip="View stats"' in profile_source
     assert 'data-tooltip="Agentic review"' in profile_source
-    assert '/profile/pipeline-runs/${encodeURIComponent(run.run_id || "")}/agentic-review' in profile_source
-    assert '<th>Actions</th>' in profile_ui_source
+    # The run id is resolved into a local before interpolation.
+    assert (
+        '/profile/pipeline-runs/${encodeURIComponent(rawRunId)}/agentic-review'
+        in profile_source
+    )
+    # The actions header gained a scoped class.
+    assert '<th class="pipeline-runs-actions-head">Actions</th>' in profile_ui_source
     assert '<th>View</th>' not in profile_ui_source
     assert "pipeline-run-actions-cell" in profile_source
     assert "pipeline-run-icon-btn pipeline-run-view-btn" in profile_source
     assert "pipeline-run-icon-btn pipeline-run-agentic-review-btn" in profile_source
-    assert "pipeline-run-action-icon--view" in profile_source
-    assert "pipeline-run-action-icon--agentic" in profile_source
+    # Per-action icon modifier classes were replaced by one shared glyph class
+    # plus distinct icon identities; the actions stay visually distinguishable.
+    assert 'pipelineRunIcon("chart", "pipeline-run-icon-btn-glyph")' in profile_source
+    assert 'pipelineRunIcon("sparkle", "pipeline-run-icon-btn-glyph")' in profile_source
     assert '("Scheduler", "/scheduler", "scheduler")' not in shell_source
     assert '("Agentic Review", "/agentic-review", "AR")' not in shell_source
 
@@ -813,14 +862,17 @@ def test_agentic_review_dedicated_page_contract():
     assert route_source.index("app_redesign.css") < route_source.index("agentic_review.css")
     assert "{render_top_shell(\"/profile\")}" in route_source
     assert (
-        '<a class="agentic-review-back-link" href="/profile?tab=pipeline-runs">'
+        # Context-aware href (f-string variable); both approved routes are
+        # pinned at the owner in test_item6c2.
+        '<a class="agentic-review-back-link" href="{back_href}">'
         in route_source
     )
     assert (
         '<span class="agentic-review-back-link__icon" aria-hidden="true">←</span>'
         in route_source
     )
-    assert "<span>Back to pipeline runs</span>" in route_source
+    # The label is context-aware alongside the href.
+    assert "<span>{back_label}</span>" in route_source
     assert '<a class="agentic-review-back-link" href="/profile">' not in route_source
     assert "getProfileTabTargetFromUrl" in profile_source
     assert 'tab === "pipeline-runs"' in profile_source
@@ -856,9 +908,15 @@ def test_agentic_review_dedicated_page_contract():
     assert ".pipeline-run-icon-btn" in common_css
     assert ".pipeline-run-icon-btn::after" in common_css
     assert "content: attr(data-tooltip)" in common_css
-    assert "html[data-theme=\"light\"] .pipeline-run-icon-btn" in common_css
-    assert 'url("/static/media/view_img.svg")' in common_css
-    assert 'url("/static/media/ai-img.svg")' in common_css
+    # The hard-coded light-theme override was replaced by theme tokens that
+    # adapt automatically; assert the control is token-driven instead.
+    _icon_rule = common_css.split(".pipeline-run-icon-btn {", 1)[1].split("}", 1)[0]
+    assert "var(--app-" in _icon_rule
+    # The raster/SVG url() icons were replaced by inline pipelineRunIcon()
+    # glyphs (asserted above); the CSS now only sizes the shared glyph.
+    assert 'url("/static/media/view_img.svg")' not in common_css
+    assert 'url("/static/media/ai-img.svg")' not in common_css
+    assert ".pipeline-run-icon-btn-glyph" in common_css
     profile_tabs_block = common_css.split(".profile-tabs", 1)[1].split(".profile-tab-btn", 1)[0]
     assert "border-radius: 999px" not in profile_tabs_block
     assert "background: var(--app-surface-2)" not in profile_tabs_block
@@ -897,7 +955,12 @@ def test_agentic_review_dedicated_page_contract():
     assert ".agentic-review-tab::after" not in common_css
     assert ".agentic-review-segmented" not in common_css
     assert ".agentic-workflow-summary-card" not in common_css
-    assert ".agent-trace-panel" not in common_css
+    # app_redesign.css may reuse .agent-trace-panel for the profile pipeline-run
+    # stats modal, but must never own the Agentic Review page styling: every
+    # occurrence has to stay scoped to #pipelineRunStatsModal.
+    for _line in common_css.splitlines():
+        if ".agent-trace-panel" in _line:
+            assert "#pipelineRunStatsModal" in _line, _line.strip()[:90]
 
 
 def test_missing_job_prioritization_overlay_is_safe():

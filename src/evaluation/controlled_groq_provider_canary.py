@@ -223,6 +223,30 @@ def _iter_keys(value: Any) -> Iterable[str]:
             yield from _iter_keys(item)
 
 
+def canary_schedule_key(
+    *,
+    full_plan_sha256: str,
+    execution_order: int,
+    case_alias: str,
+    provider: str,
+    model: str,
+) -> str:
+    """Public canonical minting of one canary schedule key.
+
+    Exposed so a historical canary run can recompute the CURRENT expected key
+    from the current contract's own declared inputs instead of pinning a value
+    that moves whenever unrelated corpus material moves.
+    """
+
+    return _schedule_key(
+        full_plan_sha256=full_plan_sha256,
+        execution_order=execution_order,
+        case_alias=case_alias,
+        provider=provider,
+        model=model,
+    )
+
+
 def _schedule_key(
     *,
     full_plan_sha256: str,

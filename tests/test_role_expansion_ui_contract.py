@@ -37,8 +37,21 @@ def test_profile_role_mapping_summary_has_click_affordance_and_cache_bust():
     profile_ui = Path("src/app/profile_ui.py").read_text(encoding="utf-8")
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
 
-    assert "resume-role-summary-caret" in profile_js
-    assert "resume-role-summary-caret" in css
+    # The inline caret was intentionally removed by the approved profile
+    # redesign (40efe43b "feat: redesign profile resume and pipeline run UI").
+    # The role-mapping summary still has a real interactive affordance: a
+    # labelled row action that opens the role-family modal.
+    assert "resume-role-summary-caret" not in profile_js, "obsolete caret markup"
+
+    # Current control: markup, accessible name, and click handler.
+    assert "profile-resume-manage-role-action" in profile_js
+    assert "data-manage-resume-roles=" in profile_js
+    assert 'aria-label="Manage role families for ' in profile_js
+    assert 'closest("[data-manage-resume-roles]")' in profile_js
+    assert "openResumeRoleModal(" in profile_js
+    # ...and it is styled, so the affordance is visible.
+    assert "profile-resume-manage-role-action" in css
+
     assert "profile_preferences_menu_r1" in profile_ui
     assert "role_profile_preferences_menu_r1" in profile_ui
 

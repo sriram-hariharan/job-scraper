@@ -37,10 +37,10 @@ TRANSPORT_SHA256 = (
     "e27ad7f7eccf67837cde2b940c448042953abe16749378b0f353d6e503180209"
 )
 CURRENT_CANARY_SHA256 = (
-    "d8ac3d5852a1bfdecd5ad87bcca924dd4bc818af5fb33180b460f8bff2bd2326"
+    "0308d3619c561649453a7f53a5e532ab05a415ba9888a6e2e675e36fae181c79"
 )
 CURRENT_TRANSPORT_SHA256 = (
-    "d7a35d798804b7ab8f04be0cb808fa472ee55b5eccb2a843c3a5ef14f204d1b7"
+    "d073090cc1bee8da664322c67813dfb4fe51aabbd6a0c3c1a75b50b08f4d68e2"
 )
 IDENTITY_SHA256 = (
     "e1c7159d42daebe64ad2c8ddea5f0bb40b45c0ff1cd56111e980a52585685fef"
@@ -139,26 +139,26 @@ def test_historical_identity_and_current_semantic_ownership_are_separate():
     )
     expected = {
         "canary_run_002_f6a3df4b6caa7e82e229efc59bea7687": (
-            "case_eff6ed2fb3643d23b87bab48",
-            "canary_9c6a5ef970de552a6f830054e635ecd4",
+            "case_ab6a1757752b2853f320aebf",
+            "canary_66cad0f38a2a1a712a00e49d1d4cd4f5",
             "skill_extraction_required_preferred_v1",
             "skill_extraction_result_v1",
         ),
         "canary_run_002_19cfcee433993511035305348b7503f1": (
-            "case_8e43ca2af1d94798ae9d5167",
-            "canary_8443c4b254128440d76bab0163f78454",
+            "case_9ff5012359ce08993c5abbae",
+            "canary_c8f68420b285692fbddfa75186237ef6",
             "grounded_rag_synthetic_transmission_safe_v1",
             "grounded_rag_answer_result_v1",
         ),
         "canary_run_002_d592a547c5344cdbdf3ba926b0806c69": (
-            "case_c4f73240ce6ff98809579b5d",
-            "canary_d57f61cec14a93f0e9658ae9e04f18bb",
+            "case_baefa03bcbbc35c198c87846",
+            "canary_a631fab1cc7fd61b34d3358cadb297bd",
             "jd_intelligence_signals_v1",
             "jd_intelligence_result_v1",
         ),
         "canary_run_002_03e1b156d6ef1d8401c99298bdf09942": (
-            "case_3dddc5f43be918e0932d3bb2",
-            "canary_38aa2602e052b5c5ae84772abee84708",
+            "case_8c3fe2c6f36357f0aa1713ef",
+            "canary_2b7d20338488e4bf12c2f7a245ae97ac",
             "tailoring_generation_evidence_bound_v1",
             "tailoring_generation_result_v1",
         ),

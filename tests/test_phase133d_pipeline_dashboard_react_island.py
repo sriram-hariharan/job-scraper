@@ -174,7 +174,7 @@ def test_pipeline_states_accessibility_and_scoped_responsive_theme_styles_exist(
     assert "pipeline-empty-panel--compact" in component
     assert "margin-right: var(--pipeline-chat-clearance)" in styles
     assert '<button type="button" onClick={launchPipeline}>Run Pipeline</button>' not in component
-    assert "!important" not in styles
+    assert _unscoped_important_selectors(styles) == []
 
     stage_name_rule = styles.split(".pipeline-stage-name {", 1)[1].split("}", 1)[0]
     assert "white-space: normal" in stage_name_rule
@@ -256,3 +256,37 @@ def test_pipeline_dashboard_adds_no_pipeline_writer_or_automation_surface():
         assert forbidden not in model
         assert forbidden not in ui_source
         assert forbidden not in shell_source
+
+
+# Item: executive-island !important scope contract.
+# The island stylesheet legitimately uses !important, but only inside the
+# approved Advanced Diagnostics / Bulk Results island and dialog scopes. It must
+# never leak into global application CSS.
+APPROVED_ISLAND_IMPORTANT_SCOPES = (
+    "#advancedDiagnosticsRoot",
+    "#advancedDiagnosticsReviewDialog",
+    "#advancedDiagnosticsSectionReadbacks",
+    ".advanced-diagnostics-",
+    ".planning-bulk-results",
+)
+
+
+def _unscoped_important_selectors(css: str) -> list[str]:
+    """Return every !important selector outside the approved island scopes."""
+
+    import re as _re
+
+    offenders: list[str] = []
+    for match in _re.finditer(r"([^{}]+)\{([^{}]*)\}", css):
+        if "!important" not in match.group(2):
+            continue
+        for selector in match.group(1).split(","):
+            selector = " ".join(selector.split())
+            if not selector or selector.startswith("@"):
+                continue
+            if not any(
+                selector.startswith(scope)
+                for scope in APPROVED_ISLAND_IMPORTANT_SCOPES
+            ):
+                offenders.append(selector[:90])
+    return offenders

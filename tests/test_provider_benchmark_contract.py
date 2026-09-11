@@ -480,6 +480,84 @@ def test_returned_contracts_and_manifests_do_not_share_mutable_state():
     assert contract_owner.provider_benchmark_contract_sha256(second) == original_digest
 
 
+def _contract_with_fixture_metadata_change(workload_id, field):
+    manifest = contract_owner.load_provider_benchmark_fixture_manifest()
+    fixture = next(
+        row for row in manifest["fixtures"] if row["workload_id"] == workload_id
+    )
+    fixture[field] = not fixture[field]
+    return contract_owner.build_provider_benchmark_contract(manifest)
+
+
+def test_workload_qualification_contract_isolates_job_fit_fixture_metadata():
+    baseline = _contract()
+    changed = _contract_with_fixture_metadata_change(
+        "job_fit_evaluation",
+        "golden_output_available",
+    )
+
+    assert contract_owner.provider_benchmark_contract_sha256(baseline) != (
+        contract_owner.provider_benchmark_contract_sha256(changed)
+    )
+    moved = [
+        workload_id
+        for workload_id in EXPECTED_WORKLOADS
+        if contract_owner.workload_qualification_contract_sha256(
+            workload_id, baseline
+        )
+        != contract_owner.workload_qualification_contract_sha256(
+            workload_id, changed
+        )
+    ]
+    assert moved == ["job_fit_evaluation"]
+
+
+def test_workload_qualification_contract_isolates_skill_fixture_metadata():
+    baseline = _contract()
+    changed = _contract_with_fixture_metadata_change(
+        "skill_extraction",
+        "golden_output_available",
+    )
+
+    moved = [
+        workload_id
+        for workload_id in EXPECTED_WORKLOADS
+        if contract_owner.workload_qualification_contract_sha256(
+            workload_id, baseline
+        )
+        != contract_owner.workload_qualification_contract_sha256(
+            workload_id, changed
+        )
+    ]
+    assert moved == ["skill_extraction"]
+
+
+def test_shared_step8l_benchmark_control_invalidates_every_workload(monkeypatch):
+    baseline = {
+        workload_id: contract_owner.workload_qualification_contract_sha256(
+            workload_id
+        )
+        for workload_id in EXPECTED_WORKLOADS
+    }
+    monkeypatch.setattr(
+        contract_owner,
+        "_BENCHMARK_CONTROLS",
+        {
+            **contract_owner._BENCHMARK_CONTROLS,
+            "execution_mode": "offline_contract_only_v2",
+        },
+    )
+    changed = _contract()
+
+    assert all(
+        contract_owner.workload_qualification_contract_sha256(
+            workload_id, changed
+        )
+        != baseline[workload_id]
+        for workload_id in EXPECTED_WORKLOADS
+    )
+
+
 def test_import_and_construction_do_not_import_provider_clients():
     code = (
         "import json,sys;"

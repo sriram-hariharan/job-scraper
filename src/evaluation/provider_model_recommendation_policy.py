@@ -1102,3 +1102,401 @@ def read_provider_model_recommendation(
     )
 
     return deepcopy(matches[0])
+
+
+# ---------------------------------------------------------------------------
+# Renderer-bound V2 recommendation authority.
+#
+# The V1 pins and validators above keep their historical meaning.  V2 exists
+# because the V1 winner binding mixes whole-Step8L provenance and
+# corpus-derived raw coverage into workload authority, so an unrelated
+# workload's fixture change invalidates a workload that did not change.  The
+# V2 pin additionally binds workload-stable case coverage, so production can
+# verify exact coverage without a plan.
+# ---------------------------------------------------------------------------
+
+RENDERER_BOUND_V2_RECOMMENDATION_POLICY_VERSION = (
+    "provider-model-recommendation-policy-renderer-bound-v2"
+)
+RENDERER_BOUND_V2_RECOMMENDATION_PIN_VERSION = (
+    "provider-model-renderer-bound-recommendation-pin-v2"
+)
+_RENDERER_BOUND_V2_PIN_FIELDS = _RENDERER_BOUND_PIN_FIELDS | {
+    "expected_qualification_stable_case_aliases"
+}
+
+# Stable coverage proven from the reviewed qualification event's own historical
+# corpus (skill: bcf1286e/c3d419c5, job fit: 1d2f148f). Never re-derived from
+# the current corpus, whose raw aliases no longer resolve to these cases.
+_FINALIZED_SKILL_EXTRACTION_STABLE_CASE_ALIASES = [
+    "case_adb75e8f4222598d01c96632",
+    "case_ca4d896b8d25c5f6a33131e6",
+    "case_c679d81feddcd209e0923b23",
+    "case_155361f163b8a1857f1ea709",
+    "case_2e2c04e49f9cdaa7ab5b6422",
+]
+_FINALIZED_JOB_FIT_STABLE_CASE_ALIASES = ["case_d2afa978996c4d69af1f538b"]
+
+_FINALIZED_SKILL_EXTRACTION_RENDERER_BOUND_V2_PIN = {
+    **{
+        key: deepcopy(value)
+        for key, value in _FINALIZED_SKILL_EXTRACTION_RENDERER_BOUND_PIN.items()
+    },
+    "pin_version": RENDERER_BOUND_V2_RECOMMENDATION_PIN_VERSION,
+    "expected_qualification_semantics_generation": "renderer_bound_v2",
+    "expected_qualification_binding_sha256": (
+        "12b2e716ba4c9dffafb4da68344a4b603f8d36eabb9fbd1ed6fdda12f0b2a2e2"
+    ),
+    "expected_qualification_stable_case_aliases": (
+        _FINALIZED_SKILL_EXTRACTION_STABLE_CASE_ALIASES
+    ),
+}
+_FINALIZED_JOB_FIT_RENDERER_BOUND_V2_PIN = {
+    **{
+        key: deepcopy(value)
+        for key, value in _FINALIZED_JOB_FIT_RENDERER_BOUND_PIN.items()
+    },
+    "pin_version": RENDERER_BOUND_V2_RECOMMENDATION_PIN_VERSION,
+    "expected_qualification_semantics_generation": "renderer_bound_v2",
+    "expected_qualification_binding_sha256": (
+        "2cf4e2005fdb077af7080ccd8a33000ef3e7f8fb8f4d9595fba7a6a699c93f76"
+    ),
+    "expected_qualification_stable_case_aliases": (
+        _FINALIZED_JOB_FIT_STABLE_CASE_ALIASES
+    ),
+}
+FINALIZED_SKILL_EXTRACTION_RENDERER_BOUND_V2_REGISTRY_SHA256 = (
+    "d1c3c4ce2cc07ac223aac8c009771df37d4f3e31b3dfc9fbcd7d7364144fc500"
+)
+FINALIZED_JOB_FIT_RENDERER_BOUND_V2_REGISTRY_SHA256 = (
+    "d0a8998f7cbf353fc839ee64f9cedf046ea75faa7ec30cb86a72bca164b6a93b"
+)
+_FINALIZED_SKILL_EXTRACTION_V2_QUALIFIED_CANDIDATE_BINDINGS = {
+    ("groq", "openai/gpt-oss-20b"): (
+        "ca727553032f24749b3ea161188b6c2cd4f7ab4c877b8e7dc7d896a0f186e5ac",
+        "12b2e716ba4c9dffafb4da68344a4b603f8d36eabb9fbd1ed6fdda12f0b2a2e2",
+    ),
+    ("groq", "openai/gpt-oss-120b"): (
+        "79e89f604a16f38ea6803bf2669c004b4631ebaf5fd9ef005b3fe57e9f59c6ec",
+        "85b33f3b9289f3aeadacd847a754306aa13fb70154a2dc5e856498bfbbf1564e",
+    ),
+}
+
+
+def _validate_stable_case_alias_list(aliases: Any, label: str) -> None:
+    _require(
+        isinstance(aliases, list) and bool(aliases),
+        f"{label} stable case coverage is missing",
+    )
+    _require(
+        all(
+            qualification_registry._is_stable_case_alias(alias)
+            for alias in aliases
+        ),
+        f"{label} stable case alias is malformed",
+    )
+    _require(
+        len(aliases) == len(set(aliases)),
+        f"{label} stable case coverage contains duplicates",
+    )
+
+
+def validate_renderer_bound_v2_recommendation_pin(
+    pin: Mapping[str, Any],
+) -> bool:
+    """Validate the shape of one explicit renderer-bound V2 recommendation pin."""
+
+    _require(
+        isinstance(pin, Mapping) and set(pin) == _RENDERER_BOUND_V2_PIN_FIELDS,
+        "renderer-bound V2 recommendation pin fields must match the exact schema",
+    )
+    _require(
+        pin["pin_version"] == RENDERER_BOUND_V2_RECOMMENDATION_PIN_VERSION,
+        "renderer-bound V2 recommendation pin version mismatch",
+    )
+    _require(
+        pin["expected_qualification_semantics_generation"]
+        == qualification_registry
+        .RENDERER_BOUND_V2_QUALIFICATION_SEMANTICS_GENERATION,
+        "renderer-bound V2 recommendation pin generation must be renderer bound v2",
+    )
+    _validate_stable_case_alias_list(
+        pin["expected_qualification_stable_case_aliases"],
+        "renderer-bound V2 recommendation pin",
+    )
+    # Every remaining shape rule is identical to V1, so reuse it rather than
+    # restating it; only the version and generation tokens differ.
+    v1_shaped = {
+        key: deepcopy(value)
+        for key, value in pin.items()
+        if key != "expected_qualification_stable_case_aliases"
+    }
+    v1_shaped["pin_version"] = RENDERER_BOUND_RECOMMENDATION_PIN_VERSION
+    v1_shaped["expected_qualification_semantics_generation"] = (
+        qualification_registry.RENDERER_BOUND_QUALIFICATION_SEMANTICS_GENERATION
+    )
+    validate_renderer_bound_recommendation_pin(v1_shaped)
+    return True
+
+
+def build_finalized_skill_extraction_renderer_bound_v2_pin() -> Dict[str, Any]:
+    """Return the reviewed Skill winner pin under V2 binding semantics."""
+
+    pin = deepcopy(_FINALIZED_SKILL_EXTRACTION_RENDERER_BOUND_V2_PIN)
+    validate_renderer_bound_v2_recommendation_pin(pin)
+    return pin
+
+
+def build_finalized_job_fit_renderer_bound_v2_pin() -> Dict[str, Any]:
+    """Return the sole-current-candidate Job Fit pin under V2 semantics."""
+
+    pin = deepcopy(_FINALIZED_JOB_FIT_RENDERER_BOUND_V2_PIN)
+    validate_renderer_bound_v2_recommendation_pin(pin)
+    return pin
+
+
+def validate_renderer_bound_v2_workload_recommendation(
+    renderer_bound_registry: Dict[str, Any],
+    *,
+    pin: Mapping[str, Any],
+) -> bool:
+    """Validate one workload's V2 recommendation authority, failing closed.
+
+    Scoped to a single workload: unrelated workloads are never inspected, so a
+    change elsewhere in the registry cannot affect this result.
+    """
+
+    payload = deepcopy(renderer_bound_registry)
+    qualification_registry.validate_renderer_bound_v2_qualification_registry(
+        payload
+    )
+    validate_renderer_bound_v2_recommendation_pin(pin)
+
+    workload_id = pin["workload_id"]
+    cells = _renderer_bound_workload_cells(payload, workload_id)
+    _require(bool(cells), f"{workload_id} renderer-bound V2 cells are missing")
+
+    observed_universe = sorted(
+        (
+            {
+                "provider": cell["provider"],
+                "model": cell["model"],
+                "status": cell["status"],
+            }
+            for cell in cells
+        ),
+        key=lambda entry: (entry["provider"], entry["model"]),
+    )
+    expected_universe = sorted(
+        (dict(entry) for entry in pin["expected_candidate_universe"]),
+        key=lambda entry: (entry["provider"], entry["model"]),
+    )
+    _require(
+        observed_universe == expected_universe,
+        f"{workload_id} renderer-bound V2 candidate universe changed",
+    )
+
+    matches = [
+        cell
+        for cell in cells
+        if cell["provider"] == pin["provider"]
+        and cell["model"] == pin["model"]
+    ]
+    _require(
+        len(matches) == 1,
+        f"{workload_id} renderer-bound V2 winner identity is missing or ambiguous",
+    )
+    winner = matches[0]
+
+    _require(
+        winner["qualification_semantics_generation"]
+        == qualification_registry
+        .RENDERER_BOUND_V2_QUALIFICATION_SEMANTICS_GENERATION,
+        f"{workload_id} V2 winner is not renderer bound v2",
+    )
+    _require(
+        winner["status"] == pin["expected_status"],
+        f"{workload_id} V2 winner status changed",
+    )
+    _require(
+        winner["status_reasons"] == pin["expected_status_reasons"],
+        f"{workload_id} V2 winner status reasons changed",
+    )
+    tested_semantics = winner["tested_workload_qualification_semantics_sha256"]
+    current_semantics = winner[
+        "current_workload_qualification_semantics_sha256"
+    ]
+    _require(
+        tested_semantics is not None
+        and tested_semantics == current_semantics,
+        f"{workload_id} V2 winner workload semantics binding is stale",
+    )
+    _require(
+        winner["qualification_stable_case_aliases"]
+        == pin["expected_qualification_stable_case_aliases"],
+        f"{workload_id} V2 winner stable case coverage changed",
+    )
+    for cell_field, pin_field in (
+        (
+            "current_workload_qualification_semantics_sha256",
+            "expected_current_workload_qualification_semantics_sha256",
+        ),
+        (
+            "tested_workload_qualification_semantics_sha256",
+            "expected_tested_workload_qualification_semantics_sha256",
+        ),
+        ("current_task_contract_sha256", "expected_current_task_contract_sha256"),
+        ("tested_task_contract_sha256", "expected_tested_task_contract_sha256"),
+        ("qualification_binding_sha256", "expected_qualification_binding_sha256"),
+        ("evidence_sha256", "expected_evidence_sha256"),
+        ("review_sha256", "expected_review_sha256"),
+    ):
+        _require(
+            winner[cell_field] == pin[pin_field],
+            f"{workload_id} V2 winner {cell_field} changed",
+        )
+    _require(
+        winner["qualification_binding_sha256"]
+        == qualification_registry
+        .renderer_bound_v2_qualification_binding_sha256(winner),
+        f"{workload_id} V2 winner qualification binding is inconsistent",
+    )
+    return True
+
+
+def validate_finalized_job_fit_renderer_bound_v2_authority(
+    renderer_bound_registry: Dict[str, Any],
+) -> bool:
+    """Validate the exact durable Job Fit V2 authority selected for routing."""
+
+    payload = deepcopy(renderer_bound_registry)
+    qualification_registry.validate_renderer_bound_v2_qualification_registry(
+        payload
+    )
+    _require(
+        qualification_registry
+        .renderer_bound_v2_qualification_registry_sha256(payload)
+        == FINALIZED_JOB_FIT_RENDERER_BOUND_V2_REGISTRY_SHA256,
+        "finalized Job Fit renderer-bound V2 registry digest changed",
+    )
+    pin = build_finalized_job_fit_renderer_bound_v2_pin()
+    _require(
+        production_task_contract_sha256(pin["workload_id"])
+        == pin["expected_current_task_contract_sha256"],
+        "finalized Job Fit production task contract changed",
+    )
+    validate_renderer_bound_v2_workload_recommendation(payload, pin=pin)
+    cells = _renderer_bound_workload_cells(payload, pin["workload_id"])
+    qualified = [cell for cell in cells if cell["status"] == "qualified"]
+    _require(
+        len(cells) == 4
+        and len(qualified) == 1
+        and (qualified[0]["provider"], qualified[0]["model"])
+        == (pin["provider"], pin["model"]),
+        "finalized Job Fit V2 candidate authority changed",
+    )
+    # The legacy rejected candidates must stay legacy: a schema migration never
+    # promotes them into renderer-bound V2 qualification authority.
+    for cell in cells:
+        if (cell["provider"], cell["model"]) == (pin["provider"], pin["model"]):
+            continue
+        _require(
+            cell["qualification_semantics_generation"]
+            == qualification_registry
+            .LEGACY_QUALIFICATION_SEMANTICS_GENERATION
+            and cell["status"] == "rejected"
+            and not cell["qualification_stable_case_aliases"],
+            "finalized Job Fit legacy candidate semantics changed",
+        )
+    from src.evaluation.job_fit_candidate_local_qualification import (
+        job_fit_candidate_transport_semantics_sha256,
+    )
+
+    _require(
+        job_fit_candidate_transport_semantics_sha256(
+            pin["provider"], pin["model"]
+        )
+        == FINALIZED_JOB_FIT_CANDIDATE_TRANSPORT_SEMANTICS_SHA256,
+        "finalized Job Fit candidate transport semantics changed",
+    )
+    return True
+
+
+def validate_finalized_skill_extraction_renderer_bound_v2_authority(
+    renderer_bound_registry: Dict[str, Any],
+) -> bool:
+    """Validate the exact durable Skill V2 authority selected for app routing."""
+
+    payload = deepcopy(renderer_bound_registry)
+    qualification_registry.validate_renderer_bound_v2_qualification_registry(
+        payload
+    )
+    _require(
+        qualification_registry
+        .renderer_bound_v2_qualification_registry_sha256(payload)
+        == FINALIZED_SKILL_EXTRACTION_RENDERER_BOUND_V2_REGISTRY_SHA256,
+        "finalized Skill renderer-bound V2 registry digest changed",
+    )
+    pin = build_finalized_skill_extraction_renderer_bound_v2_pin()
+    _require(
+        production_task_contract_sha256(pin["workload_id"])
+        == pin["expected_current_task_contract_sha256"],
+        "finalized Skill production task contract changed",
+    )
+    validate_renderer_bound_v2_workload_recommendation(payload, pin=pin)
+    cells = _renderer_bound_workload_cells(payload, pin["workload_id"])
+    by_identity = {(cell["provider"], cell["model"]): cell for cell in cells}
+    for identity, (evidence_sha256, binding_sha256) in (
+        _FINALIZED_SKILL_EXTRACTION_V2_QUALIFIED_CANDIDATE_BINDINGS.items()
+    ):
+        cell = by_identity.get(identity)
+        _require(
+            cell is not None
+            and cell["status"] == "qualified"
+            and cell["qualification_semantics_generation"]
+            == qualification_registry
+            .RENDERER_BOUND_V2_QUALIFICATION_SEMANTICS_GENERATION
+            and cell["evidence_sha256"] == evidence_sha256
+            and cell["qualification_binding_sha256"] == binding_sha256
+            and cell["qualification_stable_case_aliases"]
+            == _FINALIZED_SKILL_EXTRACTION_STABLE_CASE_ALIASES,
+            "finalized Skill V2 qualified candidate authority changed",
+        )
+    return True
+
+
+def build_renderer_bound_v2_workload_recommendation(
+    renderer_bound_registry: Dict[str, Any],
+    *,
+    pin: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Return one V2 recommendation entry after fail-closed validation."""
+
+    validate_renderer_bound_v2_workload_recommendation(
+        renderer_bound_registry,
+        pin=pin,
+    )
+    return deepcopy(
+        {
+            "workload_id": pin["workload_id"],
+            "recommendation_status": "recommended",
+            "provider": pin["provider"],
+            "model": pin["model"],
+            "selection_basis": pin["selection_basis"],
+            "qualification_semantics_generation": (
+                pin["expected_qualification_semantics_generation"]
+            ),
+            "task_contract_sha256": pin["expected_current_task_contract_sha256"],
+            "workload_qualification_semantics_sha256": (
+                pin["expected_current_workload_qualification_semantics_sha256"]
+            ),
+            "qualification_binding_sha256": (
+                pin["expected_qualification_binding_sha256"]
+            ),
+            "qualification_stable_case_aliases": deepcopy(
+                pin["expected_qualification_stable_case_aliases"]
+            ),
+            "evidence_sha256": pin["expected_evidence_sha256"],
+            "review_sha256": pin["expected_review_sha256"],
+        }
+    )

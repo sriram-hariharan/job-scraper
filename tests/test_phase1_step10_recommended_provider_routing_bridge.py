@@ -1414,11 +1414,11 @@ def test_stage6b_skill_authority_failures_never_fall_back_or_execute(
     artifact_path = (
         ROOT
         / routing.qualification_registry
-        .RENDERER_BOUND_SKILL_REGISTRY_ARTIFACT_PATH
+        .RENDERER_BOUND_V2_SKILL_REGISTRY_ARTIFACT_PATH
     )
     baseline = (
         routing.qualification_registry
-        .load_renderer_bound_skill_qualification_registry(
+        .load_renderer_bound_v2_skill_qualification_registry(
             artifact_path,
             repository_root=ROOT,
         )
@@ -1430,11 +1430,11 @@ def test_stage6b_skill_authority_failures_never_fall_back_or_execute(
 
         monkeypatch.setattr(
             routing.qualification_registry,
-            "load_renderer_bound_skill_qualification_registry",
+            "load_renderer_bound_v2_skill_qualification_registry",
             fail_load,
         )
     elif failure_mode == "pin_mismatch":
-        original_pin = routing.build_finalized_skill_extraction_renderer_bound_pin
+        original_pin = routing.build_finalized_skill_extraction_renderer_bound_v2_pin
 
         def mismatched_pin():
             pin = original_pin()
@@ -1443,7 +1443,7 @@ def test_stage6b_skill_authority_failures_never_fall_back_or_execute(
 
         monkeypatch.setattr(
             routing,
-            "build_finalized_skill_extraction_renderer_bound_pin",
+            "build_finalized_skill_extraction_renderer_bound_v2_pin",
             mismatched_pin,
         )
     else:
@@ -1476,7 +1476,7 @@ def test_stage6b_skill_authority_failures_never_fall_back_or_execute(
             cell[field] = "0" * 64
         monkeypatch.setattr(
             routing.qualification_registry,
-            "load_renderer_bound_skill_qualification_registry",
+            "load_renderer_bound_v2_skill_qualification_registry",
             lambda *_args, **_kwargs: altered,
         )
 
@@ -2078,13 +2078,13 @@ from src.evaluation.provider_fixture_benchmark import (  # noqa: E402
 )
 
 STAGE3_CORPUS_SHA256 = (
-    "b4dea8bfccf39da87221755777d88f35427b1f4b772f3730fcd48cbdb5842b5f"
+    "59180e4064dd74759c6ecd8630478225b191f942b68fb1880e172fe07ee80aec"
 )
 STAGE3_HISTORICAL_PLAN_SHA256 = (
     "f2dcf5345442009915819432a9c1fc9342de40561eb6824c1518dcd31e99d3bf"
 )
 STAGE3_PLAN_SHA256 = (
-    "f4958bdcf4387010986258eb690c7c480481d8e91bdb221debdf2315fdd569ed"
+    "bacc7eaa4524199ba293e2d50232f5a8c6cf61014ad8dc89c3dd30d334654162"
 )
 STAGE3_REGISTRY_SHA256 = (
     "6d7c1e2cae7d03edadcfb4c7268ec6ec74e8c0e10b13e73cc3914baa03ea8f6f"

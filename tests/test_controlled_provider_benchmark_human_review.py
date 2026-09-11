@@ -155,7 +155,7 @@ def completed_evidence(controlled_inputs):
         transport=transport,
         execution_time_source=lambda: FIXED_EXECUTION_TIME,
     )
-    assert len(transport.calls) == 44
+    assert len(transport.calls) == 45
     return evidence
 
 
@@ -169,7 +169,7 @@ def failed_review_evidence(controlled_inputs):
         pricing=pricing,
         transport=transport,
         execution_time_source=lambda: FIXED_EXECUTION_TIME,
-        maximum_schedule_items=4,
+        maximum_schedule_items=5,
     )
     assert evidence["hard_failure_present"] is True
     return evidence
@@ -938,26 +938,26 @@ def test_review_construction_never_reaches_network(
     assert record["decision"] == "approved"
 
 
-def test_44_cell_plan_and_live_default_off_remain_unchanged(controlled_inputs):
+def test_45_cell_plan_and_live_default_off_remain_unchanged(controlled_inputs):
     plan = controlled_inputs[0]
     counts = plan["request_counts"]["maximum_requests_per_model"]
 
-    assert plan["request_counts"]["maximum_total_requests"] == 44
+    assert plan["request_counts"]["maximum_total_requests"] == 45
     assert counts == {
         "groq/openai/gpt-oss-20b": 12,
-        "groq/openai/gpt-oss-120b": 10,
+        "groq/openai/gpt-oss-120b": 11,
         "openai/gpt-5-mini": 12,
         "openai/gpt-5.1": 10,
     }
     assert plan["authority_invariants"]["live_execution_authorized"] is False
-    assert all(
-        not (
+    assert sum(
+        (
             row["workload_id"] == "skill_extraction"
             and row["provider"] == "groq"
             and row["model"] == "openai/gpt-oss-120b"
         )
         for row in plan["staged_matrix"]
-    )
+    ) == 1
 
 
 def test_no_production_source_imports_human_review_owner():

@@ -250,6 +250,11 @@ def test_no_dependency_schema_migration_or_pipeline_change():
     assert digest.hexdigest() in {
         "7dba8092148c9c401ff56f779adff7dc4363dfec3f67f1502ed549a437a8b4f6",
         "4c1e00dd2325e258feaa9556679409fab12b768536ebb1f2e1d3678d7cf402bb",
+        # Approved committed storage evolution unrelated to pgvector:
+        # bulk_generation/schema.sql added (41b0a742) and
+        # notification_state/schema.sql updated (ea3f597a).
+        # vector_evidence/schema.sql is excluded above and is unchanged.
+        "cdf15b61b376ab71fd9ba2e16230a55de5e425e3c2f705b609ebc44a99385e6d",
     }
 
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8").lower()

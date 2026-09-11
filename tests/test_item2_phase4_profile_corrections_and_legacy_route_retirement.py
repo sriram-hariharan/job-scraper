@@ -73,8 +73,13 @@ def test_advanced_diagnostics_link_metadata_preserved():
 
 
 def test_scheduler_health_link_metadata_preserved():
-    scheduler_link = _block(UI_SHELL_SOURCE, 'href="/scheduler"', "</a>")
-    assert 'id="profileSchedulerHealthLink"' in scheduler_link
+    # The notification-centre footer added its own href="/scheduler" link ahead
+    # of the profile dropdown item, so anchor on the unique element id rather
+    # than the first href occurrence.
+    assert UI_SHELL_SOURCE.count('id="profileSchedulerHealthLink"') == 1
+    scheduler_link = _block(
+        UI_SHELL_SOURCE, 'id="profileSchedulerHealthLink"', "</a>"
+    )
     assert 'data-admin-only="true"' in scheduler_link
     assert "Scheduler Health" in scheduler_link
     assert "profile-dropdown-nav-subtitle" not in scheduler_link

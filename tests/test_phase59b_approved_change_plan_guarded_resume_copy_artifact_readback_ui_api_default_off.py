@@ -18,6 +18,11 @@ from tests.test_phase56a_live_tailoring_suggestion_planning_workspace_wiring_def
 from tests.test_phase57a_live_exact_resume_change_proposal_planning_workspace_wiring_default_off import (
     _valid_exact_provider_payload,
 )
+from tests.test_phase58a_manual_exact_change_acceptance_approved_plan_wiring_default_off import (
+    KNOWN_PROPOSAL_ID,
+    SECOND_KNOWN_PROPOSAL_ID,
+    _two_candidate_stored_payload,
+)
 from tests.test_phase58b_manual_exact_change_acceptance_approved_plan_readback_ui_api_default_off import (
     _two_proposal_provider_payload,
 )
@@ -94,7 +99,7 @@ def test_enabled_api_readback_exposes_guarded_artifact_observability_fields(monk
         enable_live_exact_resume_change_proposal=True,
         live_exact_resume_change_proposal_adapter=lambda _request: _valid_exact_provider_payload(),
         enable_manual_exact_change_acceptance=True,
-        accepted_exact_change_proposal_ids=["phase57-proposal-001"],
+        accepted_exact_change_proposal_ids=["phase42a-001"],
         enable_guarded_resume_copy_artifact_creation=True,
         approved_change_plan_id=plan_id,
     )
@@ -129,7 +134,7 @@ def test_valid_approved_plan_input_shows_new_copy_artifact_metadata(monkeypatch)
     assert readback["artifact_metadata"]["artifact_created"] is True
     assert readback["artifact_metadata"]["output_kind"] == "new_copy_resume_artifact"
     assert readback["artifact_metadata"]["applied_approved_change_ids"] == [
-        "phase57-proposal-001"
+        "phase42a-001"
     ]
     assert readback["artifact"]["new_copy_only"] is True
     assert readback["artifact"]["persisted"] is False
@@ -225,7 +230,9 @@ def test_no_live_llm_or_provider_calls_are_made_by_artifact_readback(monkeypatch
 
 
 def test_phase55_56_57_58_and_59a_readbacks_remain_intact(monkeypatch):
-    _patch_storage(monkeypatch, stored_payload=_stored_scan_payload())
+    # Two-proposal provider payload refines two KNOWN candidates, so pair it
+    # with the matching test-local two-candidate upstream fixture.
+    _patch_storage(monkeypatch, stored_payload=_two_candidate_stored_payload())
     base = services.save_saved_scan_state_payload(
         scan_id="phase56a-scan",
         **_state_request(),
@@ -234,7 +241,7 @@ def test_phase55_56_57_58_and_59a_readbacks_remain_intact(monkeypatch):
         enable_live_exact_resume_change_proposal=True,
         live_exact_resume_change_proposal_adapter=lambda _request: _two_proposal_provider_payload(),
         enable_manual_exact_change_acceptance=True,
-        accepted_exact_change_proposal_ids=["phase57-proposal-001"],
+        accepted_exact_change_proposal_ids=["phase42a-001"],
     )
     plan_id = base["manual_exact_change_acceptance_readback"]["approved_change_plan_id"]
     payload = services.save_saved_scan_state_payload(
@@ -245,7 +252,7 @@ def test_phase55_56_57_58_and_59a_readbacks_remain_intact(monkeypatch):
         enable_live_exact_resume_change_proposal=True,
         live_exact_resume_change_proposal_adapter=lambda _request: _two_proposal_provider_payload(),
         enable_manual_exact_change_acceptance=True,
-        accepted_exact_change_proposal_ids=["phase57-proposal-001"],
+        accepted_exact_change_proposal_ids=["phase42a-001"],
         enable_guarded_resume_copy_artifact_creation=True,
         approved_change_plan_id=plan_id,
     )
@@ -263,6 +270,7 @@ def test_unaccepted_or_unapproved_proposals_are_not_included(monkeypatch):
     plan_payload = _approved_plan_payload(
         monkeypatch,
         provider_payload=_two_proposal_provider_payload(),
+        stored_payload=_two_candidate_stored_payload(),
     )
     plan_readback = plan_payload["manual_exact_change_acceptance_readback"]
 
@@ -272,9 +280,9 @@ def test_unaccepted_or_unapproved_proposals_are_not_included(monkeypatch):
         approved_change_plan_id=plan_readback["approved_change_plan_id"],
     )
 
-    assert readback["applied_approved_change_ids"] == ["phase57-proposal-001"]
-    assert "phase57-proposal-002" not in readback["applied_approved_change_ids"]
-    assert readback["artifact_metadata"]["skipped_change_ids"] == ["phase57-proposal-002"]
+    assert readback["applied_approved_change_ids"] == ["phase42a-001"]
+    assert SECOND_KNOWN_PROPOSAL_ID not in readback["applied_approved_change_ids"]
+    assert readback["artifact_metadata"]["skipped_change_ids"] == [SECOND_KNOWN_PROPOSAL_ID]
 
 
 def test_no_application_execution_submission_or_scoring_changes(monkeypatch):

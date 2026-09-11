@@ -76,7 +76,17 @@ def test_overview_remains_the_only_agentic_operations_data_endpoint() -> None:
     component = _source(COMPONENT_PATH)
 
     assert api_source.count(f'@app.get("{OVERVIEW_PATH}")') == 1
-    assert api_source.count("/profile/admin/agentic-operations/") == 1
+    # Route uniqueness is asserted on actual FastAPI route REGISTRATIONS. The
+    # overview path also appears in an authenticated-route allowlist, which is
+    # not an endpoint, so raw path-string counting is not a valid proxy.
+    import re as _re
+
+    _registrations = _re.findall(
+        r'@app\.(?:get|post|put|patch|delete)\(\s*"'
+        r'(/profile/admin/agentic-operations/[^"]*)"',
+        api_source,
+    )
+    assert _registrations == [OVERVIEW_PATH]
     assert model.count("fetch(") == 1
     assert (model + component).count(OVERVIEW_PATH) == 1
     assert "agentic_operations_run_inspector" not in api_source

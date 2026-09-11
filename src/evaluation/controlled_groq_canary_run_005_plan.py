@@ -11,11 +11,14 @@ from typing import Any, Dict, Iterable, Mapping
 from src.evaluation.controlled_provider_benchmark_plan import (
     CONTROLLED_PLAN_VERSION,
     build_controlled_provider_benchmark_plan,
+    current_case_alias,
     load_run_plan_fixture,
     validate_controlled_provider_benchmark_plan,
+    validate_current_case_ownership,
 )
 from src.evaluation.controlled_groq_provider_canary import (
     build_controlled_groq_canary_contract,
+    canary_schedule_key,
     validate_controlled_groq_canary_contract,
 )
 from src.evaluation.provider_benchmark_contract import (
@@ -43,7 +46,10 @@ RUN_005_CONTRACT_KIND = (
 )
 
 TARGET_CASE_ALIAS = "case_ece85e9411ca52b579359fb8"
-CURRENT_TARGET_CASE_ALIAS = "case_3dddc5f43be918e0932d3bb2"
+# Durable, corpus-independent identity of the approved target case. The current
+# RAW alias is deliberately not pinned here: it mixes the global corpus digest,
+# so an unrelated workload's fixture edit moves it without this case changing.
+CURRENT_TARGET_STABLE_CASE_ALIAS = "case_ff24f23eeb3e0bed33bfaefa"
 TARGET_CASE_ID = "tailoring_generation_evidence_bound_v1"
 TARGET_WORKLOADS = ("tailoring_generation",)
 TARGET_SCHEMA_ID = "tailoring_generation_result_v1"
@@ -52,7 +58,9 @@ TARGET_MODEL = "openai/gpt-oss-120b"
 RUN_005_SCHEDULE_KEY_PREFIX = "canary_run_005_"
 EXPECTED_CANONICAL_REQUEST_SIZE = 641
 EXPECTED_BASE_TRANSPORT_KEY = "canary_969374f055f6d3a74a60a3e4ce6ee440"
-CURRENT_BASE_TRANSPORT_KEY = "canary_38aa2602e052b5c5ae84772abee84708"
+# Historical base transport key stays pinned above as immutable execution
+# evidence. The CURRENT key is derived from the validated canary contract
+# instead of pinned, because it embeds the global plan digest and raw alias.
 
 _HISTORICAL_BENCHMARK_CONTRACT_SHA256 = (
     "ba4e817f4e82f9df967011709a42bc7d2f22998f176f555cfee9dfc9e0071b98"
@@ -286,11 +294,21 @@ def _committed_ownership() -> tuple[
             case["case_id"] == TARGET_CASE_ID
             and case["workload_id"] == workload
             and case["schema_id"] == TARGET_SCHEMA_ID
-            and review["case_alias"] == CURRENT_TARGET_CASE_ALIAS
             and case["sanitized_classification"] == "synthetic_sanitized"
             and case["contains_personal_resume_content"] is False
             and case["additional_redaction_required"] is False,
             "run-005 fixture case ownership changed",
+        )
+        # Bind current ownership to the workload-stable case identity and derive
+        # the expected raw alias from the current corpus, so unrelated workload
+        # churn cannot invalidate this historical canary while a substituted,
+        # renamed or removed target case still fails closed.
+        validate_current_case_ownership(
+            workload_id=workload,
+            case_id=TARGET_CASE_ID,
+            expected_stable_case_alias=CURRENT_TARGET_STABLE_CASE_ALIAS,
+            observed_case_alias=review["case_alias"],
+            corpus=corpus,
         )
         base_rows = [
             row
@@ -299,9 +317,21 @@ def _committed_ownership() -> tuple[
             and row["provider"] == TARGET_PROVIDER
             and row["model"] == TARGET_MODEL
         ]
+        # The canary contract validator already rebuilds the whole schedule
+        # deterministically, so every key is exactly recomputed there. Re-derive
+        # the expected key from the contract's OWN declared plan digest and the
+        # row's current alias rather than pinning a literal that moves whenever
+        # unrelated corpus material moves.
         _require(
             len(base_rows) == 1
-            and base_rows[0]["schedule_key"] == CURRENT_BASE_TRANSPORT_KEY,
+            and base_rows[0]["schedule_key"]
+            == canary_schedule_key(
+                full_plan_sha256=canary["controlled_full_plan_sha256"],
+                execution_order=base_rows[0]["execution_order"],
+                case_alias=base_rows[0]["case_alias"],
+                provider=TARGET_PROVIDER,
+                model=TARGET_MODEL,
+            ),
             "run-005 target must map to one exact base transport row",
         )
         ownership.append(

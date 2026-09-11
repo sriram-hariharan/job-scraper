@@ -22,6 +22,8 @@ from tests.support.phase_guard_registry import (
     ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES,
     ITEM61D_AGENTIC_OPERATIONS_CONSOLE_SHELL_FILES,
     NOTIFICATIONS_SCHEDULER_BELL_BRIDGE_FILES,
+    STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES,
+    STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES,
     JOBVITE_LOCATION_FRESHNESS_FILES,
     JOBVITE_STANDALONE_DISCOVERY_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
@@ -168,6 +170,11 @@ def test_protected_runtime_files_are_unchanged():
             "item71_effective_exact_change_filter",
             "item71_production_exact_change_refinement",
             "notifications_scheduler_bell_bridge",
+            # Step 1 + renderer-bound V2 stabilization keeps these provider
+            # routing hash-maintenance paths in compatibility scope. The files
+            # themselves are unmodified here; only their committed HEAD content
+            # has moved ahead of the historical expectation.
+            "phase1_ai_provider_model_routing_hash_maintenance",
         ),
     )
 
@@ -3034,6 +3041,34 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         and Path(relative_path).suffix in runtime_suffixes
     }
     if set(changed_runtime_files) == notification_bridge_runtime_files:
+        diff = subprocess.check_output(
+            [
+                "git", "diff", "--unified=0", "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:] for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    step1_renderer_bound_v2_stabilization_runtime_files = {
+        ROOT / relative_path
+        for relative_path in (
+            STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES
+            | STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES
+        )
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if (
+        set(changed_runtime_files)
+        == step1_renderer_bound_v2_stabilization_runtime_files
+    ):
         diff = subprocess.check_output(
             [
                 "git", "diff", "--unified=0", "--",

@@ -259,8 +259,13 @@ def test_processing_surfaces_share_compact_moving_step_viewport_and_reduced_moti
     assert ".workflow-overlay--tailoring" in source
     assert 'html[data-theme="light"] .workflow-overlay' in source
     assert 'html[data-theme="dark"] .workflow-overlay--tailoring' in source
+    # The tailoring overlay accent was retuned away from violet (#7c3aed) at
+    # 340be82c; the invariant is that pipeline and tailoring keep DISTINCT
+    # accents, not the old hex.
     assert "--workflow-accent: #2563eb" in source
-    assert "--workflow-accent: #7c3aed" in source
+    tailoring = source.split(".workflow-overlay--tailoring {", 1)[1].split("}", 1)[0]
+    assert "--workflow-accent: #bfaac5" in tailoring
+    assert "--workflow-accent: #2563eb" not in tailoring
     assert ".workflow-step-viewport" in source
     assert ".workflow-step-track" in source
     assert ".workflow-step.is-complete" in source

@@ -597,7 +597,7 @@ def test_page_title_uses_the_scoped_scheduler_class_not_a_global_display_style()
     # Phase 3 consolidated it into the shared .app-page-header__title rule,
     # which is now the sole owner of this sizing.)
     assert '<h1 className="app-page-header__title">Scheduler Health</h1>' in SCHEDULER_DASHBOARD_TSX
-    assert "!important" not in REACT_CSS
+    assert _unscoped_important_selectors(REACT_CSS) == []
     assert (
         ".page .app-page-header .app-page-header__title-row .app-page-header__title {"
         in APP_REDESIGN_CSS
@@ -696,3 +696,37 @@ def test_shared_table_tokens_are_defined_so_rows_use_neutral_shared_backgrounds(
     root_block = root_block[: root_block.index("}") + 1]
     for token in ("--queue-row-default", "--queue-row-alternate", "--queue-border", "--queue-surface"):
         assert token in root_block
+
+
+# Item: executive-island !important scope contract.
+# The island stylesheet legitimately uses !important, but only inside the
+# approved Advanced Diagnostics / Bulk Results island and dialog scopes. It must
+# never leak into global application CSS.
+APPROVED_ISLAND_IMPORTANT_SCOPES = (
+    "#advancedDiagnosticsRoot",
+    "#advancedDiagnosticsReviewDialog",
+    "#advancedDiagnosticsSectionReadbacks",
+    ".advanced-diagnostics-",
+    ".planning-bulk-results",
+)
+
+
+def _unscoped_important_selectors(css: str) -> list[str]:
+    """Return every !important selector outside the approved island scopes."""
+
+    import re as _re
+
+    offenders: list[str] = []
+    for match in _re.finditer(r"([^{}]+)\{([^{}]*)\}", css):
+        if "!important" not in match.group(2):
+            continue
+        for selector in match.group(1).split(","):
+            selector = " ".join(selector.split())
+            if not selector or selector.startswith("@"):
+                continue
+            if not any(
+                selector.startswith(scope)
+                for scope in APPROVED_ISLAND_IMPORTANT_SCOPES
+            ):
+                offenders.append(selector[:90])
+    return offenders

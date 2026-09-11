@@ -16,6 +16,7 @@ from src.evaluation.provider_benchmark_contract import (
     WORKLOAD_ORDER,
     build_provider_benchmark_contract,
     provider_benchmark_contract_sha256,
+    workload_qualification_contract_sha256,
 )
 from src.evaluation.provider_client_compatibility import (
     provider_client_compatibility_sha256,
@@ -1070,6 +1071,59 @@ def test_step8l_contract_digest_remains_stable():
     )
 
 
+def test_full_step8l_plan_binding_remains_fail_closed(monkeypatch):
+    baseline = _plan()
+    manifest = deepcopy(
+        build_provider_benchmark_contract()["fixture_manifest"]
+    )
+    job_fit = next(
+        row
+        for row in manifest["fixtures"]
+        if row["workload_id"] == "job_fit_evaluation"
+    )
+    job_fit["golden_output_available"] = not job_fit[
+        "golden_output_available"
+    ]
+    changed_contract = build_provider_benchmark_contract(manifest)
+    monkeypatch.setattr(
+        owner,
+        "build_provider_benchmark_contract",
+        lambda: deepcopy(changed_contract),
+    )
+
+    changed = owner.build_controlled_provider_benchmark_plan()
+    assert changed["step8l_contract_sha256"] == (
+        provider_benchmark_contract_sha256(changed_contract)
+    )
+    assert changed["step8l_contract_sha256"] != baseline[
+        "step8l_contract_sha256"
+    ]
+    changed["step8l_contract_sha256"] = baseline["step8l_contract_sha256"]
+    with pytest.raises(
+        ValueError,
+        match="controlled plan benchmark contract digest mismatch",
+    ):
+        owner.validate_controlled_provider_benchmark_plan(changed)
+
+
+def test_workload_projection_uses_scoped_step8l_qualification_identity():
+    from src.evaluation import provider_benchmark_contract as step8l
+
+    plan = _plan()
+    projection = owner.build_workload_plan_projection(
+        "skill_extraction",
+        plan=plan,
+    )
+
+    assert plan["step8l_contract_sha256"] == provider_benchmark_contract_sha256()
+    assert projection["global_execution_envelope"][
+        "step8l_contract_sha256"
+    ] == step8l.workload_qualification_contract_sha256("skill_extraction")
+    assert projection["global_execution_envelope"][
+        "step8l_contract_sha256"
+    ] != plan["step8l_contract_sha256"]
+
+
 def test_step8m_compatibility_digest_remains_at_baseline():
     assert provider_client_compatibility_sha256() == STEP8M_BASELINE_SHA256
 
@@ -1283,6 +1337,11 @@ def test_stage1_workload_plan_projection_binds_global_execution_envelope():
                     member: plan[field][member]
                     for member in owner._GLOBAL_TOKEN_POLICY_FIELDS
                 }
+                continue
+            if field == "step8l_contract_sha256":
+                assert envelope[field] == (
+                    workload_qualification_contract_sha256(workload_id)
+                )
                 continue
             assert envelope[field] == plan[field]
 
@@ -1511,3 +1570,198 @@ def test_stage4b_recipe_cases_pass_transmission_safety_unmodified():
             assert review[flag] is False, (case["case_id"], flag)
         assert review["eligible_for_later_controlled_transmission"] is True
         assert review["eligibility_reasons"] == []
+
+
+# ---------------------------------------------------------------------------
+# Step 14: controlled-canary current-case ownership.
+#
+# Historical canary identity stays immutable; current compatibility binds to the
+# workload-stable case identity so unrelated corpus churn cannot invalidate a
+# historical canary, while any real target-case change still fails closed.
+# ---------------------------------------------------------------------------
+
+STEP14_TARGETS = (
+    ("skill_extraction", "skill_extraction_required_preferred_v1",
+     "case_adb75e8f4222598d01c96632"),
+    ("jd_intelligence", "jd_intelligence_signals_v1",
+     "case_2f47393a4efcbe220d325519"),
+    ("tailoring_generation", "tailoring_generation_evidence_bound_v1",
+     "case_ff24f23eeb3e0bed33bfaefa"),
+)
+
+
+def test_step14_historical_canary_aliases_and_keys_remain_unchanged():
+    from src.evaluation import controlled_groq_canary_run_003_plan as run003
+    from src.evaluation import controlled_groq_canary_run_004_plan as run004
+    from src.evaluation import controlled_groq_canary_run_005_plan as run005
+
+    # Historical raw aliases - immutable execution evidence.
+    assert run003.TARGET_CASE_ALIAS == "case_fb2b069aa9340571b60e1fb5"
+    assert run004.HISTORICAL_TARGET_ALIASES == {
+        "jd_intelligence": "case_db0a584dd7f8653ca842281f",
+        "tailoring_generation": "case_ece85e9411ca52b579359fb8",
+    }
+    assert run005.TARGET_CASE_ALIAS == "case_ece85e9411ca52b579359fb8"
+    # Historical base transport key and historical digests stay pinned.
+    assert run005.EXPECTED_BASE_TRANSPORT_KEY == (
+        "canary_969374f055f6d3a74a60a3e4ce6ee440"
+    )
+    for module in (run004, run005):
+        assert module._HISTORICAL_FIXTURE_CORPUS_SHA256 == (
+            "0ddc82e62745856c0d5d4d3f0efbe3fc86bd4e84e5da070f54f4ea635e74b05c"
+        )
+        assert module._HISTORICAL_CONTROLLED_PLAN_SHA256 == (
+            "a3ef53ff992a2d1daf43f8fa9b0556202268d34e21f7611eb5de4d26e9abe6b6"
+        )
+    assert run005._HISTORICAL_RUN_005_SCHEDULE_KEY.startswith(
+        "canary_run_005_"
+    )
+
+
+def test_step14_current_stable_identities_are_exact_and_corpus_independent():
+    from src.evaluation import controlled_groq_canary_run_003_plan as run003
+    from src.evaluation import controlled_groq_canary_run_004_plan as run004
+    from src.evaluation import controlled_groq_canary_run_005_plan as run005
+
+    assert run003.CURRENT_TARGET_STABLE_CASE_ALIAS == (
+        "case_adb75e8f4222598d01c96632"
+    )
+    assert run005.CURRENT_TARGET_STABLE_CASE_ALIAS == (
+        "case_ff24f23eeb3e0bed33bfaefa"
+    )
+    assert {
+        workload: row["stable_case_alias"]
+        for workload, row in run004.CURRENT_TARGET_OWNERSHIP.items()
+    } == {
+        "jd_intelligence": "case_2f47393a4efcbe220d325519",
+        "tailoring_generation": "case_ff24f23eeb3e0bed33bfaefa",
+    }
+    # No canary pins a CURRENT raw alias any more: raw aliases are derived.
+    assert not hasattr(run003, "CURRENT_TARGET_CASE_ALIAS")
+    assert not hasattr(run005, "CURRENT_TARGET_CASE_ALIAS")
+    assert all(
+        "case_alias" not in row
+        for row in run004.CURRENT_TARGET_OWNERSHIP.values()
+    )
+    for workload, case_id, stable in STEP14_TARGETS:
+        assert owner.stable_case_alias(workload, case_id) == stable
+
+
+def test_step14_current_ownership_accepts_the_approved_case():
+    for workload, case_id, stable in STEP14_TARGETS:
+        observed = owner.current_case_alias(workload, case_id)
+        assert owner.validate_current_case_ownership(
+            workload_id=workload,
+            case_id=case_id,
+            expected_stable_case_alias=stable,
+            observed_case_alias=observed,
+        ) == observed
+
+
+def _corpus_with_unrelated_workload_drift():
+    """Mutate only an UNRELATED workload's case so the global digest moves."""
+
+    corpus = deepcopy(step8o.load_fixture_case_corpus())
+    unrelated = next(
+        case
+        for case in corpus["cases"]
+        if case["workload_id"] == "job_fit_evaluation"
+    )
+    unrelated["supported_evidence_tokens"] = list(
+        unrelated.get("supported_evidence_tokens", [])
+    ) + ["step14_unrelated_drift_token"]
+    return corpus
+
+
+def test_step14_unrelated_workload_drift_does_not_invalidate_the_canary():
+    drifted = _corpus_with_unrelated_workload_drift()
+    assert step8o.fixture_case_corpus_sha256(drifted) != (
+        step8o.fixture_case_corpus_sha256()
+    )
+    for workload, case_id, stable in STEP14_TARGETS:
+        if workload == "job_fit_evaluation":
+            continue
+        observed = owner.current_case_alias(workload, case_id, corpus=drifted)
+        # The raw alias genuinely moved because the global digest moved...
+        assert observed != owner.current_case_alias(workload, case_id)
+        # ...yet current ownership still validates the same approved case.
+        assert owner.validate_current_case_ownership(
+            workload_id=workload,
+            case_id=case_id,
+            expected_stable_case_alias=stable,
+            observed_case_alias=observed,
+            corpus=drifted,
+        ) == observed
+
+
+def test_step14_rejects_changed_case_id():
+    workload, case_id, stable = STEP14_TARGETS[0]
+    with pytest.raises(ValueError):
+        owner.validate_current_case_ownership(
+            workload_id=workload,
+            case_id="skill_extraction_some_other_case_v1",
+            expected_stable_case_alias=stable,
+            observed_case_alias=owner.current_case_alias(workload, case_id),
+        )
+
+
+def test_step14_rejects_changed_workload_id():
+    workload, case_id, stable = STEP14_TARGETS[0]
+    with pytest.raises(ValueError):
+        owner.validate_current_case_ownership(
+            workload_id="job_fit_evaluation",
+            case_id=case_id,
+            expected_stable_case_alias=stable,
+            observed_case_alias=owner.current_case_alias(workload, case_id),
+        )
+
+
+def test_step14_rejects_substituted_stable_identity():
+    workload, case_id, _stable = STEP14_TARGETS[0]
+    with pytest.raises(ValueError):
+        owner.validate_current_case_ownership(
+            workload_id=workload,
+            case_id=case_id,
+            expected_stable_case_alias="case_" + "0" * 24,
+            observed_case_alias=owner.current_case_alias(workload, case_id),
+        )
+
+
+def test_step14_rejects_observed_alias_from_a_different_case():
+    workload, case_id, stable = STEP14_TARGETS[0]
+    other_workload, other_case_id, _ = STEP14_TARGETS[1]
+    with pytest.raises(ValueError):
+        owner.validate_current_case_ownership(
+            workload_id=workload,
+            case_id=case_id,
+            expected_stable_case_alias=stable,
+            observed_case_alias=owner.current_case_alias(
+                other_workload, other_case_id
+            ),
+        )
+
+
+def test_step14_rejects_a_removed_target_case():
+    workload, case_id, stable = STEP14_TARGETS[0]
+    pruned = deepcopy(step8o.load_fixture_case_corpus())
+    pruned["cases"] = [
+        case for case in pruned["cases"] if case["case_id"] != case_id
+    ]
+    with pytest.raises(ValueError):
+        owner.current_case_alias(workload, case_id, corpus=pruned)
+
+
+def test_step14_target_case_semantic_change_still_moves_its_derived_alias():
+    """A change to the target case itself remains visible, not absorbed."""
+
+    workload, case_id, _stable = STEP14_TARGETS[0]
+    mutated = deepcopy(step8o.load_fixture_case_corpus())
+    target = next(
+        case for case in mutated["cases"] if case["case_id"] == case_id
+    )
+    target["supported_evidence_tokens"] = list(
+        target.get("supported_evidence_tokens", [])
+    ) + ["step14_target_drift_token"]
+    assert owner.current_case_alias(
+        workload, case_id, corpus=mutated
+    ) != owner.current_case_alias(workload, case_id)

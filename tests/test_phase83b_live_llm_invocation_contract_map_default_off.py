@@ -1,3 +1,4 @@
+import ast
 from pathlib import Path
 
 
@@ -182,7 +183,16 @@ def test_collector_automatic_llm_capable_paths_are_cache_first_contracts():
     skill_enricher = _read("src/ai/skill_llm_enricher.py")
     job_fit = _read("src/ai/job_fit_evaluator.py")
 
-    assert "from src.ai.skill_llm_enricher import enrich_skills_with_llm" in job_intelligence
+    job_intelligence_tree = ast.parse(job_intelligence)
+    assert any(
+        isinstance(node, ast.ImportFrom)
+        and node.module == "src.ai.skill_llm_enricher"
+        and any(
+            alias.name == "enrich_skills_with_llm"
+            for alias in node.names
+        )
+        for node in ast.walk(job_intelligence_tree)
+    )
     assert "llm_result = enrich_skills_with_llm(description)" in job_intelligence
     assert "from src.ai.llm_client import run_chat_completion" in skill_enricher
     assert "def resolve_effective_user_provider_route(" in skill_enricher

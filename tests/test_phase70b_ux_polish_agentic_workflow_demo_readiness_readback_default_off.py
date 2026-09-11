@@ -47,15 +47,13 @@ def _production_renderer() -> str:
 
 
 def test_final_demo_readiness_readback_labels_are_visible():
-    # These readback labels moved from src/app/planning_ui.py into the React
-    # Advanced Diagnostics Command Center (Item 1 Phase 3).
-    html = (
-        ROOT / "frontend/executive-kpi/src/diagnostics/AdvancedDiagnosticsDashboard.tsx"
-    ).read_text(encoding="utf-8")
+    # 6362f6fb moved these labels into the React Advanced Diagnostics
+    # command center; 8a6ffcee then consolidated the demo-readiness
+    # readback back into scan_workspace.js, which is their current owner.
     script = SCAN_WORKSPACE_JS.read_text(encoding="utf-8")
 
-    assert "Agentic workflow demo readiness" in html
-    assert "Demo readiness: backend checkpoint readback" in html
+    assert "Agentic workflow demo readiness" in script
+    assert "Demo readiness: backend checkpoint readback" in script
     assert "demo-ready scan/evaluation connected" in script
     assert "backend agentic workflow complete" in script
     assert "ready for UX polish / demo readiness" in script

@@ -90,6 +90,7 @@ from tests.support.phase_guard_registry import (
     USAJOBS_SOURCE_INTEGRATION_FILES,
     WORKDAY_DISCOVERY_IDENTITY_CONTRACT_FILES,
     WORKDAY_PAGINATION_FRESHNESS_FILES,
+    PRODUCTION_CPU_TORCH_BUILD_FILES,
     PRODUCTION_DEPLOYMENT_HARDENING_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
@@ -2450,6 +2451,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
 
     assert current_milestone_guard_compatibility_allowlist() == (
         LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES
+        | PRODUCTION_CPU_TORCH_BUILD_FILES
         | PRODUCTION_DEPLOYMENT_HARDENING_FILES
         | PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES
         | STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES
@@ -3653,11 +3655,14 @@ def test_unrelated_path_still_rejected_without_milestone_compatibility():
 def test_deployment_files_do_not_leak_into_legacy_guard_profiles():
     """No unrelated legacy profile is broadened by this registration."""
 
+    # Shared guard/deployment test infrastructure is legitimately co-owned by
+    # successor milestones; only the deployment payload files are exclusive.
     deployment_only = PRODUCTION_DEPLOYMENT_HARDENING_FILES - {
         "tests/support/phase_guard_registry.py",
         "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
         "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
         "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_production_deployment_hardening.py",
     }
     from tests.support import phase_guard_registry
 
@@ -3668,3 +3673,63 @@ def test_deployment_files_do_not_leak_into_legacy_guard_profiles():
         if not isinstance(other, (set, frozenset)):
             continue
         assert not (deployment_only & other), f"{name} was broadened"
+
+
+def test_production_cpu_torch_build_files_are_exact_and_finite():
+    """The CPU-torch repair milestone is an exact, finite, glob-free file set."""
+
+    assert PRODUCTION_CPU_TORCH_BUILD_FILES == {
+        "Dockerfile",
+        "deploy/verify_cpu_only_torch.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_production_deployment_hardening.py",
+    }
+    assert len(PRODUCTION_CPU_TORCH_BUILD_FILES) == 5
+    for path in PRODUCTION_CPU_TORCH_BUILD_FILES:
+        assert "*" not in path
+        assert not path.endswith("/")
+        assert not path.startswith("/")
+
+
+def test_production_cpu_torch_build_files_join_the_milestone_allowlist():
+    assert PRODUCTION_CPU_TORCH_BUILD_FILES <= (
+        current_milestone_guard_compatibility_allowlist()
+    )
+
+
+def test_cpu_torch_milestone_does_not_grant_unrelated_paths():
+    """Compatibility is opt-in and stays scoped to this repair."""
+
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/unrelated_guard_probe.py"},
+            PRODUCTION_CPU_TORCH_BUILD_FILES,
+            include_current_milestone_compatibility=False,
+        )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/unrelated_guard_probe.py"},
+            PRODUCTION_CPU_TORCH_BUILD_FILES,
+        )
+
+
+def test_cpu_torch_milestone_is_distinct_and_broadens_no_other_profile():
+    from tests.support import phase_guard_registry
+
+    # The repair owns only what it genuinely changed; it is deliberately NOT a
+    # copy of the larger production-deployment-hardening surface.
+    assert PRODUCTION_CPU_TORCH_BUILD_FILES != PRODUCTION_DEPLOYMENT_HARDENING_FILES
+    repair_only = PRODUCTION_CPU_TORCH_BUILD_FILES - {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_production_deployment_hardening.py",
+    }
+    assert repair_only == {"Dockerfile", "deploy/verify_cpu_only_torch.py"}
+    for name in dir(phase_guard_registry):
+        if not name.endswith("_FILES") or name == "PRODUCTION_CPU_TORCH_BUILD_FILES":
+            continue
+        other = getattr(phase_guard_registry, name)
+        if not isinstance(other, (set, frozenset)):
+            continue
+        assert not (repair_only & other), f"{name} was broadened"

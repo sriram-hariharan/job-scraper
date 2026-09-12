@@ -200,3 +200,156 @@ def test_example_documents_placeholder_only():
     assert "APPLYLENS_AI_CREDENTIAL_FERNET_KEYS=replace_with_generated_fernet_key" in source
     assert "python3 deploy/install_fernet_key.py" in source
     assert "gAAAA" not in source
+
+
+# --- CPU-only production PyTorch packaging contract -------------------------
+#
+# The production build resolved the default PyPI torch wheel, which declares
+# nvidia-cudnn-cu13, nvidia-cusparselt-cu13, nvidia-nccl-cu13,
+# nvidia-nvshmem-cu13 and triton under `platform_system == "Linux"`. The image
+# exhausted the CPU-only host's disk while unpacking libcusparseLt.so.0.
+
+DOCKERFILE = ROOT / "Dockerfile"
+CPU_WHEEL_INDEX = "https://download.pytorch.org/whl/cpu"
+
+
+def _dockerfile_run_steps() -> list[str]:
+    """Return each Dockerfile instruction with line continuations joined."""
+    joined = _read(DOCKERFILE).replace("\\\n", " ")
+    return [
+        " ".join(line.split())
+        for line in joined.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+
+
+def _pip_install_step() -> str:
+    steps = [step for step in _dockerfile_run_steps() if "pip install" in step]
+    assert len(steps) == 1, f"expected one pip install step, found {len(steps)}"
+    return steps[0]
+
+
+def _load_cpu_torch_verifier():
+    spec = importlib.util.spec_from_file_location(
+        "verify_cpu_only_torch", ROOT / "deploy" / "verify_cpu_only_torch.py"
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_production_image_installs_an_exact_cpu_torch_from_the_official_index():
+    step = _pip_install_step()
+    assert f"--index-url {CPU_WHEEL_INDEX}" in step
+    pins = [token for token in step.split() if token.startswith("torch==")]
+    assert len(pins) == 1, f"torch must be pinned exactly once, found {pins}"
+    version = pins[0].split("==", 1)[1]
+    # Deterministic: an exact version carrying the CPU local-version segment,
+    # never a floating or bare specifier that could resolve to a CUDA build.
+    assert version.endswith("+cpu"), version
+    assert all(part.isdigit() for part in version[: -len("+cpu")].split("."))
+
+
+def test_cpu_torch_is_installed_before_unrestricted_requirements_resolution():
+    step = _pip_install_step()
+    torch_at = step.index("torch==")
+    requirements_at = step.index("-r requirements.txt")
+    # Ordering is load-bearing: torch must already satisfy sentence-transformers'
+    # `torch>=2.2` by the time the general resolution runs, so pip leaves it be.
+    assert torch_at < requirements_at
+
+
+def test_production_image_never_selects_a_cuda_or_gpu_wheel_source():
+    # Executable instructions only: the explanatory comment above the install
+    # step names the CUDA packages it exists to keep out.
+    instructions = " ".join(_dockerfile_run_steps())
+    for forbidden in ("/whl/cu", "nvidia-", "nvidia_", "cudnn", "triton", "+cu1"):
+        assert forbidden not in instructions, forbidden
+    assert CPU_WHEEL_INDEX in instructions
+    # A CUDA index must not be reachable as a fallback resolution source.
+    assert "--extra-index-url" not in instructions
+
+
+def test_production_build_verifies_the_cpu_only_result():
+    step = _pip_install_step()
+    assert "python deploy/verify_cpu_only_torch.py" in step
+    # The check must run in the same step, after the requirements resolution.
+    assert step.index("-r requirements.txt") < step.index("verify_cpu_only_torch.py")
+
+
+def test_cpu_torch_verifier_accepts_a_clean_cpu_environment():
+    module = _load_cpu_torch_verifier()
+    module.verify_cpu_only_torch("2.14.0+cpu", [])
+
+
+@pytest.mark.parametrize(
+    ("version", "gpu"),
+    [
+        ("2.14.0", []),                                  # default PyPI CUDA build
+        ("2.14.0+cu130", []),                            # explicit CUDA build
+        ("2.14.0+cpu", ["nvidia-cusparselt-cu13"]),      # CUDA leaked in anyway
+        ("2.14.0+cpu", ["triton"]),
+    ],
+)
+def test_cpu_torch_verifier_fails_closed_on_any_gpu_result(version, gpu):
+    module = _load_cpu_torch_verifier()
+    with pytest.raises(SystemExit):
+        module.verify_cpu_only_torch(version, gpu)
+
+
+def test_cpu_torch_verifier_detects_the_whole_gpu_distribution_family():
+    module = _load_cpu_torch_verifier()
+
+    class _Distribution:
+        def __init__(self, name):
+            self.metadata = {"Name": name}
+
+    names = [
+        "nvidia-cudnn-cu13",
+        "nvidia_cusparselt_cu13",
+        "triton",
+        "pytorch-triton",
+        "sentence-transformers",
+        "llama-index",
+        "numpy",
+    ]
+    found = module.installed_gpu_distributions([_Distribution(n) for n in names])
+    assert found == [
+        "nvidia-cudnn-cu13",
+        "nvidia_cusparselt_cu13",
+        "pytorch-triton",
+        "triton",
+    ]
+
+
+def test_embedding_and_rag_dependencies_remain_declared():
+    requirements = _read(ROOT / "requirements.txt")
+    for dependency in (
+        "sentence-transformers",
+        "llama-index",
+        "llama-index-embeddings-huggingface",
+    ):
+        assert any(
+            line.strip() == dependency for line in requirements.splitlines()
+        ), dependency
+    # torch stays transitive in requirements.txt: a `+cpu` pin there would break
+    # non-Linux development installs, so the pin is production-image scoped.
+    assert "torch" not in requirements
+
+
+def test_existing_postgres_build_and_runtime_setup_is_preserved():
+    source = _read(DOCKERFILE)
+    for expected in (
+        "FROM node:22-alpine AS executive-kpi-builder",
+        "FROM python:3.12-slim",
+        "postgresql-client",
+        "build-essential",
+        "curl",
+        "rm -rf /var/lib/apt/lists/*",
+        "EXPOSE 8000",
+        'CMD ["python", "run_api.py", "--host", "0.0.0.0", "--port", "8000"]',
+        "COPY --from=executive-kpi-builder",
+    ):
+        assert expected in source, expected
+    assert "psycopg[binary]==3.3.4" in _read(ROOT / "requirements.txt")

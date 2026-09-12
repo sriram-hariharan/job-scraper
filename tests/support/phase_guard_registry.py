@@ -2690,6 +2690,20 @@ PRODUCTION_DEPLOYMENT_HARDENING_FILES = {
 }
 
 
+# Production CPU-only PyTorch build repair. The production image resolved the
+# default PyPI torch wheel, which pulls the CUDA/NVIDIA family on Linux and
+# exhausted the CPU-only host's disk. Exact, finite surface - no globs, no
+# directory prefixes. Registration grants changed-file surface ownership only;
+# it never exempts any file from forbidden-marker inspection.
+PRODUCTION_CPU_TORCH_BUILD_FILES = {
+    "Dockerfile",
+    "deploy/verify_cpu_only_torch.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_production_deployment_hardening.py",
+}
+
+
 def current_milestone_guard_compatibility_allowlist() -> set[str]:
     """Exact current milestone files accepted by stale registry-backed guards."""
     return (
@@ -2699,6 +2713,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES
         | STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES
         | PRODUCTION_DEPLOYMENT_HARDENING_FILES
+        | PRODUCTION_CPU_TORCH_BUILD_FILES
         | STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
         | STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES

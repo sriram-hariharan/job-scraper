@@ -24,9 +24,21 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
+COPY deploy/verify_cpu_only_torch.py deploy/verify_cpu_only_torch.py
 
+# Production is a CPU-only host with no CUDA/GPU workload. The default PyPI
+# torch wheel declares nvidia-cudnn-cu13, nvidia-cusparselt-cu13,
+# nvidia-nccl-cu13, nvidia-nvshmem-cu13 and triton under
+# `platform_system == "Linux"`, which added several GB to the image and
+# exhausted the disk while unpacking libcusparseLt.so.0. Install the exact CPU
+# build from PyTorch's official CPU index FIRST; the requirements resolution
+# below then finds torch>=2.2 already satisfied and leaves it in place.
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir \
+        --index-url https://download.pytorch.org/whl/cpu \
+        torch==2.14.0+cpu \
+    && pip install --no-cache-dir -r requirements.txt \
+    && python deploy/verify_cpu_only_torch.py
 
 COPY . .
 COPY --from=executive-kpi-builder /app/src/app/static/build/executive-kpi ./src/app/static/build/executive-kpi

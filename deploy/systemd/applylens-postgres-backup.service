@@ -1,0 +1,15 @@
+[Unit]
+Description=Back up the ApplyLens PostgreSQL database
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=deploy
+Group=deploy
+WorkingDirectory=/home/deploy/apps/job-scraper
+ExecStart=/home/deploy/apps/job-scraper/deploy/backup_postgres.sh
+TimeoutStartSec=2h
+
+[Install]
+WantedBy=multi-user.target

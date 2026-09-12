@@ -2663,6 +2663,33 @@ STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES = {
 }
 
 
+# Production deployment hardening milestone. Exact, finite surface: the deploy
+# unit/tooling files plus the two guard-registry files this compatibility
+# registration itself has to touch. No globs, no directory prefixes - the
+# registration only grants changed-file surface ownership, never any exemption
+# from runtime content-safety marker inspection.
+PRODUCTION_DEPLOYMENT_HARDENING_FILES = {
+    "deploy/PRODUCTION_DEPLOYMENT.md",
+    "deploy/backup_postgres.sh",
+    "deploy/env.production.example",
+    "deploy/install_fernet_key.py",
+    "deploy/systemd/applylens-agent-discovery.service",
+    "deploy/systemd/applylens-agent-discovery.timer",
+    "deploy/systemd/applylens-live-pipeline.service",
+    "deploy/systemd/applylens-live-pipeline.timer",
+    "deploy/systemd/applylens-postgres-backup.service",
+    "deploy/systemd/applylens-postgres-backup.timer",
+    "docker-compose.prod.yml",
+    "src/storage/admin_tools/README.md",
+    "src/storage/admin_tools/production_schema_upgrade.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_production_deployment_hardening.py",
+}
+
+
 def current_milestone_guard_compatibility_allowlist() -> set[str]:
     """Exact current milestone files accepted by stale registry-backed guards."""
     return (
@@ -2671,6 +2698,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES
         | STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES
         | STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES
+        | PRODUCTION_DEPLOYMENT_HARDENING_FILES
         | STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
         | STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES

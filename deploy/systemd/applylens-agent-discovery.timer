@@ -1,0 +1,11 @@
+[Unit]
+Description=Run ApplyLens agent discovery daily
+
+[Timer]
+OnBootSec=30min
+OnUnitActiveSec=1d
+Persistent=true
+Unit=applylens-agent-discovery.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=Back up the ApplyLens PostgreSQL database daily
+
+[Timer]
+OnBootSec=20min
+OnUnitActiveSec=1d
+Persistent=true
+Unit=applylens-postgres-backup.service
+
+[Install]
+WantedBy=timers.target

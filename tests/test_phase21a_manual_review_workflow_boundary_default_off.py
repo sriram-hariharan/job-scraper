@@ -22,6 +22,7 @@ from tests.support.phase_guard_registry import (
     ITEM61C_AGENTIC_OPERATIONS_READONLY_BACKEND_FILES,
     ITEM61D_AGENTIC_OPERATIONS_CONSOLE_SHELL_FILES,
     NOTIFICATIONS_SCHEDULER_BELL_BRIDGE_FILES,
+    PRODUCTION_DEPLOYMENT_HARDENING_FILES,
     STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES,
     STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES,
     JOBVITE_LOCATION_FRESHNESS_FILES,
@@ -3044,6 +3045,27 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
         )
         for marker in FORBIDDEN_RUNTIME_MARKERS:
             assert marker not in added_lines
+        return
+    # Production deployment hardening milestone. The new runtime file is
+    # UNTRACKED, so `git diff` yields nothing for it and an added-line scan
+    # would pass vacuously. Scan the FULL file content instead: compatibility
+    # registration grants changed-file surface ownership only, never an
+    # exemption from forbidden-marker inspection.
+    production_deployment_hardening_runtime_files = {
+        ROOT / relative_path
+        for relative_path in PRODUCTION_DEPLOYMENT_HARDENING_FILES
+        if (relative_path == "main.py" or relative_path.startswith("src/"))
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if (
+        set(changed_runtime_files)
+        == production_deployment_hardening_runtime_files
+    ):
+        assert changed_runtime_files, "marker scan must not run on an empty set"
+        for path in sorted(changed_runtime_files):
+            content = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in content, f"{path}: {marker}"
         return
     assert changed_runtime_files in (
         [],

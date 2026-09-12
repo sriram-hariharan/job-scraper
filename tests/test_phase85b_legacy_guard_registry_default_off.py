@@ -90,6 +90,7 @@ from tests.support.phase_guard_registry import (
     USAJOBS_SOURCE_INTEGRATION_FILES,
     WORKDAY_DISCOVERY_IDENTITY_CONTRACT_FILES,
     WORKDAY_PAGINATION_FRESHNESS_FILES,
+    PRODUCTION_DEPLOYMENT_HARDENING_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
     assert_no_forbidden_runtime_calls_ast,
@@ -2449,6 +2450,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
 
     assert current_milestone_guard_compatibility_allowlist() == (
         LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES
+        | PRODUCTION_DEPLOYMENT_HARDENING_FILES
         | PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES
         | STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES
         | STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES
@@ -3274,9 +3276,18 @@ def test_step11_current_stabilization_runtime_additions_have_no_forbidden_marker
         for line in diff.splitlines()
         if line.startswith("+") and not line.startswith("+++")
     )
-    assert added_lines.strip()
-    for marker in set(PHASE20D_MARKERS) | set(PHASE21A_MARKERS):
+    markers = set(PHASE20D_MARKERS) | set(PHASE21A_MARKERS)
+    for marker in markers:
         assert marker not in added_lines
+    # The diff is empty on any branch where this milestone is already committed
+    # and clean, which made the previous `assert added_lines.strip()` fail for a
+    # reason unrelated to safety. Content scanning is never vacuous, so the
+    # non-emptiness guarantee is asserted there instead.
+    for relative_path in runtime_files:
+        content = (STEP11_ROOT / relative_path).read_text(encoding="utf-8")
+        assert content.strip()
+        for marker in markers:
+            assert marker not in content
 
 
 @pytest.mark.parametrize(
@@ -3585,3 +3596,75 @@ def test_step14f_ui_static_contract_surface_is_exact():
     for path in STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES:
         assert path.startswith("tests/")
         assert "*" not in path and not path.endswith("/")
+
+
+def test_production_deployment_hardening_files_are_exact_and_finite():
+    """The milestone surface is an exact, finite, glob-free file set."""
+
+    assert PRODUCTION_DEPLOYMENT_HARDENING_FILES == {
+        "deploy/PRODUCTION_DEPLOYMENT.md",
+        "deploy/backup_postgres.sh",
+        "deploy/env.production.example",
+        "deploy/install_fernet_key.py",
+        "deploy/systemd/applylens-agent-discovery.service",
+        "deploy/systemd/applylens-agent-discovery.timer",
+        "deploy/systemd/applylens-live-pipeline.service",
+        "deploy/systemd/applylens-live-pipeline.timer",
+        "deploy/systemd/applylens-postgres-backup.service",
+        "deploy/systemd/applylens-postgres-backup.timer",
+        "docker-compose.prod.yml",
+        "src/storage/admin_tools/README.md",
+        "src/storage/admin_tools/production_schema_upgrade.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_production_deployment_hardening.py",
+    }
+    assert len(PRODUCTION_DEPLOYMENT_HARDENING_FILES) == 18
+    for path in PRODUCTION_DEPLOYMENT_HARDENING_FILES:
+        assert "*" not in path
+        assert not path.endswith("/")
+        assert not path.startswith("/")
+
+
+def test_production_deployment_hardening_files_join_the_milestone_allowlist():
+    allowlist = current_milestone_guard_compatibility_allowlist()
+    assert PRODUCTION_DEPLOYMENT_HARDENING_FILES <= allowlist
+
+
+def test_unrelated_path_still_rejected_without_milestone_compatibility():
+    """Compatibility is opt-in; it must not become a blanket allowance."""
+
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/api.py"},
+            PRODUCTION_DEPLOYMENT_HARDENING_FILES,
+            include_current_milestone_compatibility=False,
+        )
+    # ...and an unrelated path is rejected even with compatibility enabled.
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/unrelated_guard_probe.py"},
+            PRODUCTION_DEPLOYMENT_HARDENING_FILES,
+        )
+
+
+def test_deployment_files_do_not_leak_into_legacy_guard_profiles():
+    """No unrelated legacy profile is broadened by this registration."""
+
+    deployment_only = PRODUCTION_DEPLOYMENT_HARDENING_FILES - {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    from tests.support import phase_guard_registry
+
+    for name in dir(phase_guard_registry):
+        if not name.endswith("_FILES") or name == "PRODUCTION_DEPLOYMENT_HARDENING_FILES":
+            continue
+        other = getattr(phase_guard_registry, name)
+        if not isinstance(other, (set, frozenset)):
+            continue
+        assert not (deployment_only & other), f"{name} was broadened"

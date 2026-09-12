@@ -1,0 +1,15 @@
+[Unit]
+Description=ApplyLens daily agent discovery
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=deploy
+Group=deploy
+WorkingDirectory=/home/deploy/apps/job-scraper
+ExecStart=/usr/bin/docker compose --env-file .env.production -f docker-compose.prod.yml exec -T web python -u -m src.pipeline.scheduler --job agent_discovery --history-path data/scheduler_run_history.jsonl --sync-postgres-run-history --require-postgres-run-history-sync
+TimeoutStartSec=5h
+
+[Install]
+WantedBy=multi-user.target

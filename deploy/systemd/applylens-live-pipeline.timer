@@ -2,7 +2,7 @@
 Description=Run ApplyLens global acquisition every six hours
 
 [Timer]
-OnBootSec=15min
+OnActiveSec=15min
 OnUnitActiveSec=6h
 Persistent=true
 Unit=applylens-live-pipeline.service

@@ -129,6 +129,14 @@ reviewed release commit and record all preflight output in the operator log.
     a second copy while its oneshot service is active; application-level locks
     remain unchanged.
 
+    Enabling the timers does not run any job immediately. Each timer sets
+    `OnActiveSec=`, so the first run is measured from timer activation rather
+    than from system boot: 15 minutes for the live pipeline, 20 minutes for the
+    PostgreSQL backup, and 30 minutes for agent discovery. A boot-relative
+    delay would already be due on a host that has been up for longer than that.
+    Confirm the pending delays in the `systemctl list-timers` output above
+    before leaving the host.
+
 12. Perform authenticated user smoke checks through `applylensjobs.com`, inspect
     Caddy/web logs, confirm volume mounts, and verify timer state. Do not trigger
     live providers merely as a deployment smoke test.

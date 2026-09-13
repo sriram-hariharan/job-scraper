@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import configparser
 import importlib.util
 import os
 import subprocess
@@ -353,3 +354,94 @@ def test_existing_postgres_build_and_runtime_setup_is_preserved():
     ):
         assert expected in source, expected
     assert "psycopg[binary]==3.3.4" in _read(ROOT / "requirements.txt")
+
+
+# --- Timer first-run activation contract -----------------------------------
+#
+# OnBootSec= is measured from system boot. The production host had been up for
+# roughly 17 weeks (booted 2026-05-13 19:59:20), so the 15/20/30-minute boot
+# deadlines were long past and `systemctl enable --now` would have made every
+# job immediately due instead of delayed. OnActiveSec= is measured from
+# activation of the timer unit itself, which is the intended semantics.
+
+TIMER_ACTIVATION_CONTRACT = {
+    "applylens-live-pipeline": {"OnActiveSec": "15min", "OnUnitActiveSec": "6h"},
+    "applylens-postgres-backup": {"OnActiveSec": "20min", "OnUnitActiveSec": "1d"},
+    "applylens-agent-discovery": {"OnActiveSec": "30min", "OnUnitActiveSec": "1d"},
+}
+
+# Byte-exact ExecStart lines. The timer repair must not alter any service
+# command, so these pin the scheduler safety flags and the backup scope.
+EXPECTED_EXEC_START = {
+    "applylens-live-pipeline": (
+        "/usr/bin/docker compose --env-file .env.production -f docker-compose.prod.yml"
+        " exec -T web python -u -m src.pipeline.scheduler --job live_pipeline"
+        " --global-acquisition-only --skip-application-planning --delete-seen-data no"
+        " --history-path data/scheduler_run_history.jsonl --sync-postgres-run-history"
+        " --require-postgres-run-history-sync"
+    ),
+    "applylens-agent-discovery": (
+        "/usr/bin/docker compose --env-file .env.production -f docker-compose.prod.yml"
+        " exec -T web python -u -m src.pipeline.scheduler --job agent_discovery"
+        " --history-path data/scheduler_run_history.jsonl --sync-postgres-run-history"
+        " --require-postgres-run-history-sync"
+    ),
+    "applylens-postgres-backup": (
+        "/home/deploy/apps/job-scraper/deploy/backup_postgres.sh"
+    ),
+}
+
+
+def _unit_section(path: Path, section: str) -> dict[str, str]:
+    """Parse one section of a systemd unit into exact key/value pairs."""
+    parser = configparser.ConfigParser(strict=False, interpolation=None)
+    parser.optionxform = str  # systemd directive names are case-sensitive
+    parser.read_string(_read(path))
+    return dict(parser[section])
+
+
+@pytest.mark.parametrize(
+    ("unit", "expected"), sorted(TIMER_ACTIVATION_CONTRACT.items())
+)
+def test_timer_first_run_is_measured_from_activation_not_boot(unit, expected):
+    timer = SYSTEMD / f"{unit}.timer"
+    section = _unit_section(timer, "Timer")
+
+    # The regression: a boot-relative first delay is already due on a
+    # long-running host, so it must never come back.
+    assert "OnBootSec" not in section
+    assert "OnBootSec" not in _read(timer)
+
+    assert section["OnActiveSec"] == expected["OnActiveSec"]
+    # Recurrence design is unchanged and stays monotonic, never calendar-based.
+    assert section["OnUnitActiveSec"] == expected["OnUnitActiveSec"]
+    assert "OnCalendar" not in section
+    assert section["Unit"] == f"{unit}.service"
+    # Persistent= only has an effect on OnCalendar= timers, so it is inert here
+    # and is not the cause of the immediate-activation bug. It is retained
+    # rather than removed as unrelated cleanup.
+    assert section["Persistent"] == "true"
+    # Exact directive set: no additional scheduling directive may creep in.
+    assert set(section) == {"OnActiveSec", "OnUnitActiveSec", "Persistent", "Unit"}
+
+
+@pytest.mark.parametrize(("unit", "command"), sorted(EXPECTED_EXEC_START.items()))
+def test_timer_repair_left_every_service_command_byte_exact(unit, command):
+    section = _unit_section(SYSTEMD / f"{unit}.service", "Service")
+    assert section["ExecStart"] == command
+    assert section["Type"] == "oneshot"
+    assert section["User"] == "deploy"
+    assert section["WorkingDirectory"] == "/home/deploy/apps/job-scraper"
+
+
+def test_runbook_documents_activation_relative_first_run_delays():
+    runbook = _read(ROOT / "deploy" / "PRODUCTION_DEPLOYMENT.md")
+    assert "OnActiveSec" in runbook
+    assert "does not run any job immediately" in runbook
+    for delay in ("15 minutes", "20 minutes", "30 minutes"):
+        assert delay in runbook
+    # The documented enable command stays valid under activation-relative delays.
+    assert (
+        "sudo systemctl enable --now applylens-postgres-backup.timer"
+        " applylens-live-pipeline.timer applylens-agent-discovery.timer" in runbook
+    )

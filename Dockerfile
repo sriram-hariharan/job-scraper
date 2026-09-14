@@ -43,6 +43,12 @@ RUN pip install --no-cache-dir --upgrade pip \
 COPY . .
 COPY --from=executive-kpi-builder /app/src/app/static/build/executive-kpi ./src/app/static/build/executive-kpi
 
+# Git and Docker COPY do not normalize group-writable host modes. Keep the
+# packaged routing authority and only its required parent directories within
+# the production loader's immutable-file permission boundary.
+RUN chmod 0755 /app/src /app/src/evaluation \
+    && chmod 0644 /app/src/evaluation/production_provider_qualification_registry_v1.json
+
 EXPOSE 8000
 
 CMD ["python", "run_api.py", "--host", "0.0.0.0", "--port", "8000"]

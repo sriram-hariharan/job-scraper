@@ -264,6 +264,21 @@ def _dockerfile_run_steps() -> list[str]:
     ]
 
 
+def test_packaged_registry_permissions_are_normalized_after_every_copy():
+    steps = _dockerfile_run_steps()
+    permission_step = (
+        "RUN chmod 0755 /app/src /app/src/evaluation "
+        "&& chmod 0644 "
+        "/app/src/evaluation/production_provider_qualification_registry_v1.json"
+    )
+
+    assert steps.count(permission_step) == 1
+    assert steps.index(permission_step) > max(
+        index for index, step in enumerate(steps) if step.startswith("COPY ")
+    )
+    assert "chmod -R" not in permission_step
+
+
 def _pip_install_step() -> str:
     steps = [step for step in _dockerfile_run_steps() if "pip install" in step]
     assert len(steps) == 1, f"expected one pip install step, found {len(steps)}"

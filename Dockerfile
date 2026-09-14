@@ -47,7 +47,10 @@ COPY --from=executive-kpi-builder /app/src/app/static/build/executive-kpi ./src/
 # packaged routing authority and only its required parent directories within
 # the production loader's immutable-file permission boundary.
 RUN chmod 0755 /app/src /app/src/evaluation \
-    && chmod 0644 /app/src/evaluation/production_provider_qualification_registry_v1.json
+    && chmod 0644 \
+        /app/src/evaluation/production_provider_qualification_registry_v1.json \
+        /app/src/evaluation/renderer_bound_v2_skill_qualification_registry.json \
+        /app/src/evaluation/renderer_bound_v2_job_fit_qualification_registry.json
 
 EXPOSE 8000
 

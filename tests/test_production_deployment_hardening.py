@@ -264,12 +264,14 @@ def _dockerfile_run_steps() -> list[str]:
     ]
 
 
-def test_packaged_registry_permissions_are_normalized_after_every_copy():
+def test_routing_authority_permissions_are_normalized_after_every_copy():
     steps = _dockerfile_run_steps()
     permission_step = (
         "RUN chmod 0755 /app/src /app/src/evaluation "
         "&& chmod 0644 "
-        "/app/src/evaluation/production_provider_qualification_registry_v1.json"
+        "/app/src/evaluation/production_provider_qualification_registry_v1.json "
+        "/app/src/evaluation/renderer_bound_v2_skill_qualification_registry.json "
+        "/app/src/evaluation/renderer_bound_v2_job_fit_qualification_registry.json"
     )
 
     assert steps.count(permission_step) == 1

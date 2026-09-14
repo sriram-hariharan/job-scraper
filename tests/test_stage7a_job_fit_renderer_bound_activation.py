@@ -7,7 +7,6 @@ import pytest
 
 from src.app import provider_model_routing_service as routing
 from src.evaluation import controlled_live_provider_qualification as live
-from src.evaluation import controlled_provider_qualification_evidence_adapter as adapter
 from src.evaluation import controlled_provider_qualification_registry as registry
 from src.evaluation import job_fit_candidate_local_qualification as candidate
 from src.evaluation import job_fit_provider_model_qualification_overlay as overlay
@@ -26,16 +25,6 @@ from src.evaluation.provider_fixture_benchmark import load_fixture_case_corpus
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OBSERVATION_PATH = (
-    ROOT
-    / "outputs/provider_qualification/"
-    "job-fit-groq-gpt-oss-20b-"
-    "schedule_81eb617b0805ecd61b0ca7e0ec7d2bf8-"
-    "20260901T1720.qualification-observation.json"
-)
-OBSERVATION_SHA256 = (
-    "34b75e1e52ccfd1577a1d52e814f327c07ccb3fd17509137bb8d9e829d50e7aa"
-)
 REGISTRY_SHA256 = (
     "2c75dd95de90553ce05dd2a20d9b9f478c9e65441305997adefd7c9f00787519"
 )
@@ -87,14 +76,6 @@ def _no_owner_selections(monkeypatch, selection=None):
 
 
 def test_stage7a_durable_authority_pin_and_overlay_are_exact():
-    observation = adapter.load_renderer_bound_qualification_observation(
-        OBSERVATION_PATH,
-        repository_root=ROOT,
-    )
-    assert adapter.renderer_bound_qualification_observation_sha256(
-        observation
-    ) == OBSERVATION_SHA256
-
     authority = _authority()
     assert registry.renderer_bound_qualification_registry_sha256(
         authority
@@ -103,6 +84,9 @@ def test_stage7a_durable_authority_pin_and_overlay_are_exact():
         authority
     )
     cells = authority["cells"]
+    assert cells[0]["evidence_sha256"] == (
+        "e63db9ce3b95d5bda934b97f7d0ad49dae2b78c33a0aa2f19b1e61d03afd22b3"
+    )
     assert [
         (cell["provider"], cell["model"], cell["status"])
         for cell in cells
@@ -199,8 +183,9 @@ def test_stage7a_routing_uses_job_fit_authority_and_preserves_skill(
 def test_stage7a_legacy_and_transient_authority_fail_closed(monkeypatch):
     authority = _authority()
     pin = policy.build_finalized_job_fit_renderer_bound_pin()
-    v1 = registry.load_provider_qualification_registry(
-        ROOT / registry.REGISTRY_ARTIFACT_PATH,
+    v1 = registry.load_production_provider_qualification_registry(
+        ROOT
+        / registry.PRODUCTION_PROVIDER_QUALIFICATION_REGISTRY_ARTIFACT_PATH,
         repository_root=ROOT,
     )
     with pytest.raises(ValueError):

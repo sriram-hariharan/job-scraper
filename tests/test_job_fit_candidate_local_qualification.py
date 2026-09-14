@@ -61,6 +61,11 @@ CANDIDATES = (
     ("openai", "gpt-5-mini"),
     ("openai", "gpt-5.1"),
 )
+ROOT = Path(__file__).resolve().parents[1]
+PACKAGED_V1_ARTIFACT = (
+    ROOT
+    / qualification_registry.PRODUCTION_PROVIDER_QUALIFICATION_REGISTRY_ARTIFACT_PATH
+)
 
 
 @pytest.fixture(scope="module")
@@ -890,11 +895,7 @@ def test_task_contract_overlay_and_review_authority_remain_unchanged(plan):
     assert production_task_contract_sha256("job_fit_evaluation") == (
         JOB_FIT_TASK_CONTRACT_SHA256
     )
-    registry = json.loads(
-        Path(
-            "outputs/provider_benchmark/provider-qualification-registry.json"
-        ).read_text(encoding="utf-8")
-    )
+    registry = json.loads(PACKAGED_V1_ARTIFACT.read_text(encoding="utf-8"))
     overlay = build_job_fit_provider_model_qualification_overlay(registry)
     assert overlay["recommendation_status"] == "recommended"
     assert (overlay["provider"], overlay["model"]) == (

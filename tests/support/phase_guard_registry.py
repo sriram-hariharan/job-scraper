@@ -2585,6 +2585,31 @@ PROFILE_AI_SETTINGS_ROUTING_RESILIENCE_FILES = {
 }
 
 
+# Step 18D17D Track 2 immutable V1 production qualification authority.
+# Exact packaged-authority, read-only loader/bridge, attestation, focused-test,
+# and guard-registration surface only. No globs or directory prefixes.
+PRODUCTION_PROVIDER_QUALIFICATION_AUTHORITY_FILES = {
+    "deploy/PRODUCTION_DEPLOYMENT.md",
+    "docs/provider_qualification_registry_v1_production_consumption_approval_attestation.md",
+    "src/app/provider_model_routing_service.py",
+    "src/evaluation/controlled_provider_qualification_registry.py",
+    "src/evaluation/production_provider_qualification_registry_v1.json",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_controlled_production_parity_benchmark.py",
+    "tests/test_controlled_provider_qualification_evidence_adapter.py",
+    "tests/test_controlled_provider_qualification_registry.py",
+    "tests/test_job_fit_candidate_local_qualification.py",
+    "tests/test_phase1_step10_recommended_provider_routing_bridge.py",
+    "tests/test_phase1_step6_user_ai_settings_api.py",
+    "tests/test_phase1_step9c7a_controlled_live_qualification_gate.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_production_deployment_hardening.py",
+    "tests/test_stage7a_job_fit_renderer_bound_activation.py",
+}
+
+
 PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES = {
     "src/matching/jd_intelligence_contract.py",
     "src/matching/job_adapter.py",
@@ -2720,6 +2745,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
     return (
         LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES
         | PROFILE_AI_SETTINGS_ROUTING_RESILIENCE_FILES
+        | PRODUCTION_PROVIDER_QUALIFICATION_AUTHORITY_FILES
         | PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES
         | STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES
         | STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES

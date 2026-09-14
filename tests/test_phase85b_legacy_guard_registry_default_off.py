@@ -93,6 +93,7 @@ from tests.support.phase_guard_registry import (
     WORKDAY_PAGINATION_FRESHNESS_FILES,
     PRODUCTION_CPU_TORCH_BUILD_FILES,
     PRODUCTION_DEPLOYMENT_HARDENING_FILES,
+    PRODUCTION_PROVIDER_QUALIFICATION_AUTHORITY_FILES,
     assert_changed_files_allowed,
     assert_false_safety_metadata_allowed_but_real_mutation_blocked,
     assert_no_forbidden_runtime_calls_ast,
@@ -2465,6 +2466,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
     assert current_milestone_guard_compatibility_allowlist() == (
         LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES
         | PROFILE_AI_SETTINGS_ROUTING_RESILIENCE_FILES
+        | PRODUCTION_PROVIDER_QUALIFICATION_AUTHORITY_FILES
         | PRODUCTION_CPU_TORCH_BUILD_FILES
         | PRODUCTION_DEPLOYMENT_HARDENING_FILES
         | PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES
@@ -3614,6 +3616,45 @@ def test_step14f_ui_static_contract_surface_is_exact():
         assert "*" not in path and not path.endswith("/")
 
 
+def test_production_provider_qualification_authority_files_are_exact_and_finite():
+    assert PRODUCTION_PROVIDER_QUALIFICATION_AUTHORITY_FILES == {
+        "deploy/PRODUCTION_DEPLOYMENT.md",
+        "docs/provider_qualification_registry_v1_production_consumption_approval_attestation.md",
+        "src/app/provider_model_routing_service.py",
+        "src/evaluation/controlled_provider_qualification_registry.py",
+        "src/evaluation/production_provider_qualification_registry_v1.json",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_controlled_production_parity_benchmark.py",
+        "tests/test_controlled_provider_qualification_evidence_adapter.py",
+        "tests/test_controlled_provider_qualification_registry.py",
+        "tests/test_job_fit_candidate_local_qualification.py",
+        "tests/test_phase1_step10_recommended_provider_routing_bridge.py",
+        "tests/test_phase1_step6_user_ai_settings_api.py",
+        "tests/test_phase1_step9c7a_controlled_live_qualification_gate.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_production_deployment_hardening.py",
+        "tests/test_stage7a_job_fit_renderer_bound_activation.py",
+    }
+    assert len(PRODUCTION_PROVIDER_QUALIFICATION_AUTHORITY_FILES) == 18
+    assert PRODUCTION_PROVIDER_QUALIFICATION_AUTHORITY_FILES <= (
+        current_milestone_guard_compatibility_allowlist()
+    )
+    for path in PRODUCTION_PROVIDER_QUALIFICATION_AUTHORITY_FILES:
+        assert not any(token in path for token in ("*", "?", "["))
+        assert not path.endswith("/")
+        assert not path.startswith("/")
+
+
+def test_production_provider_qualification_authority_rejects_unrelated_path():
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            {"src/app/unrelated_provider_authority.py"},
+            PRODUCTION_PROVIDER_QUALIFICATION_AUTHORITY_FILES,
+        )
+
+
 def test_production_deployment_hardening_files_are_exact_and_finite():
     """The milestone surface is an exact, finite, glob-free file set."""
 
@@ -3686,7 +3727,11 @@ def test_deployment_files_do_not_leak_into_legacy_guard_profiles():
         other = getattr(phase_guard_registry, name)
         if not isinstance(other, (set, frozenset)):
             continue
-        assert not (deployment_only & other), f"{name} was broadened"
+        overlap = deployment_only & other
+        if name == "PRODUCTION_PROVIDER_QUALIFICATION_AUTHORITY_FILES":
+            assert overlap == {"deploy/PRODUCTION_DEPLOYMENT.md"}
+            continue
+        assert not overlap, f"{name} was broadened"
 
 
 def test_production_cpu_torch_build_files_are_exact_and_finite():

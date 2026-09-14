@@ -25,6 +25,13 @@ from src.evaluation.production_task_contract_fingerprints import (
 
 ROOT = Path(__file__).resolve().parents[1]
 OWNER_PATH = ROOT / "src/evaluation/controlled_provider_qualification_registry.py"
+PACKAGED_V1_ARTIFACT = (
+    ROOT
+    / registry.PRODUCTION_PROVIDER_QUALIFICATION_REGISTRY_ARTIFACT_PATH
+)
+PACKAGED_V1_SHA256 = (
+    "6d7c1e2cae7d03edadcfb4c7268ec6ec74e8c0e10b13e73cc3914baa03ea8f6f"
+)
 FIXED_EXECUTION_TIME = "2026-07-25T00:00:00Z"
 FIXED_REVIEW_TIME = "2026-07-26T14:30:00Z"
 TASK_FINGERPRINT = "a" * 64
@@ -1074,6 +1081,134 @@ def test_invalid_registry_fails_before_creating_persistence_namespace(
     assert not (tmp_path / "outputs").exists()
 
 
+def _install_packaged_v1_test_artifact(tmp_path, encoded=None):
+    target = (
+        tmp_path
+        / registry.PRODUCTION_PROVIDER_QUALIFICATION_REGISTRY_ARTIFACT_PATH
+    )
+    target.parent.mkdir(parents=True)
+    target.write_bytes(
+        PACKAGED_V1_ARTIFACT.read_bytes() if encoded is None else encoded
+    )
+    target.chmod(0o644)
+    return target
+
+
+def test_packaged_production_registry_is_exact_and_accepted():
+    encoded = PACKAGED_V1_ARTIFACT.read_bytes()
+    payload = registry.load_production_provider_qualification_registry(
+        PACKAGED_V1_ARTIFACT,
+        repository_root=ROOT,
+    )
+
+    assert stat.S_IMODE(PACKAGED_V1_ARTIFACT.stat().st_mode) == 0o644
+    assert sha256(encoded).hexdigest() == PACKAGED_V1_SHA256
+    assert registry.provider_qualification_registry_sha256(payload) == (
+        PACKAGED_V1_SHA256
+    )
+
+
+def test_production_registry_loader_missing_file_fails_without_creating_paths(
+    tmp_path,
+):
+    target = (
+        tmp_path
+        / registry.PRODUCTION_PROVIDER_QUALIFICATION_REGISTRY_ARTIFACT_PATH
+    )
+
+    with pytest.raises(ValueError, match="parent path is unsafe"):
+        registry.load_production_provider_qualification_registry(
+            target,
+            repository_root=tmp_path,
+        )
+
+    assert not (tmp_path / "src").exists()
+
+
+def test_production_registry_loader_rejects_malformed_and_tampered_content(
+    tmp_path,
+):
+    malformed = _install_packaged_v1_test_artifact(tmp_path, b"{")
+    with pytest.raises(ValueError, match="malformed"):
+        registry.load_production_provider_qualification_registry(
+            malformed,
+            repository_root=tmp_path,
+        )
+
+    payload = json.loads(PACKAGED_V1_ARTIFACT.read_bytes())
+    payload["cells"][0]["model"] = "tampered-model"
+    encoded = registry._canonical_json(payload).encode("utf-8")
+    malformed.write_bytes(encoded)
+    malformed.chmod(0o644)
+    with pytest.raises(ValueError):
+        registry.load_production_provider_qualification_registry(
+            malformed,
+            repository_root=tmp_path,
+        )
+
+
+def test_production_registry_loader_rejects_wrong_traversal_and_symlink_paths(
+    tmp_path,
+):
+    target = _install_packaged_v1_test_artifact(tmp_path)
+    with pytest.raises(ValueError, match="approved namespace"):
+        registry.load_production_provider_qualification_registry(
+            tmp_path / "registry.json",
+            repository_root=tmp_path,
+        )
+    traversal = target.parent / ".." / "evaluation" / target.name
+    with pytest.raises(ValueError, match="traversal"):
+        registry.load_production_provider_qualification_registry(
+            traversal,
+            repository_root=tmp_path,
+        )
+
+    symlink_root = tmp_path / "symlink-root"
+    packaged = (
+        symlink_root
+        / registry.PRODUCTION_PROVIDER_QUALIFICATION_REGISTRY_ARTIFACT_PATH
+    )
+    packaged.parent.mkdir(parents=True)
+    outside = tmp_path / "outside-registry.json"
+    outside.write_bytes(PACKAGED_V1_ARTIFACT.read_bytes())
+    packaged.symlink_to(outside)
+    with pytest.raises(ValueError, match="missing or unsafe"):
+        registry.load_production_provider_qualification_registry(
+            packaged,
+            repository_root=symlink_root,
+        )
+
+
+def test_production_registry_loader_rejects_nonregular_and_unsafe_modes(tmp_path):
+    target = (
+        tmp_path
+        / registry.PRODUCTION_PROVIDER_QUALIFICATION_REGISTRY_ARTIFACT_PATH
+    )
+    target.mkdir(parents=True)
+    with pytest.raises(ValueError, match="missing or unsafe"):
+        registry.load_production_provider_qualification_registry(
+            target,
+            repository_root=tmp_path,
+        )
+
+    target.rmdir()
+    target.write_bytes(PACKAGED_V1_ARTIFACT.read_bytes())
+    target.chmod(0o666)
+    with pytest.raises(ValueError, match="permissions are unsafe"):
+        registry.load_production_provider_qualification_registry(
+            target,
+            repository_root=tmp_path,
+        )
+
+    target.chmod(0o644)
+    target.parent.chmod(0o777)
+    with pytest.raises(ValueError, match="parent permissions are unsafe"):
+        registry.load_production_provider_qualification_registry(
+            target,
+            repository_root=tmp_path,
+        )
+
+
 def test_focused_tests_create_no_repository_registry_artifact(
     repository_registry_artifact_baseline,
 ):
@@ -1180,14 +1315,7 @@ PROVEN_SUPERSEDED_IDENTITIES = (
 
 
 def _stage2a_on_disk_registry():
-    return json.loads(
-        (
-            ROOT
-            / "outputs"
-            / "provider_benchmark"
-            / "provider-qualification-registry.json"
-        ).read_text(encoding="utf-8")
-    )
+    return json.loads(PACKAGED_V1_ARTIFACT.read_text(encoding="utf-8"))
 
 
 def _stage2a_current_semantics(registry_payload):

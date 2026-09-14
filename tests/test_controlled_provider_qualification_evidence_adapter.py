@@ -864,6 +864,10 @@ def test_adapter_owner_has_no_network_environment_and_scopes_persistence():
 
 
 STAGE2B_ROOT = Path(__file__).resolve().parents[1]
+PACKAGED_V1_ARTIFACT = (
+    STAGE2B_ROOT
+    / registry.PRODUCTION_PROVIDER_QUALIFICATION_REGISTRY_ARTIFACT_PATH
+)
 CURRENT_V1_REGISTRY_SHA256 = (
     "6d7c1e2cae7d03edadcfb4c7268ec6ec74e8c0e10b13e73cc3914baa03ea8f6f"
 )
@@ -1127,14 +1131,7 @@ def test_stage2b_registry_boundary_consumes_the_adapter_digest(plan):
         pricing=context["pricing"],
     )
 
-    source = json.loads(
-        (
-            STAGE2B_ROOT
-            / "outputs"
-            / "provider_benchmark"
-            / "provider-qualification-registry.json"
-        ).read_text(encoding="utf-8")
-    )
+    source = json.loads(PACKAGED_V1_ARTIFACT.read_text(encoding="utf-8"))
     base_cell = next(
         cell
         for cell in source["cells"]
@@ -1181,14 +1178,7 @@ def test_stage2b_v1_authority_invariants_hold(plan):
     )
 
     corpus = load_fixture_case_corpus()
-    source = json.loads(
-        (
-            STAGE2B_ROOT
-            / "outputs"
-            / "provider_benchmark"
-            / "provider-qualification-registry.json"
-        ).read_text(encoding="utf-8")
-    )
+    source = json.loads(PACKAGED_V1_ARTIFACT.read_text(encoding="utf-8"))
 
     assert fixture_case_corpus_sha256(corpus) == CURRENT_FIXTURE_CORPUS_SHA256
     assert controlled_provider_benchmark_plan_sha256(plan) == (
@@ -1494,12 +1484,7 @@ def test_stage4f_registry_and_prospective_policy_handoff():
     )
 
     source_registry = json.loads(
-        (
-            STAGE2B_ROOT
-            / "outputs"
-            / "provider_benchmark"
-            / "provider-qualification-registry.json"
-        ).read_text(encoding="utf-8")
+        PACKAGED_V1_ARTIFACT.read_text(encoding="utf-8")
     )
     base_cell = next(
         cell

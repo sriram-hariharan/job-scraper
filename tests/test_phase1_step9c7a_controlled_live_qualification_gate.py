@@ -2157,9 +2157,7 @@ def test_stage5c_fake_20b_and_120b_qualify_separately_in_expanded_registry(
     base = json.loads(
         (
             ROOT
-            / "outputs"
-            / "provider_benchmark"
-            / "provider-qualification-registry.json"
+            / "src/evaluation/production_provider_qualification_registry_v1.json"
         ).read_text(encoding="utf-8")
     )
     expanded = registry.project_registry_to_renderer_bound_generation(

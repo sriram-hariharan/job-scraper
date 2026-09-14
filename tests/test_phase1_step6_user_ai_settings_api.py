@@ -743,6 +743,38 @@ def test_recommended_routes_api_loads_renderer_bound_skill_authority(
     assert skill["effective_selection_source"] == "applylens_recommended"
 
 
+def test_recommended_routes_api_fails_closed_when_packaged_v1_is_unavailable(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        api.provider_model_routing_service.qualification_registry,
+        "load_production_provider_qualification_registry",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            ValueError("packaged registry unavailable")
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "run_user_chat_completion_with_metadata",
+        lambda *_args, **_kwargs: pytest.fail(
+            "routing inventory GET must not execute a provider"
+        ),
+    )
+
+    response = _authenticated_client(monkeypatch).get(
+        "/ai/settings/recommended-routes"
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": {
+            "ok": False,
+            "error_category": "recommended_provider_policy_unavailable",
+        }
+    }
+    assert "packaged registry unavailable" not in response.text
+
+
 def test_task_route_service_validates_before_exact_owner_scoped_upsert(
     monkeypatch,
 ):

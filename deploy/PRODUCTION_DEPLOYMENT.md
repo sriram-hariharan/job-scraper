@@ -16,6 +16,29 @@ must explicitly load `.env.production`.
 `/health` is a web-process liveness check. It does not prove PostgreSQL or Redis
 readiness; check those services independently.
 
+## Immutable provider qualification authority
+
+Production provider routing reads the approved V1 qualification snapshot from
+`/app/src/evaluation/production_provider_qualification_registry_v1.json`. The
+file is tracked in the image and must have both raw and repository-canonical
+SHA-256 `6d7c1e2cae7d03edadcfb4c7268ec6ec74e8c0e10b13e73cc3914baa03ea8f6f`.
+The persistent `/app/outputs` volume remains evaluation/runtime state and cannot
+override this packaged routing authority. Skill Extraction and Job Fit continue
+to use their separately tracked renderer-bound V2 authorities.
+
+After building an image and before recreating the web service, verify the
+packaged file and resolve the owner-independent routing inventory without
+provider credentials or `/app/outputs/provider_benchmark/provider-qualification-registry.json`:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm --no-deps -e GROQ_API_KEY= -e OPENAI_API_KEY= -e GEMINI_API_KEY= web python -c 'from hashlib import sha256; from pathlib import Path; from src.app.provider_model_routing_service import list_provider_model_routing_statuses; p=Path("/app/src/evaluation/production_provider_qualification_registry_v1.json"); assert sha256(p.read_bytes()).hexdigest()=="6d7c1e2cae7d03edadcfb4c7268ec6ec74e8c0e10b13e73cc3914baa03ea8f6f"; routes=list_provider_model_routing_statuses()["workloads"]; assert len(routes)==12; assert sum(r["execution_mode"]=="qualified_provider_model" for r in routes)==9; assert sum(r["execution_mode"]=="deterministic" for r in routes)==3'
+```
+
+This verification is read-only. Do not regenerate the registry during deploy,
+copy an artifact from `/app/outputs`, or treat deployment as authorization for
+provider calls or qualification changes. The approval record is
+`docs/provider_qualification_registry_v1_production_consumption_approval_attestation.md`.
+
 ## Release procedure
 
 Run commands from `/home/deploy/apps/job-scraper`. Set `TARGET_SHA` to the exact

@@ -51,6 +51,9 @@ REGISTRY_SCOPE = "evaluation_qualification_state_only"
 REGISTRY_ARTIFACT_PATH = Path(
     "outputs/provider_benchmark/provider-qualification-registry.json"
 )
+PRODUCTION_PROVIDER_QUALIFICATION_REGISTRY_ARTIFACT_PATH = Path(
+    "src/evaluation/production_provider_qualification_registry_v1.json"
+)
 RENDERER_BOUND_SKILL_REGISTRY_ARTIFACT_PATH = Path(
     "src/evaluation/renderer_bound_skill_qualification_registry.json"
 )
@@ -1992,6 +1995,140 @@ def load_provider_qualification_registry(
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         raise ValueError("persisted qualification registry is malformed") from None
     validate_provider_qualification_registry(registry, plan=plan)
+    return deepcopy(registry)
+
+
+def _prepare_production_registry_path(
+    artifact_path: str | Path,
+    *,
+    repository_root: str | Path,
+) -> Path:
+    """Resolve the immutable production V1 artifact without filesystem writes."""
+
+    supplied_root = Path(repository_root)
+    _require(
+        supplied_root.is_absolute(),
+        "production registry repository root must be absolute",
+    )
+    try:
+        root_stat = supplied_root.lstat()
+    except OSError:
+        raise ValueError("production registry repository root is unsafe") from None
+    _require(
+        stat.S_ISDIR(root_stat.st_mode) and not stat.S_ISLNK(root_stat.st_mode),
+        "production registry repository root is unsafe",
+    )
+    root = supplied_root.resolve()
+
+    candidate = Path(artifact_path)
+    _require(candidate.is_absolute(), "production registry path must be absolute")
+    _require(
+        ".." not in candidate.parts,
+        "production registry path traversal is prohibited",
+    )
+    expected = root / PRODUCTION_PROVIDER_QUALIFICATION_REGISTRY_ARTIFACT_PATH
+    _require(
+        candidate == expected,
+        "production registry path is outside the approved namespace",
+    )
+
+    current = root
+    for part in (
+        PRODUCTION_PROVIDER_QUALIFICATION_REGISTRY_ARTIFACT_PATH.parts[:-1]
+    ):
+        current = current / part
+        try:
+            parent_stat = current.lstat()
+        except OSError:
+            raise ValueError("production registry parent path is unsafe") from None
+        _require(
+            stat.S_ISDIR(parent_stat.st_mode)
+            and not stat.S_ISLNK(parent_stat.st_mode),
+            "production registry parent path is unsafe",
+        )
+        _require(
+            not stat.S_IMODE(parent_stat.st_mode)
+            & (stat.S_IWGRP | stat.S_IWOTH),
+            "production registry parent permissions are unsafe",
+        )
+
+    try:
+        artifact_stat = candidate.lstat()
+    except OSError:
+        raise ValueError(
+            "production registry artifact is missing or unsafe"
+        ) from None
+    _require(
+        stat.S_ISREG(artifact_stat.st_mode)
+        and not stat.S_ISLNK(artifact_stat.st_mode),
+        "production registry artifact is missing or unsafe",
+    )
+    _require(
+        not stat.S_IMODE(artifact_stat.st_mode)
+        & (stat.S_IWGRP | stat.S_IWOTH),
+        "production registry permissions are unsafe",
+    )
+    return candidate
+
+
+def load_production_provider_qualification_registry(
+    artifact_path: str | Path,
+    *,
+    repository_root: str | Path,
+) -> Dict[str, Any]:
+    """Load the exact packaged V1 authority for production routing only."""
+
+    path = _prepare_production_registry_path(
+        artifact_path,
+        repository_root=repository_root,
+    )
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+        try:
+            opened_stat = os.fstat(descriptor)
+            _require(
+                stat.S_ISREG(opened_stat.st_mode),
+                "production registry artifact is missing or unsafe",
+            )
+            _require(
+                not stat.S_IMODE(opened_stat.st_mode)
+                & (stat.S_IWGRP | stat.S_IWOTH),
+                "production registry permissions are unsafe",
+            )
+            with os.fdopen(descriptor, "rb", closefd=False) as handle:
+                encoded = handle.read()
+        finally:
+            os.close(descriptor)
+    except OSError:
+        raise ValueError(
+            "production registry artifact is missing or unsafe"
+        ) from None
+
+    try:
+        registry = json.loads(encoded.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise ValueError("packaged production registry is malformed") from None
+
+    validate_provider_qualification_registry(registry)
+
+    # Import locally to preserve the policy module's existing dependency on
+    # this registry owner without creating an import cycle.
+    from src.evaluation import provider_model_recommendation_policy as policy
+
+    raw_sha256 = sha256(encoded).hexdigest()
+    canonical_sha256 = provider_qualification_registry_sha256(registry)
+    policy.validate_provider_model_recommendation_policy_source(registry)
+    _require(
+        raw_sha256 == policy.SOURCE_QUALIFICATION_REGISTRY_SHA256,
+        "packaged production registry raw digest mismatch",
+    )
+    _require(
+        canonical_sha256 == policy.SOURCE_QUALIFICATION_REGISTRY_SHA256,
+        "packaged production registry canonical digest mismatch",
+    )
     return deepcopy(registry)
 
 

@@ -95,8 +95,10 @@ class ProviderModelSelectionNotQualifiedError(ValueError):
 
 def _load_authoritative_qualification_registry() -> Dict[str, Any]:
     registry_payload = (
-        qualification_registry.load_provider_qualification_registry(
-            _REPOSITORY_ROOT / qualification_registry.REGISTRY_ARTIFACT_PATH,
+        qualification_registry.load_production_provider_qualification_registry(
+            _REPOSITORY_ROOT
+            / qualification_registry
+            .PRODUCTION_PROVIDER_QUALIFICATION_REGISTRY_ARTIFACT_PATH,
             repository_root=_REPOSITORY_ROOT,
         )
     )

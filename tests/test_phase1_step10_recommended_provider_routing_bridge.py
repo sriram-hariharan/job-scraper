@@ -398,6 +398,23 @@ def test_real_frozen_policy_remains_fail_closed_before_overlay_application():
     assert job_fit["model"] is None
 
 
+def test_production_bridge_reads_only_the_packaged_v1_authority(monkeypatch):
+    source = OWNER.read_text(encoding="utf-8")
+    assert "load_production_provider_qualification_registry" in source
+    assert "load_provider_qualification_registry(" not in source
+    assert "outputs/provider_benchmark" not in source
+
+    monkeypatch.setattr(
+        routing.qualification_registry,
+        "load_provider_qualification_registry",
+        lambda *_args, **_kwargs: pytest.fail(
+            "production routing must not read the evaluation outputs registry"
+        ),
+    )
+    payload = routing.list_provider_model_routing_statuses()
+    assert len(payload["workloads"]) == 12
+
+
 def test_real_job_fit_overlay_is_exact_and_returns_fresh_safe_payloads():
     registry_payload = routing._load_authoritative_qualification_registry()
 
@@ -2097,9 +2114,7 @@ def _stage3_v1_registry():
     return _stage3_json.loads(
         (
             ROOT
-            / "outputs"
-            / "provider_benchmark"
-            / "provider-qualification-registry.json"
+            / _stage3_registry.PRODUCTION_PROVIDER_QUALIFICATION_REGISTRY_ARTIFACT_PATH
         ).read_text(encoding="utf-8")
     )
 

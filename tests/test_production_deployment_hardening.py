@@ -220,6 +220,38 @@ def test_example_documents_placeholder_only():
 
 DOCKERFILE = ROOT / "Dockerfile"
 CPU_WHEEL_INDEX = "https://download.pytorch.org/whl/cpu"
+PACKAGED_V1_REGISTRY = (
+    ROOT / "src/evaluation/production_provider_qualification_registry_v1.json"
+)
+PACKAGED_V1_SHA256 = (
+    "6d7c1e2cae7d03edadcfb4c7268ec6ec74e8c0e10b13e73cc3914baa03ea8f6f"
+)
+
+
+def test_packaged_provider_registry_is_tracked_image_content_not_volume_state():
+    from hashlib import sha256
+
+    dockerfile = _read(ROOT / "Dockerfile")
+    dockerignore = _read(ROOT / ".dockerignore")
+    compose = _read(COMPOSE)
+    routing = _read(ROOT / "src/app/provider_model_routing_service.py")
+    runbook = _read(ROOT / "deploy/PRODUCTION_DEPLOYMENT.md")
+
+    assert PACKAGED_V1_REGISTRY.is_file()
+    assert sha256(PACKAGED_V1_REGISTRY.read_bytes()).hexdigest() == (
+        PACKAGED_V1_SHA256
+    )
+    assert "COPY . ." in dockerfile
+    assert "src/" not in dockerignore
+    assert "outputs/" in dockerignore
+    assert "web_outputs:/app/outputs" in compose
+    assert "load_production_provider_qualification_registry" in routing
+    assert "load_provider_qualification_registry(" not in routing
+    assert "PRODUCTION_PROVIDER_QUALIFICATION_REGISTRY_ARTIFACT_PATH" in routing
+    assert "qualification_registry.REGISTRY_ARTIFACT_PATH" not in routing
+    assert "/app/src/evaluation/production_provider_qualification_registry_v1.json" in runbook
+    assert PACKAGED_V1_SHA256 in runbook
+    assert "/app/outputs" in runbook
 
 
 def _dockerfile_run_steps() -> list[str]:

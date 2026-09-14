@@ -31,6 +31,9 @@ from src.evaluation.provider_benchmark_contract import WORKLOAD_ORDER
 
 ROOT = Path(__file__).resolve().parents[1]
 OWNER_PATH = ROOT / "src/evaluation/controlled_production_parity_benchmark.py"
+PACKAGED_V1_ARTIFACT = (
+    ROOT / "src/evaluation/production_provider_qualification_registry_v1.json"
+)
 RUNNABLE = (
     "skill_extraction",
     "job_fit_evaluation",
@@ -1404,12 +1407,8 @@ def test_corrected_job_fit_semantics_make_prior_qualification_stale():
     )
     assert current != PRIOR_JOB_FIT_QUALIFICATION_SEMANTICS_SHA256
 
-    source = _stage1_json.load(
-        open(
-            ROOT
-            / "outputs/provider_benchmark/provider-qualification-registry.json",
-            encoding="utf-8",
-        )
+    source = _stage1_json.loads(
+        PACKAGED_V1_ARTIFACT.read_text(encoding="utf-8")
     )
     prior = deepcopy(
         next(
@@ -1437,14 +1436,8 @@ def test_corrected_job_fit_semantics_make_prior_qualification_stale():
 
 
 def test_stage1_registry_and_recommendation_authority_are_unchanged():
-    registry = _stage1_json.load(
-        open(
-            Path(__file__).resolve().parents[1]
-            / "outputs"
-            / "provider_benchmark"
-            / "provider-qualification-registry.json",
-            encoding="utf-8",
-        )
+    registry = _stage1_json.loads(
+        PACKAGED_V1_ARTIFACT.read_text(encoding="utf-8")
     )
 
     assert _stage1_registry.provider_qualification_registry_sha256(
@@ -1748,14 +1741,8 @@ def test_stage4b_current_authority_invariants_hold():
     )
 
     corpus = _stage1_load_corpus()
-    source = _stage1_json.load(
-        open(
-            Path(__file__).resolve().parents[1]
-            / "outputs"
-            / "provider_benchmark"
-            / "provider-qualification-registry.json",
-            encoding="utf-8",
-        )
+    source = _stage1_json.loads(
+        PACKAGED_V1_ARTIFACT.read_text(encoding="utf-8")
     )
 
     assert fixture_case_corpus_sha256(corpus) == (
@@ -2076,12 +2063,8 @@ def test_stage6w_evidence_bound_to_the_old_semantics_cannot_authorize():
     )
 
     current = _stage6w_job_fit_semantics()
-    source = _stage1_json.load(
-        open(
-            ROOT
-            / "outputs/provider_benchmark/provider-qualification-registry.json",
-            encoding="utf-8",
-        )
+    source = _stage1_json.loads(
+        PACKAGED_V1_ARTIFACT.read_text(encoding="utf-8")
     )
     prior = deepcopy(
         next(

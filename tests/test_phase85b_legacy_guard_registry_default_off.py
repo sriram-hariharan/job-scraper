@@ -70,6 +70,7 @@ from tests.support.phase_guard_registry import (
     PHASE21_RELEASE_CANDIDATE_FILES,
     PHASE21R_HISTORICAL_GUARD_FILES,
     PERSONIO_SOURCE_RETIREMENT_FILES,
+    PROFILE_AI_SETTINGS_ROUTING_RESILIENCE_FILES,
     PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES,
     STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES,
     STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES,
@@ -2449,8 +2450,21 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
                 include_current_milestone_compatibility=False,
             )
 
+    assert PROFILE_AI_SETTINGS_ROUTING_RESILIENCE_FILES == {
+        "src/app/profile_ui.py",
+        "src/app/static/profile_ai_settings.js",
+        "tests/test_phase1_step7_profile_ai_settings_ui.py",
+    }
+    assert all(
+        not any(token in path for token in ("*", "?", "["))
+        and not path.endswith("/")
+        and not path.startswith("/")
+        for path in PROFILE_AI_SETTINGS_ROUTING_RESILIENCE_FILES
+    )
+
     assert current_milestone_guard_compatibility_allowlist() == (
         LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES
+        | PROFILE_AI_SETTINGS_ROUTING_RESILIENCE_FILES
         | PRODUCTION_CPU_TORCH_BUILD_FILES
         | PRODUCTION_DEPLOYMENT_HARDENING_FILES
         | PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES

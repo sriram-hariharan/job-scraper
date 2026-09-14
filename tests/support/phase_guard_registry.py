@@ -2574,6 +2574,17 @@ LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES = {
     "tests/test_score_first_scan.py",
 }
 
+
+# Step 18D15E Profile AI Settings routing resilience. Exact frontend, cache
+# owner, and focused-test boundary only; routing authority and backend behavior
+# remain unchanged.
+PROFILE_AI_SETTINGS_ROUTING_RESILIENCE_FILES = {
+    "src/app/profile_ui.py",
+    "src/app/static/profile_ai_settings.js",
+    "tests/test_phase1_step7_profile_ai_settings_ui.py",
+}
+
+
 PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES = {
     "src/matching/jd_intelligence_contract.py",
     "src/matching/job_adapter.py",
@@ -2708,6 +2719,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
     """Exact current milestone files accepted by stale registry-backed guards."""
     return (
         LIVE_PIPELINE_AI_EVALUATION_RELIABILITY_FILES
+        | PROFILE_AI_SETTINGS_ROUTING_RESILIENCE_FILES
         | PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES
         | STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES
         | STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES

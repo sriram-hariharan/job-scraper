@@ -76,13 +76,17 @@ def test_page_has_dedicated_static_owners_and_no_browser_owner_control():
         assert forbidden not in html
 
 
-def test_initial_load_fetches_three_read_apis_in_parallel_and_does_not_mutate():
+def test_initial_load_keeps_settings_and_catalog_page_critical_without_mutating():
     load_page = _function(AI_SETTINGS_JS, "loadPage", "refreshSettings")
     assert "Promise.all([" in load_page
     assert 'requestJson("/ai/settings")' in load_page
     assert 'requestJson("/ai/settings/catalog")' in load_page
-    assert 'requestJson("/ai/settings/recommended-routes")' in load_page
-    assert load_page.count("requestJson(") == 3
+    critical_pair = load_page.split("Promise.all([", 1)[1].split("]);", 1)[0]
+    assert 'requestJson("/ai/settings/recommended-routes")' not in critical_pair
+    assert critical_pair.count("requestJson(") == 2
+    assert "validateSettings(settingsPayload)" in load_page
+    assert "validateCatalog(catalogPayload)" in load_page
+    assert "await refreshRouting()" in load_page
     assert AI_SETTINGS_JS.count('requestJson("/ai/settings/recommended-routes")') == 1
     assert "test-connection" not in load_page
     assert "preferred-provider" not in load_page
@@ -90,6 +94,68 @@ def test_initial_load_fetches_three_read_apis_in_parallel_and_does_not_mutate():
     assert 'method: "POST"' not in load_page
     assert 'method: "PUT"' not in load_page
     assert 'method: "DELETE"' not in load_page
+
+
+def test_routing_read_failure_is_bounded_away_from_global_page_failure():
+    refresh_routing = _function(AI_SETTINGS_JS, "refreshRouting", "loadPage")
+    load_page = _function(AI_SETTINGS_JS, "loadPage", "refreshSettings")
+    assert 'requestJson("/ai/settings/recommended-routes")' in refresh_routing
+    assert "validateRecommendedRoutes(routingPayload)" in refresh_routing
+    assert "state.routing = null" in refresh_routing
+    assert "renderRouting()" in refresh_routing
+    assert 'byId("aiSettingsLoadError")' not in refresh_routing
+    assert load_page.index('setHidden(byId("aiSettingsContent"), false)') < load_page.index(
+        "await refreshRouting()"
+    )
+    assert load_page.count('setHidden(byId("aiSettingsLoadError"), false)') == 1
+    assert "return;" in load_page.split("} catch (_error) {", 1)[1].split(
+        "} finally {", 1
+    )[0]
+
+
+def test_routing_unavailable_state_is_accessible_empty_and_write_closed():
+    rendering = _function(AI_SETTINGS_JS, "renderRouting", "renderAll")
+    unavailable = rendering.split("if (!state.routing) {", 1)[1].split(
+        "const counts =", 1
+    )[0]
+    saving = _function(AI_SETTINGS_JS, "saveTaskRoute", "bindEvents")
+    assert "Task routing is temporarily unavailable." in unavailable
+    assert "Your provider settings and API keys are still available." in unavailable
+    assert 'unavailable.setAttribute("role", "status")' in unavailable
+    assert 'unavailable.setAttribute("aria-live", "polite")' in unavailable
+    assert "list.appendChild(unavailable)" in unavailable
+    assert "return;" in unavailable
+    for forbidden in (
+        'makeElement("select"',
+        'makeElement("option"',
+        "qualifiedOptions",
+        "effectiveSelection",
+        "dataset.routeSave",
+        '"Save route"',
+    ):
+        assert forbidden not in unavailable
+    assert "if (!state.routing) return" in saving
+
+
+def test_healthy_page_data_renders_before_independent_routing_refresh():
+    render_all = _function(AI_SETTINGS_JS, "renderAll", "refreshRouting")
+    load_page = _function(AI_SETTINGS_JS, "loadPage", "refreshSettings")
+    for call in (
+        "renderProviderCards()",
+        "renderPreferredProvider()",
+        "renderConnectionSelectors()",
+        "renderModels()",
+    ):
+        assert call in render_all
+    assert "state.settings = settings" in load_page
+    assert "state.catalog = catalog" in load_page
+    assert "state.routing = null" in load_page
+    assert load_page.index("renderAll()") < load_page.index(
+        'setHidden(byId("aiSettingsContent"), false)'
+    )
+    assert load_page.index('setHidden(byId("aiSettingsContent"), false)') < load_page.index(
+        "await refreshRouting()"
+    )
 
 
 def test_provider_cards_and_selectors_derive_from_validated_catalog_data():
@@ -301,7 +367,7 @@ def test_task_routing_card_is_existing_editable_dom_owner():
     assert html.count("phase1_task_routing_ux_r3") == 1
     assert "profile_ai_settings.css?v=phase1_task_routing_ux_r3" in html
     assert (
-        "profile_ai_settings.js?v=item2f5_manual_preview_default_r1"
+        "profile_ai_settings.js?v=track1_routing_resilience_r1"
         in html
     )
     assert "phase1_task_routing_r2" not in html

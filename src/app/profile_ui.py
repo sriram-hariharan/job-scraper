@@ -1071,7 +1071,7 @@ def profile_ai_settings_page() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
-  <script src="/static/profile_ai_settings.js?v=item2f5_manual_preview_default_r1"></script>
+  <script src="/static/profile_ai_settings.js?v=track1_routing_resilience_r1"></script>
 </body>
 </html>
     """.strip()

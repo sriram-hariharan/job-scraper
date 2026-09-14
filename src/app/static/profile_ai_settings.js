@@ -575,6 +575,18 @@
     summary.replaceChildren();
     list.replaceChildren();
 
+    if (!state.routing) {
+      const unavailable = makeElement(
+        "div",
+        "profile-ai-settings-inline-message is-neutral",
+        "Task routing is temporarily unavailable. Your provider settings and API keys are still available."
+      );
+      unavailable.setAttribute("role", "status");
+      unavailable.setAttribute("aria-live", "polite");
+      list.appendChild(unavailable);
+      return;
+    }
+
     const counts = state.routing.workloads.reduce(
       (result, row) => {
         result.total += 1;
@@ -766,19 +778,27 @@
     renderRouting();
   }
 
+  async function refreshRouting() {
+    try {
+      const routingPayload = await requestJson("/ai/settings/recommended-routes");
+      state.routing = validateRecommendedRoutes(routingPayload);
+    } catch (_error) {
+      state.routing = null;
+    }
+    renderRouting();
+  }
+
   async function loadPage() {
     setHidden(byId("aiSettingsLoading"), false);
     setHidden(byId("aiSettingsLoadError"), true);
     setHidden(byId("aiSettingsContent"), true);
     try {
-      const [settingsPayload, catalogPayload, routingPayload] = await Promise.all([
+      const [settingsPayload, catalogPayload] = await Promise.all([
         requestJson("/ai/settings"),
         requestJson("/ai/settings/catalog"),
-        requestJson("/ai/settings/recommended-routes"),
       ]);
       const settings = validateSettings(settingsPayload);
       const catalog = validateCatalog(catalogPayload);
-      const routing = validateRecommendedRoutes(routingPayload);
       catalog.providers.forEach((entry) => {
         if (!Object.prototype.hasOwnProperty.call(settings.providers, entry.provider)) {
           throw new Error("Provider settings do not match catalog");
@@ -786,14 +806,16 @@
       });
       state.settings = settings;
       state.catalog = catalog;
-      state.routing = routing;
+      state.routing = null;
       renderAll();
       setHidden(byId("aiSettingsContent"), false);
     } catch (_error) {
       setHidden(byId("aiSettingsLoadError"), false);
+      return;
     } finally {
       setHidden(byId("aiSettingsLoading"), true);
     }
+    await refreshRouting();
   }
 
   async function refreshSettings() {
@@ -1056,6 +1078,7 @@
   }
 
   async function saveTaskRoute(workloadId, selectedValue) {
+    if (!state.routing) return;
     if (state.routeSavingWorkload) return;
     const routeIndex = state.routing.workloads.findIndex((route) => (
       route.workloadId === workloadId

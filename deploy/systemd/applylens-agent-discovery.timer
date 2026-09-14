@@ -2,8 +2,7 @@
 Description=Run ApplyLens agent discovery daily
 
 [Timer]
-OnActiveSec=30min
-OnUnitActiveSec=1d
+OnCalendar=*-*-* 04:57:00 UTC
 Persistent=true
 Unit=applylens-agent-discovery.service
 

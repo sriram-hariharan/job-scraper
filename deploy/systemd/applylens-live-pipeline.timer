@@ -2,8 +2,7 @@
 Description=Run ApplyLens global acquisition every six hours
 
 [Timer]
-OnActiveSec=15min
-OnUnitActiveSec=6h
+OnCalendar=*-*-* 04,10,16,22:42:00 UTC
 Persistent=true
 Unit=applylens-live-pipeline.service
 

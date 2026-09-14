@@ -34,13 +34,21 @@ def test_compose_preserves_images_and_adds_only_current_web_runtime_mounts_and_l
 
 
 @pytest.mark.parametrize(
-    ("service_name", "job", "interval"),
+    ("service_name", "job", "calendar"),
     [
-        ("applylens-live-pipeline", "live_pipeline", "6h"),
-        ("applylens-agent-discovery", "agent_discovery", "1d"),
+        (
+            "applylens-live-pipeline",
+            "live_pipeline",
+            "*-*-* 04,10,16,22:42:00 UTC",
+        ),
+        (
+            "applylens-agent-discovery",
+            "agent_discovery",
+            "*-*-* 04:57:00 UTC",
+        ),
     ],
 )
-def test_systemd_scheduler_units_use_canonical_compose_wrapper(service_name, job, interval):
+def test_systemd_scheduler_units_use_canonical_compose_wrapper(service_name, job, calendar):
     service = _read(SYSTEMD / f"{service_name}.service")
     timer = _read(SYSTEMD / f"{service_name}.timer")
     assert "Type=oneshot" in service
@@ -50,7 +58,7 @@ def test_systemd_scheduler_units_use_canonical_compose_wrapper(service_name, job
     assert f"-m src.pipeline.scheduler --job {job}" in service
     assert "--sync-postgres-run-history" in service
     assert "--require-postgres-run-history-sync" in service
-    assert f"OnUnitActiveSec={interval}" in timer
+    assert f"OnCalendar={calendar}" in timer
     assert "Persistent=true" in timer
 
 
@@ -186,7 +194,7 @@ def test_backup_systemd_and_runbook_preserve_explicit_compose_contract():
     runbook = _read(ROOT / "deploy" / "PRODUCTION_DEPLOYMENT.md")
     assert "User=deploy" in backup_service
     assert "deploy/backup_postgres.sh" in backup_service
-    assert "OnUnitActiveSec=1d" in backup_timer
+    assert "OnCalendar=*-*-* 04:47:00 UTC" in backup_timer
     assert "applylensjobs.com" in runbook
     assert "job-scraper-prod-1" in runbook
     assert "Never invoke Compose with `down -v`" in runbook
@@ -356,18 +364,34 @@ def test_existing_postgres_build_and_runtime_setup_is_preserved():
     assert "psycopg[binary]==3.3.4" in _read(ROOT / "requirements.txt")
 
 
-# --- Timer first-run activation contract -----------------------------------
+# --- Production calendar timer contract ------------------------------------
 #
-# OnBootSec= is measured from system boot. The production host had been up for
-# roughly 17 weeks (booted 2026-05-13 19:59:20), so the 15/20/30-minute boot
-# deadlines were long past and `systemctl enable --now` would have made every
-# job immediately due instead of delayed. OnActiveSec= is measured from
-# activation of the timer unit itself, which is the intended semantics.
+# Activation-relative first-run legs are re-armed when systemd re-executes,
+# which caused duplicate production runs without a reboot. Calendar-only UTC
+# schedules retain the legitimate anchors without tying them to manager or
+# machine lifetime.
 
-TIMER_ACTIVATION_CONTRACT = {
-    "applylens-live-pipeline": {"OnActiveSec": "15min", "OnUnitActiveSec": "6h"},
-    "applylens-postgres-backup": {"OnActiveSec": "20min", "OnUnitActiveSec": "1d"},
-    "applylens-agent-discovery": {"OnActiveSec": "30min", "OnUnitActiveSec": "1d"},
+TIMER_CALENDAR_CONTRACT = {
+    "applylens-live-pipeline": "*-*-* 04,10,16,22:42:00 UTC",
+    "applylens-postgres-backup": "*-*-* 04:47:00 UTC",
+    "applylens-agent-discovery": "*-*-* 04:57:00 UTC",
+}
+
+MONOTONIC_TIMER_DIRECTIVES = {
+    "OnActiveSec",
+    "OnBootSec",
+    "OnStartupSec",
+    "OnUnitActiveSec",
+    "OnUnitInactiveSec",
+}
+
+EXPECTED_SYSTEMD_INVENTORY = {
+    "applylens-live-pipeline.service",
+    "applylens-live-pipeline.timer",
+    "applylens-postgres-backup.service",
+    "applylens-postgres-backup.timer",
+    "applylens-agent-discovery.service",
+    "applylens-agent-discovery.timer",
 }
 
 # Byte-exact ExecStart lines. The timer repair must not alter any service
@@ -401,28 +425,34 @@ def _unit_section(path: Path, section: str) -> dict[str, str]:
 
 
 @pytest.mark.parametrize(
-    ("unit", "expected"), sorted(TIMER_ACTIVATION_CONTRACT.items())
+    ("unit", "calendar"), sorted(TIMER_CALENDAR_CONTRACT.items())
 )
-def test_timer_first_run_is_measured_from_activation_not_boot(unit, expected):
+def test_production_timers_use_only_the_exact_calendar_contract(unit, calendar):
     timer = SYSTEMD / f"{unit}.timer"
     section = _unit_section(timer, "Timer")
 
-    # The regression: a boot-relative first delay is already due on a
-    # long-running host, so it must never come back.
-    assert "OnBootSec" not in section
-    assert "OnBootSec" not in _read(timer)
-
-    assert section["OnActiveSec"] == expected["OnActiveSec"]
-    # Recurrence design is unchanged and stays monotonic, never calendar-based.
-    assert section["OnUnitActiveSec"] == expected["OnUnitActiveSec"]
-    assert "OnCalendar" not in section
-    assert section["Unit"] == f"{unit}.service"
-    # Persistent= only has an effect on OnCalendar= timers, so it is inert here
-    # and is not the cause of the immediate-activation bug. It is retained
-    # rather than removed as unrelated cleanup.
+    assert section["OnCalendar"] == calendar
     assert section["Persistent"] == "true"
-    # Exact directive set: no additional scheduling directive may creep in.
-    assert set(section) == {"OnActiveSec", "OnUnitActiveSec", "Persistent", "Unit"}
+    assert section["Unit"] == f"{unit}.service"
+    assert set(section) == {"OnCalendar", "Persistent", "Unit"}
+    assert MONOTONIC_TIMER_DIRECTIVES.isdisjoint(section)
+
+
+def test_no_production_timer_combines_activation_and_monotonic_recurrence():
+    for unit in TIMER_CALENDAR_CONTRACT:
+        section = _unit_section(SYSTEMD / f"{unit}.timer", "Timer")
+        has_activation_leg = "OnActiveSec" in section
+        has_monotonic_recurrence = bool(
+            {"OnUnitActiveSec", "OnUnitInactiveSec"} & set(section)
+        )
+        assert not (has_activation_leg and has_monotonic_recurrence)
+        assert MONOTONIC_TIMER_DIRECTIVES.isdisjoint(section)
+
+
+def test_production_systemd_inventory_is_exact():
+    assert {path.name for path in SYSTEMD.iterdir() if path.is_file()} == (
+        EXPECTED_SYSTEMD_INVENTORY
+    )
 
 
 @pytest.mark.parametrize(("unit", "command"), sorted(EXPECTED_EXEC_START.items()))
@@ -434,14 +464,23 @@ def test_timer_repair_left_every_service_command_byte_exact(unit, command):
     assert section["WorkingDirectory"] == "/home/deploy/apps/job-scraper"
 
 
-def test_runbook_documents_activation_relative_first_run_delays():
+def test_runbook_documents_calendar_timer_transition_and_validation():
     runbook = _read(ROOT / "deploy" / "PRODUCTION_DEPLOYMENT.md")
-    assert "OnActiveSec" in runbook
-    assert "does not run any job immediately" in runbook
-    for delay in ("15 minutes", "20 minutes", "30 minutes"):
-        assert delay in runbook
-    # The documented enable command stays valid under activation-relative delays.
-    assert (
-        "sudo systemctl enable --now applylens-postgres-backup.timer"
-        " applylens-live-pipeline.timer applylens-agent-discovery.timer" in runbook
-    )
+    for calendar in TIMER_CALENDAR_CONTRACT.values():
+        assert calendar in runbook
+    for forbidden_directive in MONOTONIC_TIMER_DIRECTIVES:
+        assert forbidden_directive in runbook
+    for required_step in (
+        "systemctl clean --what=state",
+        "systemd-analyze verify",
+        "systemd-analyze calendar",
+        "systemctl daemon-reload",
+        "TimersCalendar",
+        "TimersMonotonic",
+        "NextElapseUSecRealtime",
+        "systemctl list-timers",
+    ):
+        assert required_step in runbook
+    assert "Persistent=true" in runbook
+    assert "maintenance window" in runbook
+    assert "separately authorized" in runbook

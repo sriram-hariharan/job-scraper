@@ -54,6 +54,7 @@ router = APIRouter()
 class AuthRegisterRequest(BaseModel):
     email: str
     password: str
+    confirm_password: str
     display_name: str = ""
     next: str = "/"
 
@@ -223,6 +224,7 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
     alternate_label = "Already have an account? Log in" if is_register else "Need an account? Register"
 
     display_name_field = ""
+    confirm_password_field = ""
     if is_register:
         display_name_field = """
         <label class="auth-field">
@@ -230,6 +232,14 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
           <input id="displayNameInput" type="text" autocomplete="name" placeholder="John Doe" />
         </label>
         """
+        confirm_password_field = """
+        <label class="auth-field">
+          <span>Re-enter password</span>
+          <input id="confirmPasswordInput" type="password" autocomplete="new-password" placeholder="Re-enter your password" required />
+        </label>
+        """
+
+    auth_card_class = "auth-card auth-card--register" if is_register else "auth-card"
 
     return f"""
 <!DOCTYPE html>
@@ -876,6 +886,17 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
     }}
 
     @media (min-width: 561px) and (max-height: 920px) {{
+      .auth-card--register {{
+        justify-content: flex-start;
+        overflow-y: auto;
+      }}
+
+      .auth-card--register .auth-form-card {{
+        height: auto;
+        min-height: 0;
+        margin-block: auto;
+      }}
+
       .auth-brand-logo {{
         width: 82px;
         height: 82px;
@@ -1025,7 +1046,7 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       <p class="auth-safety-line">You stay in control. No auto-apply. No recruiter messages.<br />Your workspace prepares evidence and suggestions.</p>
     </section>
 
-    <section class="auth-card" aria-label="{escape(title)} form">
+    <section class="{auth_card_class}" aria-label="{escape(title)} form">
       <div class="auth-form-card">
         <div class="auth-form-brand">
           <img class="auth-form-logo" src="/static/media/app-logo.svg" alt="" />
@@ -1065,6 +1086,8 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
             </div>
           </label>
 
+          {confirm_password_field}
+
           <button id="authSubmitBtn" class="auth-submit" type="submit">
             {escape(submit_label)}
           </button>
@@ -1083,6 +1106,7 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
     const errorEl = document.getElementById("authError");
     const submitBtn = document.getElementById("authSubmitBtn");
     const passwordInput = document.getElementById("passwordInput");
+    const confirmPasswordInput = document.getElementById("confirmPasswordInput");
     const passwordToggleBtn = document.getElementById("passwordToggleBtn");
     const passwordToggleIcon = document.getElementById("passwordToggleIcon");
     const passwordVisibleIconPath = "/static/media/eye.svg";
@@ -1123,9 +1147,19 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       const mode = form.dataset.mode;
       const body = {{
         email: document.getElementById("emailInput").value,
-        password: document.getElementById("passwordInput").value,
+        password: passwordInput.value,
         next: document.getElementById("nextInput").value || "/",
       }};
+
+      if (mode === "register") {{
+        const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : "";
+        if (body.password !== confirmPassword) {{
+          showError("Passwords do not match.");
+          submitBtn.disabled = false;
+          return;
+        }}
+        body.confirm_password = confirmPassword;
+      }}
 
       const displayNameInput = document.getElementById("displayNameInput");
       if (displayNameInput) {{
@@ -1649,6 +1683,12 @@ def register(request: Request, payload: AuthRegisterRequest = Body(...)):
             raise HTTPException(
                 status_code=403,
                 detail="Registration is currently disabled.",
+            )
+
+        if payload.password != payload.confirm_password:
+            raise HTTPException(
+                status_code=400,
+                detail="Passwords do not match.",
             )
 
         validate_new_password(payload.password)

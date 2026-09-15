@@ -123,7 +123,7 @@ The web app uses a shared navigation shell with these main pages:
 | Profile | `/profile` | Saved resumes, pipeline runs, saved scans, and account/admin tools. |
 | Saved Scans | `/profile/saved-scans` | Review previously generated AI Optimize Scan records. |
 | App Guide | `/guide` | Normal-user guide to ApplyLens workflows, terminology, review states, and next actions. |
-| Login/Register | `/login`, `/register` | Local authentication and optional registration approval workflow. |
+| Login/Register | `/login`, `/register` | Local authentication and direct active-user registration. |
 
 ---
 
@@ -375,7 +375,7 @@ Discovery helpers live under `src/discovery` and include ATS detection, sitemap 
 ├── src/
 │   ├── app/                        # FastAPI routes, page templates, services, static UI
 │   ├── ai/                         # LLM clients, skill extraction, job-fit evaluation
-│   ├── auth/                       # Auth, sessions, registration approval
+│   ├── auth/                       # Auth, sessions, legacy registration approval support
 │   ├── discovery/                  # Company and ATS discovery
 │   ├── details/                    # ATS job detail fetchers
 │   ├── pipeline/                   # Collector, scheduler, scoring, post-run artifacts
@@ -586,7 +586,7 @@ Authenticated web workloads resolve their effective provider/model through the q
 | `JOB_STACK_AUTH_COOKIE_SECURE` | Secure cookie setting. |
 | `JOB_STACK_AUTH_COOKIE_SAMESITE` | SameSite cookie setting. |
 | `JOB_STACK_AUTH_REGISTRATION_ENABLED` | Enable registration page flow. |
-| `JOB_STACK_AUTH_REGISTRATION_APPROVAL_REQUIRED` | Require admin approval for new registrations. |
+| `JOB_STACK_AUTH_REGISTRATION_APPROVAL_REQUIRED` | Legacy approval-flow compatibility flag; intended production registration keeps this `false`. |
 | `JOB_STACK_AUTH_FIRST_USER_ADMIN_ENABLED` | Make the first user an admin. |
 
 ### Scheduler and Notifications

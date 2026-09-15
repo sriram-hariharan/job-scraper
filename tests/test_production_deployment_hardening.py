@@ -209,6 +209,10 @@ def test_example_documents_placeholder_only():
     assert "APPLYLENS_AI_CREDENTIAL_FERNET_KEYS=replace_with_generated_fernet_key" in source
     assert "python3 deploy/install_fernet_key.py" in source
     assert "gAAAA" not in source
+    assert "JOB_STACK_AUTH_REGISTRATION_ENABLED=true" in source
+    assert "JOB_STACK_AUTH_REGISTRATION_APPROVAL_REQUIRED=false" in source
+    assert "JOB_STACK_AUTH_REGISTRATION_ENABLED=false" not in source
+    assert "JOB_STACK_AUTH_REGISTRATION_APPROVAL_REQUIRED=true" not in source
 
 
 # --- CPU-only production PyTorch packaging contract -------------------------

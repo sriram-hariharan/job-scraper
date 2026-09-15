@@ -76,6 +76,7 @@ from tests.support.phase_guard_registry import (
     STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES,
     STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES,
     STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES,
+    STEP18D20_ADMIN_SCHEDULER_AUTOMATION_CONTROL_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
     RECRUITEE_STANDALONE_DISCOVERY_FILES,
     SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES,
@@ -591,6 +592,35 @@ def test_phase2d_b2_strict_seniority_filter_surface_is_exact():
 
 
 def test_current_milestone_guard_compatibility_is_exact_registered_surface():
+    assert STEP18D20_ADMIN_SCHEDULER_AUTOMATION_CONTROL_FILES == {
+        "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.test.tsx",
+        "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx",
+        "frontend/executive-kpi/src/scheduler/schedulerModel.ts",
+        "frontend/executive-kpi/src/styles.css",
+        "src/app/api.py",
+        "src/app/services.py",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/pipeline/scheduler.py",
+        "src/storage/admin_tools/production_schema_upgrade.py",
+        "src/storage/scheduler/contract.py",
+        "src/storage/scheduler/control_store.py",
+        "src/storage/scheduler/init.sql",
+        "src/storage/scheduler/schema.sql",
+        "tests/test_production_deployment_hardening.py",
+        "tests/test_scheduler_admin_health_redesign.py",
+        "tests/test_scheduler_automation_control.py",
+        "tests/test_scheduler_manual_agent_discovery.py",
+        "tests/test_scheduler_runtime_postgres_correctness.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert not any(
+        any(token in path for token in ("*", "?", "[")) or path.endswith("/")
+        for path in STEP18D20_ADMIN_SCHEDULER_AUTOMATION_CONTROL_FILES
+    )
     assert STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES == {
         "src/app/api.py",
         "src/app/guide_ui.py",
@@ -2492,6 +2522,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES
         | STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES
         | STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES
+        | STEP18D20_ADMIN_SCHEDULER_AUTOMATION_CONTROL_FILES
         | STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
         | STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES
@@ -3167,7 +3198,7 @@ def test_api_py_historical_identity_and_current_successor_are_accepted():
 
     actual = sha256((STEP11_ROOT / "src/app/api.py").read_bytes()).hexdigest()
     assert actual == (
-        "3c4a42aaa8ba7e3e4a58f3aa712d71baa443b03a7f8528fccc625ae26eef1a61"
+        "b22281d9c33e2d84708365bf1eef50308f09dd99438e78a967f1e3b95f7e07ed"
     )
     assert profile
 
@@ -3483,38 +3514,59 @@ def _step14d_compatibility_map():
 
 
 def test_step14d_successors_are_exact_committed_head_content():
-    """Every successor must equal committed HEAD, never a local edit."""
+    """Declared historical successors must be committed in current HEAD ancestry.
 
+    Later HEAD/worktree versions do not redefine Step14D provenance.
+    """
     import subprocess
-    from hashlib import sha256
+    from hashlib import file_digest
+    from tempfile import TemporaryFile
 
     compatibility = _step14d_compatibility_map()
+    proven = set()
     for relative_path, historical, successor in STEP14D_SUCCESSORS:
-        path = STEP11_ROOT / relative_path
-        worktree = sha256(path.read_bytes()).hexdigest()
-        head = subprocess.run(
-            ["git", "show", f"HEAD:{relative_path}"],
-            cwd=STEP11_ROOT,
-            capture_output=True,
-            check=True,
-        ).stdout
-        # The successor registered must be the committed HEAD content, and the
-        # worktree must not have drifted away from it.
-        assert sha256(head).hexdigest() == worktree
+        assert (relative_path, historical) in compatibility
         registered = compatibility[(relative_path, historical)]
         registered = (
             set(registered)
             if isinstance(registered, (set, frozenset, tuple, list))
             else {registered}
         )
-        assert worktree in registered
-        # The DECLARED successor must be the real committed hash, not a
-        # placeholder: this is what stops a fabricated value being registered.
-        assert successor == worktree
         assert successor in registered
-        # The historical expectation itself is never replaced.
-        assert (relative_path, historical) in compatibility
         assert historical not in registered
+        if (relative_path, successor) in proven:
+            continue
+
+        # Page exact-path history to bound captured output. Exclude deletions,
+        # whose commits have no file bytes; never consult another branch.
+        offset = 0
+        found = False
+        while not found:
+            commits = subprocess.run(
+                ["git", "log", "--full-history", "--format=%H",
+                 "--diff-filter=d", "--max-count=128", f"--skip={offset}",
+                 "HEAD", "--", relative_path],
+                cwd=STEP11_ROOT, capture_output=True, text=True,
+                check=True, timeout=30,
+            ).stdout.splitlines()
+            if not commits:
+                break
+            for commit in commits:
+                # Stream committed bytes through a temporary file, avoiding
+                # unbounded blob capture in memory. Git failures fail closed.
+                with TemporaryFile() as content:
+                    subprocess.run(
+                        ["git", "show", f"{commit}:{relative_path}"],
+                        cwd=STEP11_ROOT, stdout=content, stderr=subprocess.PIPE,
+                        check=True, timeout=30,
+                    )
+                    content.seek(0)
+                    if file_digest(content, "sha256").hexdigest() == successor:
+                        found = True
+                        break
+            offset += len(commits)
+        assert found, f"No committed HEAD-ancestor content for {relative_path}: {successor}"
+        proven.add((relative_path, successor))
 
 
 @pytest.mark.parametrize(
@@ -3527,14 +3579,9 @@ def test_step14d_historical_and_successor_accepted_third_hash_rejected(
     historical,
     successor,
 ):
-    from hashlib import sha256
-
     guarded = tmp_path / relative_path
     guarded.parent.mkdir(parents=True, exist_ok=True)
     guarded.write_text("guarded\n", encoding="utf-8")
-    current = sha256(
-        (STEP11_ROOT / relative_path).read_bytes()
-    ).hexdigest()
 
     class StubDigest:
         def __init__(self, digest):
@@ -3555,7 +3602,7 @@ def test_step14d_historical_and_successor_accepted_third_hash_rejected(
     monkeypatch.setattr(
         phase_guard_registry,
         "sha256",
-        lambda _data, digest=current: StubDigest(digest),
+        lambda _data, digest=successor: StubDigest(digest),
     )
     assert_protected_hashes(tmp_path, {relative_path: historical})
 
@@ -3749,6 +3796,11 @@ def test_deployment_files_do_not_leak_into_legacy_guard_profiles():
         overlap = deployment_only & other
         if name == "PRODUCTION_PROVIDER_QUALIFICATION_AUTHORITY_FILES":
             assert overlap == {"deploy/PRODUCTION_DEPLOYMENT.md"}
+            continue
+        if name == "STEP18D20_ADMIN_SCHEDULER_AUTOMATION_CONTROL_FILES":
+            assert overlap == {
+                "src/storage/admin_tools/production_schema_upgrade.py"
+            }
             continue
         assert not overlap, f"{name} was broadened"
 

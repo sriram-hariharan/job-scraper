@@ -66,6 +66,12 @@ PRODUCTION_SCHEMA_ALLOWLIST: Sequence[ProductionSchema] = (
         "current authenticated feedback API and summaries",
         "src.storage.agent_feedback.store:agent_feedback_contract_health_payload",
     ),
+    ProductionSchema(
+        "scheduler",
+        "src/storage/scheduler/schema.sql",
+        "scheduler storage and durable global automation pause control",
+        "src.storage.scheduler.contract:scheduler_contract_health_payload",
+    ),
 )
 
 INTENTIONALLY_EXCLUDED_SCHEMAS: Mapping[str, str] = {

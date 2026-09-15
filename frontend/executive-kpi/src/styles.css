@@ -3485,6 +3485,27 @@ html[data-theme="dark"] #schedulerHealthDashboardRoot {
 .scheduler-refresh-btn:hover { background: var(--scheduler-surface-muted); }
 .scheduler-refresh-btn:disabled { opacity: 0.6; cursor: default; }
 .scheduler-refresh-btn .is-spinning { animation: scheduler-spin 0.9s linear infinite; }
+.scheduler-automation-control-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--scheduler-red) 45%, var(--scheduler-border));
+  border-radius: 8px;
+  background: var(--scheduler-surface);
+  color: var(--scheduler-red);
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.scheduler-automation-control-btn:hover { background: var(--scheduler-red-soft); }
+.scheduler-automation-control-btn.is-paused {
+  border-color: color-mix(in srgb, var(--scheduler-green) 45%, var(--scheduler-border));
+  color: var(--scheduler-green);
+}
+.scheduler-automation-control-btn.is-paused:hover { background: var(--scheduler-green-soft); }
+.scheduler-automation-control-btn:disabled { opacity: 0.55; cursor: default; }
 @keyframes scheduler-spin { to { transform: rotate(360deg); } }
 
 .scheduler-error-banner {
@@ -3495,6 +3516,25 @@ html[data-theme="dark"] #schedulerHealthDashboardRoot {
   color: var(--scheduler-red);
   font-size: 13px;
 }
+
+.scheduler-automation-paused-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px 15px;
+  border: 1px solid color-mix(in srgb, var(--scheduler-amber) 35%, var(--scheduler-border));
+  border-radius: 10px;
+  background: var(--scheduler-amber-soft);
+  color: var(--scheduler-amber);
+}
+.scheduler-automation-paused-banner > svg { flex: 0 0 auto; margin-top: 1px; }
+.scheduler-automation-paused-banner > div { display: grid; gap: 3px; }
+.scheduler-automation-paused-banner strong { color: var(--scheduler-ink); font-size: 13px; }
+.scheduler-automation-paused-banner span { color: var(--scheduler-muted); font-size: 12px; line-height: 1.45; }
+.scheduler-automation-control-modal { width: min(520px, calc(100vw - 32px)); }
+.scheduler-automation-control-modal .subtext { display: grid; gap: 7px; margin-top: 8px; }
+.scheduler-automation-control-modal .subtext p { margin: 0; }
+.scheduler-confirm-pause { background: var(--scheduler-red); }
 
 .scheduler-badge {
   display: inline-flex;

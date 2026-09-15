@@ -106,6 +106,7 @@ def test_schema_upgrade_allowlist_and_exclusions_are_exact():
         "notification_state",
         "bulk_generation",
         "agent_feedback",
+        "scheduler",
     ]
     assert set(upgrade.INTENTIONALLY_EXCLUDED_SCHEMAS) == {
         "agent_state",
@@ -124,7 +125,26 @@ def test_schema_plan_is_read_only_and_contract_checked():
     assert plan["on_error_stop"] is True
     assert all(len(item["sha256"]) == 64 for item in plan["included"])
     checked = {item["name"] for item in plan["included"] if item["contract_health_checked"]}
-    assert checked == {"user_pipeline", "notification_state", "agent_feedback"}
+    assert checked == {
+        "user_pipeline",
+        "notification_state",
+        "agent_feedback",
+        "scheduler",
+    }
+
+
+def test_scheduler_pause_schema_is_additive_and_backup_is_outside_its_surface():
+    scheduler_schema = _read(ROOT / "src/storage/scheduler/schema.sql")
+    assert "CREATE TABLE IF NOT EXISTS scheduler_automation_control_events" in scheduler_schema
+    assert "GENERATED ALWAYS AS IDENTITY" in scheduler_schema
+    assert "DROP " not in scheduler_schema.upper()
+    assert "TRUNCATE " not in scheduler_schema.upper()
+    assert _read(SYSTEMD / "applylens-postgres-backup.service").count(
+        "/home/deploy/apps/job-scraper/deploy/backup_postgres.sh"
+    ) == 1
+    assert "src.pipeline.scheduler" not in _read(
+        SYSTEMD / "applylens-postgres-backup.service"
+    )
 
 
 def test_schema_apply_uses_env_connection_and_one_transaction(monkeypatch):

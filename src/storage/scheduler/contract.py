@@ -175,7 +175,7 @@ def render_scheduler_init_sql() -> str:
     if not seed_sql:
         raise ValueError("Scheduler seed SQL is empty after rendering.")
 
-    return schema_sql + "\n\n" + seed_sql
+    return schema_sql + "\n\n" + seed_sql + "\n"
 
 
 def scheduler_init_sql_text(
@@ -295,6 +295,19 @@ def scheduler_postgres_table_specs() -> Dict[str, Any]:
                     "references": "scheduler_job_definitions.job_name",
                 }
             ],
+        },
+        "scheduler_automation_control_events": {
+            "description": "Append-only global scheduler automation pause and resume events.",
+            "primary_key": ["revision"],
+            "columns": [
+                {"name": "revision", "type": "bigint", "nullable": False},
+                {"name": "action", "type": "text", "nullable": False},
+                {"name": "prior_paused", "type": "boolean", "nullable": False},
+                {"name": "resulting_paused", "type": "boolean", "nullable": False},
+                {"name": "changed_at", "type": "timestamptz", "nullable": False},
+                {"name": "changed_by_user_id", "type": "text", "nullable": False},
+            ],
+            "indexes": [],
         },
     }
 

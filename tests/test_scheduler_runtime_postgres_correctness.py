@@ -5,6 +5,7 @@ import plistlib
 import re
 import subprocess
 import sys
+from contextlib import contextmanager
 from types import ModuleType, SimpleNamespace
 
 import pytest
@@ -24,6 +25,22 @@ def _install_psql(monkeypatch, path="/opt/postgres/bin/psql"):
 
 def _plist(payload):
     return plistlib.loads(payload["plist_xml"].encode("utf-8"))
+
+
+def _allow_automatic_start(monkeypatch):
+    @contextmanager
+    def admitted(**_kwargs):
+        yield {"paused": False, "revision": 0}
+
+    monkeypatch.setattr(scheduler, "automatic_scheduler_start_admission", admitted)
+
+
+class _ImmediateProcess:
+    def __init__(self, returncode=0):
+        self.returncode = returncode
+
+    def wait(self):
+        return self.returncode
 
 
 def test_supported_jobs_have_explicit_defaults_and_override_wins(monkeypatch):
@@ -438,6 +455,7 @@ def test_scheduler_runtime_enabled_state_is_unknown_when_inspection_unavailable(
 
 
 def test_required_postgres_history_failure_is_visible(monkeypatch, tmp_path):
+    _allow_automatic_start(monkeypatch)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -451,11 +469,7 @@ def test_required_postgres_history_failure_is_visible(monkeypatch, tmp_path):
             "--require-postgres-run-history-sync",
         ],
     )
-    monkeypatch.setattr(
-        scheduler.subprocess,
-        "run",
-        lambda *_args, **_kwargs: SimpleNamespace(returncode=0),
-    )
+    monkeypatch.setattr(scheduler.subprocess, "Popen", lambda *_args, **_kwargs: _ImmediateProcess())
     monkeypatch.setattr(
         scheduler,
         "write_post_run_summary_artifact",
@@ -635,6 +649,7 @@ def test_scheduler_stdout_redacts_postgres_sync_database_url(
     tmp_path,
     capsys,
 ):
+    _allow_automatic_start(monkeypatch)
     database_url = (
         "postgresql://scheduler-user:p%40ssword@example.invalid/scheduler"
     )
@@ -678,6 +693,11 @@ def test_scheduler_stdout_redacts_postgres_sync_database_url(
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(sync_run_history.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        scheduler.subprocess,
+        "Popen",
+        lambda cmd, **_kwargs: _ImmediateProcess(),
+    )
 
     assert scheduler.main() == 0
     output = capsys.readouterr().out

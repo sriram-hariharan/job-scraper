@@ -32,6 +32,17 @@ export type SchedulerPostgresSummary = {
   failure_count?: number;
 };
 
+export type SchedulerAutomationControl = {
+  paused: boolean;
+  revision: number;
+  updated_at: string | null;
+  updated_by_user_id: string | null;
+  paused_at: string | null;
+  paused_by_user_id: string | null;
+  affected_jobs: ["agent_discovery", "live_pipeline"];
+  manual_admin_runs_allowed: true;
+};
+
 export type SchedulerRuntimeState =
   | "running"
   | "idle"
@@ -64,6 +75,7 @@ export type SchedulerSummaryPayload = {
   ok?: boolean;
   limit?: number;
   contract_health?: SchedulerContractHealth;
+  automation_control?: SchedulerAutomationControl;
   history?: SchedulerHistorySummary;
   latest_runs_by_job?: SchedulerRun[];
   latest_scheduled_runs_by_job?: SchedulerRun[];
@@ -72,6 +84,13 @@ export type SchedulerSummaryPayload = {
   runtime_jobs?: SchedulerRuntimeJob[];
   postgres_summary?: SchedulerPostgresSummary;
   postgres_command_text?: string;
+};
+
+export type SchedulerAutomationControlMutationResponse = {
+  ok: true;
+  changed: boolean;
+  previous_paused: boolean;
+  automation_control: SchedulerAutomationControl;
 };
 
 export type ManualAgentDiscoveryResponse = {
@@ -109,15 +128,32 @@ export type AgentDiscoveryRunSummary = {
 
 export class AgentDiscoverySummaryUnavailableError extends Error {}
 
+function schedulerControlErrorDetail(detail: unknown, fallback: string): string {
+  if (typeof detail === "string") return detail.trim() || fallback;
+  if (
+    detail !== null
+    && typeof detail === "object"
+    && !Array.isArray(detail)
+    && "error_category" in detail
+    && detail.error_category === "scheduler_automation_control_unavailable"
+  ) {
+    return "Scheduler automation control is unavailable.";
+  }
+  return fallback;
+}
+
 export async function readSchedulerSummary(): Promise<SchedulerSummaryPayload> {
   const response = await fetch("/scheduler/summary?limit=25", {
     method: "GET",
     credentials: "same-origin",
     headers: { Accept: "application/json" },
   });
-  const payload = (await response.json().catch(() => ({}))) as SchedulerSummaryPayload & { detail?: string };
+  const payload = (await response.json().catch(() => ({}))) as SchedulerSummaryPayload & { detail?: unknown };
   if (!response.ok) {
-    throw new Error(payload?.detail || `Scheduler summary request failed (${response.status})`);
+    throw new Error(schedulerControlErrorDetail(
+      payload?.detail,
+      `Scheduler summary request failed (${response.status})`,
+    ));
   }
   return payload;
 }
@@ -138,6 +174,30 @@ export async function runAgentDiscoveryNow(): Promise<ManualAgentDiscoveryRespon
     throw new Error(detail || `Manual Agent Discovery request failed (${response.status})`);
   }
   return payload as ManualAgentDiscoveryResponse;
+}
+
+export async function updateSchedulerAutomationControl(
+  paused: boolean,
+): Promise<SchedulerAutomationControlMutationResponse> {
+  const response = await fetch("/scheduler/automation-control", {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ paused }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as Partial<SchedulerAutomationControlMutationResponse> & {
+    detail?: unknown;
+  };
+  if (!response.ok) {
+    throw new Error(schedulerControlErrorDetail(
+      payload?.detail,
+      `Scheduler automation control request failed (${response.status})`,
+    ));
+  }
+  return payload as SchedulerAutomationControlMutationResponse;
 }
 
 export async function readAgentDiscoveryRunSummary(

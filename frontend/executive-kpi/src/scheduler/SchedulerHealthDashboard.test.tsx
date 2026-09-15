@@ -5,7 +5,9 @@ import {
   formatDateTime,
   formatExpectedRunDateTime,
   readAgentDiscoveryRunSummary,
+  readSchedulerSummary,
   runAgentDiscoveryNow,
+  updateSchedulerAutomationControl,
   AgentDiscoverySummaryUnavailableError,
   type AgentDiscoveryRunSummary,
   type SchedulerSummaryPayload,
@@ -89,6 +91,16 @@ const READY_PAYLOAD: SchedulerSummaryPayload = {
     ok: true,
     checks: { seed_sql_matches_artifact: true, init_sql_matches_artifact: true },
     all_checks_pass: true,
+  },
+  automation_control: {
+    paused: false,
+    revision: 0,
+    updated_at: null,
+    updated_by_user_id: null,
+    paused_at: null,
+    paused_by_user_id: null,
+    affected_jobs: ["agent_discovery", "live_pipeline"],
+    manual_admin_runs_allowed: true,
   },
   history: {
     jsonl_path: "outputs/scheduler_history.jsonl",
@@ -441,6 +453,79 @@ describe("SchedulerHealthDashboard", () => {
     );
   });
 
+  it("PUTs only the bounded global scheduler automation state", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ok: true,
+        changed: true,
+        previous_paused: false,
+        automation_control: {
+          ...READY_PAYLOAD.automation_control,
+          paused: true,
+          revision: 1,
+        },
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await updateSchedulerAutomationControl(true);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/scheduler/automation-control",
+      expect.objectContaining({
+        method: "PUT",
+        credentials: "same-origin",
+        body: JSON.stringify({ paused: true }),
+      }),
+    );
+  });
+
+  it("renders the bounded summary 503 and disables automation without object coercion", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      json: async () => ({ detail: {
+        ok: false,
+        error_category: "scheduler_automation_control_unavailable",
+      } }),
+    })));
+    render(<SchedulerHealthDashboard />);
+    const alerts = await screen.findAllByRole("alert");
+    alerts.forEach((alert) => expect(alert).toHaveTextContent("Scheduler automation control is unavailable."));
+    expect(screen.queryByText(/\[object Object\]/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pause scheduled runs" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Resume scheduled runs" })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["Admin access required.", "Admin access required."],
+    [null, "Scheduler summary request failed (503)"],
+    [{}, "Scheduler summary request failed (503)"],
+    [{ error_category: { message: "raw storage exception" } }, "Scheduler summary request failed (503)"],
+    [{ error_category: "unknown_storage_failure", message: "raw storage exception" }, "Scheduler summary request failed (503)"],
+    [[], "Scheduler summary request failed (503)"],
+    [42, "Scheduler summary request failed (503)"],
+  ])("normalizes summary detail %j deterministically", async (detail, message) => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      json: async () => ({ detail }),
+    })));
+    await expect(readSchedulerSummary()).rejects.toThrow(message);
+  });
+
+  it("uses the same bounded control error for pause/resume failures", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      json: async () => ({ detail: { error_category: "scheduler_automation_control_unavailable" } }),
+    })));
+    await expect(updateSchedulerAutomationControl(true)).rejects.toThrow("Scheduler automation control is unavailable.");
+  });
+
   it("renders a loading state without a fake healthy default", () => {
     const neverResolves = () => new Promise<never>(() => undefined);
     render(<SchedulerHealthDashboard readSummary={neverResolves} />);
@@ -452,10 +537,173 @@ describe("SchedulerHealthDashboard", () => {
     render(<SchedulerHealthDashboard readSummary={async () => READY_PAYLOAD} />);
     expect(await screen.findByText("Healthy")).toBeInTheDocument();
     expect(screen.getByText("Admin only")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pause scheduled runs" })).toBeEnabled();
     expect(screen.getAllByText("live_pipeline").length).toBeGreaterThan(0);
     const activeJobsMetric = screen.getByText("Active jobs").closest(".scheduler-overview-metric");
     expect(activeJobsMetric).not.toBeNull();
     expect(within(activeJobsMetric as HTMLElement).getByText("2")).toBeInTheDocument();
+  });
+
+  it("renders authoritative paused state without calling it unhealthy", async () => {
+    const pausedPayload: SchedulerSummaryPayload = {
+      ...READY_PAYLOAD,
+      automation_control: {
+        ...READY_PAYLOAD.automation_control!,
+        paused: true,
+        revision: 3,
+        updated_at: "2026-09-15T12:00:00Z",
+        updated_by_user_id: "admin-1",
+        paused_at: "2026-09-15T12:00:00Z",
+        paused_by_user_id: "admin-1",
+      },
+    };
+    render(<SchedulerHealthDashboard readSummary={async () => pausedPayload} />);
+
+    expect(await screen.findByRole("button", { name: "Resume scheduled runs" })).toBeEnabled();
+    const banner = screen.getByRole("status");
+    expect(within(banner).getByText("Automatic scheduled runs are paused.")).toBeInTheDocument();
+    expect(banner).toHaveTextContent("Live Pipeline and Agent Discovery will not start automatically");
+    expect(banner).toHaveTextContent("A run already in progress is not stopped");
+    expect(banner).toHaveTextContent("PostgreSQL backups are unaffected");
+    expect(banner).toHaveTextContent("manual admin actions remain available");
+    expect(banner).not.toHaveTextContent(/failed|unhealthy|broken/i);
+  });
+
+  it("requires confirmation for Pause and restores focus on Escape", async () => {
+    render(<SchedulerHealthDashboard readSummary={async () => READY_PAYLOAD} />);
+    const trigger = await screen.findByRole("button", { name: "Pause scheduled runs" });
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "Pause scheduled runs?" });
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(dialog).toHaveTextContent("Live Pipeline and Agent Discovery will not start automatically");
+    expect(dialog).toHaveTextContent("Any run already in progress will continue until it finishes");
+    expect(dialog).toHaveTextContent("PostgreSQL backups are unaffected");
+    expect(dialog).toHaveTextContent("manual admin actions remain available");
+    expect(dialog).toHaveTextContent("resumed from this page");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Pause scheduled runs?" })).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it("confirms Pause once and reconciles the authoritative response", async () => {
+    const mutate = vi.fn(async () => ({
+      ok: true as const,
+      changed: true,
+      previous_paused: false,
+      automation_control: {
+        ...READY_PAYLOAD.automation_control!,
+        paused: true,
+        revision: 1,
+        updated_at: "2026-09-15T12:00:00Z",
+        updated_by_user_id: "admin-1",
+        paused_at: "2026-09-15T12:00:00Z",
+        paused_by_user_id: "admin-1",
+      },
+    }));
+    render(
+      <SchedulerHealthDashboard
+        readSummary={async () => READY_PAYLOAD}
+        updateAutomationControl={mutate}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Pause scheduled runs" }));
+    const dialog = screen.getByRole("dialog", { name: "Pause scheduled runs?" });
+    const confirm = within(dialog).getByRole("button", { name: "Pause scheduled runs" });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+
+    expect(await screen.findByRole("button", { name: "Resume scheduled runs" })).toBeEnabled();
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(mutate).toHaveBeenCalledWith(true);
+  });
+
+  it("cancels without mutation and disables Pause submission while it is pending", async () => {
+    const authoritative = {
+      ok: true as const,
+      changed: true,
+      previous_paused: false,
+      automation_control: {
+        ...READY_PAYLOAD.automation_control!,
+        paused: true,
+        revision: 1,
+      },
+    };
+    let resolveMutation!: (value: typeof authoritative) => void;
+    const mutate = vi.fn(() => new Promise<typeof authoritative>((resolve) => {
+      resolveMutation = resolve;
+    }));
+    render(
+      <SchedulerHealthDashboard
+        readSummary={async () => READY_PAYLOAD}
+        updateAutomationControl={mutate}
+      />,
+    );
+
+    const trigger = await screen.findByRole("button", { name: "Pause scheduled runs" });
+    fireEvent.click(trigger);
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    expect(mutate).not.toHaveBeenCalled();
+
+    fireEvent.click(trigger);
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Pause scheduled runs" }));
+    const pendingButtons = screen.getAllByRole("button", { name: "Pausing scheduled runs…" });
+    expect(pendingButtons).toHaveLength(2);
+    pendingButtons.forEach((button) => expect(button).toBeDisabled());
+    expect(mutate).toHaveBeenCalledTimes(1);
+
+    resolveMutation(authoritative);
+    expect(await screen.findByRole("button", { name: "Resume scheduled runs" })).toBeEnabled();
+  });
+
+  it("resumes immediately and retains the known paused state on failure", async () => {
+    const pausedPayload: SchedulerSummaryPayload = {
+      ...READY_PAYLOAD,
+      automation_control: { ...READY_PAYLOAD.automation_control!, paused: true, revision: 2 },
+    };
+    const success = vi.fn(async () => ({
+      ok: true as const,
+      changed: true,
+      previous_paused: true,
+      automation_control: { ...READY_PAYLOAD.automation_control!, paused: false, revision: 3 },
+    }));
+    const first = render(
+      <SchedulerHealthDashboard
+        readSummary={async () => pausedPayload}
+        updateAutomationControl={success}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Resume scheduled runs" }));
+    expect(await screen.findByRole("button", { name: "Pause scheduled runs" })).toBeEnabled();
+    expect(success).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog", { name: "Pause scheduled runs?" })).not.toBeInTheDocument();
+    first.unmount();
+
+    const failure = vi.fn(async () => { throw new Error("control unavailable"); });
+    render(
+      <SchedulerHealthDashboard
+        readSummary={async () => pausedPayload}
+        updateAutomationControl={failure}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Resume scheduled runs" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("control unavailable");
+    expect(screen.getByRole("button", { name: "Resume scheduled runs" })).toBeEnabled();
+  });
+
+  it("disables automation control while loading or when readback is unavailable", async () => {
+    const neverResolves = () => new Promise<never>(() => undefined);
+    const loading = render(<SchedulerHealthDashboard readSummary={neverResolves} />);
+    expect(screen.getByRole("button", { name: "Pause scheduled runs" })).toBeDisabled();
+    loading.unmount();
+
+    render(
+      <SchedulerHealthDashboard
+        readSummary={async () => ({ ...READY_PAYLOAD, automation_control: undefined })}
+      />,
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("Scheduler automation control unavailable");
+    expect(screen.getByRole("button", { name: "Pause scheduled runs" })).toBeDisabled();
   });
 
   it("renders exactly two truthful runtime cards with definition-owned cadences", async () => {
@@ -914,12 +1162,12 @@ describe("SchedulerHealthDashboard", () => {
     expect(within(dialog).getAllByText("Yes").length).toBeGreaterThan(0);
   });
 
-  it("does not introduce a scheduler write/control action", async () => {
+  it("exposes only bounded automation pause and no host scheduler lifecycle control", async () => {
     render(<SchedulerHealthDashboard readSummary={async () => READY_PAYLOAD} />);
     await screen.findByText("Healthy");
     for (const forbidden of [
       "Run job", "Run now", "Stop job", "Stop", "Restart", "Trigger run",
-      "Disable job", "Enable job", "Install", "Uninstall",
+      "Disable job", "Enable job", "Install", "Uninstall", "Restart scheduler",
     ]) {
       expect(screen.queryByRole("button", { name: forbidden })).not.toBeInTheDocument();
     }

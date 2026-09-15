@@ -28,6 +28,7 @@ from tests.support.phase_guard_registry import (
     STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES,
     STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES,
     STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES,
+    STEP18D20_ADMIN_SCHEDULER_AUTOMATION_CONTROL_FILES,
     JOBVITE_LOCATION_FRESHNESS_FILES,
     JOBVITE_STANDALONE_DISCOVERY_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
@@ -894,6 +895,28 @@ def test_phase21a_changes_only_docs_tests_and_legacy_guards():
 
 
 def test_changed_runtime_files_add_no_autonomous_application_markers():
+    # Exact milestone routing includes frontend sources missed by the legacy
+    # selector. Full-file scanning also covers the untracked control store.
+    if set(_changed_files()) == STEP18D20_ADMIN_SCHEDULER_AUTOMATION_CONTROL_FILES:
+        step18d20_runtime_files = {
+            ROOT / "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx",
+            ROOT / "frontend/executive-kpi/src/scheduler/schedulerModel.ts",
+            ROOT / "frontend/executive-kpi/src/styles.css",
+            ROOT / "src/app/api.py",
+            ROOT / "src/app/services.py",
+            ROOT / "src/app/static/build/executive-kpi/executive-kpi.css",
+            ROOT / "src/app/static/build/executive-kpi/executive-kpi.js",
+            ROOT / "src/pipeline/scheduler.py",
+            ROOT / "src/storage/admin_tools/production_schema_upgrade.py",
+            ROOT / "src/storage/scheduler/contract.py",
+            ROOT / "src/storage/scheduler/control_store.py",
+        }
+        assert len(step18d20_runtime_files) == 11
+        for path in sorted(step18d20_runtime_files):
+            content = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in content, f"{path}: {marker}"
+        return
     runtime_suffixes = {".py", ".js", ".html", ".css"}
     changed_runtime_files = [
         ROOT / relative_path

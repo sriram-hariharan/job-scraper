@@ -25,6 +25,10 @@ from src.pipeline.post_run_summary import write_post_run_summary_artifact
 from src.pipeline.post_run_email import write_post_run_email_outbox_artifact
 from src.pipeline.post_run_email_delivery import deliver_post_run_email_outbox
 from src.pipeline.post_run_notification import write_notification_record_artifact
+from src.storage.scheduler.control_store import (
+    SchedulerAutomationControlUnavailable,
+    automatic_scheduler_start_admission,
+)
 
 DEFAULT_SCHEDULED_OUTPUT_DIR = Path(ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)
 DEFAULT_SCHEDULER_RUN_HISTORY_PATH = Path(SCHEDULER_RUN_HISTORY_PATH)
@@ -1373,27 +1377,71 @@ def main() -> int:
     if args.print_only:
         return 0
 
-    run_id = _new_scheduler_run_id(definition["name"])
-    started_at = _utc_now()
-    finished_at = started_at
+    run_id = ""
+    started_at = ""
+    finished_at = ""
     return_code = 1
     error = ""
 
-    child_env = _build_scheduled_child_env(
-        definition["name"],
-        run_id=run_id,
-        options=options,
-    )
+    if args.trigger_source == DEFAULT_SCHEDULER_TRIGGER_SOURCE:
+        try:
+            with automatic_scheduler_start_admission(
+                database_url=args.database_url,
+                database_url_env=args.database_url_env,
+            ) as automation_control:
+                if automation_control["paused"]:
+                    print(
+                        "scheduler_automatic_start_skipped=true "
+                        f"job_name={definition['name']} "
+                        f"trigger_source={args.trigger_source} "
+                        f"revision={automation_control['revision']} "
+                        "skipped_reason=automation_paused"
+                    )
+                    return 0
 
-    try:
-        completed = subprocess.run(
-            cmd,
-            check=False,
-            env=child_env,
+                run_id = _new_scheduler_run_id(definition["name"])
+                started_at = _utc_now()
+                finished_at = started_at
+                child_env = _build_scheduled_child_env(
+                    definition["name"],
+                    run_id=run_id,
+                    options=options,
+                )
+                child_process = subprocess.Popen(
+                    cmd,
+                    env=child_env,
+                    shell=False,
+                )
+            return_code = int(child_process.wait())
+        except SchedulerAutomationControlUnavailable:
+            print(
+                "scheduler_automatic_start_error="
+                "scheduler_automation_control_unavailable "
+                f"job_name={definition['name']} "
+                f"trigger_source={args.trigger_source}",
+                file=sys.stderr,
+            )
+            return 2
+        except Exception as exc:
+            error = repr(exc)
+    else:
+        run_id = _new_scheduler_run_id(definition["name"])
+        started_at = _utc_now()
+        finished_at = started_at
+        child_env = _build_scheduled_child_env(
+            definition["name"],
+            run_id=run_id,
+            options=options,
         )
-        return_code = int(completed.returncode)
-    except Exception as exc:
-        error = repr(exc)
+        try:
+            completed = subprocess.run(
+                cmd,
+                check=False,
+                env=child_env,
+            )
+            return_code = int(completed.returncode)
+        except Exception as exc:
+            error = repr(exc)
 
     finished_at = _utc_now()
     status = "succeeded" if return_code == 0 and not error else "failed"

@@ -276,6 +276,12 @@ class AgentFeedbackRequest(BaseModel):
     source: str = "api"
 
 
+class SchedulerAutomationControlRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    paused: bool = Field(strict=True)
+
+
 class AgenticApprovalDecisionRequest(BaseModel):
     reviewer_id: str
     review_decision: str
@@ -3293,8 +3299,37 @@ def scheduler_summary(
             database_url_env=database_url_env,
             psql_bin=psql_bin,
         )
+    except services.SchedulerAutomationControlUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "ok": False,
+                "error_category": "scheduler_automation_control_unavailable",
+            },
+        ) from exc
     except (ValueError, SystemExit) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/scheduler/automation-control")
+def scheduler_automation_control_update(
+    payload: SchedulerAutomationControlRequest,
+    http_request: Request,
+):
+    admin_user = _require_admin_user(http_request)
+    try:
+        return services.set_scheduler_automation_paused_payload(
+            payload.paused,
+            admin_user_id=str(admin_user.get("user_id", "") or "").strip(),
+        )
+    except services.SchedulerAutomationControlUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "ok": False,
+                "error_category": "scheduler_automation_control_unavailable",
+            },
+        ) from exc
 
 
 @app.post("/scheduler/jobs/agent_discovery/run-now", status_code=202)

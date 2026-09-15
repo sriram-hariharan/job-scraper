@@ -356,7 +356,7 @@ def test_manual_discovery_endpoint_returns_bounded_conflict(monkeypatch):
         assert forbidden not in serialized
 
 
-def test_scheduler_schema_contract_remains_two_jobs_and_already_has_trigger_source():
+def test_scheduler_schema_contract_remains_two_jobs_and_adds_append_only_control_events():
     assert [row["name"] for row in scheduler.get_scheduled_job_definitions()] == [
         "agent_discovery",
         "live_pipeline",
@@ -366,3 +366,14 @@ def test_scheduler_schema_contract_remains_two_jobs_and_already_has_trigger_sour
         column["name"] for column in specs["scheduler_run_history"]["columns"]
     }
     assert "trigger_source" in run_columns
+    control = specs["scheduler_automation_control_events"]
+    assert control["primary_key"] == ["revision"]
+    assert [column["name"] for column in control["columns"]] == [
+        "revision",
+        "action",
+        "prior_paused",
+        "resulting_paused",
+        "changed_at",
+        "changed_by_user_id",
+    ]
+    assert "scheduler_automation_control_events" not in services.scheduler_seed_sql_payload()["sql"]

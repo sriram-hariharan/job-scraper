@@ -31,3 +31,17 @@ CREATE INDEX IF NOT EXISTS idx_scheduler_run_history_job_started
 
 CREATE INDEX IF NOT EXISTS idx_scheduler_run_history_status_started
     ON scheduler_run_history (status, started_at);
+
+CREATE TABLE IF NOT EXISTS scheduler_automation_control_events (
+    revision BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    action TEXT NOT NULL CHECK (action IN ('pause', 'resume')),
+    prior_paused BOOLEAN NOT NULL,
+    resulting_paused BOOLEAN NOT NULL,
+    changed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    changed_by_user_id TEXT NOT NULL,
+    CHECK (
+        (action = 'pause' AND prior_paused = FALSE AND resulting_paused = TRUE)
+        OR
+        (action = 'resume' AND prior_paused = TRUE AND resulting_paused = FALSE)
+    )
+);

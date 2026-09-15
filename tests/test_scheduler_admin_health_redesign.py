@@ -16,6 +16,7 @@ contains only the shared shell + a bare mount root.
 """
 
 import json
+import re
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -48,6 +49,16 @@ FAKE_SUMMARY_PAYLOAD = {
         "ok": True,
         "checks": {"seed_sql_matches_artifact": True, "init_sql_matches_artifact": True},
         "all_checks_pass": True,
+    },
+    "automation_control": {
+        "paused": False,
+        "revision": 0,
+        "updated_at": None,
+        "updated_by_user_id": None,
+        "paused_at": None,
+        "paused_by_user_id": None,
+        "affected_jobs": ["agent_discovery", "live_pipeline"],
+        "manual_admin_runs_allowed": True,
     },
     "history": {
         "jsonl_path": "outputs/scheduler_history.jsonl",
@@ -160,6 +171,11 @@ def test_scheduler_summary_combines_bounded_runtime_with_postgres_latest_runs(
     )
     monkeypatch.setattr(
         services,
+        "read_scheduler_automation_control",
+        lambda **_kwargs: FAKE_SUMMARY_PAYLOAD["automation_control"],
+    )
+    monkeypatch.setattr(
+        services,
         "scheduler_postgres_status_payload",
         lambda **_kwargs: {
             "history_jsonl_row_count": 2,
@@ -257,6 +273,11 @@ def test_scheduler_expected_next_run_uses_only_postgres_last_run(monkeypatch) ->
     )
     monkeypatch.setattr(
         services,
+        "read_scheduler_automation_control",
+        lambda **_kwargs: FAKE_SUMMARY_PAYLOAD["automation_control"],
+    )
+    monkeypatch.setattr(
+        services,
         "scheduler_postgres_status_payload",
         lambda **_kwargs: {
             "history_jsonl_row_count": 2,
@@ -318,6 +339,132 @@ def test_unauthenticated_scheduler_summary_follows_existing_auth_contract(monkey
     response = client.get("/scheduler/summary")
     assert response.status_code == 401
     assert response.json() == {"detail": "Authentication required."}
+
+
+def test_scheduler_automation_control_put_is_admin_only_and_binds_actor(monkeypatch) -> None:
+    observed = []
+
+    def mutate(paused, *, admin_user_id, **_kwargs):
+        observed.append((paused, admin_user_id))
+        return {
+            "ok": True,
+            "changed": True,
+            "previous_paused": not paused,
+            "automation_control": {
+                **FAKE_SUMMARY_PAYLOAD["automation_control"],
+                "paused": paused,
+                "revision": 1,
+            },
+        }
+
+    monkeypatch.setattr(services, "set_scheduler_automation_paused_payload", mutate)
+
+    admin_response = _client_as(monkeypatch, ADMIN_USER).put(
+        "/scheduler/automation-control",
+        json={"paused": True},
+    )
+    assert admin_response.status_code == 200
+    assert admin_response.json()["automation_control"]["paused"] is True
+    assert observed == [(True, "admin-1")]
+
+    non_admin_response = _client_as(monkeypatch, NON_ADMIN_USER).put(
+        "/scheduler/automation-control",
+        json={"paused": True},
+    )
+    assert non_admin_response.status_code == 403
+
+    anonymous_response = _client_as(monkeypatch, None).put(
+        "/scheduler/automation-control",
+        json={"paused": True},
+    )
+    assert anonymous_response.status_code == 401
+    assert observed == [(True, "admin-1")]
+
+
+def test_scheduler_automation_control_duplicate_mutation_returns_authoritative_unchanged_state(
+    monkeypatch,
+) -> None:
+    calls = []
+
+    def mutate(paused, *, admin_user_id, **_kwargs):
+        calls.append((paused, admin_user_id))
+        return {
+            "ok": True,
+            "changed": len(calls) == 1,
+            "previous_paused": len(calls) > 1,
+            "automation_control": {
+                **FAKE_SUMMARY_PAYLOAD["automation_control"],
+                "paused": True,
+                "revision": 8,
+            },
+        }
+
+    monkeypatch.setattr(services, "set_scheduler_automation_paused_payload", mutate)
+    client = _client_as(monkeypatch, ADMIN_USER)
+
+    first = client.put("/scheduler/automation-control", json={"paused": True})
+    duplicate = client.put("/scheduler/automation-control", json={"paused": True})
+
+    assert first.status_code == 200
+    assert first.json()["changed"] is True
+    assert duplicate.status_code == 200
+    assert duplicate.json()["changed"] is False
+    assert duplicate.json()["automation_control"]["revision"] == 8
+    assert calls == [(True, "admin-1"), (True, "admin-1")]
+
+
+def test_scheduler_automation_control_put_is_strict_and_storage_failure_is_bounded(monkeypatch) -> None:
+    client = _client_as(monkeypatch, ADMIN_USER)
+    assert client.put(
+        "/scheduler/automation-control",
+        json={"paused": "true"},
+    ).status_code == 422
+    assert client.put(
+        "/scheduler/automation-control",
+        json={"paused": True, "job_name": "live_pipeline"},
+    ).status_code == 422
+
+    monkeypatch.setattr(
+        services,
+        "set_scheduler_automation_paused_payload",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            services.SchedulerAutomationControlUnavailable(
+                "postgresql://admin:secret@example.test/app"
+            )
+        ),
+    )
+    response = client.put("/scheduler/automation-control", json={"paused": True})
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": {
+            "ok": False,
+            "error_category": "scheduler_automation_control_unavailable",
+        }
+    }
+    assert "secret" not in response.text
+
+
+def test_scheduler_summary_control_unavailability_is_bounded(monkeypatch) -> None:
+    monkeypatch.setattr(
+        services,
+        "scheduler_operator_summary_payload",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            services.SchedulerAutomationControlUnavailable(
+                "postgresql://admin:secret@example.test/app"
+            )
+        ),
+    )
+
+    response = _client_as(monkeypatch, ADMIN_USER).get("/scheduler/summary")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": {
+            "ok": False,
+            "error_category": "scheduler_automation_control_unavailable",
+        }
+    }
+    assert "secret" not in response.text
 
 
 def test_scheduler_history_endpoint_is_admin_only(monkeypatch) -> None:
@@ -485,24 +632,40 @@ def test_no_fake_time_period_labels_introduced() -> None:
         assert "runs in" not in source
 
 
-def test_no_new_scheduler_write_or_control_action_introduced() -> None:
+def test_only_bounded_automation_control_write_exists_and_no_host_lifecycle_control() -> None:
+    # Bind every literal fetch route to its method, retaining the previously
+    # approved manual admin POST alongside the one new control PUT.
+    requests = re.findall(
+        r'fetch\(\s*(["`])(.+?)\1\s*,\s*\{\s*method:\s*"([A-Z]+)"',
+        SCHEDULER_MODEL_TS,
+        re.DOTALL,
+    )
+    assert len(requests) == SCHEDULER_MODEL_TS.count("fetch(") == 4
+    assert [(route, method) for _quote, route, method in requests] == [
+        ("/scheduler/summary?limit=25", "GET"),
+        ("/scheduler/jobs/agent_discovery/run-now", "POST"),
+        ("/scheduler/automation-control", "PUT"),
+        ("/scheduler/runs/${encodeURIComponent(clean(runId))}/agent-discovery-summary", "GET"),
+    ]
     for forbidden in (
-        'method: "POST"', "method: 'POST'",
-        'method: "PUT"', "method: 'PUT'",
-        'method: "DELETE"', "method: 'DELETE'",
-        "/scheduler/run", "/scheduler/stop", "/scheduler/trigger",
+        'method: "DELETE"', "method: 'DELETE'", "/scheduler/trigger",
+        "/scheduler/stop", "/scheduler/restart", "/scheduler/install",
+        "/scheduler/uninstall", "systemctl", "launchctl",
+        "bootstrap", "bootout", "shell: true",
     ):
+        assert forbidden not in SCHEDULER_MODEL_TS
         assert forbidden not in SCHEDULER_DASHBOARD_TSX
 
 
 def test_react_island_owns_only_bounded_scheduler_requests() -> None:
     # The scheduler model owns the summary GET, explicit manual-discovery POST,
     # and exact-run discovery-summary GET; classic JS does not compete.
-    assert SCHEDULER_MODEL_TS.count("fetch(") == 3
+    assert SCHEDULER_MODEL_TS.count("fetch(") == 4
     assert '"/scheduler/summary?limit=25"' in SCHEDULER_MODEL_TS
     assert '"/scheduler/jobs/agent_discovery/run-now"' in SCHEDULER_MODEL_TS
     assert 'encodeURIComponent(clean(runId))' in SCHEDULER_MODEL_TS
     assert '/agent-discovery-summary`' in SCHEDULER_MODEL_TS
+    assert '"/scheduler/automation-control"' in SCHEDULER_MODEL_TS
     assert "fetch(" not in SCHEDULER_DASHBOARD_TSX
     scheduler_route = UI_SOURCE[UI_SOURCE.index('@router.get("/scheduler"'):]
     assert "fetch(" not in scheduler_route

@@ -75,6 +75,7 @@ from tests.support.phase_guard_registry import (
     STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES,
     STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES,
     STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES,
+    STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
     RECRUITEE_STANDALONE_DISCOVERY_FILES,
     SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES,
@@ -590,6 +591,23 @@ def test_phase2d_b2_strict_seniority_filter_surface_is_exact():
 
 
 def test_current_milestone_guard_compatibility_is_exact_registered_surface():
+    assert STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES == {
+        "src/app/api.py",
+        "src/app/guide_ui.py",
+        "src/app/static/app_guide.css",
+        "src/app/static/app_redesign.css",
+        "src/app/static/shell.js",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_app_guide_ui.py",
+        "tests/test_persistent_bulk_generation.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert not any(
+        "*" in path or path.endswith("/")
+        for path in STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES
+    )
     assert PROBLEM1_JD_INTELLIGENCE_CONTRACT_REVISION_FILES == {
         "src/matching/jd_intelligence_contract.py",
         "src/matching/job_adapter.py",
@@ -2473,6 +2491,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES
         | STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES
         | STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES
+        | STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES
         | STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
         | STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES
@@ -3148,7 +3167,7 @@ def test_api_py_historical_identity_and_current_successor_are_accepted():
 
     actual = sha256((STEP11_ROOT / "src/app/api.py").read_bytes()).hexdigest()
     assert actual == (
-        "55c91a9182951e2cbedd1e0c5b588676f4541249086288011daf025e4ed9fb99"
+        "3c4a42aaa8ba7e3e4a58f3aa712d71baa443b03a7f8528fccc625ae26eef1a61"
     )
     assert profile
 

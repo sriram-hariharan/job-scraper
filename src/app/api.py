@@ -967,7 +967,7 @@ async def sanitize_user_ai_settings_validation_error(
 _BULK_SAFE_GET_PATHS = frozenset({
     "/", "/planning", "/decisions-ui", "/applications", "/pipeline",
     "/scheduler", "/agentic-operations", "/profile", "/profile/preferences",
-    "/profile/ai-settings", "/profile/saved-scans", "/onboarding",
+    "/profile/ai-settings", "/profile/saved-scans", "/onboarding", "/guide",
     "/health", "/user/workspace-state", "/status", "/pipeline/status",
     "/scheduler/jobs", "/scheduler/command", "/scheduler/launchd-config",
     "/scheduler/launchd-agent-status", "/scheduler/history",

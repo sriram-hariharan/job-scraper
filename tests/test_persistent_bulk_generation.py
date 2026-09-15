@@ -473,6 +473,9 @@ def test_bulk_guard_exempts_its_own_controls_and_planning_owns_the_bulk_surface(
     # The existing allowlist seam is what exempts Bulk's own controls.
     assert "control.closest(\"[data-bulk-safe='true']\")" in safe
     assert 'data-bulk-safe={running ? "true" : undefined}' in planning_tsx
+    # Read-only Guide navigation is safe in both client and server guards.
+    assert ".app-shell-guide-link" in safe
+    assert "/guide" in api._BULK_SAFE_GET_PATHS
 
     # Unsafe mutation controls keep the original blocked-action treatment.
     guard = shell[

@@ -373,7 +373,7 @@ def app_guide_page() -> str:
     articles.append(_glossary_article())
     return f"""
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>ApplyLens AI Guide</title>
-  <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" /><link rel="stylesheet" href="/static/styles.css?v=eucalyptus_action_cascade_r2" /><link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" /><link rel="stylesheet" href="/static/app_guide.css?v=applylens_guide_r7" />
+  <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" /><link rel="stylesheet" href="/static/styles.css?v=eucalyptus_action_cascade_r2" /><link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" /><link rel="stylesheet" href="/static/app_guide.css?v=applylens_guide_r8" />
 </head><body class="app-guide-body">{render_top_shell('/guide')}<main class="page app-guide-page" id="mainContent">
   <div class="app-guide-global-header" aria-hidden="true"></div>
   <div class="app-guide-workspace">
@@ -381,7 +381,10 @@ def app_guide_page() -> str:
     <div class="app-guide-content-scroll" id="appGuideContentScroll">
       <div class="app-guide-mobile-nav"><label for="appGuideTopicSelect">Guide topic</label><select id="appGuideTopicSelect">{mobile_options}</select></div>
       <div class="app-guide-content-grid">
-        <section class="app-guide-content" id="appGuideContent" aria-label="Guide content">{''.join(articles)}</section>
+        <section class="app-guide-content" id="appGuideContent" aria-label="Guide content">
+          <a class="app-guide-resume-start-cta" href="/profile?onboarding=resume_upload"><span class="app-guide-resume-start-icon" aria-hidden="true">{_icon('file')}</span><span class="app-guide-resume-start-copy"><strong>Get started by uploading a resume</strong><small>Open your resume library to upload or manage a resume.</small></span><span class="app-guide-resume-start-action">Manage resumes{_icon('arrow')}</span></a>
+          {''.join(articles)}
+        </section>
         {_context_rail()}
       </div>
     </div>

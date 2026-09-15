@@ -46,7 +46,9 @@ function bulkGenerationControlIsSafe(control) {
     "#scanWorkspaceResumeSelect, #scanWorkspaceResumeFileInput, #scanWorkspaceResumeTextInput, " +
     "#scanWorkspaceResumeBrowseBtn, #scanWorkspaceJobDescriptionInput"
   )) return true;
-  if (control.matches(".app-shell-nav-link, .app-shell-brand, .profile-dropdown-nav-btn")) return true;
+  if (control.matches(
+    ".app-shell-nav-link, .app-shell-brand, .app-shell-guide-link, .profile-dropdown-nav-btn"
+  )) return true;
   const safeIds = new Set([
     "appShellMenuBtn", "appShellCollapseBtn", "appShellCloseBtn", "themeToggleBtn",
     "profileMenuButton", "profileLogoutBtn", "notificationButton", "notificationRefreshBtn",
@@ -1020,6 +1022,11 @@ window.addEventListener("DOMContentLoaded", () => {
     ]).has(normalizedPath);
   }
 
+  function isGuideRoute(pathname = window.location.pathname) {
+    const normalizedPath = String(pathname || "/").trim().replace(/\/+$/, "") || "/";
+    return normalizedPath === "/guide";
+  }
+
   function clearNewUserWorkspaceEmptyState() {
     storageRemove(window.localStorage, APPLYLENS_NEW_USER_EMPTY_KEY);
     document.body.classList.remove("app-new-user-empty");
@@ -1050,7 +1057,7 @@ window.addEventListener("DOMContentLoaded", () => {
   function ensureNewUserEmptyState() {
     if (storageGet(window.localStorage, APPLYLENS_NEW_USER_EMPTY_KEY) !== "1") return;
     if (document.body.classList.contains("auth-page")) return;
-    if (isAccountConfigurationRoute()) return;
+    if (isAccountConfigurationRoute() || isGuideRoute()) return;
 
     const page = document.querySelector(".page");
     if (!page || page.querySelector(".new-user-empty-state")) return;
@@ -1080,7 +1087,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   async function refreshNewUserWorkspaceState() {
     if (document.body.classList.contains("auth-page")) return;
-    if (isAccountConfigurationRoute()) return;
+    if (isAccountConfigurationRoute() || isGuideRoute()) return;
 
     try {
       const response = await fetch("/user/workspace-state", {
@@ -1106,7 +1113,7 @@ window.addEventListener("DOMContentLoaded", () => {
     if (document.body.classList.contains("auth-page")) return false;
 
     const currentPath = window.location.pathname || "/";
-    if (currentPath === "/profile" || currentPath.startsWith("/static/")) return false;
+    if (currentPath === "/profile" || currentPath === "/guide" || currentPath.startsWith("/static/")) return false;
 
     try {
       const response = await fetch("/onboarding/status", {
@@ -1134,12 +1141,13 @@ window.addEventListener("DOMContentLoaded", () => {
 
   function closeFirstRunPrompt(modal) {
     storageRemove(window.sessionStorage, APPLYLENS_FIRST_RUN_PROMPT_KEY);
+    document.body.classList.remove("app-first-run-prompt-open");
     modal.classList.add("hidden");
     modal.setAttribute("aria-hidden", "true");
   }
 
   function showFirstRunPrompt() {
-    if (isAccountConfigurationRoute()) return;
+    if (isAccountConfigurationRoute() || isGuideRoute()) return;
     if (storageGet(window.sessionStorage, APPLYLENS_FIRST_RUN_PROMPT_KEY) !== "1") return;
 
     let modal = qs("firstRunPromptModal");
@@ -1181,6 +1189,7 @@ window.addEventListener("DOMContentLoaded", () => {
       });
     }
 
+    document.body.classList.add("app-first-run-prompt-open");
     modal.classList.remove("hidden");
     modal.setAttribute("aria-hidden", "false");
   }

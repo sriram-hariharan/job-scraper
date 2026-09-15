@@ -6243,6 +6243,17 @@ body.app-new-user-empty .page > :not(.new-user-empty-state) {
   padding: 24px;
 }
 
+/* Keep read-only Guide access available without exposing other shell actions
+   through the first-run modal. */
+body.app-first-run-prompt-open .app-shell-top-right:not(.app-shell-top-right--flow) {
+  z-index: 1501 !important;
+  pointer-events: none !important;
+}
+
+body.app-first-run-prompt-open .app-shell-guide-link {
+  pointer-events: auto !important;
+}
+
 .first-run-prompt-backdrop {
   position: absolute;
   inset: 0;

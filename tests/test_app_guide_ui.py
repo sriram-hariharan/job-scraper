@@ -8,7 +8,8 @@ from fastapi.testclient import TestClient
 from src.app import api
 from src.app.guide_ui import TOPICS, TERMS, TOPIC_META, app_guide_page
 from src.app.ui_shell import NAV_ITEMS, render_top_shell
-from src.auth.runtime import HTML_NAVIGATION_PATHS
+from src.auth import runtime as auth_runtime
+from src.auth.runtime import HTML_NAVIGATION_PATHS, PUBLIC_AUTH_EXACT_PATHS
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,6 +17,8 @@ GUIDE_SOURCE = (ROOT / "src/app/guide_ui.py").read_text(encoding="utf-8")
 GUIDE_JS = (ROOT / "src/app/static/app_guide.js").read_text(encoding="utf-8")
 GUIDE_CSS = (ROOT / "src/app/static/app_guide.css").read_text(encoding="utf-8")
 SHELL_CSS = (ROOT / "src/app/static/app_redesign.css").read_text(encoding="utf-8")
+SHELL_JS = (ROOT / "src/app/static/shell.js").read_text(encoding="utf-8")
+CANONICAL_RESUME_UPLOAD_URL = "/profile?onboarding=resume_upload"
 
 
 def _main_markup() -> str:
@@ -33,11 +36,31 @@ def test_authenticated_normal_user_can_open_guide(monkeypatch) -> None:
         return None
 
     monkeypatch.setattr(api, "auth_guard_response", authenticated_guard)
+    monkeypatch.setattr(
+        api.bulk_generation_service,
+        "active_bulk_generation_guard_state",
+        lambda **_: (_ for _ in ()).throw(
+            AssertionError("safe Guide GET must not consult Bulk mutation state")
+        ),
+    )
     response = TestClient(api.app).get("/guide")
 
     assert response.status_code == 200
     assert "ApplyLens AI Guide" in response.text
     assert "/guide" in HTML_NAVIGATION_PATHS
+    assert "/guide" in api._BULK_SAFE_GET_PATHS
+
+
+def test_logged_out_guide_remains_protected(monkeypatch) -> None:
+    monkeypatch.setenv("JOB_STACK_AUTH_ENABLED", "true")
+    monkeypatch.setattr(auth_runtime, "current_user_from_request", lambda _request: {})
+    monkeypatch.setattr(api, "auth_guard_response", auth_runtime.auth_guard_response)
+
+    response = TestClient(api.app).get("/guide", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?next=/guide"
+    assert "/guide" not in PUBLIC_AUTH_EXACT_PATHS
 
 
 def test_guide_is_one_global_toolbar_control_in_the_required_order() -> None:
@@ -60,6 +83,75 @@ def test_guide_is_one_global_toolbar_control_in_the_required_order() -> None:
     assert {href for _label, href, _icon in NAV_ITEMS} == {
         "/", "/planning", "/decisions-ui", "/applications", "/pipeline"
     }
+
+
+def test_guide_is_the_only_toolbar_navigation_exempted_by_its_bulk_safe_class() -> None:
+    safe = SHELL_JS[
+        SHELL_JS.index("function bulkGenerationControlIsSafe")
+        : SHELL_JS.index("function setBulkGenerationControlGuard")
+    ]
+    guard = SHELL_JS[
+        SHELL_JS.index("function applyBulkGenerationControlGuards")
+        : SHELL_JS.index("function publishBulkGenerationState")
+    ]
+
+    assert ".app-shell-guide-link" in safe
+    assert 'control.matches("a[href]")' in safe
+    assert 'if (!(control instanceof Element)) return true' in safe
+    assert "const shouldBlock = !bulkGenerationCanonicalState.verified || bulkGenerationCanonicalState.active" in guard
+    assert "shouldBlock && !bulkGenerationControlIsSafe(control)" in guard
+    assert 'document.querySelectorAll("button, a[href], input, select, textarea, [role=\'button\']")' in guard
+    assert "notificationMarkAllReadBtn" not in safe
+    assert "runPipelineBtn" not in safe
+
+
+def test_guide_bypasses_only_new_user_display_gates_not_resume_feature_requirements() -> None:
+    classifier = SHELL_JS.split("function isGuideRoute", 1)[1].split(
+        "function clearNewUserWorkspaceEmptyState", 1
+    )[0]
+    ensure = SHELL_JS.split("function ensureNewUserEmptyState", 1)[1].split(
+        "async function refreshNewUserWorkspaceState", 1
+    )[0]
+    refresh = SHELL_JS.split("async function refreshNewUserWorkspaceState", 1)[1].split(
+        "async function redirectIncompleteOnboarding", 1
+    )[0]
+    redirect = SHELL_JS.split("async function redirectIncompleteOnboarding", 1)[1].split(
+        "function closeFirstRunPrompt", 1
+    )[0]
+    prompt = SHELL_JS.split("function showFirstRunPrompt", 1)[1].split(
+        "function closeProfileMenu", 1
+    )[0]
+
+    assert 'return normalizedPath === "/guide"' in classifier
+    assert "isGuideRoute()" in ensure
+    assert "isGuideRoute()" in refresh
+    assert 'currentPath === "/guide"' in redirect
+    assert "isGuideRoute()" in prompt
+    assert "hasProfileResume" in redirect
+    assert '"/profile?onboarding=resume_upload"' in redirect
+    assert '"/onboarding"' in redirect
+
+
+def test_first_run_modal_keeps_only_the_global_guide_control_pointer_accessible() -> None:
+    close_prompt = SHELL_JS.split("function closeFirstRunPrompt", 1)[1].split(
+        "function showFirstRunPrompt", 1
+    )[0]
+    show_prompt = SHELL_JS.split("function showFirstRunPrompt", 1)[1].split(
+        "function closeProfileMenu", 1
+    )[0]
+    modal_toolbar = SHELL_CSS.split(
+        "body.app-first-run-prompt-open .app-shell-top-right:not(.app-shell-top-right--flow) {",
+        1,
+    )[1].split("}", 1)[0]
+    modal_guide = SHELL_CSS.split(
+        "body.app-first-run-prompt-open .app-shell-guide-link {", 1
+    )[1].split("}", 1)[0]
+
+    assert 'classList.add("app-first-run-prompt-open")' in show_prompt
+    assert 'classList.remove("app-first-run-prompt-open")' in close_prompt
+    assert "z-index: 1501 !important" in modal_toolbar
+    assert "pointer-events: none !important" in modal_toolbar
+    assert "pointer-events: auto !important" in modal_guide
 
 
 def test_focused_information_architecture_replaces_the_long_card_document() -> None:
@@ -85,6 +177,24 @@ def test_focused_information_architecture_replaces_the_long_card_document() -> N
     assert "Expand all" not in main
     assert "Collapse all" not in main
     assert "app-guide-card-grid" not in main
+
+
+def test_shared_resume_start_cta_is_visible_for_every_topic_and_uses_canonical_upload_surface() -> None:
+    main = _main_markup()
+    cta = main.split('class="app-guide-resume-start-cta"', 1)[1].split("</a>", 1)[0]
+
+    assert main.count("Get started by uploading a resume") == 1
+    assert f'href="{CANONICAL_RESUME_UPLOAD_URL}"' in main
+    assert "Get started by uploading a resume" in cta
+    assert main.index('class="app-guide-resume-start-cta"') < main.index('data-guide-topic="start"')
+    assert 'data-guide-topic=' not in cta
+    assert " hidden>" not in cta
+    assert main.count('data-guide-topic="') == 17
+    assert GUIDE_SOURCE.count('@router.get("/guide"') == 1
+    assert '@router.post("/profile/resumes/upload"' not in GUIDE_SOURCE
+    assert ".app-guide-resume-start-cta" in GUIDE_CSS
+    mobile = GUIDE_CSS.split("@media (max-width: 680px)", 1)[1]
+    assert ".app-guide-resume-start-cta" in mobile
 
 
 def test_all_verified_normal_user_areas_and_high_confusion_actions_are_covered() -> None:

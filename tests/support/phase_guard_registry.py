@@ -2699,6 +2699,24 @@ STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES = {
 }
 
 
+# Step 18D19 always-accessible authenticated Guide plus persistent
+# resume-start CTA. Exact Guide runtime, focused-test, and guard-registration
+# surface only; no globs or directory prefixes.
+STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES = {
+    "src/app/api.py",
+    "src/app/guide_ui.py",
+    "src/app/static/app_guide.css",
+    "src/app/static/app_redesign.css",
+    "src/app/static/shell.js",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_app_guide_ui.py",
+    "tests/test_persistent_bulk_generation.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+
 # Production deployment hardening milestone. Exact, finite surface: the deploy
 # unit/tooling files plus the two guard-registry files this compatibility
 # registration itself has to touch. No globs, no directory prefixes - the
@@ -2750,6 +2768,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES
         | STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES
         | STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES
+        | STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES
         | PRODUCTION_DEPLOYMENT_HARDENING_FILES
         | PRODUCTION_CPU_TORCH_BUILD_FILES
         | STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
@@ -3028,6 +3047,9 @@ def assert_protected_hashes(
         ): frozenset({
             # Premium ApplyLens App Guide successor (current committed HEAD).
             "55c91a9182951e2cbedd1e0c5b588676f4541249086288011daf025e4ed9fb99",
+            # Step 18D19 always-accessible authenticated Guide plus persistent
+            # resume-start CTA successor.
+            "3c4a42aaa8ba7e3e4a58f3aa712d71baa443b03a7f8528fccc625ae26eef1a61",
             "0b9923e4a7df78ca4f0e4983b1718e42c6d827785f83fbed78b0150547353012",
             "f5babdc02fa0f6df589e60b02cb6fa4eba4d073db14cdb95b2f5be550fd43a68",
             "3497214cd9f379a58687739117c40b420f04f17622a4b5d1a5e7d982b0a8e1f6",
@@ -3063,6 +3085,9 @@ def assert_protected_hashes(
         ): frozenset({
             # Premium ApplyLens App Guide successor (current committed HEAD).
             "dcd36688732bf917742ad6c1cca973b379c01baffe2fb54fc9d7f5d521bd174a",
+            # Step 18D19 always-accessible authenticated Guide plus persistent
+            # resume-start CTA successor.
+            "826929ea5072123a3bc38bb6ae52e5f00f994de131b18fbadc967fee7226077f",
             "f544310044957fcd28c74e9375093695a0b94814e2473435ff1fdefe7fc93df5",
             "8f2ab896d709e95a6ae0300004a799e9206e8c20af1c82fa08d9414bd85ef06a",
             "bae6084f3be7e173e2cb9ec4bf39d085531a4f628f88508445b0a583783e0ded",
@@ -3167,6 +3192,9 @@ def assert_protected_hashes(
             "b386161a6da69dc1eacfda8583846b5ee979d8dcba51ec33e83afd48c1e39c11",
             # Premium ApplyLens App Guide successor (current committed HEAD).
             "55c91a9182951e2cbedd1e0c5b588676f4541249086288011daf025e4ed9fb99",
+            # Step 18D19 always-accessible authenticated Guide plus persistent
+            # resume-start CTA successor.
+            "3c4a42aaa8ba7e3e4a58f3aa712d71baa443b03a7f8528fccc625ae26eef1a61",
         }),
         (
             "src/app/services.py",

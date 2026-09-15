@@ -348,6 +348,82 @@ body.app-shell-collapsed #mainContent.app-guide-page {
   box-shadow: none;
 }
 
+.app-guide-resume-start-cta {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  min-width: 0;
+  min-height: 58px;
+  margin: 0 0 22px;
+  padding: 9px 12px;
+  gap: 11px;
+  border: 1px solid color-mix(in srgb, var(--guide-green) 34%, var(--guide-line));
+  border-radius: 13px;
+  background: linear-gradient(100deg, var(--guide-green-wash), var(--guide-blue-wash));
+  color: var(--guide-ink);
+  text-decoration: none;
+}
+
+.app-guide-resume-start-cta:hover,
+.app-guide-resume-start-cta:focus-visible {
+  border-color: color-mix(in srgb, var(--guide-green) 62%, transparent);
+  color: var(--guide-ink);
+  text-decoration: none;
+}
+
+.app-guide-resume-start-cta:focus-visible {
+  outline: 3px solid var(--guide-green-wash);
+  outline-offset: 2px;
+}
+
+.app-guide-resume-start-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--guide-surface-raised);
+  color: var(--guide-green);
+}
+
+.app-guide-resume-start-icon .app-guide-icon {
+  width: 19px;
+  height: 19px;
+}
+
+.app-guide-resume-start-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.app-guide-resume-start-copy strong {
+  color: var(--guide-ink);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.app-guide-resume-start-copy small {
+  color: var(--guide-muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.app-guide-resume-start-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--guide-green);
+  font-size: 11px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.app-guide-resume-start-action .app-guide-icon {
+  width: 14px;
+  height: 14px;
+}
+
 .app-guide-search-shell {
   position: relative;
   z-index: 20;
@@ -1207,6 +1283,21 @@ body.app-shell-collapsed #mainContent.app-guide-page {
   .app-guide-content {
     padding: 0;
     border-radius: 0;
+  }
+
+  .app-guide-resume-start-cta {
+    grid-template-columns: 36px minmax(0, 1fr);
+    margin-bottom: 16px;
+    padding: 9px 10px;
+  }
+
+  .app-guide-resume-start-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .app-guide-resume-start-action {
+    grid-column: 2;
   }
 
   .app-guide-search {

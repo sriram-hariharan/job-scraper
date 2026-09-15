@@ -27,6 +27,7 @@ from tests.support.phase_guard_registry import (
     PRODUCTION_PROVIDER_QUALIFICATION_AUTHORITY_FILES,
     STEP1_RENDERER_BOUND_V2_QUALIFICATION_STABILIZATION_FILES,
     STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES,
+    STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES,
     JOBVITE_LOCATION_FRESHNESS_FILES,
     JOBVITE_STANDALONE_DISCOVERY_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
@@ -3063,6 +3064,31 @@ def test_changed_runtime_files_add_no_autonomous_application_markers():
     if (
         set(changed_runtime_files)
         == step1_renderer_bound_v2_stabilization_runtime_files
+    ):
+        diff = subprocess.check_output(
+            [
+                "git", "diff", "--unified=0", "--",
+                *(str(path.relative_to(ROOT)) for path in sorted(changed_runtime_files)),
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+        added_lines = "\n".join(
+            line[1:] for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
+        for marker in FORBIDDEN_RUNTIME_MARKERS:
+            assert marker not in added_lines
+        return
+    step18d19_always_accessible_guide_runtime_files = {
+        ROOT / relative_path
+        for relative_path in STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES
+        if relative_path.startswith("src/")
+        and Path(relative_path).suffix in runtime_suffixes
+    }
+    if (
+        set(changed_runtime_files)
+        == step18d19_always_accessible_guide_runtime_files
     ):
         diff = subprocess.check_output(
             [

@@ -29,6 +29,7 @@ from tests.support.phase_guard_registry import (
     STEP14_CONTROLLED_CANARY_CURRENT_CASE_OWNERSHIP_FILES,
     STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES,
     STEP18D20_ADMIN_SCHEDULER_AUTOMATION_CONTROL_FILES,
+    STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES,
     JOBVITE_LOCATION_FRESHNESS_FILES,
     JOBVITE_STANDALONE_DISCOVERY_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
@@ -944,6 +945,21 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         }
         assert len(step18d20_runtime_files) == 11
         for path in sorted(step18d20_runtime_files):
+            content = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in content, f"{path}: {marker}"
+        return
+    if set(_changed_files()) == STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES:
+        step18d22_runtime_suffixes = {".py", ".js", ".html", ".css", ".ts", ".tsx"}
+        step18d22_runtime_files = {
+            ROOT / relative_path
+            for relative_path in STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES
+            if relative_path.startswith(("src/", "frontend/"))
+            and Path(relative_path).suffix in step18d22_runtime_suffixes
+            and ".test." not in Path(relative_path).name
+        }
+        assert len(step18d22_runtime_files) == 10
+        for path in sorted(step18d22_runtime_files):
             content = path.read_text(encoding="utf-8")
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in content, f"{path}: {marker}"

@@ -3400,6 +3400,9 @@ html[data-theme="dark"] #agenticOperationsRoot {
   --scheduler-red-soft: #fff0f1;
   --scheduler-amber: #a15c06;
   --scheduler-amber-soft: #fff7e6;
+  --scheduler-amber-border: #e2a33c;
+  --scheduler-amber-action: #a15c06;
+  --scheduler-amber-hover: #874b04;
   width: 100%;
   min-width: 0;
   color: var(--scheduler-ink);
@@ -3434,6 +3437,9 @@ html[data-theme="dark"] #schedulerHealthDashboardRoot {
   --scheduler-red-soft: #48252c;
   --scheduler-amber: #f5c26b;
   --scheduler-amber-soft: #42351e;
+  --scheduler-amber-border: #80652f;
+  --scheduler-amber-action: #a15c06;
+  --scheduler-amber-hover: #874b04;
 }
 
 .scheduler-health-page .page.scheduler-health-shell {
@@ -3483,6 +3489,7 @@ html[data-theme="dark"] #schedulerHealthDashboardRoot {
   cursor: pointer;
 }
 .scheduler-refresh-btn:hover { background: var(--scheduler-surface-muted); }
+.scheduler-refresh-btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--scheduler-blue) 24%, transparent); outline-offset: 2px; }
 .scheduler-refresh-btn:disabled { opacity: 0.6; cursor: default; }
 .scheduler-refresh-btn .is-spinning { animation: scheduler-spin 0.9s linear infinite; }
 .scheduler-automation-control-btn {
@@ -3491,20 +3498,16 @@ html[data-theme="dark"] #schedulerHealthDashboardRoot {
   gap: 6px;
   height: 34px;
   padding: 0 14px;
-  border: 1px solid color-mix(in srgb, var(--scheduler-red) 45%, var(--scheduler-border));
+  border: 1px solid var(--scheduler-border);
   border-radius: 8px;
   background: var(--scheduler-surface);
-  color: var(--scheduler-red);
+  color: var(--scheduler-ink);
   font-size: 13px;
   font-weight: 750;
   cursor: pointer;
 }
-.scheduler-automation-control-btn:hover { background: var(--scheduler-red-soft); }
-.scheduler-automation-control-btn.is-paused {
-  border-color: color-mix(in srgb, var(--scheduler-green) 45%, var(--scheduler-border));
-  color: var(--scheduler-green);
-}
-.scheduler-automation-control-btn.is-paused:hover { background: var(--scheduler-green-soft); }
+.scheduler-automation-control-btn:hover:not(:disabled) { background: var(--scheduler-surface-muted); }
+.scheduler-automation-control-btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--scheduler-blue) 24%, transparent); outline-offset: 2px; }
 .scheduler-automation-control-btn:disabled { opacity: 0.55; cursor: default; }
 @keyframes scheduler-spin { to { transform: rotate(360deg); } }
 
@@ -3531,11 +3534,112 @@ html[data-theme="dark"] #schedulerHealthDashboardRoot {
 .scheduler-automation-paused-banner > div { display: grid; gap: 3px; }
 .scheduler-automation-paused-banner strong { color: var(--scheduler-ink); font-size: 13px; }
 .scheduler-automation-paused-banner span { color: var(--scheduler-muted); font-size: 12px; line-height: 1.45; }
-.scheduler-automation-control-modal { width: min(520px, calc(100vw - 32px)); }
-.scheduler-automation-control-modal .subtext { display: grid; gap: 7px; margin-top: 8px; }
-.scheduler-automation-control-modal .subtext p { margin: 0; }
-.scheduler-confirm-pause { background: var(--scheduler-red); }
-
+#schedulerHealthDashboardRoot .scheduler-automation-control-modal {
+  width: min(520px, calc(100vw - 48px));
+  max-height: min(86vh, 720px);
+  padding: 0;
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--scheduler-amber) 18%, var(--scheduler-border));
+  border-radius: 14px;
+  background: var(--scheduler-surface);
+  color: var(--scheduler-ink);
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.24);
+}
+.scheduler-pause-dialog-body { display: grid; gap: 18px; padding: 22px 22px 20px; }
+.scheduler-pause-dialog-header { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: start; gap: 13px; }
+.scheduler-pause-dialog-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--scheduler-blue) 28%, var(--scheduler-border));
+  border-radius: 10px;
+  background: var(--scheduler-blue-soft);
+  color: var(--scheduler-blue);
+}
+.scheduler-pause-dialog-header h3 { margin: 1px 0 5px; color: var(--scheduler-ink); font-size: 18px; line-height: 1.25; letter-spacing: -0.015em; }
+.scheduler-pause-dialog-header p { margin: 0; color: var(--scheduler-muted); font-size: 12px; line-height: 1.5; }
+.scheduler-pause-scope { padding: 13px; border: 1px solid var(--scheduler-border); border-radius: 11px; background: var(--scheduler-surface-muted); }
+.scheduler-pause-scope h4 { margin: 0 0 9px; color: var(--scheduler-muted); font-size: 10px; font-weight: 850; letter-spacing: 0.055em; text-transform: uppercase; }
+.scheduler-pause-scope-list { display: grid; gap: 7px; }
+.scheduler-pause-scope-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 54px;
+  padding: 9px 10px 9px 12px;
+  border: 1px solid var(--scheduler-border);
+  border-radius: 8px;
+  background: var(--scheduler-surface);
+}
+.scheduler-control-row-copy { display: grid; gap: 3px; min-width: 0; }
+.scheduler-control-row-copy strong { color: var(--scheduler-ink); font-size: 12px; }
+.scheduler-control-row-copy span { color: var(--scheduler-muted); font-size: 10px; font-weight: 650; }
+.scheduler-control-state { color: var(--scheduler-muted); font-size: 10px; font-weight: 750; white-space: nowrap; }
+.scheduler-control-state.is-paused { color: var(--scheduler-amber); }
+.scheduler-control-state.is-running { color: var(--scheduler-green); }
+.scheduler-job-control-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 82px;
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+#schedulerHealthDashboardRoot .scheduler-job-control-action.is-pause {
+  border-color: var(--scheduler-amber-border) !important;
+  background: var(--scheduler-amber-soft) !important;
+  color: var(--scheduler-amber) !important;
+  box-shadow: none !important;
+}
+#schedulerHealthDashboardRoot .scheduler-job-control-action.is-pause:hover:not(:disabled) {
+  border-color: var(--scheduler-amber) !important;
+  background: color-mix(in srgb, var(--scheduler-amber-soft) 76%, var(--scheduler-amber)) !important;
+  color: var(--scheduler-amber-hover) !important;
+}
+#schedulerHealthDashboardRoot .scheduler-job-control-action.is-resume {
+  border-color: color-mix(in srgb, var(--scheduler-green) 52%, var(--scheduler-border)) !important;
+  background: var(--scheduler-green-soft) !important;
+  color: var(--scheduler-green) !important;
+  box-shadow: none !important;
+}
+#schedulerHealthDashboardRoot .scheduler-job-control-action.is-resume:hover:not(:disabled) {
+  border-color: var(--scheduler-green) !important;
+  background: color-mix(in srgb, var(--scheduler-green-soft) 76%, var(--scheduler-green)) !important;
+  color: var(--scheduler-green) !important;
+  filter: none;
+}
+#schedulerHealthDashboardRoot .scheduler-job-control-action.is-pause:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--scheduler-amber) 34%, transparent) !important;
+  outline-offset: 2px;
+}
+#schedulerHealthDashboardRoot .scheduler-job-control-action.is-resume:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--scheduler-green) 34%, transparent) !important;
+  outline-offset: 2px;
+}
+#schedulerHealthDashboardRoot .scheduler-job-control-action:disabled { opacity: 0.58 !important; cursor: default !important; }
+.scheduler-control-dialog-error { padding: 9px 11px; border: 1px solid color-mix(in srgb, var(--scheduler-red) 35%, var(--scheduler-border)); border-radius: 8px; background: var(--scheduler-red-soft); color: var(--scheduler-red); font-size: 11px; line-height: 1.4; }
+.scheduler-pause-assurances { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+.scheduler-pause-assurances > div { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: start; gap: 7px; color: var(--scheduler-muted); font-size: 11px; line-height: 1.4; }
+.scheduler-pause-assurances svg { margin-top: 1px; color: var(--scheduler-green); }
+.scheduler-pause-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 22px 18px;
+  border-top: 1px solid var(--scheduler-border);
+  background: color-mix(in srgb, var(--scheduler-surface-muted) 68%, var(--scheduler-surface));
+}
+.scheduler-pause-dialog-footer .scheduler-confirm-secondary,
+.scheduler-pause-dialog-footer .scheduler-confirm-primary { min-height: 34px; padding: 0 13px; font-size: 12px; }
 .scheduler-badge {
   display: inline-flex;
   align-items: center;
@@ -3938,6 +4042,12 @@ html[data-theme="dark"] #schedulerHealthDashboardRoot {
 }
 @media (max-width: 680px) {
   .scheduler-health-page .page.scheduler-health-shell { width: min(100% - 28px, 720px); }
+  .scheduler-pause-dialog-body { gap: 15px; padding: 19px 17px 17px; }
+  .scheduler-pause-assurances { grid-template-columns: 1fr; gap: 9px; }
+  .scheduler-pause-dialog-footer { padding: 13px 17px 16px; }
+  .scheduler-pause-dialog-footer button { flex: 1 1 0; }
+  .scheduler-pause-scope-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .scheduler-control-state { grid-column: 1 / -1; grid-row: 2; }
   .scheduler-runs-filters { width: 100%; flex-wrap: wrap; }
   .scheduler-runs-filters > * { flex: 1 1 150px; }
   .scheduler-runtime-grid,

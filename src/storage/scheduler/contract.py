@@ -297,10 +297,11 @@ def scheduler_postgres_table_specs() -> Dict[str, Any]:
             ],
         },
         "scheduler_automation_control_events": {
-            "description": "Append-only global scheduler automation pause and resume events.",
+            "description": "Append-only global and per-job scheduler automation pause and resume events.",
             "primary_key": ["revision"],
             "columns": [
                 {"name": "revision", "type": "bigint", "nullable": False},
+                {"name": "job_name", "type": "text", "nullable": True},
                 {"name": "action", "type": "text", "nullable": False},
                 {"name": "prior_paused", "type": "boolean", "nullable": False},
                 {"name": "resulting_paused", "type": "boolean", "nullable": False},

@@ -51,6 +51,20 @@ FAKE_SUMMARY_PAYLOAD = {
         "all_checks_pass": True,
     },
     "automation_control": {
+        "aggregate_state": "running",
+        "jobs": {
+            job_name: {
+                "job_name": job_name,
+                "paused": False,
+                "revision": 0,
+                "updated_at": None,
+                "updated_by_user_id": None,
+                "paused_at": None,
+                "paused_by_user_id": None,
+                "effective_scope": "default",
+            }
+            for job_name in ("agent_discovery", "live_pipeline")
+        },
         "paused": False,
         "revision": 0,
         "updated_at": None,
@@ -381,6 +395,83 @@ def test_scheduler_automation_control_put_is_admin_only_and_binds_actor(monkeypa
     assert observed == [(True, "admin-1")]
 
 
+def test_scheduler_job_automation_control_put_is_exact_admin_only_and_binds_actor(monkeypatch) -> None:
+    observed = []
+
+    def mutate(job_name, paused, *, admin_user_id, **_kwargs):
+        observed.append((job_name, paused, admin_user_id))
+        control = FAKE_SUMMARY_PAYLOAD["automation_control"]
+        return {
+            "ok": True,
+            "changed": True,
+            "job_name": job_name,
+            "previous_paused": False,
+            "automation_control": {
+                **control,
+                "aggregate_state": "partially_paused",
+                "jobs": {
+                    **control["jobs"],
+                    job_name: {**control["jobs"][job_name], "paused": paused, "revision": 1},
+                },
+            },
+        }
+
+    monkeypatch.setattr(services, "set_scheduler_job_automation_paused_payload", mutate)
+    admin = _client_as(monkeypatch, ADMIN_USER)
+
+    for job_name in ("live_pipeline", "agent_discovery"):
+        response = admin.put(
+            f"/scheduler/jobs/{job_name}/automation-control",
+            json={"paused": True},
+        )
+        assert response.status_code == 200
+        assert response.json()["job_name"] == job_name
+        assert response.json()["automation_control"]["jobs"][job_name]["paused"] is True
+
+    assert observed == [
+        ("live_pipeline", True, "admin-1"),
+        ("agent_discovery", True, "admin-1"),
+    ]
+    assert _client_as(monkeypatch, NON_ADMIN_USER).put(
+        "/scheduler/jobs/live_pipeline/automation-control", json={"paused": True},
+    ).status_code == 403
+    assert _client_as(monkeypatch, None).put(
+        "/scheduler/jobs/live_pipeline/automation-control", json={"paused": True},
+    ).status_code == 401
+
+
+def test_scheduler_job_automation_control_rejects_invalid_input_and_bounds_failure(monkeypatch) -> None:
+    client = _client_as(monkeypatch, ADMIN_USER)
+    assert client.put(
+        "/scheduler/jobs/unknown/automation-control", json={"paused": True},
+    ).status_code == 422
+    assert client.put(
+        "/scheduler/jobs/live_pipeline/automation-control", json={"paused": "true"},
+    ).status_code == 422
+    assert client.put(
+        "/scheduler/jobs/live_pipeline/automation-control",
+        json={"paused": True, "actor": "client"},
+    ).status_code == 422
+
+    monkeypatch.setattr(
+        services,
+        "set_scheduler_job_automation_paused_payload",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            services.SchedulerAutomationControlUnavailable("secret storage detail")
+        ),
+    )
+    response = client.put(
+        "/scheduler/jobs/live_pipeline/automation-control", json={"paused": True},
+    )
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": {
+            "ok": False,
+            "error_category": "scheduler_automation_control_unavailable",
+        }
+    }
+    assert "secret" not in response.text
+
 def test_scheduler_automation_control_duplicate_mutation_returns_authoritative_unchanged_state(
     monkeypatch,
 ) -> None:
@@ -640,11 +731,12 @@ def test_only_bounded_automation_control_write_exists_and_no_host_lifecycle_cont
         SCHEDULER_MODEL_TS,
         re.DOTALL,
     )
-    assert len(requests) == SCHEDULER_MODEL_TS.count("fetch(") == 4
+    assert len(requests) == SCHEDULER_MODEL_TS.count("fetch(") == 5
     assert [(route, method) for _quote, route, method in requests] == [
         ("/scheduler/summary?limit=25", "GET"),
         ("/scheduler/jobs/agent_discovery/run-now", "POST"),
         ("/scheduler/automation-control", "PUT"),
+        ("/scheduler/jobs/${jobName}/automation-control", "PUT"),
         ("/scheduler/runs/${encodeURIComponent(clean(runId))}/agent-discovery-summary", "GET"),
     ]
     for forbidden in (
@@ -660,12 +752,13 @@ def test_only_bounded_automation_control_write_exists_and_no_host_lifecycle_cont
 def test_react_island_owns_only_bounded_scheduler_requests() -> None:
     # The scheduler model owns the summary GET, explicit manual-discovery POST,
     # and exact-run discovery-summary GET; classic JS does not compete.
-    assert SCHEDULER_MODEL_TS.count("fetch(") == 4
+    assert SCHEDULER_MODEL_TS.count("fetch(") == 5
     assert '"/scheduler/summary?limit=25"' in SCHEDULER_MODEL_TS
     assert '"/scheduler/jobs/agent_discovery/run-now"' in SCHEDULER_MODEL_TS
     assert 'encodeURIComponent(clean(runId))' in SCHEDULER_MODEL_TS
     assert '/agent-discovery-summary`' in SCHEDULER_MODEL_TS
     assert '"/scheduler/automation-control"' in SCHEDULER_MODEL_TS
+    assert '`/scheduler/jobs/${jobName}/automation-control`' in SCHEDULER_MODEL_TS
     assert "fetch(" not in SCHEDULER_DASHBOARD_TSX
     scheduler_route = UI_SOURCE[UI_SOURCE.index('@router.get("/scheduler"'):]
     assert "fetch(" not in scheduler_route

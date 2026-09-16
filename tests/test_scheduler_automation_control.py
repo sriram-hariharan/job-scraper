@@ -18,14 +18,36 @@ class FakeDatabase:
         self.lock_modes = []
         self.lock_held = None
         self.insert_count = 0
+        self.snapshot_read_count = 0
+        self.fail_on_insert_number = None
+        self.connections = []
+
+    def add_event(self, revision, job_name, paused, actor="admin-history"):
+        row = (
+            revision,
+            "pause" if paused else "resume",
+            not paused,
+            paused,
+            datetime(2026, 9, 15, 12, revision % 60, tzinfo=timezone.utc),
+            actor,
+            job_name,
+        )
+        self.events.append(row)
+        self.events.sort(key=lambda event: event[0])
+        self.next_revision = max(self.next_revision, revision + 1)
+        return row
 
     def connect(self, _database_url):
-        return FakeConnection(self)
+        connection = FakeConnection(self)
+        self.connections.append(connection)
+        return connection
 
 
 class FakeConnection:
     def __init__(self, database):
         self.database = database
+        self.event_snapshot = list(database.events)
+        self.revision_snapshot = database.next_revision
         self.commits = 0
         self.rollbacks = 0
         self.closed = False
@@ -39,6 +61,8 @@ class FakeConnection:
 
     def rollback(self):
         self.rollbacks += 1
+        self.database.events = list(self.event_snapshot)
+        self.database.next_revision = self.revision_snapshot
         self.database.lock_held = None
 
     def close(self):
@@ -50,6 +74,7 @@ class FakeCursor:
     def __init__(self, database):
         self.database = database
         self.row = None
+        self.rows = []
         self.closed = False
 
     def __enter__(self):
@@ -70,11 +95,33 @@ class FakeCursor:
             self.database.lock_held = "exclusive"
             self.row = (None,)
             return
+        if normalized.startswith("WITH supported_jobs"):
+            self.database.snapshot_read_count += 1
+            self.rows = []
+            for job_name in control_store.SCHEDULER_AUTOMATION_AFFECTED_JOBS:
+                matching = [
+                    event for event in self.database.events
+                    if event[6] is None or event[6] == job_name
+                ]
+                event = matching[-1] if matching else None
+                self.rows.append(
+                    (job_name,) + event
+                    if event is not None
+                    else (job_name, None, None, None, None, None, None, None)
+                )
+            return
         if normalized.startswith("SELECT revision"):
-            self.row = self.database.events[-1] if self.database.events else None
+            job_name = params[0]
+            matching = [
+                event for event in self.database.events
+                if event[6] is None or event[6] == job_name
+            ]
+            self.row = matching[-1] if matching else None
             return
         if normalized.startswith("INSERT INTO scheduler_automation_control_events"):
-            action, prior_paused, resulting_paused, actor = params
+            if self.database.fail_on_insert_number == self.database.insert_count + 1:
+                raise RuntimeError("simulated insert failure containing secret detail")
+            job_name, action, prior_paused, resulting_paused, actor = params
             self.row = (
                 self.database.next_revision,
                 action,
@@ -82,6 +129,7 @@ class FakeCursor:
                 resulting_paused,
                 datetime(2026, 9, 15, 12, 0, tzinfo=timezone.utc),
                 actor,
+                job_name,
             )
             self.database.next_revision += 1
             self.database.insert_count += 1
@@ -91,6 +139,9 @@ class FakeCursor:
 
     def fetchone(self):
         return self.row
+
+    def fetchall(self):
+        return list(self.rows)
 
     def close(self):
         self.closed = True
@@ -104,40 +155,61 @@ def test_default_state_is_unpaused_and_finite():
     )
 
     assert state == {
+        "aggregate_state": "running",
+        "manual_admin_runs_allowed": True,
+        "affected_jobs": ["agent_discovery", "live_pipeline"],
+        "jobs": {
+            job_name: {
+                "job_name": job_name,
+                "paused": False,
+                "revision": 0,
+                "updated_at": None,
+                "updated_by_user_id": None,
+                "paused_at": None,
+                "paused_by_user_id": None,
+                "effective_scope": "default",
+            }
+            for job_name in ("agent_discovery", "live_pipeline")
+        },
         "paused": False,
         "revision": 0,
         "updated_at": None,
         "updated_by_user_id": None,
         "paused_at": None,
         "paused_by_user_id": None,
-        "affected_jobs": ["agent_discovery", "live_pipeline"],
-        "manual_admin_runs_allowed": True,
     }
+    assert database.snapshot_read_count == 1
 
 
-def test_pause_resume_and_duplicate_requests_are_append_only_and_idempotent():
+@pytest.mark.parametrize("job_name", ["live_pipeline", "agent_discovery"])
+def test_per_job_pause_resume_and_duplicates_are_independent(job_name):
     database = FakeDatabase()
     kwargs = {
         "database_url": "postgresql://test.invalid/db",
         "connection_factory": database.connect,
     }
 
-    paused = control_store.set_scheduler_automation_paused(
+    other_job = "agent_discovery" if job_name == "live_pipeline" else "live_pipeline"
+    paused = control_store.set_scheduler_job_automation_paused(
+        job_name,
         True,
         changed_by_user_id="admin-1",
         **kwargs,
     )
-    duplicate_pause = control_store.set_scheduler_automation_paused(
+    duplicate_pause = control_store.set_scheduler_job_automation_paused(
+        job_name,
         True,
         changed_by_user_id="admin-2",
         **kwargs,
     )
-    resumed = control_store.set_scheduler_automation_paused(
+    resumed = control_store.set_scheduler_job_automation_paused(
+        job_name,
         False,
         changed_by_user_id="admin-2",
         **kwargs,
     )
-    duplicate_resume = control_store.set_scheduler_automation_paused(
+    duplicate_resume = control_store.set_scheduler_job_automation_paused(
+        job_name,
         False,
         changed_by_user_id="admin-3",
         **kwargs,
@@ -145,32 +217,126 @@ def test_pause_resume_and_duplicate_requests_are_append_only_and_idempotent():
 
     assert paused["changed"] is True
     assert paused["previous_paused"] is False
-    assert paused["automation_control"]["revision"] == 1
-    assert paused["automation_control"]["paused_by_user_id"] == "admin-1"
-    assert paused["automation_control"]["paused_at"] == "2026-09-15T12:00:00+00:00"
+    assert paused["job_name"] == job_name
+    assert paused["automation_control"]["aggregate_state"] == "partially_paused"
+    assert paused["automation_control"]["jobs"][job_name]["revision"] == 1
+    assert paused["automation_control"]["jobs"][job_name]["paused_by_user_id"] == "admin-1"
+    assert paused["automation_control"]["jobs"][other_job]["paused"] is False
     assert duplicate_pause["changed"] is False
-    assert duplicate_pause["automation_control"]["revision"] == 1
+    assert duplicate_pause["automation_control"]["jobs"][job_name]["revision"] == 1
     assert resumed["changed"] is True
     assert resumed["previous_paused"] is True
-    assert resumed["automation_control"]["revision"] == 2
-    assert resumed["automation_control"]["updated_by_user_id"] == "admin-2"
-    assert resumed["automation_control"]["paused_at"] is None
-    assert resumed["automation_control"]["paused_by_user_id"] is None
+    assert resumed["automation_control"]["aggregate_state"] == "running"
+    assert resumed["automation_control"]["jobs"][job_name]["revision"] == 2
+    assert resumed["automation_control"]["jobs"][job_name]["updated_by_user_id"] == "admin-2"
     assert duplicate_resume["changed"] is False
     assert duplicate_resume["automation_control"]["revision"] == 2
     assert database.insert_count == 2
-    assert [row[1:4] for row in database.events] == [
-        ("pause", False, True),
-        ("resume", True, False),
+    assert [(row[6], *row[1:4]) for row in database.events] == [
+        (job_name, "pause", False, True),
+        (job_name, "resume", True, False),
     ]
     assert database.lock_modes == [
         ("exclusive", control_store.SCHEDULER_AUTOMATION_ADMISSION_LOCK_KEYS),
     ] * 4
 
 
+def test_historical_global_and_named_events_use_newest_matching_revision():
+    database = FakeDatabase()
+    database.add_event(10, None, True)
+    database.add_event(11, "live_pipeline", False)
+    database.add_event(12, None, False)
+    database.add_event(13, "agent_discovery", True)
+
+    state = control_store.read_scheduler_automation_control(
+        database_url="postgresql://test.invalid/db",
+        connection_factory=database.connect,
+    )
+
+    assert state["aggregate_state"] == "partially_paused"
+    assert state["jobs"]["live_pipeline"]["paused"] is False
+    assert state["jobs"]["live_pipeline"]["revision"] == 12
+    assert state["jobs"]["live_pipeline"]["effective_scope"] == "global"
+    assert state["jobs"]["agent_discovery"]["paused"] is True
+    assert state["jobs"]["agent_discovery"]["revision"] == 13
+    assert state["jobs"]["agent_discovery"]["effective_scope"] == "job"
+    assert state["paused"] is False
+    assert state["revision"] == 13
+    assert state["paused_at"] is None
+
+
+def test_legacy_global_pause_and_resume_append_named_events_atomically():
+    database = FakeDatabase()
+    kwargs = {
+        "database_url": "postgresql://test.invalid/db",
+        "connection_factory": database.connect,
+    }
+
+    paused = control_store.set_scheduler_automation_paused(
+        True, changed_by_user_id="admin-1", **kwargs,
+    )
+    duplicate = control_store.set_scheduler_automation_paused(
+        True, changed_by_user_id="admin-2", **kwargs,
+    )
+    resumed = control_store.set_scheduler_automation_paused(
+        False, changed_by_user_id="admin-3", **kwargs,
+    )
+
+    assert paused["automation_control"]["aggregate_state"] == "paused"
+    assert paused["automation_control"]["paused"] is True
+    assert duplicate["changed"] is False
+    assert resumed["automation_control"]["aggregate_state"] == "running"
+    assert [(row[6], row[1]) for row in database.events] == [
+        ("agent_discovery", "pause"),
+        ("live_pipeline", "pause"),
+        ("agent_discovery", "resume"),
+        ("live_pipeline", "resume"),
+    ]
+    assert all(row[6] is not None for row in database.events)
+
+
+def test_bulk_transition_rolls_back_atomically_and_failure_is_bounded():
+    database = FakeDatabase()
+    database.fail_on_insert_number = 2
+
+    with pytest.raises(control_store.SchedulerAutomationControlUnavailable) as exc:
+        control_store.set_scheduler_automation_paused(
+            True,
+            changed_by_user_id="admin-1",
+            database_url="postgresql://test.invalid/db",
+            connection_factory=database.connect,
+        )
+
+    assert str(exc.value) == "scheduler_automation_control_unavailable"
+    assert database.events == []
+    assert database.connections[-1].rollbacks == 1
+    assert "secret" not in str(exc.value)
+    assert "MAX(revision)" not in control_store._INSERT_EVENT_SQL.upper()
+
+
+def test_unsupported_job_is_rejected_before_connection_or_mutation():
+    called = False
+
+    def connect(_database_url):
+        nonlocal called
+        called = True
+        raise AssertionError("connection must not be opened")
+
+    with pytest.raises(ValueError, match="Unsupported scheduler job name"):
+        control_store.set_scheduler_job_automation_paused(
+            "unknown",
+            True,
+            changed_by_user_id="admin-1",
+            database_url="postgresql://test.invalid/db",
+            connection_factory=connect,
+        )
+    assert called is False
+
+
 def test_automatic_admission_uses_shared_lock_until_caller_finishes_spawn():
     database = FakeDatabase()
     with control_store.automatic_scheduler_start_admission(
+        job_name="live_pipeline",
         database_url="postgresql://test.invalid/db",
         connection_factory=database.connect,
     ) as state:
@@ -181,6 +347,30 @@ def test_automatic_admission_uses_shared_lock_until_caller_finishes_spawn():
     assert database.lock_modes == [
         ("shared", control_store.SCHEDULER_AUTOMATION_ADMISSION_LOCK_KEYS),
     ]
+
+
+def test_automatic_admission_reads_only_the_selected_job_state():
+    database = FakeDatabase()
+    control_store.set_scheduler_job_automation_paused(
+        "live_pipeline",
+        True,
+        changed_by_user_id="admin-1",
+        database_url="postgresql://test.invalid/db",
+        connection_factory=database.connect,
+    )
+
+    with control_store.automatic_scheduler_start_admission(
+        job_name="live_pipeline",
+        database_url="postgresql://test.invalid/db",
+        connection_factory=database.connect,
+    ) as live_state:
+        assert live_state["paused"] is True
+    with control_store.automatic_scheduler_start_admission(
+        job_name="agent_discovery",
+        database_url="postgresql://test.invalid/db",
+        connection_factory=database.connect,
+    ) as discovery_state:
+        assert discovery_state["paused"] is False
 
 
 def test_storage_failure_is_bounded_and_does_not_leak_credentials():
@@ -214,7 +404,8 @@ def _patch_scheduler_post_run(monkeypatch, records):
 @pytest.mark.parametrize("job_name", ["live_pipeline", "agent_discovery"])
 def test_paused_automatic_jobs_exit_zero_before_run_or_child(monkeypatch, capsys, job_name):
     @contextmanager
-    def paused_admission(**_kwargs):
+    def paused_admission(**kwargs):
+        assert kwargs["job_name"] == job_name
         yield {"paused": True, "revision": 7}
 
     monkeypatch.setattr(scheduler, "automatic_scheduler_start_admission", paused_admission)
@@ -280,7 +471,8 @@ def test_unpaused_automatic_spawn_occurs_under_lock_then_waits_outside(monkeypat
     process_events = []
 
     @contextmanager
-    def admitted(**_kwargs):
+    def admitted(**kwargs):
+        assert kwargs["job_name"] == "agent_discovery"
         lock_held["value"] = True
         try:
             yield {"paused": False, "revision": 2}

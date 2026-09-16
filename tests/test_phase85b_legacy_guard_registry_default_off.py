@@ -77,6 +77,7 @@ from tests.support.phase_guard_registry import (
     STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES,
     STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES,
     STEP18D20_ADMIN_SCHEDULER_AUTOMATION_CONTROL_FILES,
+    STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
     RECRUITEE_STANDALONE_DISCOVERY_FILES,
     SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES,
@@ -2523,6 +2524,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES
         | STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES
         | STEP18D20_ADMIN_SCHEDULER_AUTOMATION_CONTROL_FILES
+        | STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES
         | STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
         | STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES
@@ -3198,7 +3200,7 @@ def test_api_py_historical_identity_and_current_successor_are_accepted():
 
     actual = sha256((STEP11_ROOT / "src/app/api.py").read_bytes()).hexdigest()
     assert actual == (
-        "b22281d9c33e2d84708365bf1eef50308f09dd99438e78a967f1e3b95f7e07ed"
+        "eb1ddc8e65a12a10991b20a11e76703300168f7d88affe77facc08d7a0a0c507"
     )
     assert profile
 
@@ -3863,3 +3865,247 @@ def test_cpu_torch_milestone_is_distinct_and_broadens_no_other_profile():
         if not isinstance(other, (set, frozenset)):
             continue
         assert not (repair_only & other), f"{name} was broadened"
+
+
+def test_step18d22_per_scheduler_control_surface_is_exact_and_finite():
+    expected = {
+        "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.test.tsx",
+        "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx",
+        "frontend/executive-kpi/src/scheduler/schedulerModel.ts",
+        "frontend/executive-kpi/src/styles.css",
+        "src/app/api.py",
+        "src/app/services.py",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/pipeline/scheduler.py",
+        "src/storage/scheduler/contract.py",
+        "src/storage/scheduler/control_store.py",
+        "src/storage/scheduler/init.sql",
+        "src/storage/scheduler/schema.sql",
+        "tests/test_production_deployment_hardening.py",
+        "tests/test_scheduler_admin_health_redesign.py",
+        "tests/test_scheduler_automation_control.py",
+        "tests/test_scheduler_manual_agent_discovery.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES == expected
+    assert len(expected) == 21
+    assert {
+        path for path in expected if path.startswith("tests/") and "phase" in path
+    } >= {
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    }
+    assert {
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+    } <= expected
+    assert all(
+        not any(token in path for token in ("*", "?", "["))
+        and not path.endswith("/")
+        and not path.startswith("/")
+        for path in expected
+    )
+
+
+def test_step18d22_surface_is_allowed_but_unrelated_paths_fail_closed():
+    assert STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES <= (
+        current_milestone_guard_compatibility_allowlist()
+    )
+    assert_changed_files_allowed(
+        STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES,
+        set(),
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES
+            | {"src/app/step18d22_unapproved_probe.py"},
+            set(),
+        )
+
+
+def test_step18d22_successors_are_exact_and_lineage_scoped():
+    compatibility = _step14d_compatibility_map()
+    api_current = (
+        "eb1ddc8e65a12a10991b20a11e76703300168f7d88affe77facc08d7a0a0c507"
+    )
+    services_current = (
+        "4a4a7277256d5df1ba81c62229c141cdec2de4a0bce0f1adaabae155c0abf933"
+    )
+
+    def accepted_hashes(value):
+        return set(value) if isinstance(value, (set, frozenset, tuple)) else {value}
+
+    api_lineages = {
+        key
+        for key, value in compatibility.items()
+        if api_current in accepted_hashes(value)
+    }
+    services_lineages = {
+        key
+        for key, value in compatibility.items()
+        if services_current in accepted_hashes(value)
+    }
+    assert api_lineages == {
+        (
+            "src/app/api.py",
+            "d2e57ab788d69329f46cb31f6fb705ed46af2499ac57001222e1b738de27e004",
+        ),
+        (
+            "src/app/api.py",
+            "2b93b37a38fce17d50a9b5eb693062faa9bb9ada6a4926bb9e0f76d9ee518674",
+        ),
+    }
+    assert services_lineages == {
+        (
+            "src/app/services.py",
+            "02d09d6f6e204183ef67a543222b4e3a4dae993f40041dfb8911397b835be7f7",
+        ),
+        (
+            "src/app/services.py",
+            "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
+        ),
+    }
+    historical_proof_values = {
+        value for triple in STEP14D_SUCCESSORS for value in triple
+    }
+    assert api_current not in historical_proof_values
+    assert services_current not in historical_proof_values
+
+    for relative_path, historical in sorted(api_lineages | services_lineages):
+        assert_protected_hashes(STEP11_ROOT, {relative_path: historical})
+
+
+@pytest.mark.parametrize("relative_test_path,function_name", STEP11_MARKER_GUARDS)
+def test_step18d22_marker_branch_is_exact_derived_and_full_content_scanned(
+    relative_test_path,
+    function_name,
+):
+    import ast
+
+    module = ast.parse(
+        (STEP11_ROOT / relative_test_path).read_text(encoding="utf-8")
+    )
+    function = next(
+        node
+        for node in module.body
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    )
+    branch = next(
+        node
+        for node in ast.walk(function)
+        if isinstance(node, ast.If)
+        and "STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES"
+        in ast.dump(node.test)
+    )
+    assert isinstance(branch.test, ast.Compare)
+    assert any(isinstance(op, ast.Eq) for op in branch.test.ops)
+    branch_dump = ast.dump(branch)
+    assert "step18d22_runtime_suffixes" in branch_dump
+    assert "startswith" in branch_dump and "suffix" in branch_dump
+    assert "read_text" in branch_dump
+    assert "FORBIDDEN_RUNTIME_MARKERS" in branch_dump
+    marker_loops = [
+        node
+        for node in ast.walk(branch)
+        if isinstance(node, ast.For)
+        and "FORBIDDEN_RUNTIME_MARKERS" in ast.dump(node.iter)
+    ]
+    assert len(marker_loops) == 1
+    assert any(isinstance(node, ast.Assert) for node in ast.walk(marker_loops[0]))
+    assert len([node for node in ast.walk(branch) if isinstance(node, ast.Return)]) == 1
+
+
+def test_step18d22_runtime_surface_and_marker_vocabulary_are_exact():
+    import ast
+
+    runtime_suffixes = {".py", ".js", ".html", ".css", ".ts", ".tsx"}
+    runtime_files = {
+        path
+        for path in STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES
+        if path.startswith(("src/", "frontend/"))
+        and Path(path).suffix in runtime_suffixes
+        and ".test." not in Path(path).name
+    }
+    assert runtime_files == {
+        "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx",
+        "frontend/executive-kpi/src/scheduler/schedulerModel.ts",
+        "frontend/executive-kpi/src/styles.css",
+        "src/app/api.py",
+        "src/app/services.py",
+        "src/app/static/build/executive-kpi/executive-kpi.css",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/pipeline/scheduler.py",
+        "src/storage/scheduler/contract.py",
+        "src/storage/scheduler/control_store.py",
+    }
+    expected_markers = (
+        "autoApply",
+        "autoSubmit",
+        "autonomousApplicationExecution",
+        "executeApplication",
+        "submitApplication",
+        "applicationSubmitter",
+        "applyAutomatically",
+        "submitAutomatically",
+    )
+    for relative_test_path, _function_name in STEP11_MARKER_GUARDS:
+        module = ast.parse(
+            (STEP11_ROOT / relative_test_path).read_text(encoding="utf-8")
+        )
+        assignment = next(
+            node
+            for node in module.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name)
+                and target.id == "FORBIDDEN_RUNTIME_MARKERS"
+                for target in node.targets
+            )
+        )
+        assert ast.literal_eval(assignment.value) == expected_markers
+
+
+def test_step18d22_scheduler_write_surface_and_lifecycle_safety_are_exact():
+    model = (
+        STEP11_ROOT
+        / "frontend/executive-kpi/src/scheduler/schedulerModel.ts"
+    ).read_text(encoding="utf-8")
+    dashboard = (
+        STEP11_ROOT
+        / "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx"
+    ).read_text(encoding="utf-8")
+
+    approved_writes = (
+        ('"/scheduler/jobs/agent_discovery/run-now"', 'method: "POST"'),
+        ('"/scheduler/automation-control"', 'method: "PUT"'),
+        ('`/scheduler/jobs/${jobName}/automation-control`', 'method: "PUT"'),
+    )
+    for route, method in approved_writes:
+        route_index = model.index(route)
+        assert method in model[route_index:route_index + 300]
+    assert model.count('method: "POST"') == 1
+    assert model.count('method: "PUT"') == 2
+    assert 'method: "DELETE"' not in model
+    assert 'method: "PATCH"' not in model
+    assert "fetch(" not in dashboard
+
+    for forbidden in (
+        "/scheduler/trigger",
+        "/scheduler/stop",
+        "/scheduler/restart",
+        "/scheduler/install",
+        "/scheduler/uninstall",
+        "systemctl",
+        "launchctl",
+        "bootstrap",
+        "bootout",
+        "shell: true",
+    ):
+        assert forbidden not in model
+        assert forbidden not in dashboard

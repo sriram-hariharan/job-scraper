@@ -1386,6 +1386,7 @@ def main() -> int:
     if args.trigger_source == DEFAULT_SCHEDULER_TRIGGER_SOURCE:
         try:
             with automatic_scheduler_start_admission(
+                job_name=definition["name"],
                 database_url=args.database_url,
                 database_url_env=args.database_url_env,
             ) as automation_control:

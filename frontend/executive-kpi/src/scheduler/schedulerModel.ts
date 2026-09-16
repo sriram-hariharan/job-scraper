@@ -32,7 +32,22 @@ export type SchedulerPostgresSummary = {
   failure_count?: number;
 };
 
+export type SchedulerAutomationJobName = "live_pipeline" | "agent_discovery";
+
+export type SchedulerAutomationJobControl = {
+  job_name: SchedulerAutomationJobName;
+  paused: boolean;
+  revision: number;
+  updated_at: string | null;
+  updated_by_user_id: string | null;
+  paused_at: string | null;
+  paused_by_user_id: string | null;
+  effective_scope: "default" | "global" | "job";
+};
+
 export type SchedulerAutomationControl = {
+  aggregate_state: "running" | "partially_paused" | "paused";
+  jobs: Record<SchedulerAutomationJobName, SchedulerAutomationJobControl>;
   paused: boolean;
   revision: number;
   updated_at: string | null;
@@ -89,6 +104,7 @@ export type SchedulerSummaryPayload = {
 export type SchedulerAutomationControlMutationResponse = {
   ok: true;
   changed: boolean;
+  job_name?: SchedulerAutomationJobName;
   previous_paused: boolean;
   automation_control: SchedulerAutomationControl;
 };
@@ -198,6 +214,31 @@ export async function updateSchedulerAutomationControl(
     ));
   }
   return payload as SchedulerAutomationControlMutationResponse;
+}
+
+export async function updateSchedulerJobAutomationControl(
+  jobName: SchedulerAutomationJobName,
+  paused: boolean,
+): Promise<SchedulerAutomationControlMutationResponse & { job_name: SchedulerAutomationJobName }> {
+  const response = await fetch(`/scheduler/jobs/${jobName}/automation-control`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ paused }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as Partial<SchedulerAutomationControlMutationResponse> & {
+    detail?: unknown;
+  };
+  if (!response.ok) {
+    throw new Error(schedulerControlErrorDetail(
+      payload?.detail,
+      `Scheduler automation control request failed (${response.status})`,
+    ));
+  }
+  return payload as SchedulerAutomationControlMutationResponse & { job_name: SchedulerAutomationJobName };
 }
 
 export async function readAgentDiscoveryRunSummary(

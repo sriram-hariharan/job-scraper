@@ -2746,6 +2746,34 @@ STEP18D20_ADMIN_SCHEDULER_AUTOMATION_CONTROL_FILES = {
 }
 
 
+# Step 18D22 per-scheduler automation control and protected-guard
+# reconciliation. Exact paths only; generated bundles are named explicitly and
+# runtime marker scanning remains mandatory.
+STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES = {
+    "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.test.tsx",
+    "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx",
+    "frontend/executive-kpi/src/scheduler/schedulerModel.ts",
+    "frontend/executive-kpi/src/styles.css",
+    "src/app/api.py",
+    "src/app/services.py",
+    "src/app/static/build/executive-kpi/executive-kpi.css",
+    "src/app/static/build/executive-kpi/executive-kpi.js",
+    "src/pipeline/scheduler.py",
+    "src/storage/scheduler/contract.py",
+    "src/storage/scheduler/control_store.py",
+    "src/storage/scheduler/init.sql",
+    "src/storage/scheduler/schema.sql",
+    "tests/test_production_deployment_hardening.py",
+    "tests/test_scheduler_admin_health_redesign.py",
+    "tests/test_scheduler_automation_control.py",
+    "tests/test_scheduler_manual_agent_discovery.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+}
+
+
 # Production deployment hardening milestone. Exact, finite surface: the deploy
 # unit/tooling files plus the two guard-registry files this compatibility
 # registration itself has to touch. No globs, no directory prefixes - the
@@ -2799,6 +2827,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | STEP14F_UI_STATIC_CONTRACT_REPAIR_FILES
         | STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES
         | STEP18D20_ADMIN_SCHEDULER_AUTOMATION_CONTROL_FILES
+        | STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES
         | PRODUCTION_DEPLOYMENT_HARDENING_FILES
         | PRODUCTION_CPU_TORCH_BUILD_FILES
         | STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
@@ -3077,6 +3106,8 @@ def assert_protected_hashes(
         ): frozenset({
             # Step 18D20 bounded scheduler automation control successor.
             "b22281d9c33e2d84708365bf1eef50308f09dd99438e78a967f1e3b95f7e07ed",
+            # Step 18D22 independent per-scheduler automation control successor.
+            "eb1ddc8e65a12a10991b20a11e76703300168f7d88affe77facc08d7a0a0c507",
             # Premium ApplyLens App Guide successor (current committed HEAD).
             "55c91a9182951e2cbedd1e0c5b588676f4541249086288011daf025e4ed9fb99",
             # Step 18D19 always-accessible authenticated Guide plus persistent
@@ -3204,6 +3235,8 @@ def assert_protected_hashes(
         ): frozenset({
             # Step 18D20 bounded scheduler automation control successor.
             "b22281d9c33e2d84708365bf1eef50308f09dd99438e78a967f1e3b95f7e07ed",
+            # Step 18D22 independent per-scheduler automation control successor.
+            "eb1ddc8e65a12a10991b20a11e76703300168f7d88affe77facc08d7a0a0c507",
             "0b9923e4a7df78ca4f0e4983b1718e42c6d827785f83fbed78b0150547353012",
             "f5babdc02fa0f6df589e60b02cb6fa4eba4d073db14cdb95b2f5be550fd43a68",
             "3497214cd9f379a58687739117c40b420f04f17622a4b5d1a5e7d982b0a8e1f6",
@@ -3236,6 +3269,8 @@ def assert_protected_hashes(
         ): frozenset({
             # Step 18D20 bounded scheduler automation control successor.
             "c9ed04d5b2c6a37ce95e3956611418a7892916bc67778dd5b90dfd8e80683f54",
+            # Step 18D22 independent per-scheduler automation control successor.
+            "4a4a7277256d5df1ba81c62229c141cdec2de4a0bce0f1adaabae155c0abf933",
             # Bulk rerun and Scan review reliability successor (current committed HEAD).
             "29732353a50e4451f2b18d50124439e9b636fce6f9bca9060fb59634dd77e2ee",
             "351721d166d4a1538ed3084e169365ffdd2b8e822b399f82298418493581e963",
@@ -3253,6 +3288,8 @@ def assert_protected_hashes(
         ): frozenset({
             # Step 18D20 bounded scheduler automation control successor.
             "c9ed04d5b2c6a37ce95e3956611418a7892916bc67778dd5b90dfd8e80683f54",
+            # Step 18D22 independent per-scheduler automation control successor.
+            "4a4a7277256d5df1ba81c62229c141cdec2de4a0bce0f1adaabae155c0abf933",
             # Bulk rerun and Scan review reliability successor
             # (current committed HEAD).
             "29732353a50e4451f2b18d50124439e9b636fce6f9bca9060fb59634dd77e2ee",

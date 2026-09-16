@@ -239,6 +239,7 @@ from src.storage.scheduler.control_store import (
     SchedulerAutomationControlUnavailable,
     read_scheduler_automation_control,
     set_scheduler_automation_paused,
+    set_scheduler_job_automation_paused,
 )
 from src.storage.scheduler_artifacts_store import (
     get_scheduler_artifact_payload,
@@ -9977,6 +9978,33 @@ def set_scheduler_automation_paused_payload(
         result["previous_paused"],
         result["automation_control"]["paused"],
         result["automation_control"]["revision"],
+        result["changed"],
+    )
+    return result
+
+
+def set_scheduler_job_automation_paused_payload(
+    job_name: str,
+    paused: bool,
+    *,
+    admin_user_id: str,
+    database_url_env: str = "DATABASE_URL",
+) -> Dict[str, Any]:
+    result = set_scheduler_job_automation_paused(
+        job_name,
+        paused,
+        changed_by_user_id=admin_user_id,
+        database_url_env=database_url_env,
+    )
+    logger.info(
+        "Scheduler job automation control job_name=%s action=%s actor_user_id=%s "
+        "previous_paused=%s resulting_paused=%s revision=%s changed=%s",
+        job_name,
+        "pause" if paused else "resume",
+        str(admin_user_id or "").strip(),
+        result["previous_paused"],
+        result["automation_control"]["jobs"][job_name]["paused"],
+        result["automation_control"]["jobs"][job_name]["revision"],
         result["changed"],
     )
     return result

@@ -137,6 +137,14 @@ def test_scheduler_pause_schema_is_additive_and_backup_is_outside_its_surface():
     scheduler_schema = _read(ROOT / "src/storage/scheduler/schema.sql")
     assert "CREATE TABLE IF NOT EXISTS scheduler_automation_control_events" in scheduler_schema
     assert "GENERATED ALWAYS AS IDENTITY" in scheduler_schema
+    assert "ALTER TABLE scheduler_automation_control_events" in scheduler_schema
+    assert "ADD COLUMN IF NOT EXISTS job_name TEXT" in scheduler_schema
+    assert "job_name IS NULL" in scheduler_schema
+    assert "job_name IN ('agent_discovery', 'live_pipeline')" in scheduler_schema
+    upgrade._validate_additive_sql(
+        next(schema for schema in upgrade.PRODUCTION_SCHEMA_ALLOWLIST if schema.name == "scheduler"),
+        scheduler_schema,
+    )
     assert "DROP " not in scheduler_schema.upper()
     assert "TRUNCATE " not in scheduler_schema.upper()
     assert _read(SYSTEMD / "applylens-postgres-backup.service").count(

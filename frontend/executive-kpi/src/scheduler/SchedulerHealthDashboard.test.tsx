@@ -8,6 +8,7 @@ import {
   readSchedulerSummary,
   runAgentDiscoveryNow,
   updateSchedulerAutomationControl,
+  updateSchedulerJobAutomationControl,
   AgentDiscoverySummaryUnavailableError,
   type AgentDiscoveryRunSummary,
   type SchedulerSummaryPayload,
@@ -93,6 +94,29 @@ const READY_PAYLOAD: SchedulerSummaryPayload = {
     all_checks_pass: true,
   },
   automation_control: {
+    aggregate_state: "running",
+    jobs: {
+      agent_discovery: {
+        job_name: "agent_discovery",
+        paused: false,
+        revision: 0,
+        updated_at: null,
+        updated_by_user_id: null,
+        paused_at: null,
+        paused_by_user_id: null,
+        effective_scope: "default",
+      },
+      live_pipeline: {
+        job_name: "live_pipeline",
+        paused: false,
+        revision: 0,
+        updated_at: null,
+        updated_by_user_id: null,
+        paused_at: null,
+        paused_by_user_id: null,
+        effective_scope: "default",
+      },
+    },
     paused: false,
     revision: 0,
     updated_at: null,
@@ -213,6 +237,35 @@ const READY_PAYLOAD: SchedulerSummaryPayload = {
   },
   postgres_command_text: "SELECT 1",
 };
+
+function controlWithStates(livePaused: boolean, discoveryPaused: boolean) {
+  const base = READY_PAYLOAD.automation_control!;
+  const latestRevision = livePaused || discoveryPaused ? 1 : 0;
+  return {
+    ...base,
+    aggregate_state: livePaused && discoveryPaused
+      ? "paused" as const
+      : livePaused || discoveryPaused
+        ? "partially_paused" as const
+        : "running" as const,
+    paused: livePaused && discoveryPaused,
+    revision: latestRevision,
+    jobs: {
+      live_pipeline: {
+        ...base.jobs.live_pipeline,
+        paused: livePaused,
+        revision: livePaused ? 1 : 0,
+        effective_scope: livePaused ? "job" as const : "default" as const,
+      },
+      agent_discovery: {
+        ...base.jobs.agent_discovery,
+        paused: discoveryPaused,
+        revision: discoveryPaused ? 1 : 0,
+        effective_scope: discoveryPaused ? "job" as const : "default" as const,
+      },
+    },
+  };
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -483,6 +536,32 @@ describe("SchedulerHealthDashboard", () => {
     );
   });
 
+  it("PUTs a strict per-job scheduler automation state", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ok: true,
+        changed: true,
+        job_name: "live_pipeline",
+        previous_paused: false,
+        automation_control: controlWithStates(true, false),
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await updateSchedulerJobAutomationControl("live_pipeline", true);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/scheduler/jobs/live_pipeline/automation-control",
+      expect.objectContaining({
+        method: "PUT",
+        credentials: "same-origin",
+        body: JSON.stringify({ paused: true }),
+      }),
+    );
+  });
+
   it("renders the bounded summary 503 and disables automation without object coercion", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({
       ok: false,
@@ -496,8 +575,7 @@ describe("SchedulerHealthDashboard", () => {
     const alerts = await screen.findAllByRole("alert");
     alerts.forEach((alert) => expect(alert).toHaveTextContent("Scheduler automation control is unavailable."));
     expect(screen.queryByText(/\[object Object\]/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Pause scheduled runs" })).toBeDisabled();
-    expect(screen.queryByRole("button", { name: "Resume scheduled runs" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Manage scheduled runs" })).toBeDisabled();
   });
 
   it.each([
@@ -524,6 +602,7 @@ describe("SchedulerHealthDashboard", () => {
       json: async () => ({ detail: { error_category: "scheduler_automation_control_unavailable" } }),
     })));
     await expect(updateSchedulerAutomationControl(true)).rejects.toThrow("Scheduler automation control is unavailable.");
+    await expect(updateSchedulerJobAutomationControl("live_pipeline", true)).rejects.toThrow("Scheduler automation control is unavailable.");
   });
 
   it("renders a loading state without a fake healthy default", () => {
@@ -534,72 +613,83 @@ describe("SchedulerHealthDashboard", () => {
   });
 
   it("renders the overview panel, Job Status table, and admin badge once loaded", async () => {
-    render(<SchedulerHealthDashboard readSummary={async () => READY_PAYLOAD} />);
+    const { container } = render(<SchedulerHealthDashboard readSummary={async () => READY_PAYLOAD} />);
     expect(await screen.findByText("Healthy")).toBeInTheDocument();
     expect(screen.getByText("Admin only")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Pause scheduled runs" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Manage scheduled runs" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Refresh scheduler health" })).toBeEnabled();
+    const discovery = container.querySelector('[data-job-name="agent_discovery"]') as HTMLElement;
+    expect(within(discovery).getByRole("button", { name: "Run discovery now" })).toBeEnabled();
     expect(screen.getAllByText("live_pipeline").length).toBeGreaterThan(0);
     const activeJobsMetric = screen.getByText("Active jobs").closest(".scheduler-overview-metric");
     expect(activeJobsMetric).not.toBeNull();
     expect(within(activeJobsMetric as HTMLElement).getByText("2")).toBeInTheDocument();
   });
 
-  it("renders authoritative paused state without calling it unhealthy", async () => {
-    const pausedPayload: SchedulerSummaryPayload = {
-      ...READY_PAYLOAD,
-      automation_control: {
-        ...READY_PAYLOAD.automation_control!,
-        paused: true,
-        revision: 3,
-        updated_at: "2026-09-15T12:00:00Z",
-        updated_by_user_id: "admin-1",
-        paused_at: "2026-09-15T12:00:00Z",
-        paused_by_user_id: "admin-1",
-      },
-    };
-    render(<SchedulerHealthDashboard readSummary={async () => pausedPayload} />);
-
-    expect(await screen.findByRole("button", { name: "Resume scheduled runs" })).toBeEnabled();
-    const banner = screen.getByRole("status");
-    expect(within(banner).getByText("Automatic scheduled runs are paused.")).toBeInTheDocument();
-    expect(banner).toHaveTextContent("Live Pipeline and Agent Discovery will not start automatically");
-    expect(banner).toHaveTextContent("A run already in progress is not stopped");
-    expect(banner).toHaveTextContent("PostgreSQL backups are unaffected");
-    expect(banner).toHaveTextContent("manual admin actions remain available");
-    expect(banner).not.toHaveTextContent(/failed|unhealthy|broken/i);
-  });
-
-  it("requires confirmation for Pause and restores focus on Escape", async () => {
+  it("opens the accessible management dialog with two independent controls", async () => {
     render(<SchedulerHealthDashboard readSummary={async () => READY_PAYLOAD} />);
-    const trigger = await screen.findByRole("button", { name: "Pause scheduled runs" });
+    const trigger = await screen.findByRole("button", { name: "Manage scheduled runs" });
     fireEvent.click(trigger);
-    const dialog = screen.getByRole("dialog", { name: "Pause scheduled runs?" });
+    const dialog = screen.getByRole("dialog", { name: "Manage scheduled runs" });
     expect(dialog).toHaveAttribute("aria-modal", "true");
-    expect(dialog).toHaveTextContent("Live Pipeline and Agent Discovery will not start automatically");
-    expect(dialog).toHaveTextContent("Any run already in progress will continue until it finishes");
+    expect(dialog).toHaveAccessibleDescription("Control automatic starts for each scheduler independently.");
+    expect(within(dialog).getByText("Every 6 hours")).toBeInTheDocument();
+    expect(within(dialog).getByText("Every 24 hours")).toBeInTheDocument();
+    expect(within(dialog).getAllByText("Running automatically")).toHaveLength(2);
+    const livePause = within(dialog).getByRole("button", { name: "Pause Live Pipeline" });
+    const discoveryPause = within(dialog).getByRole("button", { name: "Pause Agent Discovery" });
+    expect(livePause).toHaveClass("is-pause");
+    expect(livePause).not.toHaveClass("is-resume");
+    expect(discoveryPause).toHaveClass("is-pause");
+    expect(discoveryPause).not.toHaveClass("is-resume");
+    expect(dialog).toHaveTextContent("Already-running work continues until completion");
     expect(dialog).toHaveTextContent("PostgreSQL backups are unaffected");
-    expect(dialog).toHaveTextContent("manual admin actions remain available");
-    expect(dialog).toHaveTextContent("resumed from this page");
+    expect(dialog).toHaveTextContent("Permitted manual admin actions remain available");
+    expect(dialog).toHaveTextContent("Each control affects only future automatic starts");
+
+    const liveAction = within(dialog).getByRole("button", { name: "Pause Live Pipeline" });
+    const close = within(dialog).getByRole("button", { name: "Close" });
+    await waitFor(() => expect(liveAction).toHaveFocus());
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(close).toHaveFocus();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(liveAction).toHaveFocus();
 
     fireEvent.keyDown(document, { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Pause scheduled runs?" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Manage scheduled runs" })).not.toBeInTheDocument());
     await waitFor(() => expect(trigger).toHaveFocus());
+
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Manage scheduled runs" })).not.toBeInTheDocument());
   });
 
-  it("confirms Pause once and reconciles the authoritative response", async () => {
-    const mutate = vi.fn(async () => ({
+  it("uses distinct green Resume semantics for both paused schedulers", async () => {
+    const pausedPayload = {
+      ...READY_PAYLOAD,
+      automation_control: controlWithStates(true, true),
+    };
+    render(<SchedulerHealthDashboard readSummary={async () => pausedPayload} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Manage scheduled runs" }));
+    const dialog = screen.getByRole("dialog", { name: "Manage scheduled runs" });
+    const liveResume = within(dialog).getByRole("button", { name: "Resume Live Pipeline" });
+    const discoveryResume = within(dialog).getByRole("button", { name: "Resume Agent Discovery" });
+
+    expect(liveResume).toHaveClass("is-resume");
+    expect(liveResume).not.toHaveClass("is-pause");
+    expect(discoveryResume).toHaveClass("is-resume");
+    expect(discoveryResume).not.toHaveClass("is-pause");
+  });
+
+  it("reconciles Live only from the authoritative response and keeps the modal open", async () => {
+    const mutate = vi.fn(async (jobName: string, paused: boolean) => ({
       ok: true as const,
       changed: true,
+      job_name: "live_pipeline" as const,
       previous_paused: false,
-      automation_control: {
-        ...READY_PAYLOAD.automation_control!,
-        paused: true,
-        revision: 1,
-        updated_at: "2026-09-15T12:00:00Z",
-        updated_by_user_id: "admin-1",
-        paused_at: "2026-09-15T12:00:00Z",
-        paused_by_user_id: "admin-1",
-      },
+      automation_control: jobName === "live_pipeline" && paused
+        ? controlWithStates(true, false)
+        : READY_PAYLOAD.automation_control!,
     }));
     render(
       <SchedulerHealthDashboard
@@ -607,27 +697,24 @@ describe("SchedulerHealthDashboard", () => {
         updateAutomationControl={mutate}
       />,
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Pause scheduled runs" }));
-    const dialog = screen.getByRole("dialog", { name: "Pause scheduled runs?" });
-    const confirm = within(dialog).getByRole("button", { name: "Pause scheduled runs" });
-    fireEvent.click(confirm);
-    fireEvent.click(confirm);
+    fireEvent.click(await screen.findByRole("button", { name: "Manage scheduled runs" }));
+    const dialog = screen.getByRole("dialog", { name: "Manage scheduled runs" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Pause Live Pipeline" }));
 
-    expect(await screen.findByRole("button", { name: "Resume scheduled runs" })).toBeEnabled();
+    expect(await within(dialog).findByRole("button", { name: "Resume Live Pipeline" })).toHaveClass("is-resume");
+    expect(within(dialog).getByRole("button", { name: "Pause Agent Discovery" })).toHaveClass("is-pause");
+    expect(screen.getByRole("dialog", { name: "Manage scheduled runs" })).toBeInTheDocument();
     expect(mutate).toHaveBeenCalledTimes(1);
-    expect(mutate).toHaveBeenCalledWith(true);
+    expect(mutate).toHaveBeenCalledWith("live_pipeline", true);
   });
 
-  it("cancels without mutation and disables Pause submission while it is pending", async () => {
+  it("disables both actions during one mutation and blocks duplicate and dismissal", async () => {
     const authoritative = {
       ok: true as const,
       changed: true,
+      job_name: "agent_discovery" as const,
       previous_paused: false,
-      automation_control: {
-        ...READY_PAYLOAD.automation_control!,
-        paused: true,
-        revision: 1,
-      },
+      automation_control: controlWithStates(false, true),
     };
     let resolveMutation!: (value: typeof authoritative) => void;
     const mutate = vi.fn(() => new Promise<typeof authoritative>((resolve) => {
@@ -640,45 +727,29 @@ describe("SchedulerHealthDashboard", () => {
       />,
     );
 
-    const trigger = await screen.findByRole("button", { name: "Pause scheduled runs" });
+    const trigger = await screen.findByRole("button", { name: "Manage scheduled runs" });
     fireEvent.click(trigger);
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
-    expect(mutate).not.toHaveBeenCalled();
-
-    fireEvent.click(trigger);
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Pause scheduled runs" }));
-    const pendingButtons = screen.getAllByRole("button", { name: "Pausing scheduled runs…" });
-    expect(pendingButtons).toHaveLength(2);
-    pendingButtons.forEach((button) => expect(button).toBeDisabled());
+    const dialog = screen.getByRole("dialog", { name: "Manage scheduled runs" });
+    const discoveryAction = within(dialog).getByRole("button", { name: "Pause Agent Discovery" });
+    fireEvent.click(discoveryAction);
+    fireEvent.click(discoveryAction);
+    expect(within(dialog).getByRole("button", { name: "Pause Live Pipeline" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Pause Agent Discovery" })).toBeDisabled();
+    expect(discoveryAction).toHaveTextContent("Pausing…");
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeDisabled();
     expect(mutate).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.getByRole("dialog", { name: "Manage scheduled runs" })).toBeInTheDocument();
 
     resolveMutation(authoritative);
-    expect(await screen.findByRole("button", { name: "Resume scheduled runs" })).toBeEnabled();
+    expect(await within(dialog).findByRole("button", { name: "Resume Agent Discovery" })).toBeEnabled();
   });
 
-  it("resumes immediately and retains the known paused state on failure", async () => {
+  it("preserves authoritative state and shows a readable error when mutation fails", async () => {
     const pausedPayload: SchedulerSummaryPayload = {
       ...READY_PAYLOAD,
-      automation_control: { ...READY_PAYLOAD.automation_control!, paused: true, revision: 2 },
+      automation_control: controlWithStates(true, false),
     };
-    const success = vi.fn(async () => ({
-      ok: true as const,
-      changed: true,
-      previous_paused: true,
-      automation_control: { ...READY_PAYLOAD.automation_control!, paused: false, revision: 3 },
-    }));
-    const first = render(
-      <SchedulerHealthDashboard
-        readSummary={async () => pausedPayload}
-        updateAutomationControl={success}
-      />,
-    );
-    fireEvent.click(await screen.findByRole("button", { name: "Resume scheduled runs" }));
-    expect(await screen.findByRole("button", { name: "Pause scheduled runs" })).toBeEnabled();
-    expect(success).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("dialog", { name: "Pause scheduled runs?" })).not.toBeInTheDocument();
-    first.unmount();
-
     const failure = vi.fn(async () => { throw new Error("control unavailable"); });
     render(
       <SchedulerHealthDashboard
@@ -686,15 +757,40 @@ describe("SchedulerHealthDashboard", () => {
         updateAutomationControl={failure}
       />,
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Resume scheduled runs" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("control unavailable");
-    expect(screen.getByRole("button", { name: "Resume scheduled runs" })).toBeEnabled();
+    fireEvent.click(await screen.findByRole("button", { name: "Manage scheduled runs" }));
+    const dialog = screen.getByRole("dialog", { name: "Manage scheduled runs" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Resume Live Pipeline" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("control unavailable");
+    expect(within(dialog).getByRole("button", { name: "Resume Live Pipeline" })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: "Pause Agent Discovery" })).toBeEnabled();
+    expect(dialog).not.toHaveTextContent("[object Object]");
+  });
+
+  it("renders running, partial, and fully paused aggregate banners truthfully", async () => {
+    const running = render(<SchedulerHealthDashboard readSummary={async () => READY_PAYLOAD} />);
+    await screen.findByText("Healthy");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    running.unmount();
+
+    const partialPayload = { ...READY_PAYLOAD, automation_control: controlWithStates(true, false) };
+    const partial = render(<SchedulerHealthDashboard readSummary={async () => partialPayload} />);
+    const partialBanner = await screen.findByRole("status");
+    expect(partialBanner).toHaveTextContent("Live Pipeline automatic starts are paused");
+    expect(partialBanner).toHaveTextContent("Agent Discovery remains automatic");
+    expect(partialBanner).toHaveTextContent("PostgreSQL backups are unaffected");
+    partial.unmount();
+
+    const pausedPayload = { ...READY_PAYLOAD, automation_control: controlWithStates(true, true) };
+    render(<SchedulerHealthDashboard readSummary={async () => pausedPayload} />);
+    const pausedBanner = await screen.findByRole("status");
+    expect(pausedBanner).toHaveTextContent("Automatic starts for both schedulers are paused");
+    expect(pausedBanner).toHaveTextContent("Live Pipeline and Agent Discovery will not start automatically");
   });
 
   it("disables automation control while loading or when readback is unavailable", async () => {
     const neverResolves = () => new Promise<never>(() => undefined);
     const loading = render(<SchedulerHealthDashboard readSummary={neverResolves} />);
-    expect(screen.getByRole("button", { name: "Pause scheduled runs" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Manage scheduled runs" })).toBeDisabled();
     loading.unmount();
 
     render(
@@ -703,7 +799,7 @@ describe("SchedulerHealthDashboard", () => {
       />,
     );
     expect(await screen.findByRole("alert")).toHaveTextContent("Scheduler automation control unavailable");
-    expect(screen.getByRole("button", { name: "Pause scheduled runs" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Manage scheduled runs" })).toBeDisabled();
   });
 
   it("renders exactly two truthful runtime cards with definition-owned cadences", async () => {

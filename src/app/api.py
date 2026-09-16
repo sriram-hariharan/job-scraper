@@ -2,7 +2,7 @@ from pathlib import Path
 import base64
 import binascii
 import json
-from typing import Any
+from typing import Any, Literal
 from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
@@ -280,6 +280,9 @@ class SchedulerAutomationControlRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     paused: bool = Field(strict=True)
+
+
+SchedulerAutomationJobName = Literal["live_pipeline", "agent_discovery"]
 
 
 class AgenticApprovalDecisionRequest(BaseModel):
@@ -3319,6 +3322,29 @@ def scheduler_automation_control_update(
     admin_user = _require_admin_user(http_request)
     try:
         return services.set_scheduler_automation_paused_payload(
+            payload.paused,
+            admin_user_id=str(admin_user.get("user_id", "") or "").strip(),
+        )
+    except services.SchedulerAutomationControlUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "ok": False,
+                "error_category": "scheduler_automation_control_unavailable",
+            },
+        ) from exc
+
+
+@app.put("/scheduler/jobs/{job_name}/automation-control")
+def scheduler_job_automation_control_update(
+    job_name: SchedulerAutomationJobName,
+    payload: SchedulerAutomationControlRequest,
+    http_request: Request,
+):
+    admin_user = _require_admin_user(http_request)
+    try:
+        return services.set_scheduler_job_automation_paused_payload(
+            job_name,
             payload.paused,
             admin_user_id=str(admin_user.get("user_id", "") or "").strip(),
         )

@@ -10,6 +10,7 @@ import {
   Activity,
   CheckCircle2,
   CircleCheck,
+  CirclePause,
   Clock,
   Database,
   FileSearch,
@@ -43,7 +44,7 @@ import {
   readAgentDiscoveryRunSummary,
   readSchedulerSummary,
   runAgentDiscoveryNow,
-  updateSchedulerAutomationControl,
+  updateSchedulerJobAutomationControl,
   runRowKey,
   schedulerNextRunPresentation,
   schedulerTriggerLabel,
@@ -55,6 +56,7 @@ import {
   type SchedulerSummaryPayload,
   type SchedulerAutomationControl,
   type SchedulerAutomationControlMutationResponse,
+  type SchedulerAutomationJobName,
   type ManualAgentDiscoveryResponse,
   type AgentDiscoveryRunSummary,
   AgentDiscoverySummaryUnavailableError,
@@ -79,7 +81,10 @@ type SchedulerHealthDashboardProps = {
   readSummary?: () => Promise<SchedulerSummaryPayload>;
   runDiscoveryNow?: () => Promise<ManualAgentDiscoveryResponse>;
   readDiscoverySummary?: (runId: string) => Promise<AgentDiscoveryRunSummary>;
-  updateAutomationControl?: (paused: boolean) => Promise<SchedulerAutomationControlMutationResponse>;
+  updateAutomationControl?: (
+    jobName: SchedulerAutomationJobName,
+    paused: boolean,
+  ) => Promise<SchedulerAutomationControlMutationResponse & { job_name: SchedulerAutomationJobName }>;
 };
 
 type DiscoverySummaryLoadState =
@@ -187,16 +192,14 @@ function DashboardHeader({
         </span>
         <button
           type="button"
-          className={`scheduler-automation-control-btn ${automationControl?.paused ? "is-paused" : ""}`}
+          className="scheduler-automation-control-btn"
           onClick={onAutomationAction}
           disabled={!automationControl || automationSubmitting}
           title={!automationControl ? "Scheduler automation control unavailable" : undefined}
           ref={automationControlTriggerRef}
         >
-          <Power size={15} aria-hidden="true" />
-          {automationSubmitting
-            ? automationControl?.paused ? "Resuming scheduled runs…" : "Pausing scheduled runs…"
-            : automationControl?.paused ? "Resume scheduled runs" : "Pause scheduled runs"}
+          <Clock size={15} aria-hidden="true" />
+          Manage scheduled runs
         </button>
         <button
           type="button"
@@ -213,31 +216,37 @@ function DashboardHeader({
   );
 }
 
-function AutomationPauseConfirmDialog({
+function AutomationManagementDialog({
   open,
-  confirming,
+  automationControl,
+  runtimeJobs,
+  submittingJob,
+  actionError,
   onClose,
-  onConfirm,
+  onAction,
   triggerRef,
 }: {
   open: boolean;
-  confirming: boolean;
+  automationControl: SchedulerAutomationControl | null;
+  runtimeJobs: SchedulerRuntimeJob[];
+  submittingJob: SchedulerAutomationJobName | null;
+  actionError: string;
   onClose: () => void;
-  onConfirm: () => void;
+  onAction: (jobName: SchedulerAutomationJobName, paused: boolean) => void;
   triggerRef: React.RefObject<HTMLButtonElement>;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
-  const cancelRef = useRef<HTMLButtonElement>(null);
-  const confirmingRef = useRef(confirming);
-  confirmingRef.current = confirming;
+  const initialActionRef = useRef<HTMLButtonElement>(null);
+  const submittingRef = useRef(submittingJob);
+  submittingRef.current = submittingJob;
 
   useEffect(() => {
     if (!open) return undefined;
-    window.requestAnimationFrame(() => cancelRef.current?.focus());
+    window.requestAnimationFrame(() => initialActionRef.current?.focus());
     const handleKeydown = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        if (!confirmingRef.current) onClose();
+        if (!submittingRef.current) onClose();
         return;
       }
       if (event.key !== "Tab" || !cardRef.current) return;
@@ -263,49 +272,101 @@ function AutomationPauseConfirmDialog({
   }, [onClose, open, triggerRef]);
 
   if (!open) return null;
+  const jobs: Array<{ jobName: SchedulerAutomationJobName; label: string }> = [
+    { jobName: "live_pipeline", label: "Live Pipeline" },
+    { jobName: "agent_discovery", label: "Agent Discovery" },
+  ];
   return (
     <div
-      className="modal-backdrop"
+      className="modal-backdrop scheduler-automation-control-backdrop"
       onClick={(event) => {
-        if (!confirming && event.target === event.currentTarget) onClose();
+        if (!submittingJob && event.target === event.currentTarget) onClose();
       }}
     >
       <div
-        className="modal-card scheduler-automation-control-modal"
+        className="scheduler-automation-control-modal"
         ref={cardRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="schedulerAutomationPauseTitle"
-        aria-describedby="schedulerAutomationPauseDescription"
+        aria-labelledby="schedulerAutomationManagementTitle"
+        aria-describedby="schedulerAutomationManagementDescription"
       >
-        <div className="modal-header">
-          <div>
-            <h3 id="schedulerAutomationPauseTitle">Pause scheduled runs?</h3>
-            <div className="subtext" id="schedulerAutomationPauseDescription">
-              <p>Live Pipeline and Agent Discovery will not start automatically.</p>
-              <p>Any run already in progress will continue until it finishes.</p>
-              <p>PostgreSQL backups are unaffected, and permitted manual admin actions remain available.</p>
-              <p>The schedule can be resumed from this page.</p>
+        <div className="scheduler-pause-dialog-body">
+          <div className="scheduler-pause-dialog-header">
+            <span className="scheduler-pause-dialog-icon" aria-hidden="true">
+              <Clock size={19} />
+            </span>
+            <div>
+              <h3 id="schedulerAutomationManagementTitle">Manage scheduled runs</h3>
+              <p id="schedulerAutomationManagementDescription">
+                Control automatic starts for each scheduler independently.
+              </p>
+            </div>
+          </div>
+
+          <section className="scheduler-pause-scope" aria-label="Scheduler automation controls">
+            <div className="scheduler-pause-scope-list">
+              {jobs.map(({ jobName, label }, index) => {
+                const control = automationControl?.jobs[jobName];
+                const runtime = runtimeJobs.find((job) => job.job_name === jobName);
+                const paused = Boolean(control?.paused);
+                const submitting = submittingJob === jobName;
+                const actionLabel = paused ? "Resume" : "Pause";
+                return (
+                  <div className="scheduler-pause-scope-row" data-control-job={jobName} key={jobName}>
+                    <div className="scheduler-control-row-copy">
+                      <strong>{label}</strong>
+                      <span>{runtime ? formatCadence(runtime.cadence_seconds) : "Schedule unavailable"}</span>
+                    </div>
+                    <span className={`scheduler-control-state ${paused ? "is-paused" : "is-running"}`}>
+                      {paused ? "Automatic starts paused" : "Running automatically"}
+                    </span>
+                    <button
+                      type="button"
+                      className={`scheduler-job-control-action ${paused ? "is-resume" : "is-pause"}`}
+                      aria-label={`${actionLabel} ${label}`}
+                      disabled={!control || submittingJob !== null}
+                      onClick={() => onAction(jobName, !paused)}
+                      ref={index === 0 ? initialActionRef : undefined}
+                    >
+                      {paused ? <Play size={14} aria-hidden="true" /> : <CirclePause size={14} aria-hidden="true" />}
+                      {submitting ? `${paused ? "Resuming" : "Pausing"}…` : actionLabel}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          {actionError ? <div className="scheduler-control-dialog-error" role="alert">{actionError}</div> : null}
+
+          <div className="scheduler-pause-assurances" aria-label="Operational safeguards">
+            <div>
+              <CheckCircle2 size={15} aria-hidden="true" />
+              <span>Already-running work continues until completion.</span>
+            </div>
+            <div>
+              <Database size={15} aria-hidden="true" />
+              <span>PostgreSQL backups are unaffected.</span>
+            </div>
+            <div>
+              <ShieldCheck size={15} aria-hidden="true" />
+              <span>Permitted manual admin actions remain available.</span>
+            </div>
+            <div>
+              <RefreshCw size={15} aria-hidden="true" />
+              <span>Each control affects only future automatic starts.</span>
             </div>
           </div>
         </div>
-        <div className="scheduler-manual-discovery-actions">
+        <div className="scheduler-pause-dialog-footer">
           <button
             type="button"
             className="scheduler-confirm-secondary"
-            disabled={confirming}
+            disabled={submittingJob !== null}
             onClick={onClose}
-            ref={cancelRef}
           >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="scheduler-confirm-primary scheduler-confirm-pause"
-            disabled={confirming}
-            onClick={onConfirm}
-          >
-            {confirming ? "Pausing scheduled runs…" : "Pause scheduled runs"}
+            Close
           </button>
         </div>
       </div>
@@ -1516,7 +1577,7 @@ export function SchedulerHealthDashboard({
   readSummary = readSchedulerSummary,
   runDiscoveryNow = runAgentDiscoveryNow,
   readDiscoverySummary = readAgentDiscoveryRunSummary,
-  updateAutomationControl = updateSchedulerAutomationControl,
+  updateAutomationControl = updateSchedulerJobAutomationControl,
 }: SchedulerHealthDashboardProps) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [refreshing, setRefreshing] = useState(false);
@@ -1524,8 +1585,8 @@ export function SchedulerHealthDashboard({
   const [manualConfirmOpen, setManualConfirmOpen] = useState(false);
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [manualActionError, setManualActionError] = useState("");
-  const [automationConfirmOpen, setAutomationConfirmOpen] = useState(false);
-  const [automationSubmitting, setAutomationSubmitting] = useState(false);
+  const [automationManagementOpen, setAutomationManagementOpen] = useState(false);
+  const [automationSubmittingJob, setAutomationSubmittingJob] = useState<SchedulerAutomationJobName | null>(null);
   const [automationActionError, setAutomationActionError] = useState("");
   const diagnosticsTriggerRef = useRef<HTMLButtonElement>(null);
   const manualDiscoveryTriggerRef = useRef<HTMLButtonElement>(null);
@@ -1589,14 +1650,18 @@ export function SchedulerHealthDashboard({
     setManualConfirmOpen(true);
   }, []);
 
-  const applyAutomationControl = useCallback(async (paused: boolean) => {
+  const applyAutomationControl = useCallback(async (jobName: SchedulerAutomationJobName, paused: boolean) => {
     if (automationRequestInFlightRef.current) return;
     automationRequestInFlightRef.current = true;
-    setAutomationSubmitting(true);
+    setAutomationSubmittingJob(jobName);
     setAutomationActionError("");
     try {
-      const result = await updateAutomationControl(paused);
-      if (!result.ok || result.automation_control.paused !== paused) {
+      const result = await updateAutomationControl(jobName, paused);
+      if (
+        !result.ok
+        || result.job_name !== jobName
+        || result.automation_control.jobs[jobName]?.paused !== paused
+      ) {
         throw new Error("Scheduler automation control returned an unexpected state.");
       }
       setState((current) => {
@@ -1609,7 +1674,6 @@ export function SchedulerHealthDashboard({
           },
         };
       });
-      setAutomationConfirmOpen(false);
     } catch (error) {
       setAutomationActionError(
         error instanceof Error
@@ -1618,19 +1682,15 @@ export function SchedulerHealthDashboard({
       );
     } finally {
       automationRequestInFlightRef.current = false;
-      setAutomationSubmitting(false);
+      setAutomationSubmittingJob(null);
     }
   }, [updateAutomationControl]);
 
   const requestAutomationAction = useCallback(() => {
     if (state.kind !== "ready" || !state.payload.automation_control) return;
     setAutomationActionError("");
-    if (state.payload.automation_control.paused) {
-      void applyAutomationControl(false);
-    } else {
-      setAutomationConfirmOpen(true);
-    }
-  }, [applyAutomationControl, state]);
+    setAutomationManagementOpen(true);
+  }, [state]);
 
   useEffect(() => {
     void refresh();
@@ -1641,8 +1701,18 @@ export function SchedulerHealthDashboard({
   const status: "loading" | "ready" | "error" = state.kind;
   const errorMessage = state.kind === "error" ? state.message : undefined;
   const lastRefreshedAt = state.kind === "ready" ? state.checkedAt : null;
-  const automationControl = payload?.automation_control || null;
+  const automationControlCandidate = payload?.automation_control;
+  const automationControl = (
+    automationControlCandidate?.jobs?.live_pipeline
+    && automationControlCandidate.jobs.agent_discovery
+  ) ? automationControlCandidate : null;
   const automationControlUnavailable = state.kind === "ready" && !automationControl;
+  const pausedJobNames = automationControl
+    ? (["live_pipeline", "agent_discovery"] as SchedulerAutomationJobName[]).filter(
+        (jobName) => automationControl.jobs[jobName].paused,
+      )
+    : [];
+  const pausedJobLabels = pausedJobNames.map(jobDisplayName);
 
   return (
     <div className="scheduler-health-dashboard" aria-busy={state.kind === "loading"}>
@@ -1651,7 +1721,7 @@ export function SchedulerHealthDashboard({
         refreshing={refreshing}
         lastRefreshedAt={lastRefreshedAt}
         automationControl={automationControl}
-        automationSubmitting={automationSubmitting}
+        automationSubmitting={automationSubmittingJob !== null}
         onAutomationAction={requestAutomationAction}
         automationControlTriggerRef={automationControlTriggerRef}
       />
@@ -1664,15 +1734,21 @@ export function SchedulerHealthDashboard({
       {automationControlUnavailable ? (
         <div className="scheduler-error-banner" role="alert">Scheduler automation control unavailable.</div>
       ) : null}
-      {automationActionError ? (
-        <div className="scheduler-error-banner" role="alert">{automationActionError}</div>
-      ) : null}
-      {automationControl?.paused ? (
+      {automationControl && automationControl.aggregate_state !== "running" ? (
         <div className="scheduler-automation-paused-banner" role="status">
           <Power size={18} aria-hidden="true" />
           <div>
-            <strong>Automatic scheduled runs are paused.</strong>
-            <span>Live Pipeline and Agent Discovery will not start automatically. A run already in progress is not stopped. PostgreSQL backups are unaffected, and permitted manual admin actions remain available.</span>
+            <strong>
+              {automationControl?.aggregate_state === "paused"
+                ? "Automatic starts for both schedulers are paused."
+                : `${pausedJobLabels[0]} automatic starts are paused.`}
+            </strong>
+            <span>
+              {automationControl?.aggregate_state === "partially_paused"
+                ? `${jobDisplayName(pausedJobNames[0] === "live_pipeline" ? "agent_discovery" : "live_pipeline")} remains automatic. `
+                : "Live Pipeline and Agent Discovery will not start automatically. "}
+              Already-running work continues. Permitted manual admin actions remain available. PostgreSQL backups are unaffected.
+            </span>
           </div>
         </div>
       ) : null}
@@ -1709,11 +1785,14 @@ export function SchedulerHealthDashboard({
         onConfirm={() => void confirmManualDiscovery()}
         triggerRef={manualDiscoveryTriggerRef}
       />
-      <AutomationPauseConfirmDialog
-        open={automationConfirmOpen}
-        confirming={automationSubmitting}
-        onClose={() => setAutomationConfirmOpen(false)}
-        onConfirm={() => void applyAutomationControl(true)}
+      <AutomationManagementDialog
+        open={automationManagementOpen}
+        automationControl={automationControl}
+        runtimeJobs={payload?.runtime_jobs || []}
+        submittingJob={automationSubmittingJob}
+        actionError={automationActionError}
+        onClose={() => setAutomationManagementOpen(false)}
+        onAction={(jobName, paused) => void applyAutomationControl(jobName, paused)}
         triggerRef={automationControlTriggerRef}
       />
     </div>

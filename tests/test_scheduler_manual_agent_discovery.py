@@ -370,6 +370,7 @@ def test_scheduler_schema_contract_remains_two_jobs_and_adds_append_only_control
     assert control["primary_key"] == ["revision"]
     assert [column["name"] for column in control["columns"]] == [
         "revision",
+        "job_name",
         "action",
         "prior_paused",
         "resulting_paused",

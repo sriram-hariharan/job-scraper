@@ -34,6 +34,10 @@ CREATE INDEX IF NOT EXISTS idx_scheduler_run_history_status_started
 
 CREATE TABLE IF NOT EXISTS scheduler_automation_control_events (
     revision BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    job_name TEXT CHECK (
+        job_name IS NULL
+        OR job_name IN ('agent_discovery', 'live_pipeline')
+    ),
     action TEXT NOT NULL CHECK (action IN ('pause', 'resume')),
     prior_paused BOOLEAN NOT NULL,
     resulting_paused BOOLEAN NOT NULL,
@@ -44,6 +48,13 @@ CREATE TABLE IF NOT EXISTS scheduler_automation_control_events (
         OR
         (action = 'resume' AND prior_paused = TRUE AND resulting_paused = FALSE)
     )
+);
+
+ALTER TABLE scheduler_automation_control_events
+ADD COLUMN IF NOT EXISTS job_name TEXT
+CHECK (
+    job_name IS NULL
+    OR job_name IN ('agent_discovery', 'live_pipeline')
 );
 
 INSERT INTO scheduler_job_definitions (

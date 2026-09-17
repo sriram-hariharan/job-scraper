@@ -7,10 +7,11 @@ import plistlib
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Tuple
@@ -43,6 +44,28 @@ DEFAULT_LAUNCHD_AGENT_DIR = Path("~/Library/LaunchAgents").expanduser()
 DEFAULT_LAUNCHD_TARGET = f"gui/{os.getuid()}"
 DEFAULT_SCHEDULER_TRIGGER_SOURCE = "external_scheduler_wrapper"
 MANUAL_ADMIN_TRIGGER_SOURCE = "manual_admin"
+SCHEDULER_RUNTIME_PROVIDER_ENV = "JOB_STACK_SCHEDULER_RUNTIME_PROVIDER"
+SCHEDULER_RUNTIME_SNAPSHOT_PATH_ENV = "JOB_STACK_SCHEDULER_RUNTIME_SNAPSHOT_PATH"
+SCHEDULER_RUNTIME_MAX_AGE_SECONDS_ENV = (
+    "JOB_STACK_SCHEDULER_RUNTIME_MAX_AGE_SECONDS"
+)
+DEFAULT_SCHEDULER_RUNTIME_SNAPSHOT_PATH = Path(
+    "/app/runtime/scheduler/status.json"
+)
+DEFAULT_SCHEDULER_RUNTIME_MAX_AGE_SECONDS = 180
+SCHEDULER_RUNTIME_FUTURE_SKEW_SECONDS = 30
+MAX_SCHEDULER_RUNTIME_SNAPSHOT_BYTES = 64 * 1024
+SYSTEMD_RUNTIME_SCHEMA_VERSION = "applylens.scheduler-runtime-observation.v1"
+_SYSTEMD_SCHEDULER_UNITS = {
+    "agent_discovery": {
+        "timer": "applylens-agent-discovery.timer",
+        "service": "applylens-agent-discovery.service",
+    },
+    "live_pipeline": {
+        "timer": "applylens-live-pipeline.timer",
+        "service": "applylens-live-pipeline.service",
+    },
+}
 SUPPORTED_SCHEDULER_TRIGGER_SOURCES = (
     DEFAULT_SCHEDULER_TRIGGER_SOURCE,
     MANUAL_ADMIN_TRIGGER_SOURCE,
@@ -840,7 +863,7 @@ def get_scheduler_launchd_agent_status(
     return payload
 
 
-def get_scheduler_runtime_job_status(job_name: Any) -> Dict[str, Any]:
+def _get_scheduler_launchd_runtime_job_status(job_name: Any) -> Dict[str, Any]:
     definition = get_scheduled_job_definition(job_name)
     try:
         status = get_scheduler_launchd_agent_status(
@@ -885,11 +908,348 @@ def get_scheduler_runtime_job_status(job_name: Any) -> Dict[str, Any]:
     }
 
 
-def get_scheduler_runtime_jobs_status() -> List[Dict[str, Any]]:
+def _unavailable_scheduler_runtime_jobs() -> List[Dict[str, Any]]:
     return [
-        get_scheduler_runtime_job_status(definition["name"])
+        {
+            "job_name": definition["name"],
+            "description": definition["description"],
+            "cadence_seconds": definition["launchd_interval_seconds"],
+            "installed": None,
+            "loaded": None,
+            "enabled": None,
+            "armed": None,
+            "running": None,
+            "runtime_state": "unavailable",
+            "expected_next_run_at": None,
+        }
         for definition in get_scheduled_job_definitions()
     ]
+
+
+def _parse_scheduler_runtime_utc(value: Any) -> datetime:
+    if not isinstance(value, str):
+        raise ValueError("scheduler runtime timestamp must be a string")
+    raw = value.strip()
+    parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("scheduler runtime timestamp must be timezone-aware")
+    if parsed.utcoffset() != timedelta(0):
+        raise ValueError("scheduler runtime timestamp must be UTC")
+    return parsed.astimezone(timezone.utc)
+
+
+def _read_bounded_scheduler_runtime_snapshot(path: Path) -> Dict[str, Any]:
+    metadata = path.lstat()
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+        raise ValueError("scheduler runtime snapshot must be a regular file")
+    if metadata.st_size > MAX_SCHEDULER_RUNTIME_SNAPSHOT_BYTES:
+        raise ValueError("scheduler runtime snapshot exceeds the bounded limit")
+
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode):
+            raise ValueError("scheduler runtime snapshot must be a regular file")
+        if opened.st_size > MAX_SCHEDULER_RUNTIME_SNAPSHOT_BYTES:
+            raise ValueError("scheduler runtime snapshot exceeds the bounded limit")
+        with os.fdopen(descriptor, "rb", closefd=False) as handle:
+            raw = handle.read(MAX_SCHEDULER_RUNTIME_SNAPSHOT_BYTES + 1)
+    finally:
+        os.close(descriptor)
+    if len(raw) > MAX_SCHEDULER_RUNTIME_SNAPSHOT_BYTES:
+        raise ValueError("scheduler runtime snapshot exceeds the bounded limit")
+    decoded = json.loads(raw.decode("utf-8", errors="strict"))
+    if not isinstance(decoded, dict):
+        raise ValueError("scheduler runtime snapshot must be an object")
+    return decoded
+
+
+def _validated_systemd_runtime_job(record: Any) -> Dict[str, Any]:
+    if not isinstance(record, dict) or set(record) != {"job_name", "timer", "service"}:
+        raise ValueError("invalid scheduler runtime job shape")
+    job_name = record.get("job_name")
+    if job_name not in _SYSTEMD_SCHEDULER_UNITS:
+        raise ValueError("unsupported scheduler runtime job")
+    timer = record.get("timer")
+    service = record.get("service")
+    expected_timer_keys = {
+        "unit_name",
+        "load_state",
+        "active_state",
+        "sub_state",
+        "unit_file_state",
+        "expected_next_run_at",
+    }
+    expected_service_keys = {
+        "unit_name",
+        "active_state",
+        "sub_state",
+        "result",
+        "exec_main_status",
+    }
+    if not isinstance(timer, dict) or set(timer) != expected_timer_keys:
+        raise ValueError("invalid scheduler timer observation")
+    if not isinstance(service, dict) or set(service) != expected_service_keys:
+        raise ValueError("invalid scheduler service observation")
+    expected_units = _SYSTEMD_SCHEDULER_UNITS[job_name]
+    if timer.get("unit_name") != expected_units["timer"]:
+        raise ValueError("unexpected scheduler timer unit")
+    if service.get("unit_name") != expected_units["service"]:
+        raise ValueError("unexpected scheduler service unit")
+
+    string_fields = (
+        timer.get("load_state"),
+        timer.get("active_state"),
+        timer.get("sub_state"),
+        timer.get("unit_file_state"),
+        service.get("active_state"),
+        service.get("sub_state"),
+        service.get("result"),
+    )
+    if any(not isinstance(value, str) or len(value) > 64 for value in string_fields):
+        raise ValueError("invalid scheduler runtime state value")
+    exit_code = service.get("exec_main_status")
+    if type(exit_code) is not int or exit_code < 0:
+        raise ValueError("invalid scheduler service exit status")
+
+    load_state = timer["load_state"]
+    if load_state not in {"loaded", "not-found"}:
+        raise ValueError("unsupported timer load state")
+    installed = load_state == "loaded"
+    loaded = load_state == "loaded"
+
+    timer_active_state = timer["active_state"]
+    timer_sub_state = timer["sub_state"]
+    if timer_active_state not in {
+        "active", "activating", "inactive", "deactivating", "failed"
+    }:
+        raise ValueError("unsupported timer active state")
+    if timer_sub_state not in {"waiting", "elapsed", "dead", "failed", "running"}:
+        raise ValueError("unsupported timer substate")
+    if (
+        (timer_sub_state in {"waiting", "elapsed", "running"} and timer_active_state != "active")
+        or (timer_sub_state == "dead" and timer_active_state != "inactive")
+        or (timer_sub_state == "failed" and timer_active_state != "failed")
+    ):
+        raise ValueError("inconsistent timer active state and substate")
+
+    unit_file_state = timer["unit_file_state"]
+    if load_state == "not-found":
+        if unit_file_state:
+            raise ValueError("absent timer has inconsistent unit-file state")
+        enabled = False
+    elif unit_file_state == "enabled":
+        enabled = True
+    elif unit_file_state in {
+        "disabled", "masked", "masked-runtime", "static", "indirect",
+        "generated", "transient", "linked", "linked-runtime", "alias",
+    }:
+        enabled = False
+    else:
+        raise ValueError("unsupported timer unit-file state")
+
+    service_active_state = service["active_state"]
+    # Finite observation contract for the two oneshot scheduler services.
+    # Unsupported transitions (including deactivation) remain unavailable.
+    supported_service_states = {
+        "inactive": {"dead"},
+        "failed": {"failed"},
+        "active": {"running", "exited"},
+        "activating": {"start-pre", "start", "start-post", "running"},
+    }
+    if service["sub_state"] not in supported_service_states.get(service_active_state, set()):
+        raise ValueError("inconsistent service active state and substate")
+    running = service_active_state in {"active", "activating"}
+    if load_state == "not-found" and running:
+        raise ValueError("absent timer cannot have a running service")
+
+    next_run_raw = timer.get("expected_next_run_at")
+    if next_run_raw is None:
+        expected_next_run_at = None
+    elif isinstance(next_run_raw, str):
+        expected_next_run_at = (
+            _parse_scheduler_runtime_utc(next_run_raw)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+    else:
+        raise ValueError("invalid scheduler next-run timestamp")
+    if not installed and (
+        timer_active_state != "inactive"
+        or timer_sub_state != "dead"
+        or expected_next_run_at is not None
+    ):
+        raise ValueError("absent timer has inconsistent runtime state")
+
+    armed = bool(
+        installed
+        and loaded
+        and timer_active_state == "active"
+        and timer_sub_state == "waiting"
+        and enabled
+    )
+    if armed and expected_next_run_at is None:
+        raise ValueError("armed timer is missing its next-run timestamp")
+    if not installed:
+        runtime_state = "not_installed"
+    elif running:
+        runtime_state = "running"
+    else:
+        runtime_state = "idle"
+
+    definition = get_scheduled_job_definition(job_name)
+    return {
+        "job_name": job_name,
+        "description": definition["description"],
+        "cadence_seconds": definition["launchd_interval_seconds"],
+        "installed": installed,
+        "loaded": loaded,
+        "enabled": enabled,
+        "armed": armed,
+        "running": running,
+        "runtime_state": runtime_state,
+        "expected_next_run_at": expected_next_run_at,
+        "service_active_state": service_active_state,
+        "service_sub_state": service["sub_state"],
+        "prior_service_result": service["result"],
+        "prior_service_exit_code": exit_code,
+    }
+
+
+def _systemd_snapshot_runtime_status(
+    *,
+    snapshot_path: Path,
+    max_age_seconds: int,
+    now: datetime | None = None,
+) -> Dict[str, Any]:
+    unavailable = {
+        "runtime_provider": "systemd",
+        "runtime_observation_status": "malformed",
+        "runtime_observed_at": None,
+        "jobs": _unavailable_scheduler_runtime_jobs(),
+    }
+    try:
+        payload = _read_bounded_scheduler_runtime_snapshot(snapshot_path)
+    except FileNotFoundError:
+        return {**unavailable, "runtime_observation_status": "missing"}
+    except (OSError, UnicodeError, ValueError, RecursionError):
+        return unavailable
+
+    try:
+        if set(payload) != {
+            "schema_version", "generated_at", "runtime_provider", "collection_ok", "jobs"
+        }:
+            raise ValueError("invalid scheduler runtime snapshot shape")
+        if payload["schema_version"] != SYSTEMD_RUNTIME_SCHEMA_VERSION:
+            raise ValueError("unsupported scheduler runtime snapshot version")
+        if payload["runtime_provider"] != "systemd":
+            raise ValueError("unexpected scheduler runtime provider")
+        if type(payload["collection_ok"]) is not bool:
+            raise ValueError("invalid scheduler runtime collection status")
+        generated_at = _parse_scheduler_runtime_utc(payload["generated_at"])
+        observed_at = generated_at.isoformat().replace("+00:00", "Z")
+        reference_now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        if generated_at - reference_now > timedelta(
+            seconds=SCHEDULER_RUNTIME_FUTURE_SKEW_SECONDS
+        ):
+            return {
+                **unavailable,
+                "runtime_observation_status": "future",
+                "runtime_observed_at": observed_at,
+            }
+        if reference_now - generated_at > timedelta(seconds=max_age_seconds):
+            return {
+                **unavailable,
+                "runtime_observation_status": "stale",
+                "runtime_observed_at": observed_at,
+            }
+        if payload["collection_ok"] is not True:
+            return {
+                **unavailable,
+                "runtime_observation_status": "collection_error",
+                "runtime_observed_at": observed_at,
+            }
+        records = payload["jobs"]
+        if not isinstance(records, list) or len(records) != len(_SYSTEMD_SCHEDULER_UNITS):
+            raise ValueError("invalid scheduler runtime job count")
+        jobs = [_validated_systemd_runtime_job(record) for record in records]
+        if {job["job_name"] for job in jobs} != set(_SYSTEMD_SCHEDULER_UNITS):
+            raise ValueError("scheduler runtime jobs must be exact and unique")
+        ordered = [
+            next(job for job in jobs if job["job_name"] == definition["name"])
+            for definition in get_scheduled_job_definitions()
+        ]
+    except (KeyError, TypeError, ValueError):
+        return unavailable
+    return {
+        "runtime_provider": "systemd",
+        "runtime_observation_status": "fresh",
+        "runtime_observed_at": observed_at,
+        "jobs": ordered,
+    }
+
+
+def get_scheduler_runtime_status() -> Dict[str, Any]:
+    provider = str(os.getenv(SCHEDULER_RUNTIME_PROVIDER_ENV, "launchd") or "").strip().lower()
+    if provider == "launchd":
+        return {
+            "runtime_provider": "launchd",
+            "runtime_observation_status": "live",
+            "runtime_observed_at": _utc_now(),
+            "jobs": [
+                _get_scheduler_launchd_runtime_job_status(definition["name"])
+                for definition in get_scheduled_job_definitions()
+            ],
+        }
+    if provider == "systemd_snapshot":
+        raw_path = str(
+            os.getenv(
+                SCHEDULER_RUNTIME_SNAPSHOT_PATH_ENV,
+                str(DEFAULT_SCHEDULER_RUNTIME_SNAPSHOT_PATH),
+            )
+            or ""
+        ).strip()
+        try:
+            max_age = int(
+                str(
+                    os.getenv(
+                        SCHEDULER_RUNTIME_MAX_AGE_SECONDS_ENV,
+                        DEFAULT_SCHEDULER_RUNTIME_MAX_AGE_SECONDS,
+                    )
+                ).strip()
+            )
+            if not raw_path or max_age <= 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            return {
+                "runtime_provider": "systemd",
+                "runtime_observation_status": "invalid_configuration",
+                "runtime_observed_at": None,
+                "jobs": _unavailable_scheduler_runtime_jobs(),
+            }
+        return _systemd_snapshot_runtime_status(
+            snapshot_path=Path(raw_path),
+            max_age_seconds=max_age,
+        )
+    return {
+        "runtime_provider": "unavailable",
+        "runtime_observation_status": "invalid_provider",
+        "runtime_observed_at": None,
+        "jobs": _unavailable_scheduler_runtime_jobs(),
+    }
+
+
+def get_scheduler_runtime_job_status(job_name: Any) -> Dict[str, Any]:
+    normalized = get_scheduled_job_definition(job_name)["name"]
+    return next(
+        job for job in get_scheduler_runtime_status()["jobs"]
+        if job["job_name"] == normalized
+    )
+
+
+def get_scheduler_runtime_jobs_status() -> List[Dict[str, Any]]:
+    return list(get_scheduler_runtime_status()["jobs"])
 
 
 def install_scheduler_launchd_agent(

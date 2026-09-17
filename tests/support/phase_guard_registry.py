@@ -2774,6 +2774,31 @@ STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES = {
 }
 
 
+# Step 18D23 truthful production systemd scheduler-runtime observation.
+# Exact host observer, read-only consumption, UI, focused-test, generated-bundle,
+# and guard-reconciliation paths only; the historical Step 18D22 set is unchanged.
+STEP18D23_SYSTEMD_SCHEDULER_RUNTIME_OBSERVATION_FILES = {
+    "deploy/PRODUCTION_DEPLOYMENT.md",
+    "deploy/systemd/applylens-scheduler-runtime-observation.service",
+    "deploy/systemd/applylens-scheduler-runtime-observation.timer",
+    "deploy/write_systemd_scheduler_runtime_snapshot.py",
+    "docker-compose.prod.yml",
+    "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.test.tsx",
+    "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx",
+    "frontend/executive-kpi/src/scheduler/schedulerModel.ts",
+    "src/app/services.py",
+    "src/app/static/build/executive-kpi/executive-kpi.js",
+    "src/pipeline/scheduler.py",
+    "tests/support/phase_guard_registry.py",
+    "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+    "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+    "tests/test_phase85b_legacy_guard_registry_default_off.py",
+    "tests/test_production_deployment_hardening.py",
+    "tests/test_scheduler_admin_health_redesign.py",
+    "tests/test_scheduler_runtime_postgres_correctness.py",
+}
+
+
 # Production deployment hardening milestone. Exact, finite surface: the deploy
 # unit/tooling files plus the two guard-registry files this compatibility
 # registration itself has to touch. No globs, no directory prefixes - the
@@ -2828,6 +2853,7 @@ def current_milestone_guard_compatibility_allowlist() -> set[str]:
         | STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES
         | STEP18D20_ADMIN_SCHEDULER_AUTOMATION_CONTROL_FILES
         | STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES
+        | STEP18D23_SYSTEMD_SCHEDULER_RUNTIME_OBSERVATION_FILES
         | PRODUCTION_DEPLOYMENT_HARDENING_FILES
         | PRODUCTION_CPU_TORCH_BUILD_FILES
         | STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
@@ -3267,6 +3293,8 @@ def assert_protected_hashes(
             "src/app/services.py",
             "02d09d6f6e204183ef67a543222b4e3a4dae993f40041dfb8911397b835be7f7",
         ): frozenset({
+            # Step 18D23 read-only systemd summary integration successor.
+            "c71b2d72933098a01c418e33b7693a25428678d1e37ea598bb8b510ac364cf4f",
             # Step 18D20 bounded scheduler automation control successor.
             "c9ed04d5b2c6a37ce95e3956611418a7892916bc67778dd5b90dfd8e80683f54",
             # Step 18D22 independent per-scheduler automation control successor.
@@ -3286,6 +3314,8 @@ def assert_protected_hashes(
             "src/app/services.py",
             "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74",
         ): frozenset({
+            # Step 18D23 read-only systemd summary integration successor.
+            "c71b2d72933098a01c418e33b7693a25428678d1e37ea598bb8b510ac364cf4f",
             # Step 18D20 bounded scheduler automation control successor.
             "c9ed04d5b2c6a37ce95e3956611418a7892916bc67778dd5b90dfd8e80683f54",
             # Step 18D22 independent per-scheduler automation control successor.

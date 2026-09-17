@@ -40,12 +40,21 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-job_scraper}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-job_scraper_ops}
       REDIS_URL: redis://redis:6379/0
+      JOB_STACK_SCHEDULER_RUNTIME_PROVIDER: systemd_snapshot
+      JOB_STACK_SCHEDULER_RUNTIME_SNAPSHOT_PATH: /app/runtime/scheduler/status.json
+      JOB_STACK_SCHEDULER_RUNTIME_MAX_AGE_SECONDS: "180"
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
       - web_pipeline_runs:/app/tmp/pipeline_runs
       - web_data:/app/data
       - web_outputs:/app/outputs
+      - type: bind
+        source: /var/lib/applylens-scheduler-runtime
+        target: /app/runtime/scheduler
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8000/health"]
       interval: 30s

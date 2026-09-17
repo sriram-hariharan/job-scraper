@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import configparser
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -17,6 +18,17 @@ COMPOSE = ROOT / "docker-compose.prod.yml"
 SYSTEMD = ROOT / "deploy" / "systemd"
 
 
+def _load_systemd_observer_module():
+    spec = importlib.util.spec_from_file_location(
+        "write_systemd_scheduler_runtime_snapshot",
+        ROOT / "deploy" / "write_systemd_scheduler_runtime_snapshot.py",
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
@@ -29,6 +41,20 @@ def test_compose_preserves_images_and_adds_only_current_web_runtime_mounts_and_l
     assert "web_pipeline_runs:/app/tmp/pipeline_runs" in source
     assert "web_data:/app/data" in source
     assert "web_outputs:/app/outputs" in source
+    assert "JOB_STACK_SCHEDULER_RUNTIME_PROVIDER: systemd_snapshot" in source
+    assert "JOB_STACK_SCHEDULER_RUNTIME_SNAPSHOT_PATH: /app/runtime/scheduler/status.json" in source
+    assert 'JOB_STACK_SCHEDULER_RUNTIME_MAX_AGE_SECONDS: "180"' in source
+    assert "source: /var/lib/applylens-scheduler-runtime" in source
+    assert "target: /app/runtime/scheduler" in source
+    assert "read_only: true" in source
+    assert "create_host_path: false" in source
+    for forbidden in (
+        "/var/run/docker.sock",
+        "/run/systemd/private",
+        "/run/dbus/system_bus_socket",
+        "privileged: true",
+    ):
+        assert forbidden not in source
     assert "http://127.0.0.1:8000/health" in source
     assert "curl" in _read(ROOT / "Dockerfile")
 
@@ -473,6 +499,8 @@ EXPECTED_SYSTEMD_INVENTORY = {
     "applylens-postgres-backup.timer",
     "applylens-agent-discovery.service",
     "applylens-agent-discovery.timer",
+    "applylens-scheduler-runtime-observation.service",
+    "applylens-scheduler-runtime-observation.timer",
 }
 
 # Byte-exact ExecStart lines. The timer repair must not alter any service
@@ -565,3 +593,242 @@ def test_runbook_documents_calendar_timer_transition_and_validation():
     assert "Persistent=true" in runbook
     assert "maintenance window" in runbook
     assert "separately authorized" in runbook
+
+
+def test_systemd_runtime_observer_units_are_bounded_and_do_not_start_workloads():
+    service = _read(SYSTEMD / "applylens-scheduler-runtime-observation.service")
+    timer = _read(SYSTEMD / "applylens-scheduler-runtime-observation.timer")
+    assert "Type=oneshot" in service
+    assert "User=deploy" in service
+    assert "StateDirectory=applylens-scheduler-runtime" in service
+    assert "NoNewPrivileges=true" in service
+    assert "ProtectSystem=strict" in service
+    assert (
+        "ExecStart=/usr/bin/python3 /home/deploy/apps/job-scraper/"
+        "deploy/write_systemd_scheduler_runtime_snapshot.py"
+    ) in service
+    assert "docker" not in service.lower()
+    assert "network-online" not in service
+    assert "OnUnitActiveSec=1min" in timer
+    assert "Unit=applylens-scheduler-runtime-observation.service" in timer
+    for workload in (
+        "applylens-live-pipeline.service",
+        "applylens-agent-discovery.service",
+    ):
+        assert workload not in timer
+
+
+def test_systemd_runtime_observer_uses_exact_read_only_calls_and_contract(monkeypatch):
+    module = _load_systemd_observer_module()
+    calls = []
+    real_popen = subprocess.Popen
+
+    def fake_popen(command, **kwargs):
+        calls.append((list(command), kwargs))
+        unit = command[2]
+        if unit.endswith(".timer"):
+            output = (
+                "LoadState=loaded\nActiveState=active\nSubState=waiting\n"
+                "UnitFileState=enabled\n"
+                "NextElapseUSecRealtime=Thu 2026-09-17 04:57:00 UTC\n"
+            )
+        elif "agent-discovery" in unit:
+            output = (
+                "ActiveState=failed\nSubState=failed\nResult=exit-code\n"
+                "ExecMainStatus=1\n"
+            )
+        else:
+            output = (
+                "ActiveState=inactive\nSubState=dead\nResult=success\n"
+                "ExecMainStatus=0\n"
+            )
+        return real_popen(
+            [sys.executable, "-c", f"import os; os.write(1, {output.encode()!r})"],
+            **kwargs,
+        )
+
+    monkeypatch.setattr(module.subprocess, "Popen", fake_popen)
+    payload = module.collect_snapshot()
+
+    assert payload["schema_version"] == module.SCHEMA_VERSION
+    assert payload["runtime_provider"] == "systemd"
+    assert payload["collection_ok"] is True
+    assert [job["job_name"] for job in payload["jobs"]] == [
+        "agent_discovery",
+        "live_pipeline",
+    ]
+    assert len(calls) == 4
+    assert [call[0][2] for call in calls] == [
+        "applylens-agent-discovery.timer",
+        "applylens-agent-discovery.service",
+        "applylens-live-pipeline.timer",
+        "applylens-live-pipeline.service",
+    ]
+    for command, kwargs in calls:
+        assert command[:2] == ["/usr/bin/systemctl", "show"]
+        assert command[3] == "--no-pager"
+        assert command[4].startswith("--property=")
+        assert kwargs["shell"] is False
+        assert kwargs["stdout"] == subprocess.PIPE
+        assert kwargs["stderr"] == subprocess.PIPE
+        assert kwargs["stdin"] == subprocess.DEVNULL
+        assert module.COMMAND_TIMEOUT_SECONDS == 5
+        assert kwargs["env"] == {
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/usr/bin:/bin",
+            "SYSTEMD_COLORS": "0",
+            "SYSTEMD_PAGER": "cat",
+            "TZ": "UTC",
+        }
+    serialized = json.dumps(payload)
+    for forbidden in ("journal", "password", "credential", "DATABASE_URL"):
+        assert forbidden not in serialized
+
+
+def test_systemd_runtime_observer_rejects_unsupported_units_and_bad_output(monkeypatch):
+    module = _load_systemd_observer_module()
+    with pytest.raises(ValueError, match="unsupported systemd unit"):
+        module._systemctl_show("synthetic.service", module.SERVICE_PROPERTIES)
+
+    real_popen = subprocess.Popen
+
+    def oversized_popen(command, **kwargs):
+        return real_popen(
+            [sys.executable, "-c", "import os; os.write(1, b'x' * 1048576)"],
+            **kwargs,
+        )
+
+    monkeypatch.setattr(module.subprocess, "Popen", oversized_popen)
+    with pytest.raises(RuntimeError, match="bounded limit"):
+        module._systemctl_show(
+            "applylens-live-pipeline.service",
+            module.SERVICE_PROPERTIES,
+        )
+
+
+@pytest.mark.parametrize("stdout_size,stderr_size", [(0, 0), (16383, 0), (16384, 0), (8192, 8192), (0, 16384)])
+def test_observer_capture_accepts_combined_byte_limit(monkeypatch, stdout_size, stderr_size):
+    module = _load_systemd_observer_module()
+    real_popen = subprocess.Popen
+    children = []
+
+    def fake_popen(command, **kwargs):
+        child = real_popen(
+            [sys.executable, "-c", f"import os; os.write(1, b'x'*{stdout_size}); os.write(2, b'y'*{stderr_size})"],
+            **kwargs,
+        )
+        children.append(child)
+        return child
+
+    monkeypatch.setattr(module.subprocess, "Popen", fake_popen)
+    code, stdout = module._run_bounded_systemctl([module.SYSTEMCTL, "show"])
+    assert code == 0
+    assert stdout == "x" * stdout_size
+    assert children[0].stdout.closed and children[0].stderr.closed
+    assert children[0].poll() == 0
+
+
+@pytest.mark.parametrize("stdout_size,stderr_size", [(16385, 0), (0, 16385), (8192, 8193), (1048576, 0), (0, 1048576)])
+def test_observer_capture_rejects_while_writer_is_live(monkeypatch, stdout_size, stderr_size):
+    module = _load_systemd_observer_module()
+    real_popen, real_read = subprocess.Popen, os.read
+    children, read_sizes, requested_sizes, live_at_overflow = [], [], [], []
+
+    def fake_popen(command, **kwargs):
+        child = real_popen(
+            [sys.executable, "-c", f"import os,time; os.write(1,b'x'*{stdout_size}); os.write(2,b'y'*{stderr_size}); time.sleep(30)"],
+            **kwargs,
+        )
+        children.append(child)
+        return child
+
+    def tracked_read(fd, size):
+        chunk = real_read(fd, size)
+        # Popen also reads its private startup-error pipe; count only capture.
+        if children and fd in {children[0].stdout.fileno(), children[0].stderr.fileno()}:
+            requested_sizes.append(size)
+            read_sizes.append(len(chunk))
+            if sum(read_sizes) > module.MAX_COMMAND_OUTPUT_BYTES:
+                live_at_overflow.append(children[0].poll() is None)
+        return chunk
+
+    monkeypatch.setattr(module.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(module.os, "read", tracked_read)
+    with pytest.raises(RuntimeError, match="bounded limit"):
+        module._run_bounded_systemctl([module.SYSTEMCTL, "show"])
+    # Only the cap plus one sentinel byte ever reaches the collector, even
+    # when the child attempts a MiB. Overflow is detected before child exit.
+    assert sum(read_sizes) == module.MAX_COMMAND_OUTPUT_BYTES + 1
+    assert max(requested_sizes) <= 4096
+    assert live_at_overflow == [True]
+    assert children[0].poll() is not None
+    assert children[0].stdout.closed and children[0].stderr.closed
+
+
+@pytest.mark.parametrize("ignore_terminate", [False, True])
+def test_observer_timeout_reaps_child_with_bounded_kill_fallback(monkeypatch, ignore_terminate):
+    module = _load_systemd_observer_module()
+    real_popen = subprocess.Popen
+    children, cleanup = [], []
+
+    def fake_popen(command, **kwargs):
+        child = real_popen([sys.executable, "-c", "import time; time.sleep(30)"], **kwargs)
+        terminate, kill, wait = child.terminate, child.kill, child.wait
+
+        def tracked_terminate():
+            cleanup.append("terminate")
+            if not ignore_terminate:
+                terminate()
+
+        def tracked_kill():
+            cleanup.append("kill")
+            kill()
+
+        def tracked_wait(*, timeout):
+            assert timeout <= module.PROCESS_CLEANUP_TIMEOUT_SECONDS
+            return wait(timeout=timeout)
+
+        child.terminate, child.kill, child.wait = tracked_terminate, tracked_kill, tracked_wait
+        children.append(child)
+        return child
+
+    monkeypatch.setattr(module.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(module, "COMMAND_TIMEOUT_SECONDS", 0.1)
+    monkeypatch.setattr(module, "PROCESS_CLEANUP_TIMEOUT_SECONDS", 0.1)
+    with pytest.raises(subprocess.TimeoutExpired):
+        module._run_bounded_systemctl([module.SYSTEMCTL, "show"])
+    assert cleanup == (["terminate", "kill"] if ignore_terminate else ["terminate"])
+    assert children[0].poll() is not None
+    assert children[0].stdout.closed and children[0].stderr.closed
+
+
+def test_systemd_runtime_observer_atomic_write_fsyncs_and_cleans_up(
+    monkeypatch,
+    tmp_path,
+):
+    module = _load_systemd_observer_module()
+    output = tmp_path / "status.json"
+    fsync_calls = []
+    real_fsync = module.os.fsync
+
+    def tracked_fsync(descriptor):
+        fsync_calls.append(descriptor)
+        return real_fsync(descriptor)
+
+    monkeypatch.setattr(module.os, "fsync", tracked_fsync)
+    payload = module.failed_snapshot()
+    module.write_snapshot_atomic(payload, output)
+    assert json.loads(output.read_text(encoding="utf-8")) == payload
+    assert os.stat(output).st_mode & 0o777 == 0o644
+    assert len(fsync_calls) == 2
+    assert not list(tmp_path.glob(".status.json.*.tmp"))
+
+    monkeypatch.setattr(
+        module.os,
+        "replace",
+        lambda *_args: (_ for _ in ()).throw(OSError("replace failed")),
+    )
+    with pytest.raises(OSError, match="replace failed"):
+        module.write_snapshot_atomic(payload, output)
+    assert not list(tmp_path.glob(".status.json.*.tmp"))

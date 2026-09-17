@@ -88,6 +88,9 @@ function payloadWithDiscoveryHistory(): SchedulerSummaryPayload {
 const READY_PAYLOAD: SchedulerSummaryPayload = {
   ok: true,
   limit: 25,
+  runtime_provider: "launchd",
+  runtime_observation_status: "live",
+  runtime_observed_at: "2026-07-20T02:00:00Z",
   contract_health: {
     ok: true,
     checks: { seed_sql_matches_artifact: true, init_sql_matches_artifact: true },
@@ -1083,6 +1086,69 @@ describe("SchedulerHealthDashboard", () => {
     expect(screen.getByText("Launchd runtime inspection is unavailable.")).toBeInTheDocument();
     expect(screen.queryByText("Healthy")).not.toBeInTheDocument();
   });
+
+  it("renders fresh systemd timer truth independently from a failed discovery run", async () => {
+    const systemdPayload: SchedulerSummaryPayload = {
+      ...READY_PAYLOAD,
+      runtime_provider: "systemd",
+      runtime_observation_status: "fresh",
+      runtime_observed_at: "2099-09-16T10:40:00Z",
+      runtime_jobs: READY_PAYLOAD.runtime_jobs?.map((job) => ({
+        ...job,
+        running: false,
+        runtime_state: "idle",
+        expected_next_run_at: job.job_name === "agent_discovery"
+          ? "2099-09-17T04:57:00Z"
+          : "2099-09-16T10:42:00Z",
+        last_run: job.job_name === "agent_discovery"
+          ? { ...job.last_run, status: "failed", return_code: 1 }
+          : job.last_run,
+      })),
+    };
+    const { container } = render(
+      <SchedulerHealthDashboard readSummary={async () => systemdPayload} />,
+    );
+    expect(await screen.findByText("Healthy")).toBeInTheDocument();
+    expect(screen.getByText("Configuration and systemd runtime are healthy.")).toBeInTheDocument();
+    expect(screen.getByText("Systemd runtime")).toBeInTheDocument();
+    const discovery = container.querySelector('[data-job-name="agent_discovery"]') as HTMLElement;
+    expect(within(discovery).getByText("Idle")).toBeInTheDocument();
+    expect(within(discovery).getByText("Armed")).toBeInTheDocument();
+    expect(within(discovery).getByText("failed")).toBeInTheDocument();
+    expect(within(discovery).getByText("1")).toBeInTheDocument();
+    expect(within(discovery).getByText(
+      `EXPECTED NEXT · ${formatExpectedRunDateTime("2099-09-17T04:57:00Z")}`,
+    )).toBeInTheDocument();
+  });
+
+  it.each(["missing", "malformed", "stale"] as const)(
+    "shows unavailable systemd observation for %s state",
+    async (runtimeObservationStatus) => {
+      const unavailablePayload: SchedulerSummaryPayload = {
+        ...READY_PAYLOAD,
+        runtime_provider: "systemd",
+        runtime_observation_status: runtimeObservationStatus,
+        runtime_jobs: READY_PAYLOAD.runtime_jobs?.map((job) => ({
+          ...job,
+          installed: null,
+          loaded: null,
+          enabled: null,
+          armed: null,
+          running: null,
+          runtime_state: "unavailable",
+          expected_next_run_at: null,
+        })),
+      };
+      render(<SchedulerHealthDashboard readSummary={async () => unavailablePayload} />);
+      expect(await screen.findByText("Unavailable", { selector: ".scheduler-overview-primary h2" })).toBeInTheDocument();
+      expect(screen.getByText(
+        runtimeObservationStatus === "stale"
+          ? "Systemd runtime observation is stale."
+          : "Systemd runtime observation is unavailable.",
+      )).toBeInTheDocument();
+      expect(screen.getByText("Systemd runtime · observation unavailable")).toBeInTheDocument();
+    },
+  );
 
   it("uses the shared app-page-header contract while keeping the Admin only badge and last-refreshed text", async () => {
     const { container } = render(<SchedulerHealthDashboard readSummary={async () => READY_PAYLOAD} />);

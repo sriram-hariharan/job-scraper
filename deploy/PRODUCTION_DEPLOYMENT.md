@@ -116,14 +116,46 @@ reviewed release commit and record all preflight output in the operator log.
    python3 deploy/install_fernet_key.py --env-file .env.production --apply
    ```
 
-9. Recreate only the web service. Do not remove volumes and do not recreate a
+9. Install and start the read-only scheduler-runtime observer before recreating
+   `web`. The observer uses fixed `systemctl show` calls for the two scheduler
+   timers and services, writes no host control state, and creates the bind-mount
+   source with the expected `deploy` ownership through `StateDirectory`.
+
+   ```bash
+   sudo install -o root -g root -m 0644 deploy/systemd/applylens-scheduler-runtime-observation.service deploy/systemd/applylens-scheduler-runtime-observation.timer /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemd-analyze verify /etc/systemd/system/applylens-scheduler-runtime-observation.service /etc/systemd/system/applylens-scheduler-runtime-observation.timer
+   sudo systemctl start applylens-scheduler-runtime-observation.service
+   systemctl show applylens-scheduler-runtime-observation.service --property=ActiveState,SubState,Result,ExecMainStatus
+   test -d /var/lib/applylens-scheduler-runtime
+   test -f /var/lib/applylens-scheduler-runtime/status.json
+   python3 -m json.tool /var/lib/applylens-scheduler-runtime/status.json >/dev/null
+   ```
+
+   The snapshot must have schema
+   `applylens.scheduler-runtime-observation.v1`, provider `systemd`, exactly the
+   `agent_discovery` and `live_pipeline` jobs, `collection_ok: true`, and a UTC
+   `generated_at` no older than 180 seconds and no more than 30 seconds ahead.
+   Validate the snapshot with the deployed application's snapshot validator;
+   require `runtime_observation_status == "fresh"` before continuing.
+   Do not create the bind source by starting Compose: production Compose has
+   `create_host_path: false` so a missing or incorrectly owned path fails closed.
+
+   Only after validating the snapshot, enable the observer timer:
+
+   ```bash
+   sudo systemctl enable --now applylens-scheduler-runtime-observation.timer
+   systemctl show applylens-scheduler-runtime-observation.timer --property=ActiveState,SubState,LastTriggerUSec,NextElapseUSecRealtime
+   ```
+
+10. Recreate only the web service. Do not remove volumes and do not recreate a
    healthy database or Redis service unnecessarily.
 
    ```bash
    docker compose --env-file .env.production -f docker-compose.prod.yml up -d --no-deps web
    ```
 
-10. Check web liveness, then independently check PostgreSQL and Redis.
+11. Check web liveness, then independently check PostgreSQL and Redis.
 
     ```bash
     docker compose --env-file .env.production -f docker-compose.prod.yml ps
@@ -132,7 +164,7 @@ reviewed release commit and record all preflight output in the operator log.
     docker compose --env-file .env.production -f docker-compose.prod.yml exec -T redis redis-cli ping
     ```
 
-11. Transition the three reviewed systemd timers to their calendar-only UTC
+12. Transition the three reviewed workload systemd timers to their calendar-only UTC
     schedules. Capture the existing state first, and perform the transition in
     a window that ends before the next intended calendar occurrence.
 
@@ -209,7 +241,7 @@ reviewed release commit and record all preflight output in the operator log.
     separately authorized, with the real ApplyLens timers stopped or inert
     temporary probe units used instead.
 
-12. Perform authenticated user smoke checks through `applylensjobs.com`, inspect
+13. Perform authenticated user smoke checks through `applylensjobs.com`, inspect
     Caddy/web logs, confirm volume mounts, and verify timer state. Do not trigger
     live providers merely as a deployment smoke test.
 
@@ -221,6 +253,14 @@ captured SHA or rebuild the captured image, and recreate only `web` with the
 same explicit Compose arguments. The production schema upgrade is additive and
 is designed to remain backward-compatible; do not drop tables or restore the
 database as a routine code rollback.
+
+For a scheduler-runtime-observation-only rollback, recreate the captured old
+web image and Compose definition first. The old web ignores the observation.
+Then disable only `applylens-scheduler-runtime-observation.timer`; do not stop or
+disable the live-pipeline, Agent Discovery, or PostgreSQL backup timers merely
+to remove read-only runtime observation. A new web binary left in place after
+the observer is disabled will safely report the observation as stale after 180
+seconds.
 
 If data restoration is genuinely required, stop writers, preserve the failed
 database, and use a separately reviewed manual restore procedure against the

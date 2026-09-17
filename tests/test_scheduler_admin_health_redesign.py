@@ -206,8 +206,12 @@ def test_scheduler_summary_combines_bounded_runtime_with_postgres_latest_runs(
     monkeypatch.setattr(services, "_load_scheduler_history_rows", lambda *_args: [])
     monkeypatch.setattr(
         services,
-        "get_scheduler_runtime_jobs_status",
-        lambda: [
+        "get_scheduler_runtime_status",
+        lambda: {
+            "runtime_provider": "launchd",
+            "runtime_observation_status": "live",
+            "runtime_observed_at": "2026-08-16T02:00:00Z",
+            "jobs": [
             {
                 "job_name": "agent_discovery",
                 "description": "Discovery",
@@ -230,7 +234,8 @@ def test_scheduler_summary_combines_bounded_runtime_with_postgres_latest_runs(
                 "running": None,
                 "runtime_state": "unavailable",
             },
-        ],
+            ],
+        },
     )
 
     payload = services.scheduler_operator_summary_payload(limit=25)
@@ -247,6 +252,8 @@ def test_scheduler_summary_combines_bounded_runtime_with_postgres_latest_runs(
     assert payload["runtime_jobs"][1]["expected_next_run_at"] == (
         "2026-08-16T08:00:00+00:00"
     )
+    assert payload["runtime_provider"] == "launchd"
+    assert payload["runtime_observation_status"] == "live"
     assert payload["latest_scheduled_runs_by_job"] == latest_scheduled_runs
     serialized = json.dumps(payload)
     for forbidden in (
@@ -321,11 +328,16 @@ def test_scheduler_expected_next_run_uses_only_postgres_last_run(monkeypatch) ->
     )
     monkeypatch.setattr(
         services,
-        "get_scheduler_runtime_jobs_status",
-        lambda: [
-            {"job_name": "agent_discovery", "cadence_seconds": 86400},
-            {"job_name": "live_pipeline", "cadence_seconds": 21600},
-        ],
+        "get_scheduler_runtime_status",
+        lambda: {
+            "runtime_provider": "launchd",
+            "runtime_observation_status": "live",
+            "runtime_observed_at": "2026-08-16T02:00:00Z",
+            "jobs": [
+                {"job_name": "agent_discovery", "cadence_seconds": 86400},
+                {"job_name": "live_pipeline", "cadence_seconds": 21600},
+            ],
+        },
     )
 
     payload = services.scheduler_operator_summary_payload(limit=25)
@@ -338,6 +350,85 @@ def test_scheduler_expected_next_run_uses_only_postgres_last_run(monkeypatch) ->
     assert payload["runtime_jobs"][0]["expected_next_run_at"] is None
     assert payload["runtime_jobs"][1]["last_run"]["started_at"] == "malformed"
     assert payload["runtime_jobs"][1]["expected_next_run_at"] is None
+
+
+def test_systemd_summary_preserves_authoritative_next_run_and_postgres_result(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        services,
+        "scheduler_contract_health_payload",
+        lambda: {"all_checks_pass": True},
+    )
+    monkeypatch.setattr(
+        services,
+        "read_scheduler_automation_control",
+        lambda **_kwargs: FAKE_SUMMARY_PAYLOAD["automation_control"],
+    )
+    failed_run = {
+        "job_name": "agent_discovery",
+        "status": "failed",
+        "return_code": 1,
+        "started_at": "2026-09-16T04:57:08Z",
+    }
+    monkeypatch.setattr(
+        services,
+        "scheduler_postgres_status_payload",
+        lambda **_kwargs: {
+            "history_jsonl_row_count": 1,
+            "history_postgres_row_count": 1,
+            "history_count_matches_jsonl": True,
+            "postgres_command_text": "psql [DATABASE_URL_REDACTED]",
+            "postgres": {
+                "latest_runs_by_job": [failed_run],
+                "latest_scheduled_runs_by_job": [failed_run],
+                "recent_runs": [failed_run],
+            },
+        },
+    )
+    monkeypatch.setattr(services, "_load_scheduler_history_rows", lambda *_args: [])
+    monkeypatch.setattr(
+        services,
+        "get_scheduler_runtime_status",
+        lambda: {
+            "runtime_provider": "systemd",
+            "runtime_observation_status": "fresh",
+            "runtime_observed_at": "2026-09-16T10:40:00Z",
+            "jobs": [
+                {
+                    "job_name": "agent_discovery",
+                    "cadence_seconds": 86400,
+                    "installed": True,
+                    "loaded": True,
+                    "enabled": True,
+                    "armed": True,
+                    "running": False,
+                    "runtime_state": "idle",
+                    "expected_next_run_at": "2026-09-17T04:57:00Z",
+                },
+                {
+                    "job_name": "live_pipeline",
+                    "cadence_seconds": 21600,
+                    "installed": True,
+                    "loaded": True,
+                    "enabled": True,
+                    "armed": True,
+                    "running": False,
+                    "runtime_state": "idle",
+                    "expected_next_run_at": "2026-09-16T10:42:00Z",
+                },
+            ],
+        },
+    )
+
+    payload = services.scheduler_operator_summary_payload(limit=25)
+
+    assert payload["runtime_provider"] == "systemd"
+    assert payload["runtime_observation_status"] == "fresh"
+    discovery = payload["runtime_jobs"][0]
+    assert discovery["expected_next_run_at"] == "2026-09-17T04:57:00Z"
+    assert discovery["last_run"]["status"] == "failed"
+    assert discovery["last_run"]["return_code"] == 1
 
 
 def test_non_admin_receives_existing_admin_forbidden_api_response(monkeypatch) -> None:

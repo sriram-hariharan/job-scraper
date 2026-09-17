@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import importlib
+import json
 import plistlib
 import re
 import subprocess
 import sys
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from types import ModuleType, SimpleNamespace
 
 import pytest
@@ -452,6 +454,278 @@ def test_scheduler_runtime_enabled_state_is_unknown_when_inspection_unavailable(
     assert runtime["armed"] is None
     assert runtime["running"] is None
     assert runtime["runtime_state"] == "unavailable"
+
+
+def _systemd_snapshot(*, generated_at=None, collection_ok=True):
+    generated_at = generated_at or datetime.now(timezone.utc).isoformat().replace(
+        "+00:00", "Z"
+    )
+    return {
+        "schema_version": scheduler.SYSTEMD_RUNTIME_SCHEMA_VERSION,
+        "generated_at": generated_at,
+        "runtime_provider": "systemd",
+        "collection_ok": collection_ok,
+        "jobs": [
+            {
+                "job_name": "agent_discovery",
+                "timer": {
+                    "unit_name": "applylens-agent-discovery.timer",
+                    "load_state": "loaded",
+                    "active_state": "active",
+                    "sub_state": "waiting",
+                    "unit_file_state": "enabled",
+                    "expected_next_run_at": "2026-09-17T04:57:00Z",
+                },
+                "service": {
+                    "unit_name": "applylens-agent-discovery.service",
+                    "active_state": "failed",
+                    "sub_state": "failed",
+                    "result": "exit-code",
+                    "exec_main_status": 1,
+                },
+            },
+            {
+                "job_name": "live_pipeline",
+                "timer": {
+                    "unit_name": "applylens-live-pipeline.timer",
+                    "load_state": "loaded",
+                    "active_state": "active",
+                    "sub_state": "waiting",
+                    "unit_file_state": "enabled",
+                    "expected_next_run_at": "2026-09-16T10:42:00Z",
+                },
+                "service": {
+                    "unit_name": "applylens-live-pipeline.service",
+                    "active_state": "inactive",
+                    "sub_state": "dead",
+                    "result": "success",
+                    "exec_main_status": 0,
+                },
+            },
+        ],
+    }
+
+
+def _read_systemd_snapshot(tmp_path, payload, *, now=None):
+    path = tmp_path / "status.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return scheduler._systemd_snapshot_runtime_status(
+        snapshot_path=path,
+        max_age_seconds=180,
+        now=now,
+    )
+
+
+def test_fresh_systemd_snapshot_preserves_oneshot_and_prior_failure_semantics(tmp_path):
+    now = datetime(2026, 9, 16, 10, 40, tzinfo=timezone.utc)
+    payload = _systemd_snapshot(generated_at="2026-09-16T10:40:00Z")
+
+    status = _read_systemd_snapshot(tmp_path, payload, now=now)
+
+    assert status["runtime_provider"] == "systemd"
+    assert status["runtime_observation_status"] == "fresh"
+    jobs = {job["job_name"]: job for job in status["jobs"]}
+    discovery = jobs["agent_discovery"]
+    assert discovery["installed"] is True
+    assert discovery["loaded"] is True
+    assert discovery["enabled"] is True
+    assert discovery["armed"] is True
+    assert discovery["running"] is False
+    assert discovery["runtime_state"] == "idle"
+    assert discovery["prior_service_result"] == "exit-code"
+    assert discovery["prior_service_exit_code"] == 1
+    assert discovery["expected_next_run_at"] == "2026-09-17T04:57:00Z"
+    live = jobs["live_pipeline"]
+    assert live["armed"] is True
+    assert live["running"] is False
+    assert live["runtime_state"] == "idle"
+    assert live["expected_next_run_at"] == "2026-09-16T10:42:00Z"
+
+
+@pytest.mark.parametrize("active_state", ["active", "activating"])
+def test_systemd_active_or_activating_service_is_running(tmp_path, active_state):
+    now = datetime(2026, 9, 16, 10, 40, tzinfo=timezone.utc)
+    payload = _systemd_snapshot(generated_at="2026-09-16T10:40:00Z")
+    payload["jobs"][1]["service"].update(
+        {"active_state": active_state, "sub_state": "running"}
+    )
+    live = _read_systemd_snapshot(tmp_path, payload, now=now)["jobs"][1]
+    assert live["running"] is True
+    assert live["runtime_state"] == "running"
+
+
+@pytest.mark.parametrize(
+    "active_state,sub_state,running",
+    [
+        ("inactive", "dead", False), ("failed", "failed", False),
+        ("active", "running", True), ("active", "exited", True),
+        ("activating", "start-pre", True), ("activating", "start", True),
+        ("activating", "start-post", True), ("activating", "running", True),
+    ],
+)
+def test_systemd_service_supported_pairs_preserve_armed_timer(tmp_path, active_state, sub_state, running):
+    payload = _systemd_snapshot()
+    payload["jobs"][0]["service"].update(active_state=active_state, sub_state=sub_state)
+    status = _read_systemd_snapshot(tmp_path, payload)
+    assert status["runtime_observation_status"] == "fresh"
+    job = status["jobs"][0]
+    assert job["armed"] is True
+    assert job["running"] is running
+    assert job["runtime_state"] == ("running" if running else "idle")
+    assert job["prior_service_result"] == "exit-code"
+    assert job["prior_service_exit_code"] == 1
+
+
+@pytest.mark.parametrize(
+    "active_state,sub_state",
+    [
+        ("deactivating", "failed"), ("active", "stop-sigterm"),
+        ("inactive", "running"), ("failed", "dead"),
+        ("unknown", "dead"), ("active", "unknown"),
+        ("active", "start"), ("activating", "exited"),
+        ("deactivating", "stop"),
+    ],
+)
+def test_systemd_service_unsupported_pairs_fail_closed(tmp_path, active_state, sub_state):
+    payload = _systemd_snapshot()
+    payload["jobs"][0]["service"].update(active_state=active_state, sub_state=sub_state)
+    status = _read_systemd_snapshot(tmp_path, payload)
+    assert status["runtime_observation_status"] == "malformed"
+    assert all(job["runtime_state"] == "unavailable" for job in status["jobs"])
+    assert all(job["armed"] is None for job in status["jobs"])
+
+
+def test_explicit_systemd_provider_missing_snapshot_never_calls_launchd(monkeypatch, tmp_path):
+    monkeypatch.setenv(scheduler.SCHEDULER_RUNTIME_PROVIDER_ENV, "systemd_snapshot")
+    monkeypatch.setenv(
+        scheduler.SCHEDULER_RUNTIME_SNAPSHOT_PATH_ENV,
+        str(tmp_path / "missing.json"),
+    )
+    monkeypatch.setattr(
+        scheduler,
+        "get_scheduler_launchd_agent_status",
+        lambda *_args, **_kwargs: pytest.fail("systemd provider must not fall back"),
+    )
+
+    status = scheduler.get_scheduler_runtime_status()
+
+    assert status["runtime_provider"] == "systemd"
+    assert status["runtime_observation_status"] == "missing"
+    assert all(job["runtime_state"] == "unavailable" for job in status["jobs"])
+    assert all(job["expected_next_run_at"] is None for job in status["jobs"])
+
+
+@pytest.mark.parametrize(
+    ("payload_mutation", "expected_status"),
+    [
+        (lambda payload: payload.update(schema_version="wrong"), "malformed"),
+        (lambda payload: payload.update(runtime_provider="launchd"), "malformed"),
+        (lambda payload: payload.update(collection_ok=False), "collection_error"),
+        (lambda payload: payload.update(collection_ok=1), "malformed"),
+        (lambda payload: payload.update(generated_at=20260916), "malformed"),
+        (lambda payload: payload.update(generated_at="0001-01-01T00:00:00+01:00"), "malformed"),
+        (lambda payload: payload["jobs"].pop(), "malformed"),
+        (lambda payload: payload["jobs"].append(dict(payload["jobs"][0])), "malformed"),
+        (lambda payload: payload["jobs"].__setitem__(1, dict(payload["jobs"][0])), "malformed"),
+        (lambda payload: payload["jobs"][0].update(job_name="extra_job"), "malformed"),
+        (lambda payload: payload["jobs"][0]["timer"].update(load_state=True), "malformed"),
+        (lambda payload: payload["jobs"][0]["timer"].update(active_state="inactive"), "malformed"),
+        (lambda payload: payload["jobs"][0]["timer"].update(load_state="not-found", unit_file_state=""), "malformed"),
+        (lambda payload: payload["jobs"][1]["service"].update(sub_state="running"), "malformed"),
+        (lambda payload: payload["jobs"][1]["service"].update(active_state="active"), "malformed"),
+        (
+            lambda payload: payload["jobs"][0]["timer"].update(
+                load_state="not-found", unit_file_state="enabled"
+            ),
+            "malformed",
+        ),
+        (
+            lambda payload: payload["jobs"][0]["timer"].update(
+                expected_next_run_at=None
+            ),
+            "malformed",
+        ),
+    ],
+)
+def test_systemd_snapshot_contract_violations_fail_closed(
+    tmp_path,
+    payload_mutation,
+    expected_status,
+):
+    now = datetime(2026, 9, 16, 10, 40, tzinfo=timezone.utc)
+    payload = _systemd_snapshot(generated_at="2026-09-16T10:40:00Z")
+    payload_mutation(payload)
+    status = _read_systemd_snapshot(tmp_path, payload, now=now)
+    assert status["runtime_observation_status"] == expected_status
+    assert all(job["runtime_state"] == "unavailable" for job in status["jobs"])
+
+
+def test_malformed_stale_future_and_oversized_systemd_snapshots_fail_closed(tmp_path):
+    path = tmp_path / "status.json"
+    path.write_text("{malformed", encoding="utf-8")
+    malformed = scheduler._systemd_snapshot_runtime_status(
+        snapshot_path=path,
+        max_age_seconds=180,
+        now=datetime(2026, 9, 16, 10, 40, tzinfo=timezone.utc),
+    )
+    assert malformed["runtime_observation_status"] == "malformed"
+
+    stale_payload = _systemd_snapshot(generated_at="2026-09-16T10:36:59Z")
+    stale = _read_systemd_snapshot(
+        tmp_path,
+        stale_payload,
+        now=datetime(2026, 9, 16, 10, 40, tzinfo=timezone.utc),
+    )
+    assert stale["runtime_observation_status"] == "stale"
+
+    future_payload = _systemd_snapshot(generated_at="2026-09-16T10:40:31Z")
+    future = _read_systemd_snapshot(
+        tmp_path,
+        future_payload,
+        now=datetime(2026, 9, 16, 10, 40, tzinfo=timezone.utc),
+    )
+    assert future["runtime_observation_status"] == "future"
+
+    path.write_bytes(b"x" * (scheduler.MAX_SCHEDULER_RUNTIME_SNAPSHOT_BYTES + 1))
+    oversized = scheduler._systemd_snapshot_runtime_status(
+        snapshot_path=path,
+        max_age_seconds=180,
+    )
+    assert oversized["runtime_observation_status"] == "malformed"
+
+
+def test_systemd_snapshot_rejects_symlink(tmp_path):
+    target = tmp_path / "target.json"
+    target.write_text(json.dumps(_systemd_snapshot()), encoding="utf-8")
+    link = tmp_path / "status.json"
+    link.symlink_to(target)
+    status = scheduler._systemd_snapshot_runtime_status(
+        snapshot_path=link,
+        max_age_seconds=180,
+    )
+    assert status["runtime_observation_status"] == "malformed"
+
+
+def test_deeply_nested_snapshot_fails_closed(tmp_path):
+    path = tmp_path / "status.json"
+    path.write_text("[" * 2000 + "]" * 2000, encoding="utf-8")
+    status = scheduler._systemd_snapshot_runtime_status(
+        snapshot_path=path, max_age_seconds=180,
+    )
+    assert status["runtime_observation_status"] == "malformed"
+    assert all(job["runtime_state"] == "unavailable" for job in status["jobs"])
+
+
+def test_explicit_absent_timer_is_not_installed(tmp_path):
+    payload = _systemd_snapshot()
+    payload["jobs"][1]["timer"].update(
+        load_state="not-found", active_state="inactive", sub_state="dead",
+        unit_file_state="", expected_next_run_at=None,
+    )
+    status = _read_systemd_snapshot(tmp_path, payload)
+    assert status["runtime_observation_status"] == "fresh"
+    assert status["jobs"][1]["runtime_state"] == "not_installed"
+    assert status["jobs"][1]["armed"] is False
 
 
 def test_required_postgres_history_failure_is_visible(monkeypatch, tmp_path):

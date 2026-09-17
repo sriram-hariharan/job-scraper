@@ -30,6 +30,7 @@ from tests.support.phase_guard_registry import (
     STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES,
     STEP18D20_ADMIN_SCHEDULER_AUTOMATION_CONTROL_FILES,
     STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES,
+    STEP18D23_SYSTEMD_SCHEDULER_RUNTIME_OBSERVATION_FILES,
     JOBVITE_LOCATION_FRESHNESS_FILES,
     JOBVITE_STANDALONE_DISCOVERY_FILES,
     PHASE2D_A_INDEPENDENT_SENIORITY_POLICY_FILES,
@@ -960,6 +961,23 @@ def test_no_changed_runtime_file_introduces_forbidden_automation_markers():
         }
         assert len(step18d22_runtime_files) == 10
         for path in sorted(step18d22_runtime_files):
+            content = path.read_text(encoding="utf-8")
+            for marker in FORBIDDEN_RUNTIME_MARKERS:
+                assert marker not in content, f"{path}: {marker}"
+        return
+    if set(_changed_files()) == STEP18D23_SYSTEMD_SCHEDULER_RUNTIME_OBSERVATION_FILES:
+        step18d23_runtime_suffixes = {
+            ".py", ".js", ".ts", ".tsx", ".service", ".timer", ".yml"
+        }
+        step18d23_runtime_files = {
+            ROOT / relative_path
+            for relative_path in STEP18D23_SYSTEMD_SCHEDULER_RUNTIME_OBSERVATION_FILES
+            if Path(relative_path).suffix in step18d23_runtime_suffixes
+            and not relative_path.startswith("tests/")
+            and ".test." not in Path(relative_path).name
+        }
+        assert len(step18d23_runtime_files) == 9
+        for path in sorted(step18d23_runtime_files):
             content = path.read_text(encoding="utf-8")
             for marker in FORBIDDEN_RUNTIME_MARKERS:
                 assert marker not in content, f"{path}: {marker}"

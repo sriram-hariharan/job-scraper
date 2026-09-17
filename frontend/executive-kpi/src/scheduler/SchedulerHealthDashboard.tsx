@@ -137,6 +137,26 @@ function truthLabel(value: boolean | null) {
   return "Unknown";
 }
 
+function runtimeProviderLabel(payload: SchedulerSummaryPayload | null) {
+  if (payload?.runtime_provider === "systemd") return "Systemd";
+  if (payload?.runtime_provider === "launchd") return "Launchd";
+  return "Scheduler";
+}
+
+function unavailableRuntimeExplanation(payload: SchedulerSummaryPayload) {
+  const provider = runtimeProviderLabel(payload);
+  if (payload.runtime_provider === "systemd") {
+    if (payload.runtime_observation_status === "stale") {
+      return "Systemd runtime observation is stale.";
+    }
+    return "Systemd runtime observation is unavailable.";
+  }
+  if (payload.runtime_provider === "launchd") {
+    return "Launchd runtime inspection is unavailable.";
+  }
+  return `${provider} runtime inspection is unavailable.`;
+}
+
 function manualDiscoveryEligibility(job: SchedulerRuntimeJob) {
   if (job.manual_run_active === true) {
     return { enabled: false, reason: "Agent Discovery is already running." };
@@ -406,14 +426,15 @@ function OverviewPanel({
   if (payload && !contractOk) issues.push("configuration integrity");
   if (payload && runtimeTruthKnown && !runtimeHealthy) issues.push("scheduler runtime");
 
+  const providerLabel = runtimeProviderLabel(payload);
   const explanation = loading
     ? "Loading scheduler status..."
     : !payload
       ? "Scheduler status is unavailable."
       : overallHealthy
-        ? "Configuration and launchd runtime are healthy."
+        ? `Configuration and ${providerLabel.toLowerCase()} runtime are healthy.`
         : overallUnavailable
-          ? "Launchd runtime inspection is unavailable."
+          ? unavailableRuntimeExplanation(payload)
           : `Needs attention: ${issues.join(" and ")}.`;
 
   const metrics = [
@@ -474,11 +495,16 @@ function RuntimeJobsPanel({
   manualDiscoveryTriggerRef: React.RefObject<HTMLButtonElement>;
 }) {
   const jobs = payload?.runtime_jobs || [];
+  const providerLabel = runtimeProviderLabel(payload);
+  const observationUnavailable = payload?.runtime_provider === "systemd"
+    && payload.runtime_observation_status !== "fresh";
   return (
     <section className="scheduler-runtime-section" aria-label="Scheduler runtime jobs">
       <div className="scheduler-runtime-section-heading">
         <div>
-          <p className="scheduler-overview-kicker">Launchd runtime</p>
+          <p className="scheduler-overview-kicker">
+            {`${providerLabel} runtime${observationUnavailable ? " · observation unavailable" : ""}`}
+          </p>
           <h2>Scheduled jobs</h2>
         </div>
         <span>{loading ? "Inspecting runtime..." : `${jobs.length} external jobs`}</span>
@@ -1483,7 +1509,7 @@ function DiagnosticsModal({
           <div>
             <h3 id="schedulerDiagnosticsModalTitle">Scheduler diagnostics</h3>
             <div className="subtext" id="schedulerDiagnosticsModalDescription">
-              Read-only launchd runtime, configuration integrity, and Postgres history.
+              Read-only {runtimeProviderLabel(payload)} runtime, configuration integrity, and Postgres history.
             </div>
           </div>
           <button

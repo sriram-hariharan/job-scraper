@@ -26318,6 +26318,13 @@ function qR(e) {
 	return e === !0 ? "Yes" : e === !1 ? "No" : "Unknown";
 }
 function JR(e) {
+	return (e == null ? void 0 : e.runtime_provider) === "systemd" ? "Systemd" : (e == null ? void 0 : e.runtime_provider) === "launchd" ? "Launchd" : "Scheduler";
+}
+function YR(e) {
+	let t = JR(e);
+	return e.runtime_provider === "systemd" ? e.runtime_observation_status === "stale" ? "Systemd runtime observation is stale." : "Systemd runtime observation is unavailable." : e.runtime_provider === "launchd" ? "Launchd runtime inspection is unavailable." : `${t} runtime inspection is unavailable.`;
+}
+function XR(e) {
 	if (e.manual_run_active === !0) return {
 		enabled: !1,
 		reason: "Agent Discovery is already running."
@@ -26332,7 +26339,7 @@ function JR(e) {
 		reason: t ? "Run Agent Discovery once without changing its schedule." : "Agent Discovery is unavailable until its scheduler is installed, loaded, enabled, armed, and idle."
 	};
 }
-function YR({ onRefresh: e, refreshing: t, lastRefreshedAt: n, automationControl: r, automationSubmitting: i, onAutomationAction: a, automationControlTriggerRef: o }) {
+function ZR({ onRefresh: e, refreshing: t, lastRefreshedAt: n, automationControl: r, automationSubmitting: i, onAutomationAction: a, automationControlTriggerRef: o }) {
 	return /* @__PURE__ */ (0, q.jsxs)("header", {
 		className: "scheduler-health-header app-page-header",
 		children: [/* @__PURE__ */ (0, q.jsxs)("div", {
@@ -26385,7 +26392,7 @@ function YR({ onRefresh: e, refreshing: t, lastRefreshedAt: n, automationControl
 		})]
 	});
 }
-function XR({ open: e, automationControl: t, runtimeJobs: n, submittingJob: r, actionError: i, onClose: a, onAction: o, triggerRef: s }) {
+function QR({ open: e, automationControl: t, runtimeJobs: n, submittingJob: r, actionError: i, onClose: a, onAction: o, triggerRef: s }) {
 	let c = (0, C.useRef)(null), l = (0, C.useRef)(null), u = (0, C.useRef)(r);
 	return u.current = r, (0, C.useEffect)(() => {
 		if (!e) return;
@@ -26527,11 +26534,11 @@ function XR({ open: e, automationControl: t, runtimeJobs: n, submittingJob: r, a
 		})
 	}) : null;
 }
-function ZR({ payload: e, loading: t, onOpenDiagnostics: n, diagnosticsTriggerRef: r }) {
+function $R({ payload: e, loading: t, onOpenDiagnostics: n, diagnosticsTriggerRef: r }) {
 	var i, a, o, s, c, l, u, d, f;
 	let p = !!(!(e == null || (i = e.contract_health) == null) && i.all_checks_pass), m = (e == null ? void 0 : e.runtime_jobs) || [], h = m.length === 2 && m.every((e) => e.installed !== null && e.loaded !== null && e.armed !== null && e.running !== null && e.runtime_state !== "unavailable"), g = h && m.every((e) => e.installed === !0 && e.loaded === !0 && e.armed === !0 && (e.runtime_state === "idle" || e.runtime_state === "running")), _ = !!e && p && g, v = !!e && p && !h, y = [];
 	e && !p && y.push("configuration integrity"), e && h && !g && y.push("scheduler runtime");
-	let b = t ? "Loading scheduler status..." : e ? _ ? "Configuration and launchd runtime are healthy." : v ? "Launchd runtime inspection is unavailable." : `Needs attention: ${y.join(" and ")}.` : "Scheduler status is unavailable.", x = [
+	let b = JR(e), x = t ? "Loading scheduler status..." : e ? _ ? `Configuration and ${b.toLowerCase()} runtime are healthy.` : v ? YR(e) : `Needs attention: ${y.join(" and ")}.` : "Scheduler status is unavailable.", S = [
 		{
 			label: "Active jobs",
 			value: t || !e ? "-" : String((a = (o = e.postgres_summary) == null ? void 0 : o.active_job_count) == null ? 0 : a)
@@ -26567,7 +26574,7 @@ function ZR({ payload: e, loading: t, onOpenDiagnostics: n, diagnosticsTriggerRe
 					/* @__PURE__ */ (0, q.jsx)("h2", { children: t ? "Checking..." : _ ? "Healthy" : v || !e ? "Unavailable" : "Attention" }),
 					/* @__PURE__ */ (0, q.jsx)("p", {
 						className: "scheduler-overview-explanation",
-						children: b
+						children: x
 					})
 				] })]
 			}),
@@ -26577,7 +26584,7 @@ function ZR({ payload: e, loading: t, onOpenDiagnostics: n, diagnosticsTriggerRe
 			}),
 			/* @__PURE__ */ (0, q.jsx)("div", {
 				className: "scheduler-overview-metrics",
-				children: x.map((e) => /* @__PURE__ */ (0, q.jsxs)("div", {
+				children: S.map((e) => /* @__PURE__ */ (0, q.jsxs)("div", {
 					className: "scheduler-overview-metric",
 					children: [/* @__PURE__ */ (0, q.jsx)("span", { children: e.label }), /* @__PURE__ */ (0, q.jsx)("strong", { children: e.value })]
 				}, e.label))
@@ -26595,7 +26602,7 @@ function ZR({ payload: e, loading: t, onOpenDiagnostics: n, diagnosticsTriggerRe
 		]
 	});
 }
-function QR({ payload: e, loading: t, manualSubmitting: n, onRequestManualDiscovery: r, manualDiscoveryTriggerRef: i }) {
+function ez({ payload: e, loading: t, manualSubmitting: n, onRequestManualDiscovery: r, manualDiscoveryTriggerRef: i }) {
 	let a = (e == null ? void 0 : e.runtime_jobs) || [];
 	return /* @__PURE__ */ (0, q.jsxs)("section", {
 		className: "scheduler-runtime-section",
@@ -26604,12 +26611,12 @@ function QR({ payload: e, loading: t, manualSubmitting: n, onRequestManualDiscov
 			className: "scheduler-runtime-section-heading",
 			children: [/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("p", {
 				className: "scheduler-overview-kicker",
-				children: "Launchd runtime"
+				children: `${JR(e)} runtime${(e == null ? void 0 : e.runtime_provider) === "systemd" && e.runtime_observation_status !== "fresh" ? " · observation unavailable" : ""}`
 			}), /* @__PURE__ */ (0, q.jsx)("h2", { children: "Scheduled jobs" })] }), /* @__PURE__ */ (0, q.jsx)("span", { children: t ? "Inspecting runtime..." : `${a.length} external jobs` })]
 		}), a.length ? /* @__PURE__ */ (0, q.jsx)("div", {
 			className: "scheduler-runtime-grid",
 			children: a.map((e) => {
-				let t = e.last_run, a = Z(t == null ? void 0 : t.status) || "Never run", o = KR(e), s = FR(e, new Date(Date.now())), c = JR(e);
+				let t = e.last_run, a = Z(t == null ? void 0 : t.status) || "Never run", o = KR(e), s = FR(e, new Date(Date.now())), c = XR(e);
 				return /* @__PURE__ */ (0, q.jsxs)("article", {
 					className: `scheduler-runtime-card ${o === "failed" || RR(a) ? "is-attention" : ""}`,
 					"data-job-name": e.job_name,
@@ -26684,7 +26691,7 @@ function QR({ payload: e, loading: t, manualSubmitting: n, onRequestManualDiscov
 		})]
 	});
 }
-function $R(e, t) {
+function tz(e, t) {
 	return /* @__PURE__ */ (0, q.jsxs)("div", {
 		className: "scheduler-run-history-job",
 		children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: OR(e.job_name, "Unnamed job") }), Z(e.job_name) === "agent_discovery" && Z(e.run_id) ? /* @__PURE__ */ (0, q.jsxs)("button", {
@@ -26699,7 +26706,7 @@ function $R(e, t) {
 		}) : null]
 	});
 }
-function ez(e) {
+function nz(e) {
 	return [
 		{
 			id: "job_name",
@@ -26707,7 +26714,7 @@ function ez(e) {
 			accessorFn: (e) => Z(e.job_name),
 			size: 220,
 			enableSorting: !1,
-			cell: ({ row: t }) => $R(t.original, e)
+			cell: ({ row: t }) => tz(t.original, e)
 		},
 		{
 			id: "status",
@@ -26758,7 +26765,7 @@ function ez(e) {
 		}
 	];
 }
-function tz(e) {
+function rz(e) {
 	return [
 		{
 			id: "job_name",
@@ -26766,7 +26773,7 @@ function tz(e) {
 			accessorFn: (e) => Z(e.job_name),
 			size: 200,
 			enableSorting: !1,
-			cell: ({ row: t }) => $R(t.original, e)
+			cell: ({ row: t }) => tz(t.original, e)
 		},
 		{
 			id: "status",
@@ -26831,7 +26838,7 @@ function tz(e) {
 		}
 	];
 }
-function nz({ status: e, errorMessage: t, payload: n, onRetry: r, readDiscoverySummary: i }) {
+function iz({ status: e, errorMessage: t, payload: n, onRetry: r, readDiscoverySummary: i }) {
 	let [a, o] = (0, C.useState)("job_status"), [s, c] = (0, C.useState)([]), [l, u] = (0, C.useState)([]), [d, f] = (0, C.useState)(null), [p, m] = (0, C.useState)(null), h = (0, C.useRef)(null), g = (0, C.useRef)(0), _ = (0, C.useMemo)(() => BR((n == null ? void 0 : n.latest_runs_by_job) || []), [n]), v = (0, C.useMemo)(() => (n == null ? void 0 : n.recent_postgres_runs) || [], [n]), y = (0, C.useMemo)(() => Array.from(new Set(v.map((e) => Z(e.job_name)).filter(Boolean))).sort().map((e) => ({
 		value: e,
 		label: e
@@ -26860,7 +26867,7 @@ function nz({ status: e, errorMessage: t, payload: n, onRetry: r, readDiscoveryS
 		});
 	}, [i]), w = (0, C.useCallback)(() => {
 		g.current += 1, f(null), m(null);
-	}, []), T = (0, C.useMemo)(() => ez(S), [S]), E = (0, C.useMemo)(() => tz(S), [S]), [D, O] = (0, C.useState)([{
+	}, []), T = (0, C.useMemo)(() => nz(S), [S]), E = (0, C.useMemo)(() => rz(S), [S]), [D, O] = (0, C.useState)([{
 		id: "started_at",
 		desc: !0
 	}]), k = $I({
@@ -26940,7 +26947,7 @@ function nz({ status: e, errorMessage: t, payload: n, onRetry: r, readDiscoveryS
 		onPageChange: () => void 0,
 		onRetry: r,
 		fillAvailableWidth: !0
-	}), /* @__PURE__ */ (0, q.jsx)(sz, {
+	}), /* @__PURE__ */ (0, q.jsx)(lz, {
 		run: d,
 		state: p,
 		onClose: w,
@@ -26992,14 +26999,14 @@ function nz({ status: e, errorMessage: t, payload: n, onRetry: r, readDiscoveryS
 		onPageChange: () => void 0,
 		onRetry: r,
 		fillAvailableWidth: !0
-	}), /* @__PURE__ */ (0, q.jsx)(sz, {
+	}), /* @__PURE__ */ (0, q.jsx)(lz, {
 		run: d,
 		state: p,
 		onClose: w,
 		triggerRef: h
 	})] });
 }
-var rz = {
+var az = {
 	domain_discovered: "Domain detection",
 	career_discovered: "Career pages",
 	network_discovered: "ATS network",
@@ -27008,20 +27015,20 @@ var rz = {
 	github_discovered: "GitHub",
 	sitemap_discovered: "Sitemap"
 };
-function iz(e) {
+function oz(e) {
 	let t = Z(e);
 	return !t || Number.isNaN(new Date(t).getTime()) ? "—" : NR(t);
 }
-function az(e, t) {
+function sz(e, t) {
 	let n = new Date(Z(e)), r = new Date(Z(t)).getTime() - n.getTime();
 	if (!Number.isFinite(r) || r < 0) return "—";
 	let i = Math.floor(r / 1e3), a = Math.floor(i / 60), o = i % 60;
 	return a ? `${a}m ${o}s` : `${o}s`;
 }
-function oz(e) {
+function cz(e) {
 	return typeof e == "number" && Number.isFinite(e) ? e.toLocaleString() : "—";
 }
-function sz({ run: e, state: t, onClose: n, triggerRef: r }) {
+function lz({ run: e, state: t, onClose: n, triggerRef: r }) {
 	var i;
 	let a = (0, C.useRef)(null), o = (0, C.useRef)(null);
 	if ((0, C.useEffect)(() => {
@@ -27051,7 +27058,7 @@ function sz({ run: e, state: t, onClose: n, triggerRef: r }) {
 		e,
 		r
 	]), !e || !t) return null;
-	let s = t.kind === "ready" ? t.summary : null, c = Object.entries((s == null ? void 0 : s.discovery.run_unique_discovered_by_ats) || {}), l = Object.entries((s == null ? void 0 : s.company_discovery.candidate_counts_by_ats) || {}), u = Object.entries((s == null ? void 0 : s.discovery.sources) || {}), d = c.length ? c.reduce((e, [, t]) => e + t, 0) : null, f = s == null ? void 0 : s.company_discovery.queries_failed, p = (s == null ? void 0 : s.trigger) === "manual" ? "Manual" : (s == null ? void 0 : s.trigger) === "scheduled" ? "Scheduled" : "Unknown", m = iz(s == null ? void 0 : s.started_at), h = iz(s == null ? void 0 : s.finished_at);
+	let s = t.kind === "ready" ? t.summary : null, c = Object.entries((s == null ? void 0 : s.discovery.run_unique_discovered_by_ats) || {}), l = Object.entries((s == null ? void 0 : s.company_discovery.candidate_counts_by_ats) || {}), u = Object.entries((s == null ? void 0 : s.discovery.sources) || {}), d = c.length ? c.reduce((e, [, t]) => e + t, 0) : null, f = s == null ? void 0 : s.company_discovery.queries_failed, p = (s == null ? void 0 : s.trigger) === "manual" ? "Manual" : (s == null ? void 0 : s.trigger) === "scheduled" ? "Scheduled" : "Unknown", m = oz(s == null ? void 0 : s.started_at), h = oz(s == null ? void 0 : s.finished_at);
 	return /* @__PURE__ */ (0, q.jsx)("div", {
 		className: "modal-backdrop scheduler-discovery-summary-backdrop",
 		onClick: (e) => {
@@ -27085,7 +27092,7 @@ function sz({ run: e, state: t, onClose: n, triggerRef: r }) {
 								"aria-hidden": "true",
 								children: "•"
 							}),
-							/* @__PURE__ */ (0, q.jsx)("span", { children: iz((s == null ? void 0 : s.started_at) || e.started_at) })
+							/* @__PURE__ */ (0, q.jsx)("span", { children: oz((s == null ? void 0 : s.started_at) || e.started_at) })
 						]
 					})
 				] }), /* @__PURE__ */ (0, q.jsxs)("div", {
@@ -27192,7 +27199,7 @@ function sz({ run: e, state: t, onClose: n, triggerRef: r }) {
 										})
 									}),
 									/* @__PURE__ */ (0, q.jsx)("span", { children: e }),
-									/* @__PURE__ */ (0, q.jsx)("strong", { children: oz(t) })
+									/* @__PURE__ */ (0, q.jsx)("strong", { children: cz(t) })
 								]
 							}, e))
 						}),
@@ -27240,7 +27247,7 @@ function sz({ run: e, state: t, onClose: n, triggerRef: r }) {
 										return /* @__PURE__ */ (0, q.jsxs)("div", {
 											className: `scheduler-discovery-source-row is-accent-${n % 4}`,
 											children: [
-												/* @__PURE__ */ (0, q.jsx)("span", { children: rz[e] || "Discovery source" }),
+												/* @__PURE__ */ (0, q.jsx)("span", { children: az[e] || "Discovery source" }),
 												/* @__PURE__ */ (0, q.jsx)("small", {
 													title: r,
 													children: r
@@ -27326,7 +27333,7 @@ function sz({ run: e, state: t, onClose: n, triggerRef: r }) {
 									title: h === "—" ? void 0 : h,
 									children: h
 								})] }),
-								/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Duration" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: az(s.started_at, s.finished_at) })] }),
+								/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Duration" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: sz(s.started_at, s.finished_at) })] }),
 								/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Return code" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: (i = s.return_code) == null ? "—" : i })] }),
 								/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Run ID" }), /* @__PURE__ */ (0, q.jsx)("strong", {
 									className: "scheduler-run-id-cell",
@@ -27341,7 +27348,7 @@ function sz({ run: e, state: t, onClose: n, triggerRef: r }) {
 		})
 	});
 }
-function cz({ open: e, confirming: t, onClose: n, onConfirm: r, triggerRef: i }) {
+function uz({ open: e, confirming: t, onClose: n, onConfirm: r, triggerRef: i }) {
 	let a = (0, C.useRef)(null), o = (0, C.useRef)(null);
 	return (0, C.useEffect)(() => {
 		if (!e) return;
@@ -27410,7 +27417,7 @@ function cz({ open: e, confirming: t, onClose: n, onConfirm: r, triggerRef: i })
 		})
 	}) : null;
 }
-function lz({ icon: e, label: t, ok: n, explanation: r }) {
+function dz({ icon: e, label: t, ok: n, explanation: r }) {
 	return /* @__PURE__ */ (0, q.jsxs)("li", {
 		className: `scheduler-config-row ${n ? "is-ok" : "is-issue"}`,
 		children: [
@@ -27433,7 +27440,7 @@ function lz({ icon: e, label: t, ok: n, explanation: r }) {
 		]
 	});
 }
-function uz({ rows: e, emptyMessage: t }) {
+function fz({ rows: e, emptyMessage: t }) {
 	return e.length ? /* @__PURE__ */ (0, q.jsx)("div", {
 		className: "scheduler-diagnostics-table-viewport",
 		children: /* @__PURE__ */ (0, q.jsxs)("table", { children: [/* @__PURE__ */ (0, q.jsx)("thead", { children: /* @__PURE__ */ (0, q.jsxs)("tr", { children: [
@@ -27474,7 +27481,7 @@ function uz({ rows: e, emptyMessage: t }) {
 		children: t
 	});
 }
-function dz({ open: e, payload: t, onClose: n, triggerRef: r }) {
+function pz({ open: e, payload: t, onClose: n, triggerRef: r }) {
 	var i, a;
 	let [o, s] = (0, C.useState)("runtime"), c = (0, C.useRef)(null), l = (0, C.useRef)(null);
 	if ((0, C.useEffect)(() => {
@@ -27524,10 +27531,14 @@ function dz({ open: e, payload: t, onClose: n, triggerRef: r }) {
 					children: [/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("h3", {
 						id: "schedulerDiagnosticsModalTitle",
 						children: "Scheduler diagnostics"
-					}), /* @__PURE__ */ (0, q.jsx)("div", {
+					}), /* @__PURE__ */ (0, q.jsxs)("div", {
 						className: "subtext",
 						id: "schedulerDiagnosticsModalDescription",
-						children: "Read-only launchd runtime, configuration integrity, and Postgres history."
+						children: [
+							"Read-only ",
+							JR(t),
+							" runtime, configuration integrity, and Postgres history."
+						]
 					})] }), /* @__PURE__ */ (0, q.jsx)("button", {
 						type: "button",
 						className: "ghost-btn scheduler-diagnostics-close-btn",
@@ -27581,19 +27592,19 @@ function dz({ open: e, payload: t, onClose: n, triggerRef: r }) {
 						o === "configuration" ? /* @__PURE__ */ (0, q.jsxs)("ul", {
 							className: "scheduler-config-list",
 							children: [
-								/* @__PURE__ */ (0, q.jsx)(lz, {
+								/* @__PURE__ */ (0, q.jsx)(dz, {
 									icon: d ? Ae : Me,
 									label: "Overall configuration integrity",
 									ok: d,
 									explanation: d ? "All configuration checks pass." : "One or more configuration checks failed."
 								}),
-								/* @__PURE__ */ (0, q.jsx)(lz, {
+								/* @__PURE__ */ (0, q.jsx)(dz, {
 									icon: u.seed_sql_matches_artifact ? ne : re,
 									label: "Seed SQL artifact match",
 									ok: !!u.seed_sql_matches_artifact,
 									explanation: "Generated seed SQL matches the committed artifact."
 								}),
-								/* @__PURE__ */ (0, q.jsx)(lz, {
+								/* @__PURE__ */ (0, q.jsx)(dz, {
 									icon: u.init_sql_matches_artifact ? ne : re,
 									label: "Init SQL artifact match",
 									ok: !!u.init_sql_matches_artifact,
@@ -27607,7 +27618,7 @@ function dz({ open: e, payload: t, onClose: n, triggerRef: r }) {
 								size: 13,
 								"aria-hidden": "true"
 							}), " Recent scheduler runs currently mirrored into Postgres."]
-						}), /* @__PURE__ */ (0, q.jsx)(uz, {
+						}), /* @__PURE__ */ (0, q.jsx)(fz, {
 							rows: (t == null ? void 0 : t.recent_postgres_runs) || [],
 							emptyMessage: "No Postgres run rows recorded yet."
 						})] }) : null
@@ -27617,7 +27628,7 @@ function dz({ open: e, payload: t, onClose: n, triggerRef: r }) {
 		})
 	});
 }
-function fz({ readSummary: e = wR, runDiscoveryNow: t = TR, readDiscoverySummary: n = DR, updateAutomationControl: r = ER }) {
+function mz({ readSummary: e = wR, runDiscoveryNow: t = TR, readDiscoverySummary: n = DR, updateAutomationControl: r = ER }) {
 	var i;
 	let [a, o] = (0, C.useState)({ kind: "loading" }), [s, c] = (0, C.useState)(!1), [l, u] = (0, C.useState)(!1), [d, f] = (0, C.useState)(!1), [p, m] = (0, C.useState)(!1), [h, g] = (0, C.useState)(""), [_, v] = (0, C.useState)(!1), [y, b] = (0, C.useState)(null), [x, S] = (0, C.useState)(""), w = (0, C.useRef)(null), T = (0, C.useRef)(null), E = (0, C.useRef)(null), D = (0, C.useRef)(!1), O = (0, C.useCallback)(async (t = !1) => {
 		t && c(!0);
@@ -27695,7 +27706,7 @@ function fz({ readSummary: e = wR, runDiscoveryNow: t = TR, readDiscoverySummary
 		className: "scheduler-health-dashboard",
 		"aria-busy": a.kind === "loading",
 		children: [
-			/* @__PURE__ */ (0, q.jsx)(YR, {
+			/* @__PURE__ */ (0, q.jsx)(ZR, {
 				onRefresh: () => void O(!0),
 				refreshing: s,
 				lastRefreshedAt: te,
@@ -27727,40 +27738,40 @@ function fz({ readSummary: e = wR, runDiscoveryNow: t = TR, readDiscoverySummary
 					"aria-hidden": "true"
 				}), /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: (I == null ? void 0 : I.aggregate_state) === "paused" ? "Automatic starts for both schedulers are paused." : `${ae[0]} automatic starts are paused.` }), /* @__PURE__ */ (0, q.jsxs)("span", { children: [(I == null ? void 0 : I.aggregate_state) === "partially_paused" ? `${UR(ie[0] === "live_pipeline" ? "agent_discovery" : "live_pipeline")} remains automatic. ` : "Live Pipeline and Agent Discovery will not start automatically. ", "Already-running work continues. Permitted manual admin actions remain available. PostgreSQL backups are unaffected."] })] })]
 			}) : null,
-			/* @__PURE__ */ (0, q.jsx)(ZR, {
+			/* @__PURE__ */ (0, q.jsx)($R, {
 				payload: P,
 				loading: a.kind === "loading",
 				onOpenDiagnostics: () => u(!0),
 				diagnosticsTriggerRef: w
 			}),
-			/* @__PURE__ */ (0, q.jsx)(QR, {
+			/* @__PURE__ */ (0, q.jsx)(ez, {
 				payload: P,
 				loading: a.kind === "loading",
 				manualSubmitting: p,
 				onRequestManualDiscovery: j,
 				manualDiscoveryTriggerRef: T
 			}),
-			/* @__PURE__ */ (0, q.jsx)(nz, {
+			/* @__PURE__ */ (0, q.jsx)(iz, {
 				status: F,
 				errorMessage: ee,
 				payload: P,
 				onRetry: () => void O(!0),
 				readDiscoverySummary: n
 			}),
-			/* @__PURE__ */ (0, q.jsx)(dz, {
+			/* @__PURE__ */ (0, q.jsx)(pz, {
 				open: l,
 				payload: P,
 				onClose: () => u(!1),
 				triggerRef: w
 			}),
-			/* @__PURE__ */ (0, q.jsx)(cz, {
+			/* @__PURE__ */ (0, q.jsx)(uz, {
 				open: d,
 				confirming: p,
 				onClose: A,
 				onConfirm: () => void k(),
 				triggerRef: T
 			}),
-			/* @__PURE__ */ (0, q.jsx)(XR, {
+			/* @__PURE__ */ (0, q.jsx)(QR, {
 				open: _,
 				automationControl: I,
 				runtimeJobs: (P == null ? void 0 : P.runtime_jobs) || [],
@@ -27775,7 +27786,7 @@ function fz({ readSummary: e = wR, runDiscoveryNow: t = TR, readDiscoverySummary
 }
 //#endregion
 //#region src/diagnostics/AdvancedDiagnosticsDashboard.tsx
-var pz = {
+var hz = {
 	mode: "empty",
 	savedScanOptions: [],
 	selectedScanId: "",
@@ -27785,7 +27796,7 @@ var pz = {
 		scanWorkspace: "/scan-workspace"
 	},
 	diagnosticState: {}
-}, mz = [
+}, gz = [
 	"live_tailoring_suggestion",
 	"live_exact_resume_change_proposal",
 	"manual_exact_change_acceptance",
@@ -27798,7 +27809,7 @@ var pz = {
 	"handoff_audit_trail",
 	"safety_boundary_summary",
 	"workflow_readiness_checkpoint"
-], hz = Object.fromEntries([
+], _z = Object.fromEntries([
 	{
 		id: "advancedDiagnosticsSectionGeneration",
 		title: "Generation diagnostics",
@@ -27913,7 +27924,7 @@ var pz = {
 			}
 		]
 	}
-].flatMap((e) => e.stages).map((e) => [e.stage, e])), gz = [
+].flatMap((e) => e.stages).map((e) => [e.stage, e])), vz = [
 	{
 		id: "scanWorkspaceJdLlmReadback",
 		key: "jd_llm_extraction_readback",
@@ -27930,23 +27941,23 @@ var pz = {
 		label: "Production readiness checkpoint"
 	}
 ];
-function _z(e) {
+function yz(e) {
 	return e && typeof e == "object" && !Array.isArray(e) ? e : {};
 }
 function Q(e) {
 	return typeof e == "string" ? e.trim() : "";
 }
-function vz(e) {
+function bz(e) {
 	return Array.isArray(e) ? e.map(Q).filter(Boolean) : [];
 }
-function yz(e) {
-	let t = _z(e);
+function xz(e) {
+	let t = yz(e);
 	return t.validation_status === "valid" && t.fallback_used === !1;
 }
-function bz(e) {
+function Sz(e) {
 	return e.replace(/_/g, " ").replace(/\b\w/g, (e) => e.toUpperCase());
 }
-function xz(e) {
+function Cz(e) {
 	let t = Q(e);
 	if (!t) return ["Not recorded"];
 	let n = new Date(t);
@@ -27954,7 +27965,7 @@ function xz(e) {
 	let r = n.toISOString();
 	return [r.slice(0, 10), `${r.slice(11, 19)} UTC`];
 }
-function Sz(e) {
+function wz(e) {
 	let t = Q(e.safe_error_summary);
 	if (t) return t.slice(0, 240);
 	let n = Array.isArray(e.validation_errors) ? e.validation_errors.filter((e) => typeof e == "string") : [];
@@ -27973,12 +27984,12 @@ function Sz(e) {
 		"workflow_readiness_checkpoint_id"
 	]) {
 		let n = Q(e[t]);
-		if (n) return `${bz(t)}: ${n}`;
-		if (typeof e[t] == "number") return `${bz(t)}: ${String(e[t])}`;
+		if (n) return `${Sz(t)}: ${n}`;
+		if (typeof e[t] == "number") return `${Sz(t)}: ${String(e[t])}`;
 	}
-	return yz(e) ? "Validated readback recorded." : "A bounded diagnostic result was recorded.";
+	return xz(e) ? "Validated readback recorded." : "A bounded diagnostic result was recorded.";
 }
-function Cz(e) {
+function Tz(e) {
 	let t = [], n = (n, r, i = (e) => e) => {
 		let a = Q(e[n]).slice(0, 240);
 		a && t.push({
@@ -27991,13 +28002,13 @@ function Cz(e) {
 			value: e[n] ? "Yes" : "No"
 		});
 	};
-	return n("provider", "Provider", bz), n("model", "Model"), n("failure_category", "Failure", bz), n("exception_class", "Exception"), typeof e.http_status == "number" && Number.isInteger(e.http_status) && t.push({
+	return n("provider", "Provider", Sz), n("model", "Model"), n("failure_category", "Failure", Sz), n("exception_class", "Exception"), typeof e.http_status == "number" && Number.isInteger(e.http_status) && t.push({
 		label: "HTTP",
 		value: String(e.http_status)
-	}), n("provider_error_type", "Error type", bz), n("provider_error_code", "Error code", bz), n("provider_error_param", "Parameter"), n("invalid_request_reason", "Invalid request", bz), n("schema_keyword", "Schema keyword"), r("provider_call_attempted", "Provider call attempted"), r("retry_performed", "Retry performed"), r("provider_fallback_performed", "Provider fallback performed"), t;
+	}), n("provider_error_type", "Error type", Sz), n("provider_error_code", "Error code", Sz), n("provider_error_param", "Parameter"), n("invalid_request_reason", "Invalid request", Sz), n("schema_keyword", "Schema keyword"), r("provider_call_attempted", "Provider call attempted"), r("retry_performed", "Retry performed"), r("provider_fallback_performed", "Provider fallback performed"), t;
 }
-function wz(e) {
-	if (yz(e)) return {
+function Ez(e) {
+	if (xz(e)) return {
 		status: "Completed",
 		tone: "success"
 	};
@@ -28005,7 +28016,7 @@ function wz(e) {
 		status: "Waiting",
 		tone: "waiting"
 	};
-	let t = vz(e.validation_errors);
+	let t = bz(e.validation_errors);
 	return Q(e.validation_status) === "disabled" || Q(e.fallback_reason) === "feature_flag_disabled" || t.includes("feature_flag_disabled") ? {
 		status: "Disabled",
 		tone: "muted"
@@ -28017,27 +28028,27 @@ function wz(e) {
 		tone: "error"
 	};
 }
-function Tz(e, t) {
-	let n = hz[t].readbackKey, r = _z(_z(e.readbacks)[n]);
-	return Object.keys(r).length ? r : _z(_z(e.validated_readbacks)[n]);
+function Dz(e, t) {
+	let n = _z[t].readbackKey, r = yz(yz(e.readbacks)[n]);
+	return Object.keys(r).length ? r : yz(yz(e.validated_readbacks)[n]);
 }
-function Ez(e) {
-	let t = Tz(e, "live_tailoring_suggestion");
-	return yz(t) && Array.isArray(t.suggestions_preview) ? t.suggestions_preview.map(_z) : [];
-}
-function Dz(e) {
-	let t = Tz(e, "live_exact_resume_change_proposal");
-	if (!yz(t)) return [];
-	let n = t.proposed_changes_preview;
-	return Array.isArray(n) ? n.map(_z).filter((e) => Q(e.proposal_id)) : [];
-}
-function Oz(e, t) {
-	return yz(Tz(e, t));
+function Oz(e) {
+	let t = Dz(e, "live_tailoring_suggestion");
+	return xz(t) && Array.isArray(t.suggestions_preview) ? t.suggestions_preview.map(yz) : [];
 }
 function kz(e) {
-	return Q(Tz(e, "verified_artifact_operator_decision").operator_decision_value) === "accepted";
+	let t = Dz(e, "live_exact_resume_change_proposal");
+	if (!xz(t)) return [];
+	let n = t.proposed_changes_preview;
+	return Array.isArray(n) ? n.map(yz).filter((e) => Q(e.proposal_id)) : [];
 }
-var Az = {
+function Az(e, t) {
+	return xz(Dz(e, t));
+}
+function jz(e) {
+	return Q(Dz(e, "verified_artifact_operator_decision").operator_decision_value) === "accepted";
+}
+var Mz = {
 	live_tailoring_suggestion: "scanWorkspaceTailoringLlmReadback",
 	live_exact_resume_change_proposal: "scanWorkspaceExactChangeLlmReadback",
 	manual_exact_change_acceptance: "scanWorkspaceManualExactChangeAcceptanceReadback",
@@ -28051,26 +28062,26 @@ var Az = {
 	safety_boundary_summary: "scanWorkspaceSafetyBoundarySummaryReadback",
 	workflow_readiness_checkpoint: "scanWorkspaceWorkflowReadinessCheckpointReadback"
 };
-function jz(e, t, n, r, i, a) {
-	let o = (e) => Oz(t, e) || n.includes(e);
-	if (e === "manual_exact_change_acceptance" && !Oz(t, "live_exact_resume_change_proposal")) return "Generate and validate exact proposals first.";
+function Nz(e, t, n, r, i, a) {
+	let o = (e) => Az(t, e) || n.includes(e);
+	if (e === "manual_exact_change_acceptance" && !Az(t, "live_exact_resume_change_proposal")) return "Generate and validate exact proposals first.";
 	if (e === "manual_exact_change_acceptance" && r.length === 0) return "Select at least one proposal below.";
 	if (e === "guarded_resume_copy_artifact" && !o("manual_exact_change_acceptance") && !a.approved_change_plan_id) return "Complete exact-change acceptance first.";
 	if (e === "guarded_resume_copy_artifact_verification" && !o("guarded_resume_copy_artifact") && !a.guarded_resume_copy_artifact_id) return "Create a guarded artifact first.";
 	if (e === "verified_artifact_operator_review_packet" && !o("guarded_resume_copy_artifact_verification") && !a.verified_artifact_operator_review_artifact_id) return "Verify the guarded artifact first.";
 	if (e === "verified_artifact_operator_decision") {
-		if (!Oz(t, "verified_artifact_operator_review_packet") && !a.verified_artifact_operator_decision_packet_id) return "Create and validate the review packet first.";
+		if (!Az(t, "verified_artifact_operator_review_packet") && !a.verified_artifact_operator_decision_packet_id) return "Create and validate the review packet first.";
 		if (!i) return "Choose an explicit operator decision below.";
 	}
-	if (e === "application_readiness_packet" && !kz(t)) return "A validated accepted operator decision is required.";
-	let s = mz.indexOf(e);
+	if (e === "application_readiness_packet" && !jz(t)) return "A validated accepted operator decision is required.";
+	let s = gz.indexOf(e);
 	if (s >= 8) {
-		let e = mz[s - 1];
-		if (!o(e)) return `Complete ${bz(e)} first.`;
+		let e = gz[s - 1];
+		if (!o(e)) return `Complete ${Sz(e)} first.`;
 	}
 	return "";
 }
-function Mz() {
+function Pz() {
 	return /* @__PURE__ */ (0, q.jsx)("header", {
 		className: "advanced-diagnostics-header app-page-header",
 		children: /* @__PURE__ */ (0, q.jsxs)("div", {
@@ -28105,7 +28116,7 @@ function Mz() {
 		})
 	});
 }
-function Nz({ options: e, hrefs: t, navigate: n }) {
+function Fz({ options: e, hrefs: t, navigate: n }) {
 	let [r, i] = (0, C.useState)([]), a = (0, C.useMemo)(() => e.map((e) => ({
 		value: e.scanId,
 		label: e.secondary ? `${e.primary} — ${e.secondary}` : e.primary
@@ -28141,7 +28152,7 @@ function Nz({ options: e, hrefs: t, navigate: n }) {
 		]
 	});
 }
-function Pz({ hrefs: e }) {
+function Iz({ hrefs: e }) {
 	return /* @__PURE__ */ (0, q.jsxs)("section", {
 		className: "advanced-diagnostics-card advanced-diagnostics-empty-card",
 		children: [
@@ -28163,7 +28174,7 @@ function Pz({ hrefs: e }) {
 		]
 	});
 }
-function Fz({ hrefs: e }) {
+function Lz({ hrefs: e }) {
 	return /* @__PURE__ */ (0, q.jsxs)("section", {
 		className: "advanced-diagnostics-card advanced-diagnostics-invalid-card",
 		children: [
@@ -28185,7 +28196,7 @@ function Fz({ hrefs: e }) {
 		]
 	});
 }
-var Iz = [
+var Rz = [
 	{
 		label: "Analyze",
 		stages: ["live_tailoring_suggestion", "live_exact_resume_change_proposal"]
@@ -28203,26 +28214,26 @@ var Iz = [
 		stages: ["workflow_readiness_checkpoint"]
 	}
 ];
-function Lz(e, t) {
-	return t === 0 ? Oz(e, "live_exact_resume_change_proposal") : Iz[t].stages.every((t) => Oz(e, t));
+function zz(e, t) {
+	return t === 0 ? Az(e, "live_exact_resume_change_proposal") : Rz[t].stages.every((t) => Az(e, t));
 }
-function Rz(e) {
-	let t = Tz(e, "live_tailoring_suggestion");
-	if (Oz(e, "live_tailoring_suggestion") || !Object.keys(t).length) return !1;
-	let n = wz(t);
+function Bz(e) {
+	let t = Dz(e, "live_tailoring_suggestion");
+	if (Az(e, "live_tailoring_suggestion") || !Object.keys(t).length) return !1;
+	let n = Ez(t);
 	return n.status !== "Waiting" && n.status !== "Disabled";
 }
-function zz(e, t) {
-	return t === 0 && Lz(e, 0) && Rz(e);
+function Vz(e, t) {
+	return t === 0 && zz(e, 0) && Bz(e);
 }
-function Bz(e, t) {
-	return t === 0 ? !0 : t === 1 ? Oz(e, "live_exact_resume_change_proposal") : t === 2 ? Oz(e, "manual_exact_change_acceptance") : Oz(e, "guarded_resume_copy_artifact_verification");
+function Hz(e, t) {
+	return t === 0 ? !0 : t === 1 ? Az(e, "live_exact_resume_change_proposal") : t === 2 ? Az(e, "manual_exact_change_acceptance") : Az(e, "guarded_resume_copy_artifact_verification");
 }
-function Vz(e) {
-	return Lz(e, 0) ? Lz(e, 1) ? Lz(e, 2) ? 3 : 2 : 1 : 0;
+function Uz(e) {
+	return zz(e, 0) ? zz(e, 1) ? zz(e, 2) ? 3 : 2 : 1 : 0;
 }
-function Hz({ context: e, hrefs: t, state: n, activeStep: r, onStepChange: i, onTechnicalDetails: a }) {
-	let o = Iz.filter((e, t) => Lz(n, t)).length, s = r < Vz(n), c = Lz(n, 3);
+function Wz({ context: e, hrefs: t, state: n, activeStep: r, onStepChange: i, onTechnicalDetails: a }) {
+	let o = Rz.filter((e, t) => zz(n, t)).length, s = r < Uz(n), c = zz(n, 3);
 	return /* @__PURE__ */ (0, q.jsxs)("section", {
 		className: "advanced-diagnostics-wizard-header",
 		"aria-label": "Scan diagnostic workflow",
@@ -28269,14 +28280,14 @@ function Hz({ context: e, hrefs: t, state: n, activeStep: r, onStepChange: i, on
 			}),
 			/* @__PURE__ */ (0, q.jsxs)("div", {
 				className: "advanced-diagnostics-wizard-progress",
-				children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: s ? `Viewing: ${Iz[r].label}` : c ? "Workflow complete" : `Stage ${r + 1} of 4` }), /* @__PURE__ */ (0, q.jsxs)("span", { children: [o, " of 4 workflow stages complete"] })]
+				children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: s ? `Viewing: ${Rz[r].label}` : c ? "Workflow complete" : `Stage ${r + 1} of 4` }), /* @__PURE__ */ (0, q.jsxs)("span", { children: [o, " of 4 workflow stages complete"] })]
 			}),
 			/* @__PURE__ */ (0, q.jsx)("nav", {
 				"aria-label": "Workflow stages",
 				children: /* @__PURE__ */ (0, q.jsx)("ol", {
 					className: "advanced-diagnostics-stepper",
-					children: Iz.map((e, t) => {
-						let a = t, o = Lz(n, a), s = r === a, c = Bz(n, a), l = zz(n, a), u = s && o, d = l ? "Needs attention" : c ? o ? "Completed" : s ? "Current stage" : "Available" : "Locked";
+					children: Rz.map((e, t) => {
+						let a = t, o = zz(n, a), s = r === a, c = Hz(n, a), l = Vz(n, a), u = s && o, d = l ? "Needs attention" : c ? o ? "Completed" : s ? "Current stage" : "Available" : "Locked";
 						return /* @__PURE__ */ (0, q.jsx)("li", {
 							"data-state": l ? "attention" : c ? o ? "completed" : s ? "active" : "available" : "locked",
 							"data-viewing": u ? "true" : void 0,
@@ -28313,25 +28324,25 @@ function Hz({ context: e, hrefs: t, state: n, activeStep: r, onStepChange: i, on
 		]
 	});
 }
-function Uz({ state: e, stage: t }) {
-	let n = Tz(e, t);
-	if (t === "live_tailoring_suggestion" && Rz(e)) return /* @__PURE__ */ (0, q.jsx)("span", {
+function Gz({ state: e, stage: t }) {
+	let n = Dz(e, t);
+	if (t === "live_tailoring_suggestion" && Bz(e)) return /* @__PURE__ */ (0, q.jsx)("span", {
 		className: "advanced-diagnostics-badge advanced-diagnostics-badge--attention",
 		children: "Needs attention"
 	});
-	let r = Oz(e, t) ? {
+	let r = Az(e, t) ? {
 		status: "Completed",
 		tone: "success"
-	} : wz(n);
+	} : Ez(n);
 	return /* @__PURE__ */ (0, q.jsx)("span", {
 		className: `advanced-diagnostics-badge advanced-diagnostics-badge--${r.tone}`,
 		children: r.status
 	});
 }
-function Wz({ state: e }) {
-	let t = Ez(e), n = _z(_z(e.readbacks).live_tailoring_suggestion_readback), r = Tz(e, "live_tailoring_suggestion"), i = Array.isArray(r.unsupported_claim_risks) ? r.unsupported_claim_risks.map(_z) : [];
-	if (!Oz(e, "live_tailoring_suggestion")) {
-		let e = wz(n);
+function Kz({ state: e }) {
+	let t = Oz(e), n = yz(yz(e.readbacks).live_tailoring_suggestion_readback), r = Dz(e, "live_tailoring_suggestion"), i = Array.isArray(r.unsupported_claim_risks) ? r.unsupported_claim_risks.map(yz) : [];
+	if (!Az(e, "live_tailoring_suggestion")) {
+		let e = Ez(n);
 		return /* @__PURE__ */ (0, q.jsx)("p", {
 			className: `advanced-diagnostics-analysis-empty ${e.status === "Failed" || e.status === "Needs attention" ? "is-attention" : `is-${e.tone}`}`,
 			children: e.status === "Failed" || e.status === "Needs attention" ? "The AI provider could not return a valid structured result for the latest analysis." : "Run tailoring analysis to see recommendations."
@@ -28340,14 +28351,14 @@ function Wz({ state: e }) {
 	return t.length ? /* @__PURE__ */ (0, q.jsxs)(q.Fragment, { children: [/* @__PURE__ */ (0, q.jsx)("div", {
 		className: "advanced-diagnostics-recommendation-list",
 		children: t.map((e, t) => {
-			let n = Q(e.suggestion_type) || (e.patch_ready ? "patch_ready" : "guidance_only"), r = Array.isArray(e.jd_signal_links) ? e.jd_signal_links.map(_z) : [], i = vz(e.evidence_spans), a = vz(e.risk_flags);
+			let n = Q(e.suggestion_type) || (e.patch_ready ? "patch_ready" : "guidance_only"), r = Array.isArray(e.jd_signal_links) ? e.jd_signal_links.map(yz) : [], i = bz(e.evidence_spans), a = bz(e.risk_flags);
 			return /* @__PURE__ */ (0, q.jsxs)("article", {
 				className: "advanced-diagnostics-recommendation",
 				"data-kind": n,
 				children: [
 					/* @__PURE__ */ (0, q.jsxs)("div", {
 						className: "advanced-diagnostics-recommendation-heading",
-						children: [/* @__PURE__ */ (0, q.jsx)("span", { children: n === "patch_ready" ? "Patch-ready" : n === "rejected" ? "Rejected / unsupported" : "Guidance" }), Q(e.target_section) ? /* @__PURE__ */ (0, q.jsx)("small", { children: bz(Q(e.target_section)) }) : null]
+						children: [/* @__PURE__ */ (0, q.jsx)("span", { children: n === "patch_ready" ? "Patch-ready" : n === "rejected" ? "Rejected / unsupported" : "Guidance" }), Q(e.target_section) ? /* @__PURE__ */ (0, q.jsx)("small", { children: Sz(Q(e.target_section)) }) : null]
 					}),
 					Q(e.suggested_text) ? /* @__PURE__ */ (0, q.jsx)("h4", { children: Q(e.suggested_text) }) : /* @__PURE__ */ (0, q.jsx)("h4", { children: Q(e.source_bullet_id) || "Tailoring recommendation" }),
 					Q(e.reason) ? /* @__PURE__ */ (0, q.jsxs)("div", {
@@ -28384,7 +28395,7 @@ function Wz({ state: e }) {
 		children: "No supported tailoring recommendations were produced for this scan."
 	});
 }
-function Gz({ open: e, onClose: t, children: n }) {
+function qz({ open: e, onClose: t, children: n }) {
 	let r = (0, C.useRef)(null), i = (0, C.useRef)(null), a = (0, C.useRef)(t);
 	return a.current = t, (0, C.useEffect)(() => {
 		var t;
@@ -28450,7 +28461,7 @@ function Gz({ open: e, onClose: t, children: n }) {
 		})
 	}), document.body) : null;
 }
-function Kz({ open: e, eyebrow: t = "Human approval required", title: n, description: r, children: i, footer: a, onClose: o }) {
+function Jz({ open: e, eyebrow: t = "Human approval required", title: n, description: r, children: i, footer: a, onClose: o }) {
 	let s = (0, C.useRef)(null);
 	return (0, C.useEffect)(() => {
 		let t = s.current;
@@ -28497,7 +28508,7 @@ function Kz({ open: e, eyebrow: t = "Human approval required", title: n, descrip
 		})
 	}) : null;
 }
-function qz({ rows: e }) {
+function Yz({ rows: e }) {
 	return /* @__PURE__ */ (0, q.jsx)("div", {
 		className: "advanced-diagnostics-dialog-proposals",
 		children: e.map((e) => /* @__PURE__ */ (0, q.jsxs)("article", { children: [
@@ -28519,21 +28530,21 @@ function qz({ rows: e }) {
 				className: "advanced-diagnostics-dialog-explanation",
 				children: [/* @__PURE__ */ (0, q.jsx)("b", { children: "Why AI recommends this" }), /* @__PURE__ */ (0, q.jsx)("p", { children: Q(e.change_reason) })]
 			}) : null,
-			vz(e.jd_terms_supported).length ? /* @__PURE__ */ (0, q.jsxs)("div", {
+			bz(e.jd_terms_supported).length ? /* @__PURE__ */ (0, q.jsxs)("div", {
 				className: "advanced-diagnostics-dialog-explanation",
 				children: [/* @__PURE__ */ (0, q.jsx)("b", { children: "JD signals" }), /* @__PURE__ */ (0, q.jsx)("div", {
 					className: "advanced-diagnostics-chip-row",
-					children: vz(e.jd_terms_supported).map((e) => /* @__PURE__ */ (0, q.jsx)("span", { children: e }, e))
+					children: bz(e.jd_terms_supported).map((e) => /* @__PURE__ */ (0, q.jsx)("span", { children: e }, e))
 				})]
 			}) : null,
-			vz(e.resume_evidence_used).length ? /* @__PURE__ */ (0, q.jsxs)("div", {
+			bz(e.resume_evidence_used).length ? /* @__PURE__ */ (0, q.jsxs)("div", {
 				className: "advanced-diagnostics-dialog-explanation",
-				children: [/* @__PURE__ */ (0, q.jsx)("b", { children: "Resume evidence" }), /* @__PURE__ */ (0, q.jsx)("p", { children: vz(e.resume_evidence_used).join(" · ") })]
+				children: [/* @__PURE__ */ (0, q.jsx)("b", { children: "Resume evidence" }), /* @__PURE__ */ (0, q.jsx)("p", { children: bz(e.resume_evidence_used).join(" · ") })]
 			}) : null
 		] }, Q(e.proposal_id)))
 	});
 }
-function Jz({ rows: e, selected: t, onChange: n }) {
+function Xz({ rows: e, selected: t, onChange: n }) {
 	return e.length ? /* @__PURE__ */ (0, q.jsxs)("fieldset", {
 		className: "advanced-diagnostics-proposals",
 		children: [
@@ -28542,7 +28553,7 @@ function Jz({ rows: e, selected: t, onChange: n }) {
 			/* @__PURE__ */ (0, q.jsx)("div", {
 				className: "advanced-diagnostics-proposal-list",
 				children: e.map((e) => {
-					let r = Q(e.proposal_id), i = t.includes(r), a = Q(e.current_text), o = Q(e.proposed_text), s = Q(e.change_reason), c = vz(e.jd_terms_supported), l = vz(e.resume_evidence_used), u = [Q(e.target_section), Q(e.target_identifier)].filter(Boolean).join(" · ");
+					let r = Q(e.proposal_id), i = t.includes(r), a = Q(e.current_text), o = Q(e.proposed_text), s = Q(e.change_reason), c = bz(e.jd_terms_supported), l = bz(e.resume_evidence_used), u = [Q(e.target_section), Q(e.target_identifier)].filter(Boolean).join(" · ");
 					return /* @__PURE__ */ (0, q.jsxs)("label", {
 						className: `advanced-diagnostics-proposal ${i ? "is-selected" : ""}`,
 						children: [/* @__PURE__ */ (0, q.jsx)("input", {
@@ -28554,7 +28565,7 @@ function Jz({ rows: e, selected: t, onChange: n }) {
 							children: [
 								/* @__PURE__ */ (0, q.jsxs)("span", {
 									className: "advanced-diagnostics-proposal-heading",
-									children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: bz(Q(e.change_type) || "exact_change") }), u ? /* @__PURE__ */ (0, q.jsx)("small", {
+									children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: Sz(Q(e.change_type) || "exact_change") }), u ? /* @__PURE__ */ (0, q.jsx)("small", {
 										title: u,
 										children: u
 									}) : null]
@@ -28590,7 +28601,7 @@ function Jz({ rows: e, selected: t, onChange: n }) {
 		]
 	}) : null;
 }
-var Yz = [
+var Zz = [
 	[
 		"approved_change_plan_id",
 		"scanWorkspaceApprovedChangePlanId",
@@ -28702,7 +28713,7 @@ var Yz = [
 		"Workflow artifact ID"
 	]
 ];
-function Xz({ values: e, onChange: t }) {
+function Qz({ values: e, onChange: t }) {
 	return /* @__PURE__ */ (0, q.jsxs)("details", {
 		className: "advanced-diagnostics-overrides",
 		children: [
@@ -28713,7 +28724,7 @@ function Xz({ values: e, onChange: t }) {
 			/* @__PURE__ */ (0, q.jsx)("p", { children: "Use only to inspect an existing identifier when the persisted upstream readback is unavailable." }),
 			/* @__PURE__ */ (0, q.jsx)("div", {
 				className: "advanced-diagnostics-overrides-grid",
-				children: Yz.map(([n, r, i]) => /* @__PURE__ */ (0, q.jsxs)("label", {
+				children: Zz.map(([n, r, i]) => /* @__PURE__ */ (0, q.jsxs)("label", {
 					htmlFor: r,
 					children: [/* @__PURE__ */ (0, q.jsx)("span", { children: i }), /* @__PURE__ */ (0, q.jsx)("input", {
 						id: r,
@@ -28727,8 +28738,8 @@ function Xz({ values: e, onChange: t }) {
 		]
 	});
 }
-function Zz({ id: e, label: t, value: n }) {
-	let r = Object.keys(n).length > 0, { status: i, tone: a } = wz(n), o = Cz(n);
+function $z({ id: e, label: t, value: n }) {
+	let r = Object.keys(n).length > 0, { status: i, tone: a } = Ez(n), o = Tz(n);
 	return /* @__PURE__ */ (0, q.jsxs)("div", {
 		className: "advanced-diagnostics-readback-row",
 		id: e,
@@ -28737,7 +28748,7 @@ function Zz({ id: e, label: t, value: n }) {
 			className: "advanced-diagnostics-readback-copy",
 			children: [
 				/* @__PURE__ */ (0, q.jsx)("strong", { children: t }),
-				/* @__PURE__ */ (0, q.jsx)("small", { children: r ? Sz(n) : "No persisted readback yet." }),
+				/* @__PURE__ */ (0, q.jsx)("small", { children: r ? wz(n) : "No persisted readback yet." }),
 				o.length ? /* @__PURE__ */ (0, q.jsx)("dl", {
 					className: "advanced-diagnostics-readback-metadata",
 					children: o.map((e) => /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: e.label }), /* @__PURE__ */ (0, q.jsx)("dd", { children: e.value })] }, e.label))
@@ -28749,7 +28760,7 @@ function Zz({ id: e, label: t, value: n }) {
 		})]
 	});
 }
-var Qz = [
+var eB = [
 	{
 		stage: "verified_artifact_operator_review_packet",
 		label: "Human review packet",
@@ -28786,11 +28797,11 @@ var Qz = [
 		action: "Confirm workflow readiness"
 	}
 ];
-function $z({ state: e, rows: t, currentStage: n }) {
+function tB({ state: e, rows: t, currentStage: n }) {
 	return /* @__PURE__ */ (0, q.jsx)("ol", {
 		className: "advanced-diagnostics-checklist",
 		children: t.map(({ stage: t, label: r }) => {
-			let i = Oz(e, t), a = n === t, o = t === "verified_artifact_operator_decision" && i ? Q(Tz(e, t).operator_decision_value) : "";
+			let i = Az(e, t), a = n === t, o = t === "verified_artifact_operator_decision" && i ? Q(Dz(e, t).operator_decision_value) : "";
 			return /* @__PURE__ */ (0, q.jsxs)("li", {
 				className: `${i ? "is-complete" : ""} ${a ? "is-current" : ""}`,
 				children: [
@@ -28798,8 +28809,8 @@ function $z({ state: e, rows: t, currentStage: n }) {
 						"aria-hidden": "true",
 						children: i ? /* @__PURE__ */ (0, q.jsx)(ne, { size: 17 }) : /* @__PURE__ */ (0, q.jsx)(ie, { size: 17 })
 					}),
-					/* @__PURE__ */ (0, q.jsxs)("strong", { children: [r, o ? `: ${bz(o)}` : ""] }),
-					/* @__PURE__ */ (0, q.jsx)(Uz, {
+					/* @__PURE__ */ (0, q.jsxs)("strong", { children: [r, o ? `: ${Sz(o)}` : ""] }),
+					/* @__PURE__ */ (0, q.jsx)(Gz, {
 						state: e,
 						stage: t
 					})
@@ -28808,13 +28819,13 @@ function $z({ state: e, rows: t, currentStage: n }) {
 		})
 	});
 }
-function eB({ state: e = pz, navigate: t = (e) => {
+function nB({ state: e = hz, navigate: t = (e) => {
 	window.location.href = e;
 }, request: n = window.fetch.bind(window) }) {
-	let [r, i] = (0, C.useState)(() => e.diagnosticState || {}), [a, o] = (0, C.useState)([]), [s, c] = (0, C.useState)({}), [l, u] = (0, C.useState)(null), [d, f] = (0, C.useState)(!1), [p, m] = (0, C.useState)(!1), [h, g] = (0, C.useState)(!1), [_, v] = (0, C.useState)(!1), [y, b] = (0, C.useState)(!1), [x, S] = (0, C.useState)(() => Vz(e.diagnosticState || {})), [w, T] = (0, C.useState)(null), E = Dz(r), D = Tz(r, "live_tailoring_suggestion"), O = E.filter((e) => a.includes(Q(e.proposal_id))), k = async (t, c = "") => {
-		let d = jz(t, r, [], a, c, s);
+	let [r, i] = (0, C.useState)(() => e.diagnosticState || {}), [a, o] = (0, C.useState)([]), [s, c] = (0, C.useState)({}), [l, u] = (0, C.useState)(null), [d, f] = (0, C.useState)(!1), [p, m] = (0, C.useState)(!1), [h, g] = (0, C.useState)(!1), [_, v] = (0, C.useState)(!1), [y, b] = (0, C.useState)(!1), [x, S] = (0, C.useState)(() => Uz(e.diagnosticState || {})), [w, T] = (0, C.useState)(null), E = kz(r), D = Dz(r, "live_tailoring_suggestion"), O = E.filter((e) => a.includes(Q(e.proposal_id))), k = async (t, c = "") => {
+		let d = Nz(t, r, [], a, c, s);
 		if (!e.selectedScanId || l || d) return !1;
-		let f = x < Vz(r), p = {
+		let f = x < Uz(r), p = {
 			diagnostics_execution: !0,
 			diagnostic_stages: [t],
 			...Object.fromEntries(Object.entries(s).filter(([, e]) => e.trim()))
@@ -28825,17 +28836,17 @@ function eB({ state: e = pz, navigate: t = (e) => {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify(p)
-			}), a = _z(await r.json());
+			}), a = yz(await r.json());
 			if (!r.ok) throw Error(Q(a.detail) || "This workflow check could not be completed.");
-			let s = _z(a.diagnostic_state);
+			let s = yz(a.diagnostic_state);
 			i(s);
-			let c = Array.isArray(a.stage_results) ? a.stage_results.map(_z) : [];
-			return c.length > 0 && c.every((e) => e.valid === !0) ? ((t === "manual_exact_change_acceptance" || t === "live_exact_resume_change_proposal") && o([]), t === "live_tailoring_suggestion" && Lz(s, 0) && !f && S(1), t === "live_exact_resume_change_proposal" && Lz(s, 0) && S(1), t === "manual_exact_change_acceptance" && S(2), t === "guarded_resume_copy_artifact_verification" && S(3), T({
+			let c = Array.isArray(a.stage_results) ? a.stage_results.map(yz) : [];
+			return c.length > 0 && c.every((e) => e.valid === !0) ? ((t === "manual_exact_change_acceptance" || t === "live_exact_resume_change_proposal") && o([]), t === "live_tailoring_suggestion" && zz(s, 0) && !f && S(1), t === "live_exact_resume_change_proposal" && zz(s, 0) && S(1), t === "manual_exact_change_acceptance" && S(2), t === "guarded_resume_copy_artifact_verification" && S(3), T({
 				tone: "success",
-				text: `${hz[t].label} completed.`
+				text: `${_z[t].label} completed.`
 			}), !0) : (T({
 				tone: "error",
-				text: `${hz[t].label} needs attention. Open Technical details for the persisted reason.`
+				text: `${_z[t].label} needs attention. Open Technical details for the persisted reason.`
 			}), !1);
 		} catch (e) {
 			return T({
@@ -28853,10 +28864,10 @@ function eB({ state: e = pz, navigate: t = (e) => {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({ diagnostics_reset: !0 })
-				}), r = _z(await t.json());
+				}), r = yz(await t.json());
 				if (!t.ok) throw Error(Q(r.detail) || "The diagnostics workflow could not be reset.");
-				let a = _z(r.diagnostic_state);
-				i(a), o([]), c({}), m(!1), g(!1), v(!1), S(Vz(a)), T({
+				let a = yz(r.diagnostic_state);
+				i(a), o([]), c({}), m(!1), g(!1), v(!1), S(Uz(a)), T({
 					tone: "success",
 					text: "Diagnostics workflow reset. Choose an analysis to run."
 				});
@@ -28869,23 +28880,23 @@ function eB({ state: e = pz, navigate: t = (e) => {
 				f(!1);
 			}
 		}
-	}, j = _z(r.readbacks), M = _z(r.ambient_readbacks), N = (e, t = "") => jz(e, r, [], a, t, s), P = Qz.find(({ stage: e }) => !Oz(r, e)), F = Oz(r, "workflow_readiness_checkpoint"), ee = Oz(r, "live_exact_resume_change_proposal"), te = Tz(r, "manual_exact_change_acceptance"), I = typeof te.accepted_proposal_count == "number" ? te.accepted_proposal_count : vz(te.accepted_proposal_ids).length, re = Number(D.suggestion_count || Ez(r).length), ie = Rz(r);
+	}, j = yz(r.readbacks), M = yz(r.ambient_readbacks), N = (e, t = "") => Nz(e, r, [], a, t, s), P = eB.find(({ stage: e }) => !Az(r, e)), F = Az(r, "workflow_readiness_checkpoint"), ee = Az(r, "live_exact_resume_change_proposal"), te = Dz(r, "manual_exact_change_acceptance"), I = typeof te.accepted_proposal_count == "number" ? te.accepted_proposal_count : bz(te.accepted_proposal_ids).length, re = Number(D.suggestion_count || Oz(r).length), ie = Bz(r);
 	return /* @__PURE__ */ (0, q.jsxs)("div", {
 		className: "advanced-diagnostics-dashboard",
 		children: [
-			/* @__PURE__ */ (0, q.jsx)(Mz, {}),
-			e.mode === "hub" ? /* @__PURE__ */ (0, q.jsx)(Nz, {
+			/* @__PURE__ */ (0, q.jsx)(Pz, {}),
+			e.mode === "hub" ? /* @__PURE__ */ (0, q.jsx)(Fz, {
 				options: e.savedScanOptions,
 				hrefs: e.hrefs,
 				navigate: t
 			}) : null,
-			e.mode === "empty" ? /* @__PURE__ */ (0, q.jsx)(Pz, { hrefs: e.hrefs }) : null,
-			e.mode === "invalid" ? /* @__PURE__ */ (0, q.jsx)(Fz, { hrefs: e.hrefs }) : null,
+			e.mode === "empty" ? /* @__PURE__ */ (0, q.jsx)(Iz, { hrefs: e.hrefs }) : null,
+			e.mode === "invalid" ? /* @__PURE__ */ (0, q.jsx)(Lz, { hrefs: e.hrefs }) : null,
 			e.mode === "context" && e.context ? /* @__PURE__ */ (0, q.jsxs)("div", {
 				className: "advanced-diagnostics-body",
 				id: "scanWorkspaceAdvancedDiagnostics",
 				children: [
-					/* @__PURE__ */ (0, q.jsx)(Hz, {
+					/* @__PURE__ */ (0, q.jsx)(Wz, {
 						context: e.context,
 						hrefs: e.hrefs,
 						state: r,
@@ -28925,13 +28936,13 @@ function eB({ state: e = pz, navigate: t = (e) => {
 										children: [
 											/* @__PURE__ */ (0, q.jsxs)("div", {
 												className: "advanced-diagnostics-section-heading",
-												children: [/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("h3", { children: "Tailoring recommendations" }), /* @__PURE__ */ (0, q.jsx)("p", { children: Oz(r, "live_tailoring_suggestion") ? `${re === 0 ? "0 supported recommendations" : `${re} recommendations`}${re > Ez(r).length ? ` · showing ${Ez(r).length}` : ""}` : "Evidence-backed guidance from the configured AI route." })] }), /* @__PURE__ */ (0, q.jsx)(Uz, {
+												children: [/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("h3", { children: "Tailoring recommendations" }), /* @__PURE__ */ (0, q.jsx)("p", { children: Az(r, "live_tailoring_suggestion") ? `${re === 0 ? "0 supported recommendations" : `${re} recommendations`}${re > Oz(r).length ? ` · showing ${Oz(r).length}` : ""}` : "Evidence-backed guidance from the configured AI route." })] }), /* @__PURE__ */ (0, q.jsx)(Gz, {
 													state: r,
 													stage: "live_tailoring_suggestion"
 												})]
 											}),
-											/* @__PURE__ */ (0, q.jsx)(Wz, { state: r }),
-											Oz(r, "live_tailoring_suggestion") ? null : /* @__PURE__ */ (0, q.jsx)("button", {
+											/* @__PURE__ */ (0, q.jsx)(Kz, { state: r }),
+											Az(r, "live_tailoring_suggestion") ? null : /* @__PURE__ */ (0, q.jsx)("button", {
 												id: "scanWorkspaceLiveTailoringSuggestionToggle",
 												"aria-label": ie ? "Retry tailoring analysis" : "Run tailoring analysis",
 												className: "advanced-diagnostics-primary-action",
@@ -28949,7 +28960,7 @@ function eB({ state: e = pz, navigate: t = (e) => {
 										className: "advanced-diagnostics-analysis-block is-exact",
 										children: [/* @__PURE__ */ (0, q.jsxs)("div", {
 											className: "advanced-diagnostics-section-heading",
-											children: [/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("h3", { children: "Exact resume-change analysis" }), /* @__PURE__ */ (0, q.jsx)("p", { children: ee ? `${E.length} evidence-backed proposed changes are ready for review.` : "Generate source-backed proposals for human review." })] }), /* @__PURE__ */ (0, q.jsx)(Uz, {
+											children: [/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("h3", { children: "Exact resume-change analysis" }), /* @__PURE__ */ (0, q.jsx)("p", { children: ee ? `${E.length} evidence-backed proposed changes are ready for review.` : "Generate source-backed proposals for human review." })] }), /* @__PURE__ */ (0, q.jsx)(Gz, {
 												state: r,
 												stage: "live_exact_resume_change_proposal"
 											})]
@@ -29005,7 +29016,7 @@ function eB({ state: e = pz, navigate: t = (e) => {
 											] })]
 										}) : null]
 									}),
-									E.length ? /* @__PURE__ */ (0, q.jsx)(Jz, {
+									E.length ? /* @__PURE__ */ (0, q.jsx)(Xz, {
 										rows: E,
 										selected: a,
 										onChange: o
@@ -29040,7 +29051,7 @@ function eB({ state: e = pz, navigate: t = (e) => {
 											/* @__PURE__ */ (0, q.jsx)("small", { children: "The source resume remains unchanged while each guarded step completes separately." })
 										] })]
 									}),
-									/* @__PURE__ */ (0, q.jsx)($z, {
+									/* @__PURE__ */ (0, q.jsx)(tB, {
 										state: r,
 										rows: [
 											{
@@ -29053,12 +29064,12 @@ function eB({ state: e = pz, navigate: t = (e) => {
 											},
 											{
 												stage: "guarded_resume_copy_artifact_verification",
-												label: Oz(r, "guarded_resume_copy_artifact") ? "Protected copy verified" : "Verification required"
+												label: Az(r, "guarded_resume_copy_artifact") ? "Protected copy verified" : "Verification required"
 											}
 										],
-										currentStage: Oz(r, "guarded_resume_copy_artifact") ? Oz(r, "guarded_resume_copy_artifact_verification") ? void 0 : "guarded_resume_copy_artifact_verification" : "guarded_resume_copy_artifact"
+										currentStage: Az(r, "guarded_resume_copy_artifact") ? Az(r, "guarded_resume_copy_artifact_verification") ? void 0 : "guarded_resume_copy_artifact_verification" : "guarded_resume_copy_artifact"
 									}),
-									Oz(r, "guarded_resume_copy_artifact") ? null : /* @__PURE__ */ (0, q.jsx)("button", {
+									Az(r, "guarded_resume_copy_artifact") ? null : /* @__PURE__ */ (0, q.jsx)("button", {
 										id: "scanWorkspaceGuardedResumeCopyArtifactToggle",
 										"aria-label": "Create guarded resume copy",
 										className: "advanced-diagnostics-primary-action",
@@ -29068,7 +29079,7 @@ function eB({ state: e = pz, navigate: t = (e) => {
 										onClick: () => void k("guarded_resume_copy_artifact"),
 										children: "Create protected copy"
 									}),
-									Oz(r, "guarded_resume_copy_artifact") && !Oz(r, "guarded_resume_copy_artifact_verification") ? /* @__PURE__ */ (0, q.jsx)("button", {
+									Az(r, "guarded_resume_copy_artifact") && !Az(r, "guarded_resume_copy_artifact_verification") ? /* @__PURE__ */ (0, q.jsx)("button", {
 										id: "scanWorkspaceGuardedResumeCopyArtifactVerificationToggle",
 										"aria-label": "Verify guarded resume copy",
 										className: "advanced-diagnostics-primary-action",
@@ -29078,7 +29089,7 @@ function eB({ state: e = pz, navigate: t = (e) => {
 										onClick: () => void k("guarded_resume_copy_artifact_verification"),
 										children: "Verify protected copy"
 									}) : null,
-									Oz(r, "guarded_resume_copy_artifact_verification") ? /* @__PURE__ */ (0, q.jsx)("button", {
+									Az(r, "guarded_resume_copy_artifact_verification") ? /* @__PURE__ */ (0, q.jsx)("button", {
 										className: "advanced-diagnostics-secondary-action advanced-diagnostics-pane-navigation",
 										type: "button",
 										onClick: () => S(3),
@@ -29102,9 +29113,9 @@ function eB({ state: e = pz, navigate: t = (e) => {
 											/* @__PURE__ */ (0, q.jsx)("small", { children: "A sequential, human-only preparation chain. This status never submits an application." })
 										] })]
 									}),
-									/* @__PURE__ */ (0, q.jsx)($z, {
+									/* @__PURE__ */ (0, q.jsx)(tB, {
 										state: r,
-										rows: Qz,
+										rows: eB,
 										currentStage: P == null ? void 0 : P.stage
 									}),
 									P && P.stage === "verified_artifact_operator_decision" ? /* @__PURE__ */ (0, q.jsx)("button", {
@@ -29117,8 +29128,8 @@ function eB({ state: e = pz, navigate: t = (e) => {
 										children: "Record decision"
 									}) : null,
 									P && P.stage !== "verified_artifact_operator_decision" ? /* @__PURE__ */ (0, q.jsx)("button", {
-										id: hz[P.stage].id,
-										"aria-label": hz[P.stage].label,
+										id: _z[P.stage].id,
+										"aria-label": _z[P.stage].label,
 										className: "advanced-diagnostics-primary-action",
 										type: "button",
 										disabled: !!l || !!N(P.stage),
@@ -29148,7 +29159,7 @@ function eB({ state: e = pz, navigate: t = (e) => {
 							}) : null
 						]
 					}),
-					/* @__PURE__ */ (0, q.jsxs)(Gz, {
+					/* @__PURE__ */ (0, q.jsxs)(qz, {
 						open: y,
 						onClose: () => b(!1),
 						children: [/* @__PURE__ */ (0, q.jsxs)("div", {
@@ -29169,22 +29180,22 @@ function eB({ state: e = pz, navigate: t = (e) => {
 												/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: "Context ID" }), /* @__PURE__ */ (0, q.jsx)("span", { children: e.context.contextId })] }),
 												/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: "Last diagnostic update" }), /* @__PURE__ */ (0, q.jsx)("span", {
 													className: "advanced-diagnostics-technical-timestamp",
-													children: xz(r.updated_at).map((e) => /* @__PURE__ */ (0, q.jsx)("span", { children: e }, e))
+													children: Cz(r.updated_at).map((e) => /* @__PURE__ */ (0, q.jsx)("span", { children: e }, e))
 												})] }),
 												/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: "Internal checks complete" }), /* @__PURE__ */ (0, q.jsxs)("span", { children: [
-													mz.filter((e) => Oz(r, e)).length,
+													gz.filter((e) => Az(r, e)).length,
 													" of ",
-													mz.length
+													gz.length
 												] })] })
 											]
 										}),
 										/* @__PURE__ */ (0, q.jsx)("div", {
 											className: "advanced-diagnostics-technical-list",
 											"aria-label": "Internal checks",
-											children: gz.slice(1).map((e) => /* @__PURE__ */ (0, q.jsx)(Zz, {
+											children: vz.slice(1).map((e) => /* @__PURE__ */ (0, q.jsx)($z, {
 												id: e.id,
 												label: e.label,
-												value: _z(M[e.key])
+												value: yz(M[e.key])
 											}, e.id))
 										})
 									]
@@ -29197,16 +29208,16 @@ function eB({ state: e = pz, navigate: t = (e) => {
 										children: "AI providers"
 									})] }), /* @__PURE__ */ (0, q.jsxs)("div", {
 										className: "advanced-diagnostics-technical-list",
-										children: [/* @__PURE__ */ (0, q.jsx)(Zz, {
-											id: gz[0].id,
-											label: gz[0].label,
-											value: _z(M[gz[0].key])
-										}), mz.slice(0, 2).map((e) => {
-											let t = hz[e];
-											return /* @__PURE__ */ (0, q.jsx)(Zz, {
-												id: Az[e],
+										children: [/* @__PURE__ */ (0, q.jsx)($z, {
+											id: vz[0].id,
+											label: vz[0].label,
+											value: yz(M[vz[0].key])
+										}), gz.slice(0, 2).map((e) => {
+											let t = _z[e];
+											return /* @__PURE__ */ (0, q.jsx)($z, {
+												id: Mz[e],
 												label: t.label,
-												value: _z(j[t.readbackKey])
+												value: yz(j[t.readbackKey])
 											}, t.readbackKey);
 										})]
 									})]
@@ -29219,18 +29230,18 @@ function eB({ state: e = pz, navigate: t = (e) => {
 										children: "Workflow"
 									})] }), /* @__PURE__ */ (0, q.jsx)("div", {
 										className: "advanced-diagnostics-technical-list",
-										children: mz.slice(2).map((e) => {
-											let t = hz[e];
-											return /* @__PURE__ */ (0, q.jsx)(Zz, {
-												id: Az[e],
+										children: gz.slice(2).map((e) => {
+											let t = _z[e];
+											return /* @__PURE__ */ (0, q.jsx)($z, {
+												id: Mz[e],
 												label: t.label,
-												value: _z(j[t.readbackKey])
+												value: yz(j[t.readbackKey])
 											}, t.readbackKey);
 										})
 									})]
 								})
 							]
-						}), /* @__PURE__ */ (0, q.jsx)(Xz, {
+						}), /* @__PURE__ */ (0, q.jsx)(Qz, {
 							values: s,
 							onChange: (e, t) => c((n) => ({
 								...n,
@@ -29243,7 +29254,7 @@ function eB({ state: e = pz, navigate: t = (e) => {
 						role: w.tone === "error" ? "alert" : "status",
 						children: w.text
 					}) : null,
-					/* @__PURE__ */ (0, q.jsxs)(Kz, {
+					/* @__PURE__ */ (0, q.jsxs)(Jz, {
 						open: p,
 						title: "Review resume changes",
 						description: `${a.length} change${a.length === 1 ? "" : "s"} selected`,
@@ -29261,12 +29272,12 @@ function eB({ state: e = pz, navigate: t = (e) => {
 							onClick: () => void k("manual_exact_change_acceptance").then((e) => e && m(!1)),
 							children: l === "manual_exact_change_acceptance" ? "Accepting..." : "Accept selected changes"
 						})] }),
-						children: [/* @__PURE__ */ (0, q.jsx)(qz, { rows: O }), /* @__PURE__ */ (0, q.jsxs)("div", {
+						children: [/* @__PURE__ */ (0, q.jsx)(Yz, { rows: O }), /* @__PURE__ */ (0, q.jsxs)("div", {
 							className: "advanced-diagnostics-dialog-safety",
 							children: [/* @__PURE__ */ (0, q.jsx)(Ae, { size: 18 }), /* @__PURE__ */ (0, q.jsxs)("p", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: "What happens next" }), "Accepting these changes does not overwrite the source resume. It authorizes the existing guarded-copy workflow."] })]
 						})]
 					}),
-					/* @__PURE__ */ (0, q.jsxs)(Kz, {
+					/* @__PURE__ */ (0, q.jsxs)(Jz, {
 						open: h,
 						title: "Review protected resume",
 						description: "Human decision required",
@@ -29287,7 +29298,7 @@ function eB({ state: e = pz, navigate: t = (e) => {
 							type: "button",
 							disabled: !!l,
 							onClick: () => void k("verified_artifact_operator_decision", e).then((e) => e && g(!1)),
-							children: bz(e)
+							children: Sz(e)
 						}, e))] }),
 						children: [/* @__PURE__ */ (0, q.jsxs)("div", {
 							className: "advanced-diagnostics-decision-summary",
@@ -29297,7 +29308,7 @@ function eB({ state: e = pz, navigate: t = (e) => {
 							children: [/* @__PURE__ */ (0, q.jsx)(Ae, { size: 18 }), /* @__PURE__ */ (0, q.jsxs)("p", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: "Your decision is explicit" }), "No option is preselected, and recording it does not submit an application or overwrite the source resume."] })]
 						})]
 					}),
-					/* @__PURE__ */ (0, q.jsx)(Kz, {
+					/* @__PURE__ */ (0, q.jsx)(Jz, {
 						open: _,
 						eyebrow: "Start a new diagnostics workflow",
 						title: "Run diagnostics again?",
@@ -29343,7 +29354,7 @@ function eB({ state: e = pz, navigate: t = (e) => {
 }
 //#endregion
 //#region src/agentic/agenticOperationsModel.ts
-async function tB() {
+async function rB() {
 	let e = await fetch("/profile/admin/agentic-operations/overview", {
 		method: "GET",
 		credentials: "same-origin",
@@ -29354,7 +29365,7 @@ async function tB() {
 }
 //#endregion
 //#region src/agentic/AgenticOperationsDashboard.tsx
-var nB = [
+var iB = [
 	{
 		field: "score_mutation",
 		label: "Score",
@@ -29385,7 +29396,7 @@ var nB = [
 		label: "Application action",
 		summaryField: "application_action_capable_count"
 	}
-], rB = [
+], aB = [
 	"cross_user_access",
 	"database_write_performed",
 	"schema_write_performed",
@@ -29399,17 +29410,17 @@ var nB = [
 	"application_execution_performed",
 	"ats_submission_performed"
 ];
-function iB(e) {
+function oB(e) {
 	return String(e == null ? "" : e).trim();
 }
-function aB(e, t = "Unavailable") {
-	let n = iB(e);
+function sB(e, t = "Unavailable") {
+	let n = oB(e);
 	return n ? n.replace(/[_-]+/g, " ").replace(/\b\w/g, (e) => e.toUpperCase()).replace(/\bAi\b/g, "AI") : t;
 }
-function oB(e) {
+function cB(e) {
 	return typeof e == "number" && Number.isFinite(e) ? String(e) : "Unavailable";
 }
-function sB(e) {
+function lB(e) {
 	if (!Array.isArray(e)) return {
 		agents: [],
 		invalidCount: 0,
@@ -29423,7 +29434,7 @@ function sB(e) {
 	let t = e.filter((e) => {
 		if (!e || typeof e != "object" || Array.isArray(e)) return !1;
 		let t = e;
-		return !!(iB(t.key) && iB(t.display_name) && iB(t.responsibility));
+		return !!(oB(t.key) && oB(t.display_name) && oB(t.responsibility));
 	});
 	return {
 		agents: t,
@@ -29431,41 +29442,41 @@ function sB(e) {
 		state: t.length > 0 ? "available" : "unavailable"
 	};
 }
-function cB(e, t) {
-	return !t || e.length === 0 || typeof t.canonical_agent_count != "number" || e.some((e) => nB.some(({ field: t }) => typeof e[t] != "boolean")) || nB.some(({ summaryField: e }) => typeof t[e] != "number") ? !1 : t.canonical_agent_count !== e.length || nB.some(({ field: n, summaryField: r }) => t[r] !== e.filter((e) => e[n] === !0).length);
+function uB(e, t) {
+	return !t || e.length === 0 || typeof t.canonical_agent_count != "number" || e.some((e) => iB.some(({ field: t }) => typeof e[t] != "boolean")) || iB.some(({ summaryField: e }) => typeof t[e] != "number") ? !1 : t.canonical_agent_count !== e.length || iB.some(({ field: n, summaryField: r }) => t[r] !== e.filter((e) => e[n] === !0).length);
 }
-var lB = new Intl.DateTimeFormat(void 0, {
+var dB = new Intl.DateTimeFormat(void 0, {
 	month: "short",
 	day: "numeric",
 	year: "numeric",
 	hour: "numeric",
 	minute: "2-digit"
 });
-function uB(e) {
-	let t = iB(e);
+function fB(e) {
+	let t = oB(e);
 	if (!t) return "Unavailable";
 	let n = new Date(t);
-	return Number.isNaN(n.getTime()) ? t : lB.format(n);
-}
-function dB(e) {
-	return e === "not_configured" ? "No current pipeline status path is configured for the latest owner-scoped run." : e === "not_found" ? "The current pipeline status artifact was not found." : e === "malformed" ? "The current pipeline status artifact could not be read as valid status data." : "Current pipeline status is unavailable.";
-}
-function fB(e) {
-	return e ? e.available === !0 ? aB(e.status, "Unknown") : aB(e.state) : "Unavailable";
+	return Number.isNaN(n.getTime()) ? t : dB.format(n);
 }
 function pB(e) {
-	let t = e.safety_metadata;
-	return !!(e.read_only === !0 && e.admin_only === !0 && (t == null ? void 0 : t.read_only) === !0 && t.admin_only === !0 && rB.every((e) => t[e] === !1));
+	return e === "not_configured" ? "No current pipeline status path is configured for the latest owner-scoped run." : e === "not_found" ? "The current pipeline status artifact was not found." : e === "malformed" ? "The current pipeline status artifact could not be read as valid status data." : "Current pipeline status is unavailable.";
 }
-function mB({ confirmed: e }) {
+function mB(e) {
+	return e ? e.available === !0 ? sB(e.status, "Unknown") : sB(e.state) : "Unavailable";
+}
+function hB(e) {
+	let t = e.safety_metadata;
+	return !!(e.read_only === !0 && e.admin_only === !0 && (t == null ? void 0 : t.read_only) === !0 && t.admin_only === !0 && aB.every((e) => t[e] === !1));
+}
+function gB({ confirmed: e }) {
 	let t = document.getElementById("agenticOperationsHeaderReadOnlyBadge");
 	return !e || !t ? null : (0, aT.createPortal)(/* @__PURE__ */ (0, q.jsx)("span", {
 		className: "agentic-operations-header-badge app-page-header__badge",
 		children: "Read-only"
 	}), t);
 }
-function hB(e) {
-	let t = iB(e).toLowerCase();
+function _B(e) {
+	let t = oB(e).toLowerCase();
 	return [
 		"succeeded",
 		"complete",
@@ -29481,7 +29492,7 @@ function hB(e) {
 		"processing"
 	].includes(t) ? "active" : "neutral";
 }
-function gB() {
+function vB() {
 	return /* @__PURE__ */ (0, q.jsxs)("div", {
 		className: "agentic-operations-loading",
 		role: "status",
@@ -29492,7 +29503,7 @@ function gB() {
 		}), /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: "Loading operations overview…" }), /* @__PURE__ */ (0, q.jsx)("span", { children: "Reading current pipeline, recent runs, and safety metadata." })] })]
 	});
 }
-function _B({ payload: e }) {
+function yB({ payload: e }) {
 	var t;
 	let n = e.current_pipeline, r = e.recent_runs_state, i = (t = e.safety_summary) == null ? void 0 : t.canonical_agent_count;
 	return /* @__PURE__ */ (0, q.jsx)("section", {
@@ -29502,25 +29513,25 @@ function _B({ payload: e }) {
 			{
 				icon: O,
 				label: "Pipeline status",
-				value: fB(n),
+				value: mB(n),
 				detail: (n == null ? void 0 : n.available) === !0 ? "Current owner-scoped run" : "Status readback"
 			},
 			{
 				icon: Ie,
 				label: "Current stage",
-				value: (n == null ? void 0 : n.available) === !0 ? aB(n.current_stage) : "Unavailable",
-				detail: (n == null ? void 0 : n.available) === !0 ? iB(n.stage_message) || "No stage message recorded" : "No available current stage"
+				value: (n == null ? void 0 : n.available) === !0 ? sB(n.current_stage) : "Unavailable",
+				detail: (n == null ? void 0 : n.available) === !0 ? oB(n.stage_message) || "No stage message recorded" : "No available current stage"
 			},
 			{
 				icon: se,
 				label: "Recent runs",
-				value: (r == null ? void 0 : r.available) === !0 ? oB(r.count) : "Unavailable",
-				detail: (r == null ? void 0 : r.available) === !0 ? `Bounded to ${oB(r.bound)}` : "Owner-scoped history unavailable"
+				value: (r == null ? void 0 : r.available) === !0 ? cB(r.count) : "Unavailable",
+				detail: (r == null ? void 0 : r.available) === !0 ? `Bounded to ${cB(r.bound)}` : "Owner-scoped history unavailable"
 			},
 			{
 				icon: j,
 				label: "Canonical agents",
-				value: oB(i),
+				value: cB(i),
 				detail: "Current registry count"
 			}
 		].map((e) => {
@@ -29547,7 +29558,7 @@ function _B({ payload: e }) {
 		})
 	});
 }
-function vB({ pipeline: e }) {
+function bB({ pipeline: e }) {
 	if ((e == null ? void 0 : e.available) !== !0) {
 		let t = (e == null ? void 0 : e.state) || "unavailable";
 		return /* @__PURE__ */ (0, q.jsxs)("section", {
@@ -29562,15 +29573,15 @@ function vB({ pipeline: e }) {
 					id: "agenticOperationsCurrentTitle",
 					children: "Current pipeline"
 				})] }), /* @__PURE__ */ (0, q.jsx)("span", {
-					className: `agentic-operations-status agentic-operations-status--${hB(t)}`,
-					children: aB(t)
+					className: `agentic-operations-status agentic-operations-status--${_B(t)}`,
+					children: sB(t)
 				})]
 			}), /* @__PURE__ */ (0, q.jsxs)("div", {
 				className: "agentic-operations-unavailable",
 				children: [/* @__PURE__ */ (0, q.jsx)(Me, {
 					size: 20,
 					"aria-hidden": "true"
-				}), /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: aB(t) }), /* @__PURE__ */ (0, q.jsx)("p", { children: dB(t) })] })]
+				}), /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: sB(t) }), /* @__PURE__ */ (0, q.jsx)("p", { children: pB(t) })] })]
 			})]
 		});
 	}
@@ -29588,8 +29599,8 @@ function vB({ pipeline: e }) {
 					id: "agenticOperationsCurrentTitle",
 					children: "Current pipeline"
 				})] }), /* @__PURE__ */ (0, q.jsx)("span", {
-					className: `agentic-operations-status agentic-operations-status--${hB(e.status)}`,
-					children: aB(e.status, "Unknown")
+					className: `agentic-operations-status agentic-operations-status--${_B(e.status)}`,
+					children: sB(e.status, "Unknown")
 				})]
 			}),
 			/* @__PURE__ */ (0, q.jsxs)("div", {
@@ -29600,8 +29611,8 @@ function vB({ pipeline: e }) {
 					children: /* @__PURE__ */ (0, q.jsx)(Ie, { size: 21 })
 				}), /* @__PURE__ */ (0, q.jsxs)("div", { children: [
 					/* @__PURE__ */ (0, q.jsx)("span", { children: "Current stage" }),
-					/* @__PURE__ */ (0, q.jsx)("h3", { children: aB(e.current_stage) }),
-					/* @__PURE__ */ (0, q.jsx)("p", { children: iB(e.stage_message) || "No stage message recorded." })
+					/* @__PURE__ */ (0, q.jsx)("h3", { children: sB(e.current_stage) }),
+					/* @__PURE__ */ (0, q.jsx)("p", { children: oB(e.stage_message) || "No stage message recorded." })
 				] })]
 			}),
 			r ? /* @__PURE__ */ (0, q.jsxs)("div", {
@@ -29623,22 +29634,22 @@ function vB({ pipeline: e }) {
 				className: "agentic-operations-detail-grid",
 				children: [
 					/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Run ID" }), /* @__PURE__ */ (0, q.jsx)("dd", {
-						title: iB(e.run_id),
-						children: iB(e.run_id) || "Unavailable"
+						title: oB(e.run_id),
+						children: oB(e.run_id) || "Unavailable"
 					})] }),
-					/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Stage started" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: uB(e.stage_started_at) })] }),
-					/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Updated" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: uB(a) })] }),
-					/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Final job count" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: oB(e.final_job_count) })] }),
+					/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Stage started" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: fB(e.stage_started_at) })] }),
+					/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Updated" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: fB(a) })] }),
+					/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Final job count" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: cB(e.final_job_count) })] }),
 					/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Return code" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: e.return_code === null || e.return_code === void 0 || e.return_code === "" ? "Unavailable" : String(e.return_code) })] })
 				]
 			})
 		]
 	});
 }
-function yB(e) {
-	return uB(e.completed_at || e.updated_at || e.started_at);
+function xB(e) {
+	return fB(e.completed_at || e.updated_at || e.started_at);
 }
-function bB({ payload: e, selectedRunId: t, onSelect: n }) {
+function SB({ payload: e, selectedRunId: t, onSelect: n }) {
 	let r = e.recent_runs_state, i = Array.isArray(e.recent_runs) ? e.recent_runs : [];
 	return /* @__PURE__ */ (0, q.jsxs)("section", {
 		className: "agentic-operations-card agentic-operations-runs",
@@ -29653,7 +29664,7 @@ function bB({ payload: e, selectedRunId: t, onSelect: n }) {
 				children: "Recent pipeline runs"
 			})] }), /* @__PURE__ */ (0, q.jsx)("span", {
 				className: "agentic-operations-section-meta",
-				children: (r == null ? void 0 : r.available) === !0 ? `${oB(r.count)} recorded` : "Unavailable"
+				children: (r == null ? void 0 : r.available) === !0 ? `${cB(r.count)} recorded` : "Unavailable"
 			})]
 		}), (r == null ? void 0 : r.available) === !0 ? i.length === 0 ? /* @__PURE__ */ (0, q.jsxs)("div", {
 			className: "agentic-operations-empty",
@@ -29665,7 +29676,7 @@ function bB({ payload: e, selectedRunId: t, onSelect: n }) {
 			className: "agentic-operations-run-list",
 			role: "list",
 			children: i.map((e, r) => {
-				let i = iB(e.run_id), a = !!(i && i === t);
+				let i = oB(e.run_id), a = !!(i && i === t);
 				return /* @__PURE__ */ (0, q.jsxs)("article", {
 					className: `agentic-operations-run-row${a ? " is-selected" : ""}`,
 					role: "listitem",
@@ -29674,23 +29685,23 @@ function bB({ payload: e, selectedRunId: t, onSelect: n }) {
 							className: "agentic-operations-run-primary",
 							children: [
 								/* @__PURE__ */ (0, q.jsx)("span", {
-									className: `agentic-operations-status agentic-operations-status--${hB(e.status)}`,
-									children: aB(e.status, "Unknown")
+									className: `agentic-operations-status agentic-operations-status--${_B(e.status)}`,
+									children: sB(e.status, "Unknown")
 								}),
 								/* @__PURE__ */ (0, q.jsx)("strong", {
 									title: i,
 									children: i || "Run ID unavailable"
 								}),
-								/* @__PURE__ */ (0, q.jsx)("span", { children: yB(e) })
+								/* @__PURE__ */ (0, q.jsx)("span", { children: xB(e) })
 							]
 						}),
 						/* @__PURE__ */ (0, q.jsxs)("div", {
 							className: "agentic-operations-run-stage",
-							children: [/* @__PURE__ */ (0, q.jsx)("span", { children: iB(e.current_stage) ? aB(e.current_stage) : "Final stage unavailable" }), /* @__PURE__ */ (0, q.jsx)("small", { children: iB(e.stage_message) || iB(e.summary_message) || "No run message recorded" })]
+							children: [/* @__PURE__ */ (0, q.jsx)("span", { children: oB(e.current_stage) ? sB(e.current_stage) : "Final stage unavailable" }), /* @__PURE__ */ (0, q.jsx)("small", { children: oB(e.stage_message) || oB(e.summary_message) || "No run message recorded" })]
 						}),
 						/* @__PURE__ */ (0, q.jsxs)("div", {
 							className: "agentic-operations-run-count",
-							children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Final jobs" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: oB(e.final_job_count) })]
+							children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Final jobs" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: cB(e.final_job_count) })]
 						}),
 						/* @__PURE__ */ (0, q.jsx)("div", {
 							className: "agentic-operations-run-action",
@@ -29715,7 +29726,7 @@ function bB({ payload: e, selectedRunId: t, onSelect: n }) {
 		})]
 	});
 }
-function xB({ run: e }) {
+function CB({ run: e }) {
 	if (!e) return /* @__PURE__ */ (0, q.jsxs)("section", {
 		className: "agentic-operations-card agentic-operations-inspector",
 		"aria-labelledby": "agenticOperationsInspectorTitle",
@@ -29736,7 +29747,7 @@ function xB({ run: e }) {
 			}), /* @__PURE__ */ (0, q.jsx)("strong", { children: "Select a recent pipeline run to inspect its recorded summary." })]
 		})]
 	});
-	let t = iB(e.run_id), n = iB(e.stage_message) || iB(e.summary_message), r = iB(e.error), i = iB(e.completed_at || e.updated_at || e.started_at), a = iB(e.current_stage), o = typeof e.final_job_count == "number" && Number.isFinite(e.final_job_count), s = e.return_code !== null && e.return_code !== void 0 && e.return_code !== "";
+	let t = oB(e.run_id), n = oB(e.stage_message) || oB(e.summary_message), r = oB(e.error), i = oB(e.completed_at || e.updated_at || e.started_at), a = oB(e.current_stage), o = typeof e.final_job_count == "number" && Number.isFinite(e.final_job_count), s = e.return_code !== null && e.return_code !== void 0 && e.return_code !== "";
 	return /* @__PURE__ */ (0, q.jsxs)("section", {
 		className: "agentic-operations-card agentic-operations-inspector",
 		"aria-labelledby": "agenticOperationsInspectorTitle",
@@ -29748,9 +29759,9 @@ function xB({ run: e }) {
 			}), /* @__PURE__ */ (0, q.jsx)("h2", {
 				id: "agenticOperationsInspectorTitle",
 				children: "Run Inspector"
-			})] }), iB(e.status) ? /* @__PURE__ */ (0, q.jsx)("span", {
-				className: `agentic-operations-status agentic-operations-status--${hB(e.status)}`,
-				children: aB(e.status)
+			})] }), oB(e.status) ? /* @__PURE__ */ (0, q.jsx)("span", {
+				className: `agentic-operations-status agentic-operations-status--${_B(e.status)}`,
+				children: sB(e.status)
 			}) : null]
 		}), /* @__PURE__ */ (0, q.jsxs)("div", {
 			className: "agentic-operations-inspector-content",
@@ -29762,8 +29773,8 @@ function xB({ run: e }) {
 							title: t,
 							children: t
 						})] }),
-						i ? /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Recorded at" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: yB(e) })] }) : null,
-						a ? /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Current / final stage" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: aB(a) })] }) : null,
+						i ? /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Recorded at" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: xB(e) })] }) : null,
+						a ? /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Current / final stage" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: sB(a) })] }) : null,
 						o ? /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Final job count" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: String(e.final_job_count) })] }) : null,
 						s ? /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Return code" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: String(e.return_code) })] }) : null
 					]
@@ -29788,7 +29799,7 @@ function xB({ run: e }) {
 		})]
 	});
 }
-function SB({ value: e, trueLabel: t, falseLabel: n, unavailableLabel: r }) {
+function wB({ value: e, trueLabel: t, falseLabel: n, unavailableLabel: r }) {
 	let i = e === !0 ? "yes" : e === !1 ? "no" : "unavailable", a = i === "yes" ? t : i === "no" ? n : r;
 	return /* @__PURE__ */ (0, q.jsxs)("span", {
 		className: `agentic-operations-declaration agentic-operations-declaration--${i}`,
@@ -29801,7 +29812,7 @@ function SB({ value: e, trueLabel: t, falseLabel: n, unavailableLabel: r }) {
 		}), /* @__PURE__ */ (0, q.jsx)("span", { children: a })]
 	});
 }
-function CB({ registry: e }) {
+function TB({ registry: e }) {
 	return /* @__PURE__ */ (0, q.jsxs)("section", {
 		className: "agentic-operations-card agentic-operations-registry",
 		"aria-labelledby": "agenticOperationsRegistryTitle",
@@ -29828,38 +29839,38 @@ function CB({ registry: e }) {
 							className: "agentic-operations-agent-icon",
 							"aria-hidden": "true",
 							children: /* @__PURE__ */ (0, q.jsx)(j, { size: 17 })
-						}), /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Canonical definition" }), /* @__PURE__ */ (0, q.jsx)("h3", { children: iB(e.display_name) })] })]
+						}), /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Canonical definition" }), /* @__PURE__ */ (0, q.jsx)("h3", { children: oB(e.display_name) })] })]
 					}),
-					/* @__PURE__ */ (0, q.jsx)("p", { children: iB(e.responsibility) }),
+					/* @__PURE__ */ (0, q.jsx)("p", { children: oB(e.responsibility) }),
 					/* @__PURE__ */ (0, q.jsxs)("div", {
 						className: "agentic-operations-declarations",
-						"aria-label": `${iB(e.display_name)} declared capabilities`,
+						"aria-label": `${oB(e.display_name)} declared capabilities`,
 						children: [
-							/* @__PURE__ */ (0, q.jsx)(SB, {
+							/* @__PURE__ */ (0, q.jsx)(wB, {
 								value: e.deterministic_core,
 								trueLabel: "Deterministic core",
 								falseLabel: "Non-deterministic core",
 								unavailableLabel: "Deterministic core unavailable"
 							}),
-							/* @__PURE__ */ (0, q.jsx)(SB, {
+							/* @__PURE__ */ (0, q.jsx)(wB, {
 								value: e.llm_capable,
 								trueLabel: "LLM capable",
 								falseLabel: "Not LLM capable",
 								unavailableLabel: "LLM capability unavailable"
 							}),
-							/* @__PURE__ */ (0, q.jsx)(SB, {
+							/* @__PURE__ */ (0, q.jsx)(wB, {
 								value: e.optional_controlled_llm_guardrail,
 								trueLabel: "Controlled LLM guardrail available",
 								falseLabel: "Controlled LLM guardrail not available",
 								unavailableLabel: "Controlled LLM guardrail unavailable"
 							}),
-							/* @__PURE__ */ (0, q.jsx)(SB, {
+							/* @__PURE__ */ (0, q.jsx)(wB, {
 								value: e.advisory_only,
 								trueLabel: "Advisory only",
 								falseLabel: "Not advisory-only",
 								unavailableLabel: "Advisory status unavailable"
 							}),
-							/* @__PURE__ */ (0, q.jsx)(SB, {
+							/* @__PURE__ */ (0, q.jsx)(wB, {
 								value: e.human_approval_required,
 								trueLabel: "Human approval required",
 								falseLabel: "Human approval not required by definition",
@@ -29868,7 +29879,7 @@ function CB({ registry: e }) {
 						]
 					})
 				]
-			}, `${iB(e.key)}-${t}`))
+			}, `${oB(e.key)}-${t}`))
 		}), e.invalidCount > 0 ? /* @__PURE__ */ (0, q.jsxs)("div", {
 			className: "agentic-operations-registry-note",
 			role: "status",
@@ -29891,7 +29902,7 @@ function CB({ registry: e }) {
 		})]
 	});
 }
-function wB({ value: e, label: t }) {
+function EB({ value: e, label: t }) {
 	let n = e === !0 ? "yes" : e === !1 ? "no" : "unavailable", r = n === "yes" ? "Yes" : n === "no" ? "No" : "Unavailable";
 	return /* @__PURE__ */ (0, q.jsxs)("span", {
 		className: `agentic-operations-authority agentic-operations-authority--${n}`,
@@ -29905,8 +29916,8 @@ function wB({ value: e, label: t }) {
 		}), /* @__PURE__ */ (0, q.jsx)("span", { children: r })]
 	});
 }
-function TB({ registry: e, summary: t }) {
-	let n = cB(e.agents, t);
+function DB({ registry: e, summary: t }) {
+	let n = uB(e.agents, t);
 	return /* @__PURE__ */ (0, q.jsxs)("section", {
 		className: "agentic-operations-card agentic-operations-matrix",
 		"aria-labelledby": "agenticOperationsMatrixTitle",
@@ -29939,17 +29950,17 @@ function TB({ registry: e, summary: t }) {
 					/* @__PURE__ */ (0, q.jsx)("thead", { children: /* @__PURE__ */ (0, q.jsxs)("tr", { children: [/* @__PURE__ */ (0, q.jsx)("th", {
 						scope: "col",
 						children: "Canonical agent"
-					}), nB.map((e) => /* @__PURE__ */ (0, q.jsx)("th", {
+					}), iB.map((e) => /* @__PURE__ */ (0, q.jsx)("th", {
 						scope: "col",
 						children: e.label
 					}, e.field))] }) }),
 					/* @__PURE__ */ (0, q.jsx)("tbody", { children: e.agents.map((e, t) => /* @__PURE__ */ (0, q.jsxs)("tr", { children: [/* @__PURE__ */ (0, q.jsx)("th", {
 						scope: "row",
-						children: iB(e.display_name)
-					}), nB.map((t) => /* @__PURE__ */ (0, q.jsx)("td", { children: /* @__PURE__ */ (0, q.jsx)(wB, {
+						children: oB(e.display_name)
+					}), iB.map((t) => /* @__PURE__ */ (0, q.jsx)("td", { children: /* @__PURE__ */ (0, q.jsx)(EB, {
 						value: e[t.field],
 						label: t.label
-					}) }, t.field))] }, `${iB(e.key)}-${t}`)) })
+					}) }, t.field))] }, `${oB(e.key)}-${t}`)) })
 				] })
 			}) : /* @__PURE__ */ (0, q.jsxs)("div", {
 				className: "agentic-operations-registry-empty agentic-operations-registry-empty--compact",
@@ -29961,7 +29972,7 @@ function TB({ registry: e, summary: t }) {
 		]
 	});
 }
-function EB({ payload: e, confirmed: t }) {
+function OB({ payload: e, confirmed: t }) {
 	let n = !!e.safety_metadata, r = e.safety_summary, i = [
 		["Canonical agents", r == null ? void 0 : r.canonical_agent_count],
 		["Queue mutation capable", r == null ? void 0 : r.queue_mutation_capable_count],
@@ -29993,11 +30004,11 @@ function EB({ payload: e, confirmed: t }) {
 			] })]
 		}), /* @__PURE__ */ (0, q.jsx)("dl", {
 			className: "agentic-operations-safety-metrics",
-			children: i.map(([e, t]) => /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: e }), /* @__PURE__ */ (0, q.jsx)("dd", { children: oB(t) })] }, e))
+			children: i.map(([e, t]) => /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: e }), /* @__PURE__ */ (0, q.jsx)("dd", { children: cB(t) })] }, e))
 		})]
 	});
 }
-function DB({ readOverview: e = tB }) {
+function kB({ readOverview: e = rB }) {
 	let [t, n] = (0, C.useState)({ kind: "loading" }), [r, i] = (0, C.useState)(!1), [a, o] = (0, C.useState)(null), s = (0, C.useRef)(null), c = (0, C.useCallback)((t = !1) => {
 		if (s.current) return s.current;
 		t && i(!0);
@@ -30015,7 +30026,7 @@ function DB({ readOverview: e = tB }) {
 	(0, C.useEffect)(() => {
 		c();
 	}, [c]);
-	let l = t.kind === "ready" && Array.isArray(t.payload.recent_runs) ? t.payload.recent_runs : [], u = a && l.find((e) => iB(e.run_id) === a) || null;
+	let l = t.kind === "ready" && Array.isArray(t.payload.recent_runs) ? t.payload.recent_runs : [], u = a && l.find((e) => oB(e.run_id) === a) || null;
 	(0, C.useEffect)(() => {
 		t.kind === "ready" && a && !u && o(null);
 	}, [
@@ -30023,12 +30034,12 @@ function DB({ readOverview: e = tB }) {
 		a,
 		t.kind
 	]);
-	let d = t.kind === "ready" && pB(t.payload), f = t.kind === "ready" ? sB(t.payload.canonical_agents) : null;
+	let d = t.kind === "ready" && hB(t.payload), f = t.kind === "ready" ? lB(t.payload.canonical_agents) : null;
 	return /* @__PURE__ */ (0, q.jsxs)("div", {
 		className: "agentic-operations-dashboard",
 		"aria-busy": t.kind === "loading" || r,
 		children: [
-			/* @__PURE__ */ (0, q.jsx)(mB, { confirmed: d }),
+			/* @__PURE__ */ (0, q.jsx)(gB, { confirmed: d }),
 			/* @__PURE__ */ (0, q.jsxs)("div", {
 				className: "agentic-operations-toolbar",
 				children: [/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", {
@@ -30046,7 +30057,7 @@ function DB({ readOverview: e = tB }) {
 					}), r ? "Refreshing…" : "Refresh overview"]
 				})]
 			}),
-			t.kind === "loading" ? /* @__PURE__ */ (0, q.jsx)(gB, {}) : null,
+			t.kind === "loading" ? /* @__PURE__ */ (0, q.jsx)(vB, {}) : null,
 			t.kind === "error" ? /* @__PURE__ */ (0, q.jsxs)("div", {
 				className: "agentic-operations-error",
 				role: "alert",
@@ -30056,22 +30067,22 @@ function DB({ readOverview: e = tB }) {
 				}), /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: "Overview unavailable" }), /* @__PURE__ */ (0, q.jsx)("p", { children: t.message })] })]
 			}) : null,
 			t.kind === "ready" && f ? /* @__PURE__ */ (0, q.jsxs)(q.Fragment, { children: [
-				/* @__PURE__ */ (0, q.jsx)(_B, { payload: t.payload }),
+				/* @__PURE__ */ (0, q.jsx)(yB, { payload: t.payload }),
 				/* @__PURE__ */ (0, q.jsxs)("div", {
 					className: "agentic-operations-primary-grid",
-					children: [/* @__PURE__ */ (0, q.jsx)(vB, { pipeline: t.payload.current_pipeline }), /* @__PURE__ */ (0, q.jsx)(bB, {
+					children: [/* @__PURE__ */ (0, q.jsx)(bB, { pipeline: t.payload.current_pipeline }), /* @__PURE__ */ (0, q.jsx)(SB, {
 						payload: t.payload,
 						selectedRunId: a,
 						onSelect: o
 					})]
 				}),
-				/* @__PURE__ */ (0, q.jsx)(xB, { run: u }),
-				/* @__PURE__ */ (0, q.jsx)(EB, {
+				/* @__PURE__ */ (0, q.jsx)(CB, { run: u }),
+				/* @__PURE__ */ (0, q.jsx)(OB, {
 					payload: t.payload,
 					confirmed: d
 				}),
-				/* @__PURE__ */ (0, q.jsx)(CB, { registry: f }),
-				/* @__PURE__ */ (0, q.jsx)(TB, {
+				/* @__PURE__ */ (0, q.jsx)(TB, { registry: f }),
+				/* @__PURE__ */ (0, q.jsx)(DB, {
 					registry: f,
 					summary: t.payload.safety_summary
 				})
@@ -30081,7 +30092,7 @@ function DB({ readOverview: e = tB }) {
 }
 //#endregion
 //#region src/PlanningWorklist.tsx
-var OB = "applylens:planning-worklist-state", kB = "applylens:planning-worklist-action", AB = "applylens.planning.columnWidths.v1", jB = {
+var AB = "applylens:planning-worklist-state", jB = "applylens:planning-worklist-action", MB = "applylens.planning.columnWidths.v1", NB = {
 	status: "loading",
 	rows: [],
 	metaLabel: "Planning view · loading",
@@ -30118,12 +30129,12 @@ var OB = "applylens:planning-worklist-state", kB = "applylens:planning-worklist-
 		available: !1,
 		isRunning: !1
 	}
-}, MB = "Bulk Generate running. Click to view.";
-function NB(e) {
+}, PB = "Bulk Generate running. Click to view.";
+function FB(e) {
 	let t = String(e || "").trim();
 	return t.length <= 80 ? t : `${t.slice(0, 79)}…`;
 }
-var PB = {
+var IB = {
 	success: {
 		icon: "✓",
 		label: "Completed",
@@ -30150,10 +30161,10 @@ var PB = {
 		tone: "pending"
 	}
 };
-function FB(e) {
-	return PB[e] || PB.pending;
+function LB(e) {
+	return IB[e] || IB.pending;
 }
-var IB = {
+var RB = {
 	generated: {
 		label: "Ready rewrites",
 		tone: "ready"
@@ -30171,17 +30182,17 @@ var IB = {
 		tone: "attention"
 	}
 };
-function LB(e) {
+function zB(e) {
 	let t = String(e.outcome || "").trim();
 	return String(e.status || "").trim() === "needs_attention" && t !== "failed" ? {
 		label: "Needs attention",
 		tone: "attention"
-	} : IB[t] || {
+	} : RB[t] || {
 		label: "Needs attention",
 		tone: "attention"
 	};
 }
-function RB(e) {
+function BB(e) {
 	let t = String(e || "").trim();
 	if (!t) return "—";
 	let n = new Date(t);
@@ -30195,38 +30206,38 @@ function RB(e) {
 		day: "numeric"
 	})}, ${r}`;
 }
-function zB(e) {
+function VB(e) {
 	var t;
 	return ((t = String(e || "").trim().replace(/\\/g, "/").split("/").pop()) == null ? void 0 : t.trim()) || "";
 }
-function BB(e) {
+function HB(e) {
 	if (e == null || String(e).trim() === "") return null;
 	let t = Number(e);
 	return Number.isFinite(t) ? t : null;
 }
-function VB(e) {
-	let t = zB(e.selected_resume);
+function UB(e) {
+	let t = VB(e.selected_resume);
 	if (!t) return null;
-	let n = zB(e.winner_resume);
-	if (n && t === n) return BB(e.winner_score);
-	let r = zB(e.runner_up_resume || e.runnerup_resume);
+	let n = VB(e.winner_resume);
+	if (n && t === n) return HB(e.winner_score);
+	let r = VB(e.runner_up_resume || e.runnerup_resume);
 	if (r && t === r) {
 		var i;
-		return BB((i = e.runner_up_score) == null ? e.runnerup_score : i);
+		return HB((i = e.runner_up_score) == null ? e.runnerup_score : i);
 	}
 	return null;
 }
-function HB(e) {
-	let t = VB(e);
+function WB(e) {
+	let t = UB(e);
 	return t === null ? "—" : `${(Math.abs(t) <= 1 ? t * 100 : t).toFixed(2)}%`;
 }
-function UB(e) {
+function GB(e) {
 	let t = String(e || "").trim();
 	if (!t) return "?";
 	let n = t.split(/\s+/).filter(Boolean);
 	return n.length >= 2 ? `${n[0][0]}${n[1][0]}`.toUpperCase() : t.slice(0, 2).toUpperCase();
 }
-function WB({ company: e, domain: t, clientId: n }) {
+function KB({ company: e, domain: t, clientId: n }) {
 	let r = String(t || "").trim(), i = String(n || "").trim(), [a, o] = (0, C.useState)(!1);
 	return (0, C.useEffect)(() => o(!1), [r, i]), /* @__PURE__ */ (0, q.jsx)("span", {
 		className: "planning-bulk-results__logo",
@@ -30240,11 +30251,11 @@ function WB({ company: e, domain: t, clientId: n }) {
 			onError: () => o(!0)
 		}) : /* @__PURE__ */ (0, q.jsx)("span", {
 			className: "planning-bulk-results__lettermark",
-			children: UB(e)
+			children: GB(e)
 		})
 	});
 }
-var GB = [
+var qB = [
 	{
 		id: "all",
 		label: "All",
@@ -30270,7 +30281,7 @@ var GB = [
 		match: (e) => e.outcome === "failed" || e.status === "needs_attention"
 	}
 ];
-function KB({ bulk: e, onClose: t, onRerun: n }) {
+function JB({ bulk: e, onClose: t, onRerun: n }) {
 	let r = (0, C.useId)(), i = (0, C.useId)(), a = (0, C.useRef)(null), [o, s] = (0, C.useState)(""), [c, l] = (0, C.useState)("all"), [u, d] = (0, C.useState)([]), f = (0, C.useMemo)(() => Array.isArray(e.resultItems) ? e.resultItems : [], [e.resultItems]);
 	(0, C.useEffect)(() => {
 		d([]), s(""), l("all");
@@ -30297,7 +30308,7 @@ function KB({ bulk: e, onClose: t, onRerun: n }) {
 			let n = String(t.job_title || t.job_label || "").toLowerCase(), r = String(t.job_company || "").toLowerCase();
 			return n.includes(e) || r.includes(e);
 		}) : f;
-	}, [f, o]), m = GB.find((e) => e.id === c) || GB[0], h = (0, C.useMemo)(() => p.filter(m.match), [p, m]), g = (0, C.useMemo)(() => h.filter((e) => e.rerunnable), [h]), _ = (0, C.useMemo)(() => f.filter((e) => e.rerunnable), [f]), v = f.filter((e) => e.outcome === "generated").length, y = f.filter((e) => e.outcome === "failed" || e.status === "needs_attention").length, b = new Set(u), x = g.filter((e) => b.has(e.job_identity)), S = g.length > 0 && x.length === g.length, w = (e) => {
+	}, [f, o]), m = qB.find((e) => e.id === c) || qB[0], h = (0, C.useMemo)(() => p.filter(m.match), [p, m]), g = (0, C.useMemo)(() => h.filter((e) => e.rerunnable), [h]), _ = (0, C.useMemo)(() => f.filter((e) => e.rerunnable), [f]), v = f.filter((e) => e.outcome === "generated").length, y = f.filter((e) => e.outcome === "failed" || e.status === "needs_attention").length, b = new Set(u), x = g.filter((e) => b.has(e.job_identity)), S = g.length > 0 && x.length === g.length, w = (e) => {
 		d((t) => t.includes(e) ? t.filter((t) => t !== e) : [...t, e]);
 	}, T = () => {
 		if (S) {
@@ -30345,7 +30356,7 @@ function KB({ bulk: e, onClose: t, onRerun: n }) {
 						}),
 						/* @__PURE__ */ (0, q.jsxs)("div", {
 							className: "planning-bulk-results__head-meta",
-							children: [/* @__PURE__ */ (0, q.jsx)("span", { children: `Last run ${RB(e.lastFinishedAt)}` }), E ? /* @__PURE__ */ (0, q.jsx)("span", {
+							children: [/* @__PURE__ */ (0, q.jsx)("span", { children: `Last run ${BB(e.lastFinishedAt)}` }), E ? /* @__PURE__ */ (0, q.jsx)("span", {
 								title: E,
 								children: `Live Pipeline: ${D}`
 							}) : null]
@@ -30452,7 +30463,7 @@ function KB({ bulk: e, onClose: t, onRerun: n }) {
 							className: "planning-bulk-results__pills",
 							role: "group",
 							"aria-label": "Filter results",
-							children: GB.map((e) => {
+							children: qB.map((e) => {
 								let t = p.filter(e.match).length;
 								return /* @__PURE__ */ (0, q.jsxs)("button", {
 									type: "button",
@@ -30513,7 +30524,7 @@ function KB({ bulk: e, onClose: t, onRerun: n }) {
 							className: "planning-bulk-results__empty",
 							children: "No jobs match the current search or filter."
 						}) }) : h.map((t) => {
-							let n = LB(t), r = b.has(t.job_identity), i = !!t.rerunnable, a = HB(t), o = String(t.selected_resume || "").trim(), s = String(t.job_company || "").trim();
+							let n = zB(t), r = b.has(t.job_identity), i = !!t.rerunnable, a = WB(t), o = String(t.selected_resume || "").trim(), s = String(t.job_company || "").trim();
 							return /* @__PURE__ */ (0, q.jsxs)("tr", {
 								className: `planning-bulk-results__row${r ? " is-selected" : ""}`,
 								children: [
@@ -30535,7 +30546,7 @@ function KB({ bulk: e, onClose: t, onRerun: n }) {
 									}), t.job_location ? /* @__PURE__ */ (0, q.jsx)("small", { children: t.job_location }) : null] }),
 									/* @__PURE__ */ (0, q.jsx)("td", { children: /* @__PURE__ */ (0, q.jsxs)("span", {
 										className: "planning-bulk-results__company",
-										children: [/* @__PURE__ */ (0, q.jsx)(WB, {
+										children: [/* @__PURE__ */ (0, q.jsx)(KB, {
 											company: s,
 											domain: t.company_domain,
 											clientId: e.brandfetchClientId
@@ -30545,7 +30556,7 @@ function KB({ bulk: e, onClose: t, onRerun: n }) {
 										className: `planning-bulk-results__badge is-${n.tone}`,
 										children: n.label
 									}) }),
-									/* @__PURE__ */ (0, q.jsx)("td", { children: RB(t.finished_at) }),
+									/* @__PURE__ */ (0, q.jsx)("td", { children: BB(t.finished_at) }),
 									/* @__PURE__ */ (0, q.jsx)("td", { children: /* @__PURE__ */ (0, q.jsxs)("span", {
 										className: "planning-bulk-results__resume",
 										children: [
@@ -30622,7 +30633,7 @@ function KB({ bulk: e, onClose: t, onRerun: n }) {
 		})
 	});
 }
-function qB({ bulk: e, onStart: t, onStop: n, onViewResults: r, onRerun: i }) {
+function YB({ bulk: e, onStart: t, onStop: n, onViewResults: r, onRerun: i }) {
 	let [a, o] = (0, C.useState)(!1), [s, c] = (0, C.useState)(!1), [l, u] = (0, C.useState)(!1), [d, f] = (0, C.useState)(!1), p = (0, C.useRef)(null), m = (0, C.useRef)(null), h = (0, C.useId)(), g = (0, C.useId)(), _ = !!e.isRunning, v = String(e.currentPipelineRunId || "").trim(), y = String(e.resultPipelineRunId || "").trim(), b = !!e.hasResults && v.length > 0 && v === y, x = !_ && b, S = Number(e.processedCount || 0);
 	(0, C.useEffect)(() => {
 		!_ && a && o(!1);
@@ -30643,7 +30654,7 @@ function qB({ bulk: e, onStart: t, onStop: n, onViewResults: r, onRerun: i }) {
 			document.removeEventListener("mousedown", e), document.removeEventListener("keydown", t);
 		};
 	}, [a]);
-	let w = Number(e.total || 0), T = Number(e.completed || 0), E = Number(e.needsAttention || 0), D = Number(e.remaining || 0), O = !!e.stopRequested, k = Array.isArray(e.items) ? e.items : [], A = w > 0 ? Math.min(100, Math.max(0, Math.round(T / w * 100))) : 0, j = e.verified === !1 ? "Status unavailable" : O ? "Stopping after current" : "Running", M = NB(e.currentLabel || ""), N = e.verified === !1 ? "pending" : O ? "attention" : "running", P = k.filter((e) => e.status === "needs_attention").length, F = d ? k.filter((e) => e.status === "needs_attention") : k, ee = `Review the completed Bulk Generate run for this Live Pipeline (${S} processed).`, te = e.eligibleCount > 0 ? `Generate suggestions for ${e.eligibleCount} eligible Planning job${e.eligibleCount === 1 ? "" : "s"}.` : "No Planning jobs currently need suggestions.";
+	let w = Number(e.total || 0), T = Number(e.completed || 0), E = Number(e.needsAttention || 0), D = Number(e.remaining || 0), O = !!e.stopRequested, k = Array.isArray(e.items) ? e.items : [], A = w > 0 ? Math.min(100, Math.max(0, Math.round(T / w * 100))) : 0, j = e.verified === !1 ? "Status unavailable" : O ? "Stopping after current" : "Running", M = FB(e.currentLabel || ""), N = e.verified === !1 ? "pending" : O ? "attention" : "running", P = k.filter((e) => e.status === "needs_attention").length, F = d ? k.filter((e) => e.status === "needs_attention") : k, ee = `Review the completed Bulk Generate run for this Live Pipeline (${S} processed).`, te = e.eligibleCount > 0 ? `Generate suggestions for ${e.eligibleCount} eligible Planning job${e.eligibleCount === 1 ? "" : "s"}.` : "No Planning jobs currently need suggestions.";
 	return /* @__PURE__ */ (0, q.jsxs)("span", {
 		className: "planning-react-bulk-actions",
 		ref: p,
@@ -30700,9 +30711,9 @@ function qB({ bulk: e, onStart: t, onStop: n, onViewResults: r, onRerun: i }) {
 				id: g,
 				role: "tooltip",
 				className: `planning-bulk-run__hint${l ? "" : " hidden"}`,
-				children: MB
+				children: PB
 			}) : null,
-			s && x ? /* @__PURE__ */ (0, q.jsx)(KB, {
+			s && x ? /* @__PURE__ */ (0, q.jsx)(JB, {
 				bulk: e,
 				onClose: () => {
 					var e;
@@ -30827,7 +30838,7 @@ function qB({ bulk: e, onStart: t, onStop: n, onViewResults: r, onRerun: i }) {
 							className: "planning-bulk-run__job-list",
 							tabIndex: 0,
 							children: [F.map((e, t) => {
-								let n = FB(e.status), r = NB(e.label);
+								let n = LB(e.status), r = FB(e.label);
 								return /* @__PURE__ */ (0, q.jsxs)("li", {
 									className: `planning-bulk-run__job is-${n.tone}`,
 									children: [
@@ -30868,7 +30879,7 @@ function qB({ bulk: e, onStart: t, onStop: n, onViewResults: r, onRerun: i }) {
 		]
 	});
 }
-var JB = [
+var XB = [
 	{
 		value: "APPLY",
 		label: "Ready for review",
@@ -30889,7 +30900,7 @@ var JB = [
 		label: "Review later",
 		tone: "later"
 	}
-], YB = [
+], ZB = [
 	{
 		value: "strong",
 		label: "Excellent match",
@@ -30915,7 +30926,7 @@ var JB = [
 		label: "No credible match",
 		tone: "unavailable"
 	}
-], XB = [
+], QB = [
 	{
 		value: "ready",
 		label: "Ready",
@@ -30931,7 +30942,7 @@ var JB = [
 		label: "Unavailable",
 		tone: "unavailable"
 	}
-], ZB = {
+], $B = {
 	queue_rank: {
 		min: 72,
 		max: 110
@@ -30961,25 +30972,25 @@ var JB = [
 		max: 280
 	}
 };
-function QB(e) {
-	window.dispatchEvent(new CustomEvent(kB, { detail: e }));
+function eV(e) {
+	window.dispatchEvent(new CustomEvent(jB, { detail: e }));
 }
 function $(e) {
 	return String(e == null ? "" : e).trim();
 }
-function $B(e) {
+function tV(e) {
 	let t = $(e).replace(/_/g, " ");
 	return t ? t.charAt(0).toUpperCase() + t.slice(1) : "Unavailable";
 }
-function eV(e) {
-	return $(e).toLowerCase() === "review" ? "No safe rewrites" : $B(e);
+function nV(e) {
+	return $(e).toLowerCase() === "review" ? "No safe rewrites" : tV(e);
 }
-function tV(e) {
+function rV(e) {
 	let t = $(e);
 	return t ? t.replace(/\.pdf$/i, "").replace(/_/g, " ") : "Not selected";
 }
-var nV = /* @__PURE__ */ new Set(["effective_tie", "manual_review_close_call"]);
-function rV(e) {
+var iV = /* @__PURE__ */ new Set(["effective_tie", "manual_review_close_call"]);
+function aV(e) {
 	return [
 		"true",
 		"1",
@@ -30988,33 +30999,33 @@ function rV(e) {
 		"on"
 	].includes($(e).toLowerCase());
 }
-function iV(e) {
-	if (rV(e.variant_review_required) || rV(e.needs_variant_review)) return !1;
-	let t = $(e.resolved_selection_status).toLowerCase();
-	return t ? t === "resolved" : !nV.has($(e.selection_signal).toLowerCase()) && $(e.action).toUpperCase() === "APPLY";
-}
-function aV(e) {
-	return $(e.operator_selected_resume || e.selected_resume);
-}
 function oV(e) {
-	return aV(e) || (iV(e) ? $(e.winner_resume) : "");
+	if (aV(e.variant_review_required) || aV(e.needs_variant_review)) return !1;
+	let t = $(e.resolved_selection_status).toLowerCase();
+	return t ? t === "resolved" : !iV.has($(e.selection_signal).toLowerCase()) && $(e.action).toUpperCase() === "APPLY";
 }
 function sV(e) {
-	return aV(e) ? "" : $(e.winner_resume);
+	return $(e.operator_selected_resume || e.selected_resume);
 }
 function cV(e) {
-	let t = oV(e);
-	if (t) return t;
-	let n = sV(e);
-	return n ? `Top candidate: ${n}` : "";
+	return sV(e) || (oV(e) ? $(e.winner_resume) : "");
 }
 function lV(e) {
-	let t = oV(e);
-	if (t) return tV(t);
-	let n = sV(e);
-	return n ? `Top candidate: ${tV(n)}` : tV("");
+	return sV(e) ? "" : $(e.winner_resume);
 }
 function uV(e) {
+	let t = cV(e);
+	if (t) return t;
+	let n = lV(e);
+	return n ? `Top candidate: ${n}` : "";
+}
+function dV(e) {
+	let t = cV(e);
+	if (t) return rV(t);
+	let n = lV(e);
+	return n ? `Top candidate: ${rV(n)}` : rV("");
+}
+function fV(e) {
 	let t = $(e);
 	if (!t) return "Unavailable";
 	let n = new Date(t);
@@ -31024,7 +31035,7 @@ function uV(e) {
 		year: "numeric"
 	}).format(n);
 }
-function dV(e) {
+function pV(e) {
 	return {
 		APPLY: {
 			label: "Ready for review",
@@ -31047,7 +31058,7 @@ function dV(e) {
 		tone: "unavailable"
 	};
 }
-function fV(e) {
+function mV(e) {
 	let t = $(e).toLowerCase();
 	return [
 		"true",
@@ -31063,29 +31074,29 @@ function fV(e) {
 		"off"
 	].includes(t) ? "No packet" : "Packet unavailable";
 }
-function pV() {
+function hV() {
 	try {
 		let e = JSON.parse(localStorage.getItem("applylens.planning.columnWidths.v1") || "{}");
 		if (!e || typeof e != "object" || Array.isArray(e)) return {};
 		let t = "version" in e && e.version === 1 ? e.widths : e;
 		return !t || typeof t != "object" || Array.isArray(t) ? {} : Object.fromEntries(Object.entries(t).flatMap(([e, t]) => {
-			let n = ZB[e], r = Number(t);
+			let n = $B[e], r = Number(t);
 			return !n || !Number.isFinite(r) ? [] : [[e, Math.min(n.max, Math.max(n.min, r))]];
 		}));
 	} catch (e) {
 		return {};
 	}
 }
-function mV(e) {
-	localStorage.setItem(AB, JSON.stringify({
+function gV(e) {
+	localStorage.setItem(MB, JSON.stringify({
 		version: 1,
 		widths: e
 	}));
 }
-function hV(e, t) {
+function _V(e, t) {
 	return $(e.job_doc_id || e.job_url || e.queue_rank) || `planning-row-${t}`;
 }
-function gV(e) {
+function vV(e) {
 	if (e && typeof e == "object" && !Array.isArray(e)) return e;
 	let t = $(e);
 	if (!t) return null;
@@ -31096,9 +31107,9 @@ function gV(e) {
 		return null;
 	}
 }
-function _V({ row: e }) {
-	let t = gV(e.llm_adjudicator_readback), n = $((t == null ? void 0 : t.status) || e.llm_adjudicator_readback_status || "Unavailable"), r = Array.isArray(t == null ? void 0 : t.candidate_resume_names) ? t.candidate_resume_names.map($).filter(Boolean).join(", ") : "", i = [
-		["Status", $B(n)],
+function yV({ row: e }) {
+	let t = vV(e.llm_adjudicator_readback), n = $((t == null ? void 0 : t.status) || e.llm_adjudicator_readback_status || "Unavailable"), r = Array.isArray(t == null ? void 0 : t.candidate_resume_names) ? t.candidate_resume_names.map($).filter(Boolean).join(", ") : "", i = [
+		["Status", tV(n)],
 		["Provider", $((t == null ? void 0 : t.provider_used) || (t == null ? void 0 : t.provider_requested))],
 		["Model", $((t == null ? void 0 : t.model_used) || (t == null ? void 0 : t.model_requested))],
 		["Candidates", r],
@@ -31114,7 +31125,7 @@ function _V({ row: e }) {
 		]
 	});
 }
-function vV({ row: e }) {
+function bV({ row: e }) {
 	let t = [
 		"true",
 		"1",
@@ -31125,18 +31136,18 @@ function vV({ row: e }) {
 		className: "planning-react-details-grid",
 		children: [
 			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Full location" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: $(e.job_location) || "Unavailable" })] }),
-			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Prefilter relevance" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: $B(e.selection_signal) })] }),
-			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "AI evaluation" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: $B(e.llm_adjudicator_readback_status) })] }),
-			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Runner-up resume" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: tV(e.runner_up_resume || e.runnerup_resume) })] }),
+			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Prefilter relevance" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: tV(e.selection_signal) })] }),
+			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "AI evaluation" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: tV(e.llm_adjudicator_readback_status) })] }),
+			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Runner-up resume" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: rV(e.runner_up_resume || e.runnerup_resume) })] }),
 			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Runner-up score" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: $(e.runner_up_score) || "Unavailable" })] }),
 			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Score gap" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: $(e.score_gap) || "Unavailable" })] }),
-			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Operator decision" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: $B(e.operator_decision || "Not decided") })] }),
+			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Operator decision" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: tV(e.operator_decision || "Not decided") })] }),
 			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Priority reason" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: $(e.queue_priority_reason) || "Unavailable" })] }),
 			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Missing requirements" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: $(e.missing_requirement_count) || "0" })] })
 		]
-	}), t ? /* @__PURE__ */ (0, q.jsx)(_V, { row: e }) : null] });
+	}), t ? /* @__PURE__ */ (0, q.jsx)(yV, { row: e }) : null] });
 }
-function yV() {
+function xV() {
 	return [
 		{
 			id: "expand",
@@ -31198,7 +31209,7 @@ function yV() {
 			sortUndefined: "last",
 			cell: ({ row: e }) => /* @__PURE__ */ (0, q.jsx)("time", {
 				dateTime: $(e.original.posted_at),
-				children: uV(e.original.posted_at)
+				children: fV(e.original.posted_at)
 			})
 		},
 		{
@@ -31207,9 +31218,9 @@ function yV() {
 			size: 184,
 			minSize: 150,
 			maxSize: 260,
-			accessorFn: (e) => dV(e).label,
+			accessorFn: (e) => pV(e).label,
 			cell: ({ row: e }) => {
-				let t = dV(e.original), n = [
+				let t = pV(e.original), n = [
 					"true",
 					"1",
 					"yes",
@@ -31237,7 +31248,7 @@ function yV() {
 			sortUndefined: "last",
 			cell: ({ row: e }) => /* @__PURE__ */ (0, q.jsx)(aL, {
 				value: e.original.winner_score,
-				strength: $B(e.original.winner_bucket)
+				strength: tV(e.original.winner_bucket)
 			})
 		},
 		{
@@ -31246,11 +31257,11 @@ function yV() {
 			size: 230,
 			minSize: 200,
 			maxSize: 360,
-			accessorFn: lV,
+			accessorFn: dV,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, q.jsx)("span", {
 				className: "planning-react-resume",
-				title: cV(e.original),
-				children: lV(e.original)
+				title: uV(e.original),
+				children: dV(e.original)
 			})
 		},
 		{
@@ -31265,13 +31276,13 @@ function yV() {
 			size: 188,
 			minSize: 160,
 			maxSize: 280,
-			accessorFn: (e) => fV(e.packet_generation_allowed),
+			accessorFn: (e) => mV(e.packet_generation_allowed),
 			cell: ({ row: e }) => /* @__PURE__ */ (0, q.jsxs)("span", {
 				className: "planning-react-status-stack",
 				children: [/* @__PURE__ */ (0, q.jsx)("span", {
-					className: `planning-react-badge ${fV(e.original.packet_generation_allowed) === "Packet ready" ? "is-ready" : ""}`,
-					children: fV(e.original.packet_generation_allowed)
-				}), /* @__PURE__ */ (0, q.jsx)("span", { children: eV(e.original.tailoring_workspace_state || "Workspace unavailable") })]
+					className: `planning-react-badge ${mV(e.original.packet_generation_allowed) === "Packet ready" ? "is-ready" : ""}`,
+					children: mV(e.original.packet_generation_allowed)
+				}), /* @__PURE__ */ (0, q.jsx)("span", { children: nV(e.original.tailoring_workspace_state || "Workspace unavailable") })]
 			})
 		},
 		{
@@ -31294,7 +31305,7 @@ function yV() {
 					className: `planning-react-next-step ${t.kind === "generate_suggestions" ? "is-primary" : ""}`,
 					disabled: t.disabled,
 					title: t.title,
-					onClick: () => QB({
+					onClick: () => eV({
 						type: "next_step",
 						row: e.original
 					}),
@@ -31304,11 +31315,11 @@ function yV() {
 		}
 	];
 }
-function bV({ state: e }) {
+function SV({ state: e }) {
 	let [t, n] = (0, C.useState)(e.filters);
 	(0, C.useEffect)(() => n(e.filters), [e.filters]);
 	let r = (e) => {
-		n(e), QB({
+		n(e), eV({
 			type: "filters_change",
 			filters: e
 		});
@@ -31323,7 +31334,7 @@ function bV({ state: e }) {
 			/* @__PURE__ */ (0, q.jsx)(nL, {
 				id: "planningActionFilter",
 				label: "Action",
-				options: JB,
+				options: XB,
 				values: t.actions,
 				onChange: (e) => r({
 					...t,
@@ -31349,7 +31360,7 @@ function bV({ state: e }) {
 			/* @__PURE__ */ (0, q.jsx)(nL, {
 				id: "planningWinnerBucket",
 				label: "Match Strength",
-				options: YB,
+				options: ZB,
 				values: t.winnerBuckets,
 				onChange: (e) => r({
 					...t,
@@ -31361,7 +31372,7 @@ function bV({ state: e }) {
 			/* @__PURE__ */ (0, q.jsx)(nL, {
 				id: "planningTailoringFilter",
 				label: "Tailoring",
-				options: XB,
+				options: QB,
 				values: t.tailoringStates,
 				onChange: (e) => r({
 					...t,
@@ -31417,7 +31428,7 @@ function bV({ state: e }) {
 					type: "button",
 					className: "planning-filter-apply",
 					id: "planningApplyFiltersBtn",
-					onClick: () => QB({
+					onClick: () => eV({
 						type: "apply_filters",
 						filters: t
 					}),
@@ -31426,7 +31437,7 @@ function bV({ state: e }) {
 					type: "button",
 					className: `${rL} planning-filter-clear`,
 					id: "planningClearFiltersBtn",
-					onClick: () => QB({ type: "clear_filters" }),
+					onClick: () => eV({ type: "clear_filters" }),
 					children: [/* @__PURE__ */ (0, q.jsx)(Ee, {
 						size: 15,
 						"aria-hidden": "true"
@@ -31436,8 +31447,8 @@ function bV({ state: e }) {
 		]
 	});
 }
-function xV({ state: e }) {
-	let [t, n] = (0, C.useState)(pV), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(yV, []), o = (0, C.useMemo)(() => e.rows.slice(), [e.rows]), s = (0, C.useMemo)(() => e.sort.key ? [{
+function CV({ state: e }) {
+	let [t, n] = (0, C.useState)(hV), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(xV, []), o = (0, C.useMemo)(() => e.rows.slice(), [e.rows]), s = (0, C.useMemo)(() => e.sort.key ? [{
 		id: e.sort.key,
 		desc: e.sort.direction === "desc"
 	}] : [], [e.sort]);
@@ -31455,10 +31466,10 @@ function xV({ state: e }) {
 			columnSizing: t,
 			expanded: r ? { [r]: !0 } : {}
 		},
-		getRowId: hV,
+		getRowId: _V,
 		onSortingChange: (e) => {
 			let t = (typeof e == "function" ? e(s) : e)[0];
-			t && (i(""), QB({
+			t && (i(""), eV({
 				type: "sort_change",
 				key: t.id,
 				direction: t.desc ? "desc" : "asc"
@@ -31467,7 +31478,7 @@ function xV({ state: e }) {
 		onColumnSizingChange: (e) => {
 			n((t) => {
 				let n = typeof e == "function" ? e(t) : e;
-				return mV(n), n;
+				return gV(n), n;
 			});
 		},
 		onExpandedChange: (e) => {
@@ -31486,12 +31497,12 @@ function xV({ state: e }) {
 		title: "Planning worklist",
 		subtitle: `Planning view · ${e.pagination.totalCount} total job${e.pagination.totalCount === 1 ? "" : "s"}`,
 		count: e.pagination.totalCount,
-		headingActions: /* @__PURE__ */ (0, q.jsx)(qB, {
+		headingActions: /* @__PURE__ */ (0, q.jsx)(YB, {
 			bulk: e.bulkSuggestions,
-			onStart: () => QB({ type: "bulk_generate_suggestions" }),
-			onStop: () => QB({ type: "bulk_stop_after_current" }),
-			onViewResults: () => QB({ type: "bulk_view_results" }),
-			onRerun: (e, t) => QB({
+			onStart: () => eV({ type: "bulk_generate_suggestions" }),
+			onStop: () => eV({ type: "bulk_stop_after_current" }),
+			onViewResults: () => eV({ type: "bulk_view_results" }),
+			onRerun: (e, t) => eV({
 				type: "bulk_rerun",
 				scope: e,
 				jobIdentities: t
@@ -31506,7 +31517,7 @@ function xV({ state: e }) {
 		stickyColumnId: "next_step",
 		rowClassName: (e, t) => `planning-react-row ${t % 2 ? "is-alternate" : ""} ${e.getIsExpanded() ? "is-expanded" : ""}`.trim(),
 		detailId: (e) => `planning-react-detail-${e.id}`,
-		renderDetails: (e) => /* @__PURE__ */ (0, q.jsx)(vV, { row: e.original }),
+		renderDetails: (e) => /* @__PURE__ */ (0, q.jsx)(bV, { row: e.original }),
 		empty: /* @__PURE__ */ (0, q.jsxs)("div", {
 			className: "planning-react-empty",
 			children: [
@@ -31515,19 +31526,19 @@ function xV({ state: e }) {
 				/* @__PURE__ */ (0, q.jsx)("button", {
 					type: "button",
 					className: rL,
-					onClick: () => QB({ type: "clear_filters" }),
+					onClick: () => eV({ type: "clear_filters" }),
 					children: "Clear filters"
 				})
 			]
 		}),
-		onPageChange: (e) => QB({
+		onPageChange: (e) => eV({
 			type: "page_change",
 			page: e
 		}),
-		onRetry: () => QB({ type: "retry" })
+		onRetry: () => eV({ type: "retry" })
 	});
 }
-var SV = [
+var wV = [
 	{
 		key: "total",
 		label: "Total results",
@@ -31557,11 +31568,11 @@ var SV = [
 		icon: Ne
 	}
 ];
-function CV({ state: e }) {
+function TV({ state: e }) {
 	return /* @__PURE__ */ (0, q.jsx)("section", {
 		className: "planning-react-summary-grid",
 		"aria-label": "Planning summary",
-		children: SV.map((t) => {
+		children: wV.map((t) => {
 			let n = t.icon;
 			return /* @__PURE__ */ (0, q.jsxs)("article", {
 				className: `planning-react-summary-card planning-react-summary-card--${t.key}`,
@@ -31588,7 +31599,7 @@ function CV({ state: e }) {
 }
 //#endregion
 //#region src/OperationalDashboards.tsx
-var wV = "applylens:decisions-dashboard-state", TV = "applylens:decisions-dashboard-action", EV = "applylens:decisions-dashboard-ready", DV = "applylens:applications-dashboard-state", OV = "applylens:applications-dashboard-action", kV = "applylens:applications-dashboard-ready", AV = "applylens.decisions.columnWidths.v1", jV = "applylens.applications.columnWidths.v1", MV = {
+var EV = "applylens:decisions-dashboard-state", DV = "applylens:decisions-dashboard-action", OV = "applylens:decisions-dashboard-ready", kV = "applylens:applications-dashboard-state", AV = "applylens:applications-dashboard-action", jV = "applylens:applications-dashboard-ready", MV = "applylens.decisions.columnWidths.v1", NV = "applylens.applications.columnWidths.v1", PV = {
 	status: "loading",
 	rows: [],
 	metaLabel: "Loading...",
@@ -31610,7 +31621,7 @@ var wV = "applylens:decisions-dashboard-state", TV = "applylens:decisions-dashbo
 		companyContains: "",
 		limit: 15
 	}
-}, NV = {
+}, FV = {
 	status: "loading",
 	rows: [],
 	metaLabel: "Loading...",
@@ -31633,7 +31644,7 @@ var wV = "applylens:decisions-dashboard-state", TV = "applylens:decisions-dashbo
 		titleContains: "",
 		limit: 15
 	}
-}, PV = [
+}, IV = [
 	"APPLY",
 	"TAILOR",
 	"SKIP",
@@ -31641,8 +31652,8 @@ var wV = "applylens:decisions-dashboard-state", TV = "applylens:decisions-dashbo
 ].map((e) => ({
 	value: e,
 	label: e
-})), FV = (e) => String(e == null ? "" : e).trim(), IV = (e, t = "Unavailable") => FV(e) || t, LV = (e) => {
-	let t = FV(e);
+})), LV = (e) => String(e == null ? "" : e).trim(), RV = (e, t = "Unavailable") => LV(e) || t, zV = (e) => {
+	let t = LV(e);
 	if (!t) return "Unavailable";
 	let n = new Date(t);
 	return Number.isNaN(n.getTime()) ? t : new Intl.DateTimeFormat(void 0, {
@@ -31652,19 +31663,19 @@ var wV = "applylens:decisions-dashboard-state", TV = "applylens:decisions-dashbo
 		hour: "numeric",
 		minute: "2-digit"
 	}).format(n);
-}, RV = (e, t) => FV(e.action_key) || [
-	FV(e.decision_timestamp || e.action_timestamp),
-	FV(e.job_doc_id || e.job_url),
-	FV(e.decision || e.application_status),
+}, BV = (e, t) => LV(e.action_key) || [
+	LV(e.decision_timestamp || e.action_timestamp),
+	LV(e.job_doc_id || e.job_url),
+	LV(e.decision || e.application_status),
 	t
-].join("|"), zV = (e) => e.key ? [{
+].join("|"), VV = (e) => e.key ? [{
 	id: e.key,
 	desc: e.direction === "desc"
 }] : [];
-function BV(e, t) {
+function HV(e, t) {
 	window.dispatchEvent(new CustomEvent(e, { detail: t }));
 }
-function VV(e) {
+function UV(e) {
 	try {
 		let t = JSON.parse(localStorage.getItem(e) || "{}"), n = (t == null ? void 0 : t.version) === 1 ? t.widths : t;
 		return n && typeof n == "object" && !Array.isArray(n) ? n : {};
@@ -31672,20 +31683,20 @@ function VV(e) {
 		return {};
 	}
 }
-function HV(e, t) {
+function WV(e, t) {
 	localStorage.setItem(e, JSON.stringify({
 		version: 1,
 		widths: t
 	}));
 }
-function UV(e, t) {
-	let n = IV(e);
+function GV(e, t) {
+	let n = RV(e);
 	return /* @__PURE__ */ (0, q.jsx)("span", {
-		className: `${t}-badge ${t}-badge--${FV(e).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "unknown"}`,
+		className: `${t}-badge ${t}-badge--${LV(e).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "unknown"}`,
 		children: n
 	});
 }
-function WV({ cards: e, label: t, loading: n = !1 }) {
+function KV({ cards: e, label: t, loading: n = !1 }) {
 	return /* @__PURE__ */ (0, q.jsx)("section", {
 		className: "operational-summary-grid",
 		"aria-label": t,
@@ -31705,7 +31716,7 @@ function WV({ cards: e, label: t, loading: n = !1 }) {
 		}, e))
 	});
 }
-function GV({ state: e }) {
+function qV({ state: e }) {
 	let [t, n] = (0, C.useState)(e.filters);
 	return (0, C.useEffect)(() => n(e.filters), [e.filters]), /* @__PURE__ */ (0, q.jsx)("section", {
 		className: "operational-filter-card",
@@ -31716,7 +31727,7 @@ function GV({ state: e }) {
 				/* @__PURE__ */ (0, q.jsx)(nL, {
 					id: "decisionFilter",
 					label: "Decision",
-					options: PV,
+					options: IV,
 					values: t.decisions,
 					onChange: (e) => n({
 						...t,
@@ -31751,7 +31762,7 @@ function GV({ state: e }) {
 					children: [/* @__PURE__ */ (0, q.jsx)("button", {
 						id: "decisionApplyFiltersBtn",
 						className: "operational-primary-action",
-						onClick: () => BV(TV, {
+						onClick: () => HV(DV, {
 							type: "apply_filters",
 							filters: t
 						}),
@@ -31759,7 +31770,7 @@ function GV({ state: e }) {
 					}), /* @__PURE__ */ (0, q.jsxs)("button", {
 						id: "decisionClearFiltersBtn",
 						className: `${rL} operational-secondary-action`,
-						onClick: () => BV(TV, { type: "clear_filters" }),
+						onClick: () => HV(DV, { type: "clear_filters" }),
 						children: [/* @__PURE__ */ (0, q.jsx)(Ee, {
 							size: 15,
 							"aria-hidden": "true"
@@ -31770,29 +31781,29 @@ function GV({ state: e }) {
 		})
 	});
 }
-function KV({ row: e }) {
+function JV({ row: e }) {
 	return /* @__PURE__ */ (0, q.jsx)(cL, { children: /* @__PURE__ */ (0, q.jsxs)("div", {
 		className: "operational-detail-grid",
 		children: [
-			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Queue rank" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: IV(e.queue_rank) })] }),
-			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Posted at" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: LV(e.posted_at) })] }),
+			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Queue rank" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: RV(e.queue_rank) })] }),
+			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Posted at" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: zV(e.posted_at) })] }),
 			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Winner resume" }), /* @__PURE__ */ (0, q.jsx)("strong", {
-				title: FV(e.winner_resume),
-				children: IV(e.winner_resume)
+				title: LV(e.winner_resume),
+				children: RV(e.winner_resume)
 			})] }),
 			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Runner-up resume" }), /* @__PURE__ */ (0, q.jsx)("strong", {
-				title: FV(e.runner_up_resume),
-				children: IV(e.runner_up_resume)
+				title: LV(e.runner_up_resume),
+				children: RV(e.runner_up_resume)
 			})] }),
 			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Selected resume" }), /* @__PURE__ */ (0, q.jsx)("strong", {
-				title: FV(e.selected_resume),
-				children: IV(e.selected_resume)
+				title: LV(e.selected_resume),
+				children: RV(e.selected_resume)
 			})] }),
-			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Note" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: IV(e.note, "No note recorded") })] })
+			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Note" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: RV(e.note, "No note recorded") })] })
 		]
 	}) });
 }
-function qV() {
+function YV() {
 	return [
 		{
 			id: "expand",
@@ -31804,7 +31815,7 @@ function qV() {
 			enableResizing: !1,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, q.jsx)(iL, {
 				expanded: e.getIsExpanded(),
-				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} decision details for ${IV(e.original.job_title, "job")}`,
+				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} decision details for ${RV(e.original.job_title, "job")}`,
 				controls: `decision-detail-${e.id}`,
 				onClick: e.getToggleExpandedHandler()
 			})
@@ -31812,46 +31823,46 @@ function qV() {
 		{
 			id: "decision_timestamp",
 			header: "Date / time",
-			accessorFn: (e) => FV(e.decision_timestamp),
+			accessorFn: (e) => LV(e.decision_timestamp),
 			size: 156,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, q.jsx)("time", {
-				dateTime: FV(e.original.decision_timestamp),
-				children: LV(e.original.decision_timestamp)
+				dateTime: LV(e.original.decision_timestamp),
+				children: zV(e.original.decision_timestamp)
 			})
 		},
 		{
 			id: "decision",
 			header: "Decision",
-			accessorFn: (e) => FV(e.decision),
+			accessorFn: (e) => LV(e.decision),
 			size: 118,
-			cell: ({ row: e }) => UV(e.original.decision, "operational")
+			cell: ({ row: e }) => GV(e.original.decision, "operational")
 		},
 		{
 			id: "job",
 			header: "Job",
-			accessorFn: (e) => FV(e.job_title),
+			accessorFn: (e) => LV(e.job_title),
 			size: 270,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, q.jsxs)("span", {
 				className: "operational-job-cell",
-				children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: IV(e.original.job_title, "Untitled job") }), /* @__PURE__ */ (0, q.jsx)("span", { children: IV(e.original.job_company, "Company unavailable") })]
+				children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: RV(e.original.job_title, "Untitled job") }), /* @__PURE__ */ (0, q.jsx)("span", { children: RV(e.original.job_company, "Company unavailable") })]
 			})
 		},
 		{
 			id: "planning_action",
 			header: "Planning action",
-			accessorFn: (e) => FV(e.planning_action),
+			accessorFn: (e) => LV(e.planning_action),
 			size: 150,
-			cell: ({ row: e }) => IV(e.original.planning_action)
+			cell: ({ row: e }) => RV(e.original.planning_action)
 		},
 		{
 			id: "selected_resume",
 			header: "Selected resume",
-			accessorFn: (e) => FV(e.selected_resume),
+			accessorFn: (e) => LV(e.selected_resume),
 			size: 220,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, q.jsx)("span", {
 				className: "operational-truncate",
-				title: FV(e.original.selected_resume),
-				children: IV(e.original.selected_resume)
+				title: LV(e.original.selected_resume),
+				children: RV(e.original.selected_resume)
 			})
 		},
 		{
@@ -31868,7 +31879,7 @@ function qV() {
 				children: "Applied"
 			}) : /* @__PURE__ */ (0, q.jsx)("button", {
 				className: "operational-row-action",
-				onClick: () => BV(TV, {
+				onClick: () => HV(DV, {
 					type: "open_application",
 					row: e.original
 				}),
@@ -31877,8 +31888,8 @@ function qV() {
 		}
 	];
 }
-function JV({ state: e }) {
-	let [t, n] = (0, C.useState)(() => VV(AV)), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(qV, []), o = (0, C.useMemo)(() => zV(e.sort), [e.sort]);
+function XV({ state: e }) {
+	let [t, n] = (0, C.useState)(() => UV(MV)), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(YV, []), o = (0, C.useMemo)(() => VV(e.sort), [e.sort]);
 	(0, C.useEffect)(() => i(""), [
 		e.resultKey,
 		e.pagination.page,
@@ -31892,7 +31903,7 @@ function JV({ state: e }) {
 			columnSizing: t,
 			expanded: r ? { [r]: !0 } : {}
 		},
-		getRowId: RV,
+		getRowId: BV,
 		getCoreRowModel: qI(),
 		getSortedRowModel: JI(),
 		getRowCanExpand: () => !0,
@@ -31900,7 +31911,7 @@ function JV({ state: e }) {
 		columnResizeMode: "onChange",
 		onSortingChange: (e) => {
 			let t = (typeof e == "function" ? e(o) : e)[0];
-			t && BV(TV, {
+			t && HV(DV, {
 				type: "sort_change",
 				key: t.id,
 				direction: t.desc ? "desc" : "asc"
@@ -31908,7 +31919,7 @@ function JV({ state: e }) {
 		},
 		onColumnSizingChange: (e) => n((t) => {
 			let n = typeof e == "function" ? e(t) : e;
-			return HV(AV, n), n;
+			return WV(MV, n), n;
 		}),
 		onExpandedChange: (e) => {
 			let t = r ? { [r]: !0 } : {}, n = typeof e == "function" ? e(t) : e, a = n === !0 ? t : n;
@@ -31931,30 +31942,30 @@ function JV({ state: e }) {
 		stickyColumnId: "application_action",
 		rowClassName: (e, t) => `operational-row ${t % 2 ? "is-alternate" : ""}`,
 		detailId: (e) => `decision-detail-${e.id}`,
-		renderDetails: (e) => /* @__PURE__ */ (0, q.jsx)(KV, { row: e.original }),
+		renderDetails: (e) => /* @__PURE__ */ (0, q.jsx)(JV, { row: e.original }),
 		empty: /* @__PURE__ */ (0, q.jsxs)("div", {
 			className: "operational-empty",
 			children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: "No operator decisions match the current filters." }), /* @__PURE__ */ (0, q.jsx)("button", {
 				className: rL,
-				onClick: () => BV(TV, { type: "clear_filters" }),
+				onClick: () => HV(DV, { type: "clear_filters" }),
 				children: "Clear filters"
 			})]
 		}),
-		onPageChange: (e) => BV(TV, {
+		onPageChange: (e) => HV(DV, {
 			type: "page_change",
 			page: e
 		}),
-		onRetry: () => BV(TV, { type: "retry" }),
+		onRetry: () => HV(DV, { type: "retry" }),
 		fillAvailableWidth: !0,
 		deferPaginationWhileLoading: !0
 	});
 }
-function YV({ state: e }) {
-	let t = e.rows, n = new Set(t.map((e) => FV(e.job_doc_id || e.job_url || `${e.job_company}|${e.job_title}`)).filter(Boolean));
+function ZV({ state: e }) {
+	let t = e.rows, n = new Set(t.map((e) => LV(e.job_doc_id || e.job_url || `${e.job_company}|${e.job_title}`)).filter(Boolean));
 	return /* @__PURE__ */ (0, q.jsxs)("div", {
 		className: "operational-dashboard",
 		children: [
-			/* @__PURE__ */ (0, q.jsx)(WV, {
+			/* @__PURE__ */ (0, q.jsx)(KV, {
 				cards: [
 					{
 						label: "Total decisions",
@@ -31972,14 +31983,14 @@ function YV({ state: e }) {
 					},
 					{
 						label: "Apply decisions",
-						value: t.filter((e) => FV(e.decision).toUpperCase() === "APPLY").length,
+						value: t.filter((e) => LV(e.decision).toUpperCase() === "APPLY").length,
 						caption: "On this page",
 						help: "Current-page decisions recorded as APPLY.",
 						icon: ne
 					},
 					{
 						label: "Tailor decisions",
-						value: t.filter((e) => FV(e.decision).toUpperCase() === "TAILOR").length,
+						value: t.filter((e) => LV(e.decision).toUpperCase() === "TAILOR").length,
 						caption: "On this page",
 						help: "Current-page decisions recorded as TAILOR.",
 						icon: me
@@ -31988,16 +31999,16 @@ function YV({ state: e }) {
 				label: "Decision summary",
 				loading: e.status === "loading"
 			}),
-			/* @__PURE__ */ (0, q.jsx)(GV, { state: e }),
-			/* @__PURE__ */ (0, q.jsx)(JV, { state: e })
+			/* @__PURE__ */ (0, q.jsx)(qV, { state: e }),
+			/* @__PURE__ */ (0, q.jsx)(XV, { state: e })
 		]
 	});
 }
-function XV({ state: e }) {
+function QV({ state: e }) {
 	let [t, n] = (0, C.useState)(e.filters);
 	(0, C.useEffect)(() => n(e.filters), [e.filters]);
 	let r = (t) => {
-		t !== e.activeTab && BV(OV, {
+		t !== e.activeTab && HV(AV, {
 			type: "tab_change",
 			tab: t
 		});
@@ -32062,7 +32073,7 @@ function XV({ state: e }) {
 					children: [/* @__PURE__ */ (0, q.jsx)("button", {
 						id: "applicationApplyFiltersBtn",
 						className: "operational-primary-action",
-						onClick: () => BV(OV, {
+						onClick: () => HV(AV, {
 							type: "apply_filters",
 							filters: t
 						}),
@@ -32070,7 +32081,7 @@ function XV({ state: e }) {
 					}), /* @__PURE__ */ (0, q.jsxs)("button", {
 						id: "applicationClearFiltersBtn",
 						className: `${rL} operational-secondary-action`,
-						onClick: () => BV(OV, { type: "clear_filters" }),
+						onClick: () => HV(AV, { type: "clear_filters" }),
 						children: [/* @__PURE__ */ (0, q.jsx)(Ee, {
 							size: 15,
 							"aria-hidden": "true"
@@ -32081,20 +32092,20 @@ function XV({ state: e }) {
 		})]
 	});
 }
-function ZV({ row: e }) {
+function $V({ row: e }) {
 	return /* @__PURE__ */ (0, q.jsx)(cL, { children: /* @__PURE__ */ (0, q.jsxs)("div", {
 		className: "operational-detail-grid",
 		children: [
-			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Complete timestamp" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: LV(e.action_timestamp) })] }),
-			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Source view" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: IV(e.source_view) })] }),
+			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Complete timestamp" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: zV(e.action_timestamp) })] }),
+			/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Source view" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: RV(e.source_view) })] }),
 			/* @__PURE__ */ (0, q.jsxs)("div", {
 				className: "is-wide",
-				children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Note" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: IV(e.note, "No note recorded") })]
+				children: [/* @__PURE__ */ (0, q.jsx)("span", { children: "Note" }), /* @__PURE__ */ (0, q.jsx)("strong", { children: RV(e.note, "No note recorded") })]
 			})
 		]
 	}) });
 }
-function QV() {
+function eH() {
 	return [
 		{
 			id: "expand",
@@ -32106,7 +32117,7 @@ function QV() {
 			enableResizing: !1,
 			cell: ({ row: e }) => e.getCanExpand() ? /* @__PURE__ */ (0, q.jsx)(iL, {
 				expanded: e.getIsExpanded(),
-				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} application details for ${IV(e.original.job_title, "job")}`,
+				label: `${e.getIsExpanded() ? "Collapse" : "Expand"} application details for ${RV(e.original.job_title, "job")}`,
 				controls: `application-detail-${e.id}`,
 				onClick: e.getToggleExpandedHandler()
 			}) : null
@@ -32114,43 +32125,43 @@ function QV() {
 		{
 			id: "action_timestamp",
 			header: "Date / time",
-			accessorFn: (e) => FV(e.action_timestamp),
+			accessorFn: (e) => LV(e.action_timestamp),
 			size: 156,
-			cell: ({ row: e }) => /* @__PURE__ */ (0, q.jsx)("time", { children: LV(e.original.action_timestamp) })
+			cell: ({ row: e }) => /* @__PURE__ */ (0, q.jsx)("time", { children: zV(e.original.action_timestamp) })
 		},
 		{
 			id: "job",
 			header: "Job",
-			accessorFn: (e) => FV(e.job_title),
+			accessorFn: (e) => LV(e.job_title),
 			size: 300,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, q.jsxs)("span", {
 				className: "operational-job-cell",
-				children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: IV(e.original.job_title, "Untitled job") }), /* @__PURE__ */ (0, q.jsx)("span", { children: IV(e.original.job_company, "Company unavailable") })]
+				children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: RV(e.original.job_title, "Untitled job") }), /* @__PURE__ */ (0, q.jsx)("span", { children: RV(e.original.job_company, "Company unavailable") })]
 			})
 		},
 		{
 			id: "application_status",
 			header: "Status",
-			accessorFn: (e) => FV(e.application_status),
+			accessorFn: (e) => LV(e.application_status),
 			size: 130,
-			cell: ({ row: e }) => UV(e.original.application_status, "application")
+			cell: ({ row: e }) => GV(e.original.application_status, "application")
 		},
 		{
 			id: "source_view",
 			header: "Source view",
-			accessorFn: (e) => FV(e.source_view),
+			accessorFn: (e) => LV(e.source_view),
 			size: 140,
-			cell: ({ row: e }) => IV(e.original.source_view)
+			cell: ({ row: e }) => RV(e.original.source_view)
 		},
 		{
 			id: "note",
 			header: "Note",
-			accessorFn: (e) => FV(e.note),
+			accessorFn: (e) => LV(e.note),
 			size: 230,
 			cell: ({ row: e }) => /* @__PURE__ */ (0, q.jsx)("span", {
 				className: "operational-truncate",
-				title: FV(e.original.note),
-				children: IV(e.original.note, "No note")
+				title: LV(e.original.note),
+				children: RV(e.original.note, "No note")
 			})
 		},
 		{
@@ -32162,7 +32173,7 @@ function QV() {
 			enableSorting: !1,
 			enableResizing: !1,
 			cell: ({ row: e }) => {
-				let t = FV(e.original.job_url || e.original.job_doc_id);
+				let t = LV(e.original.job_url || e.original.job_doc_id);
 				return t ? /* @__PURE__ */ (0, q.jsx)("a", {
 					className: "operational-row-action",
 					href: t,
@@ -32178,8 +32189,8 @@ function QV() {
 		}
 	];
 }
-function $V({ state: e }) {
-	let [t, n] = (0, C.useState)(() => VV(jV)), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(QV, []), o = (0, C.useMemo)(() => zV(e.sort), [e.sort]);
+function tH({ state: e }) {
+	let [t, n] = (0, C.useState)(() => UV(NV)), [r, i] = (0, C.useState)(""), a = (0, C.useMemo)(eH, []), o = (0, C.useMemo)(() => VV(e.sort), [e.sort]);
 	(0, C.useEffect)(() => i(""), [
 		e.resultKey,
 		e.activeTab,
@@ -32194,15 +32205,15 @@ function $V({ state: e }) {
 			columnSizing: t,
 			expanded: r ? { [r]: !0 } : {}
 		},
-		getRowId: RV,
+		getRowId: BV,
 		getCoreRowModel: qI(),
 		getSortedRowModel: JI(),
-		getRowCanExpand: (e) => !!FV(e.original.note),
+		getRowCanExpand: (e) => !!LV(e.original.note),
 		enableSortingRemoval: !1,
 		columnResizeMode: "onChange",
 		onSortingChange: (e) => {
 			let t = (typeof e == "function" ? e(o) : e)[0];
-			t && BV(OV, {
+			t && HV(AV, {
 				type: "sort_change",
 				key: t.id,
 				direction: t.desc ? "desc" : "asc"
@@ -32210,7 +32221,7 @@ function $V({ state: e }) {
 		},
 		onColumnSizingChange: (e) => n((t) => {
 			let n = typeof e == "function" ? e(t) : e;
-			return HV(jV, n), n;
+			return WV(NV, n), n;
 		}),
 		onExpandedChange: (e) => {
 			let t = r ? { [r]: !0 } : {}, n = typeof e == "function" ? e(t) : e, a = n === !0 ? t : n;
@@ -32232,25 +32243,25 @@ function $V({ state: e }) {
 		stickyColumnId: "open",
 		rowClassName: (e, t) => `operational-row ${t % 2 ? "is-alternate" : ""}`,
 		detailId: (e) => `application-detail-${e.id}`,
-		renderDetails: (e) => /* @__PURE__ */ (0, q.jsx)(ZV, { row: e.original }),
+		renderDetails: (e) => /* @__PURE__ */ (0, q.jsx)($V, { row: e.original }),
 		empty: /* @__PURE__ */ (0, q.jsxs)("div", {
 			className: "operational-empty",
 			children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: l }), /* @__PURE__ */ (0, q.jsx)("span", { children: e.activeTab === "APPLIED" ? "Applied jobs will appear after an explicit manual status update." : "Jobs explicitly saved for later will appear here." })]
 		}),
-		onPageChange: (e) => BV(OV, {
+		onPageChange: (e) => HV(AV, {
 			type: "page_change",
 			page: e
 		}),
-		onRetry: () => BV(OV, { type: "retry" }),
+		onRetry: () => HV(AV, { type: "retry" }),
 		fillAvailableWidth: !0,
 		deferPaginationWhileLoading: !0
 	});
 }
-function eH({ state: e }) {
+function nH({ state: e }) {
 	return /* @__PURE__ */ (0, q.jsxs)("div", {
 		className: "operational-dashboard",
 		children: [
-			/* @__PURE__ */ (0, q.jsx)(WV, {
+			/* @__PURE__ */ (0, q.jsx)(KV, {
 				cards: [
 					{
 						label: "Current view",
@@ -32268,14 +32279,14 @@ function eH({ state: e }) {
 					},
 					{
 						label: "With notes",
-						value: e.rows.filter((e) => FV(e.note)).length,
+						value: e.rows.filter((e) => LV(e.note)).length,
 						caption: "On this page",
 						help: "Current-page jobs with a recorded operator note.",
 						icon: me
 					},
 					{
 						label: "Companies",
-						value: new Set(e.rows.map((e) => FV(e.job_company)).filter(Boolean)).size,
+						value: new Set(e.rows.map((e) => LV(e.job_company)).filter(Boolean)).size,
 						caption: "On this page",
 						help: "Distinct companies represented on the current page.",
 						icon: Pe
@@ -32284,15 +32295,15 @@ function eH({ state: e }) {
 				label: "Application summary",
 				loading: e.status === "loading"
 			}),
-			/* @__PURE__ */ (0, q.jsx)(XV, { state: e }),
-			/* @__PURE__ */ (0, q.jsx)($V, { state: e })
+			/* @__PURE__ */ (0, q.jsx)(QV, { state: e }),
+			/* @__PURE__ */ (0, q.jsx)(tH, { state: e })
 		]
 	});
 }
 //#endregion
 //#region src/main.tsx
-var tH = "applylens:executive-kpi-state", nH = { status: "loading" };
-function rH() {
+var rH = "applylens:executive-kpi-state", iH = { status: "loading" };
+function aH() {
 	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_SOURCE_YIELD_STATE__ || xF);
 	return (0, C.useEffect)(() => {
 		let e = (e) => {
@@ -32302,17 +32313,17 @@ function rH() {
 		return window.addEventListener(bF, e), () => window.removeEventListener(bF, e);
 	}, []), /* @__PURE__ */ (0, q.jsx)(MF, { state: e });
 }
-function iH() {
-	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_EXECUTIVE_KPI_STATE__ || nH);
+function oH() {
+	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_EXECUTIVE_KPI_STATE__ || iH);
 	return (0, C.useEffect)(() => {
 		let e = (e) => {
 			let n = e.detail;
 			n != null && n.status && t(n);
 		};
-		return window.addEventListener(tH, e), () => window.removeEventListener(tH, e);
+		return window.addEventListener(rH, e), () => window.removeEventListener(rH, e);
 	}, []), /* @__PURE__ */ (0, q.jsx)(yF, { state: e });
 }
-function aH() {
+function sH() {
 	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_EXECUTIVE_QUEUE_STATE__ || _L);
 	return (0, C.useEffect)(() => {
 		let e = (e) => {
@@ -32322,52 +32333,52 @@ function aH() {
 		return window.addEventListener(pL, e), () => window.removeEventListener(pL, e);
 	}, []), /* @__PURE__ */ (0, q.jsx)(VL, { state: e });
 }
-function oH({ view: e }) {
-	let [t, n] = (0, C.useState)(() => window.__APPLYLENS_PLANNING_WORKLIST_STATE__ || jB);
+function cH({ view: e }) {
+	let [t, n] = (0, C.useState)(() => window.__APPLYLENS_PLANNING_WORKLIST_STATE__ || NB);
 	return (0, C.useEffect)(() => {
 		let e = (e) => {
 			let t = e.detail;
 			t != null && t.status && n(t);
 		};
-		return window.addEventListener(OB, e), () => window.removeEventListener(OB, e);
-	}, []), e === "filters" ? /* @__PURE__ */ (0, q.jsx)(bV, { state: t }) : e === "summary" ? /* @__PURE__ */ (0, q.jsx)(CV, { state: t }) : /* @__PURE__ */ (0, q.jsx)(xV, { state: t });
+		return window.addEventListener(AB, e), () => window.removeEventListener(AB, e);
+	}, []), e === "filters" ? /* @__PURE__ */ (0, q.jsx)(SV, { state: t }) : e === "summary" ? /* @__PURE__ */ (0, q.jsx)(TV, { state: t }) : /* @__PURE__ */ (0, q.jsx)(CV, { state: t });
 }
-function sH() {
-	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_DECISIONS_STATE__ || MV);
+function lH() {
+	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_DECISIONS_STATE__ || PV);
 	return (0, C.useEffect)(() => {
 		let e = (e) => t(e.detail);
-		return window.addEventListener(wV, e), window.__APPLYLENS_DECISIONS_REACT_READY__ = !0, window.__APPLYLENS_DECISIONS_STATE__ && t(window.__APPLYLENS_DECISIONS_STATE__), window.dispatchEvent(new CustomEvent(EV)), () => window.removeEventListener(wV, e);
-	}, []), /* @__PURE__ */ (0, q.jsx)(YV, { state: e });
+		return window.addEventListener(EV, e), window.__APPLYLENS_DECISIONS_REACT_READY__ = !0, window.__APPLYLENS_DECISIONS_STATE__ && t(window.__APPLYLENS_DECISIONS_STATE__), window.dispatchEvent(new CustomEvent(OV)), () => window.removeEventListener(EV, e);
+	}, []), /* @__PURE__ */ (0, q.jsx)(ZV, { state: e });
 }
-function cH() {
-	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_APPLICATIONS_STATE__ || NV);
+function uH() {
+	let [e, t] = (0, C.useState)(() => window.__APPLYLENS_APPLICATIONS_STATE__ || FV);
 	return (0, C.useEffect)(() => {
 		let e = (e) => t(e.detail);
-		return window.addEventListener(DV, e), window.__APPLYLENS_APPLICATIONS_REACT_READY__ = !0, window.__APPLYLENS_APPLICATIONS_STATE__ && t(window.__APPLYLENS_APPLICATIONS_STATE__), window.dispatchEvent(new CustomEvent(kV)), () => window.removeEventListener(DV, e);
-	}, []), /* @__PURE__ */ (0, q.jsx)(eH, { state: e });
+		return window.addEventListener(kV, e), window.__APPLYLENS_APPLICATIONS_REACT_READY__ = !0, window.__APPLYLENS_APPLICATIONS_STATE__ && t(window.__APPLYLENS_APPLICATIONS_STATE__), window.dispatchEvent(new CustomEvent(jV)), () => window.removeEventListener(kV, e);
+	}, []), /* @__PURE__ */ (0, q.jsx)(nH, { state: e });
 }
-var lH = document.getElementById("executiveKpiRoot");
-lH && (0, dF.createRoot)(lH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(iH, {}) }));
-var uH = document.getElementById("executiveQueueRoot");
-uH && (0, dF.createRoot)(uH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(aH, {}) }));
-var dH = document.getElementById("sourceYieldRoot");
-dH && (0, dF.createRoot)(dH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(rH, {}) }));
-var fH = document.getElementById("pipelineDashboardRoot");
-fH && (0, dF.createRoot)(fH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(xR, {}) }));
-var pH = document.getElementById("planningSummaryRoot");
-pH && (0, dF.createRoot)(pH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(oH, { view: "summary" }) }));
-var mH = document.getElementById("planningFiltersRoot");
-mH && (0, dF.createRoot)(mH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(oH, { view: "filters" }) }));
-var hH = document.getElementById("planningWorklistRoot");
-hH && (0, dF.createRoot)(hH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(oH, { view: "worklist" }) }));
-var gH = document.getElementById("decisionsDashboardRoot");
-gH && (0, dF.createRoot)(gH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(sH, {}) }));
-var _H = document.getElementById("applicationsDashboardRoot");
-_H && (0, dF.createRoot)(_H).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(cH, {}) }));
-var vH = document.getElementById("schedulerHealthDashboardRoot");
-vH && (0, dF.createRoot)(vH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(fz, {}) }));
-var yH = document.getElementById("agenticOperationsRoot");
-yH && (0, dF.createRoot)(yH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(DB, {}) }));
-var bH = document.getElementById("advancedDiagnosticsRoot");
-bH && (0, dF.createRoot)(bH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(eB, { state: window.__APPLYLENS_ADVANCED_DIAGNOSTICS_STATE__ || pz }) }));
+var dH = document.getElementById("executiveKpiRoot");
+dH && (0, dF.createRoot)(dH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(oH, {}) }));
+var fH = document.getElementById("executiveQueueRoot");
+fH && (0, dF.createRoot)(fH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(sH, {}) }));
+var pH = document.getElementById("sourceYieldRoot");
+pH && (0, dF.createRoot)(pH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(aH, {}) }));
+var mH = document.getElementById("pipelineDashboardRoot");
+mH && (0, dF.createRoot)(mH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(xR, {}) }));
+var hH = document.getElementById("planningSummaryRoot");
+hH && (0, dF.createRoot)(hH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(cH, { view: "summary" }) }));
+var gH = document.getElementById("planningFiltersRoot");
+gH && (0, dF.createRoot)(gH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(cH, { view: "filters" }) }));
+var _H = document.getElementById("planningWorklistRoot");
+_H && (0, dF.createRoot)(_H).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(cH, { view: "worklist" }) }));
+var vH = document.getElementById("decisionsDashboardRoot");
+vH && (0, dF.createRoot)(vH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(lH, {}) }));
+var yH = document.getElementById("applicationsDashboardRoot");
+yH && (0, dF.createRoot)(yH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(uH, {}) }));
+var bH = document.getElementById("schedulerHealthDashboardRoot");
+bH && (0, dF.createRoot)(bH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(mz, {}) }));
+var xH = document.getElementById("agenticOperationsRoot");
+xH && (0, dF.createRoot)(xH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(kB, {}) }));
+var SH = document.getElementById("advancedDiagnosticsRoot");
+SH && (0, dF.createRoot)(SH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(nB, { state: window.__APPLYLENS_ADVANCED_DIAGNOSTICS_STATE__ || hz }) }));
 //#endregion

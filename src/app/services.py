@@ -219,7 +219,7 @@ from src.pipeline.scheduler import (
     get_scheduled_job_definitions,
     get_scheduler_launchd_agent_status,
     get_scheduler_runtime_job_status,
-    get_scheduler_runtime_jobs_status,
+    get_scheduler_runtime_status,
     resolve_scheduler_psql_executable,
 )
 from src.storage.scheduler.contract import (
@@ -10064,8 +10064,10 @@ def scheduler_operator_summary_payload(
         if isinstance(row, dict)
     }
     manual_discovery = manual_agent_discovery_status_payload()
+    runtime_status = get_scheduler_runtime_status()
+    runtime_provider = str(runtime_status.get("runtime_provider", "") or "")
     runtime_jobs = []
-    for runtime_job in get_scheduler_runtime_jobs_status():
+    for runtime_job in list(runtime_status.get("jobs", []) or []):
         last_run = latest_run_lookup.get(runtime_job["job_name"])
         scheduled_last_run = latest_scheduled_run_lookup.get(
             runtime_job["job_name"]
@@ -10075,9 +10077,13 @@ def scheduler_operator_summary_payload(
             {
                 **runtime_job,
                 "last_run": last_run,
-                "expected_next_run_at": _scheduler_expected_next_run_at(
-                    scheduled_last_run,
-                    runtime_job.get("cadence_seconds"),
+                "expected_next_run_at": (
+                    _scheduler_expected_next_run_at(
+                        scheduled_last_run,
+                        runtime_job.get("cadence_seconds"),
+                    )
+                    if runtime_provider == "launchd"
+                    else runtime_job.get("expected_next_run_at")
                 ),
                 "manual_run_active": (
                     bool(manual_discovery["manual_run_active"])
@@ -10105,6 +10111,11 @@ def scheduler_operator_summary_payload(
         },
         "latest_runs_by_job": latest_runs_by_job,
         "latest_scheduled_runs_by_job": latest_scheduled_runs_by_job,
+        "runtime_provider": runtime_provider,
+        "runtime_observation_status": runtime_status.get(
+            "runtime_observation_status", "unavailable"
+        ),
+        "runtime_observed_at": runtime_status.get("runtime_observed_at"),
         "runtime_jobs": runtime_jobs,
         "recent_postgres_runs": postgres_block.get("recent_runs", []),
         "recent_jsonl_runs": latest_jsonl_rows,

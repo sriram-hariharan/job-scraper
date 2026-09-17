@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh ApplyLens scheduler runtime observation
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=5s
+Unit=applylens-scheduler-runtime-observation.service
+
+[Install]
+WantedBy=timers.target

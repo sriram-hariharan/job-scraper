@@ -78,6 +78,7 @@ from tests.support.phase_guard_registry import (
     STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES,
     STEP18D20_ADMIN_SCHEDULER_AUTOMATION_CONTROL_FILES,
     STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES,
+    STEP18D23_SYSTEMD_SCHEDULER_RUNTIME_OBSERVATION_FILES,
     RECRUITEE_SOURCE_INTEGRATION_FILES,
     RECRUITEE_STANDALONE_DISCOVERY_FILES,
     SCRAPER_PREFILTER_OWNERSHIP_BOUNDARY_FILES,
@@ -2525,6 +2526,7 @@ def test_current_milestone_guard_compatibility_is_exact_registered_surface():
         | STEP18D19_ALWAYS_ACCESSIBLE_GUIDE_FILES
         | STEP18D20_ADMIN_SCHEDULER_AUTOMATION_CONTROL_FILES
         | STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES
+        | STEP18D23_SYSTEMD_SCHEDULER_RUNTIME_OBSERVATION_FILES
         | STEP1B2_GLOBAL_ACQUISITION_BOUNDARY_FILES
         | STEP1B3_OWNER_PROJECTION_SHARED_POOL_FILES
         | STEP1B4_OWNER_SELECTOR_LLM_ROUTING_FILES
@@ -3804,6 +3806,9 @@ def test_deployment_files_do_not_leak_into_legacy_guard_profiles():
                 "src/storage/admin_tools/production_schema_upgrade.py"
             }
             continue
+        if name == "STEP18D23_SYSTEMD_SCHEDULER_RUNTIME_OBSERVATION_FILES":
+            assert overlap == {"deploy/PRODUCTION_DEPLOYMENT.md", "docker-compose.prod.yml"}
+            continue
         assert not overlap, f"{name} was broadened"
 
 
@@ -4107,5 +4112,131 @@ def test_step18d22_scheduler_write_surface_and_lifecycle_safety_are_exact():
         "bootout",
         "shell: true",
     ):
+        assert forbidden not in model
+        assert forbidden not in dashboard
+
+
+def test_step18d23_systemd_runtime_observation_surface_is_exact_and_finite():
+    expected = {
+        "deploy/PRODUCTION_DEPLOYMENT.md",
+        "deploy/systemd/applylens-scheduler-runtime-observation.service",
+        "deploy/systemd/applylens-scheduler-runtime-observation.timer",
+        "deploy/write_systemd_scheduler_runtime_snapshot.py",
+        "docker-compose.prod.yml",
+        "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.test.tsx",
+        "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx",
+        "frontend/executive-kpi/src/scheduler/schedulerModel.ts",
+        "src/app/services.py",
+        "src/app/static/build/executive-kpi/executive-kpi.js",
+        "src/pipeline/scheduler.py",
+        "tests/support/phase_guard_registry.py",
+        "tests/test_phase20d_no_auto_apply_safety_checkpoint_default_off.py",
+        "tests/test_phase21a_manual_review_workflow_boundary_default_off.py",
+        "tests/test_phase85b_legacy_guard_registry_default_off.py",
+        "tests/test_production_deployment_hardening.py",
+        "tests/test_scheduler_admin_health_redesign.py",
+        "tests/test_scheduler_runtime_postgres_correctness.py",
+    }
+    assert STEP18D23_SYSTEMD_SCHEDULER_RUNTIME_OBSERVATION_FILES == expected
+    assert len(expected) == 18
+    assert STEP18D22_PER_SCHEDULER_AUTOMATION_CONTROL_FILES != expected
+    assert all(
+        not any(token in path for token in ("*", "?", "["))
+        and not path.endswith("/")
+        and not path.startswith("/")
+        for path in expected
+    )
+
+
+def test_step18d23_surface_is_allowed_but_unrelated_paths_fail_closed():
+    assert STEP18D23_SYSTEMD_SCHEDULER_RUNTIME_OBSERVATION_FILES <= (
+        current_milestone_guard_compatibility_allowlist()
+    )
+    assert_changed_files_allowed(
+        STEP18D23_SYSTEMD_SCHEDULER_RUNTIME_OBSERVATION_FILES,
+        set(),
+    )
+    with pytest.raises(AssertionError):
+        assert_changed_files_allowed(
+            STEP18D23_SYSTEMD_SCHEDULER_RUNTIME_OBSERVATION_FILES
+            | {"src/app/step18d23_unapproved_probe.py"},
+            set(),
+        )
+
+
+def test_step18d23_services_successor_is_exact_and_lineage_scoped():
+    successor = "c71b2d72933098a01c418e33b7693a25428678d1e37ea598bb8b510ac364cf4f"
+    compatibility = _step14d_compatibility_map()
+    lineages = {
+        key for key, value in compatibility.items()
+        if successor in (set(value) if isinstance(value, (set, frozenset, tuple)) else {value})
+    }
+    assert lineages == {
+        ("src/app/services.py", "02d09d6f6e204183ef67a543222b4e3a4dae993f40041dfb8911397b835be7f7"),
+        ("src/app/services.py", "f23325582482f242869bd088b0fb96dc8b0d106b86a3f81c240d59c88d288b74"),
+    }
+    for relative_path, historical in lineages:
+        assert_protected_hashes(STEP11_ROOT, {relative_path: historical})
+
+
+@pytest.mark.parametrize("relative_test_path,function_name", STEP11_MARKER_GUARDS)
+def test_step18d23_marker_branch_is_exact_derived_and_full_content_scanned(
+    relative_test_path,
+    function_name,
+):
+    import ast
+
+    module = ast.parse(
+        (STEP11_ROOT / relative_test_path).read_text(encoding="utf-8")
+    )
+    function = next(
+        node
+        for node in module.body
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    )
+    branch = next(
+        node
+        for node in ast.walk(function)
+        if isinstance(node, ast.If)
+        and "STEP18D23_SYSTEMD_SCHEDULER_RUNTIME_OBSERVATION_FILES"
+        in ast.dump(node.test)
+    )
+    assert isinstance(branch.test, ast.Compare)
+    assert any(isinstance(op, ast.Eq) for op in branch.test.ops)
+    branch_dump = ast.dump(branch)
+    assert "step18d23_runtime_suffixes" in branch_dump
+    assert "startswith" in branch_dump
+    assert "suffix" in branch_dump
+    assert "read_text" in branch_dump
+    assert "FORBIDDEN_RUNTIME_MARKERS" in branch_dump
+    marker_loops = [
+        node
+        for node in ast.walk(branch)
+        if isinstance(node, ast.For)
+        and "FORBIDDEN_RUNTIME_MARKERS" in ast.dump(node.iter)
+    ]
+    assert len(marker_loops) == 1
+    assert any(isinstance(node, ast.Assert) for node in ast.walk(marker_loops[0]))
+    assert len([node for node in ast.walk(branch) if isinstance(node, ast.Return)]) == 1
+
+
+def test_step18d23_adds_read_only_observation_without_host_control_in_web():
+    compose = (STEP11_ROOT / "docker-compose.prod.yml").read_text(encoding="utf-8")
+    model = (
+        STEP11_ROOT / "frontend/executive-kpi/src/scheduler/schedulerModel.ts"
+    ).read_text(encoding="utf-8")
+    dashboard = (
+        STEP11_ROOT / "frontend/executive-kpi/src/scheduler/SchedulerHealthDashboard.tsx"
+    ).read_text(encoding="utf-8")
+    assert "read_only: true" in compose
+    assert "JOB_STACK_SCHEDULER_RUNTIME_PROVIDER: systemd_snapshot" in compose
+    for forbidden in (
+        "/var/run/docker.sock",
+        "/run/systemd/private",
+        "/run/dbus/system_bus_socket",
+        "privileged: true",
+    ):
+        assert forbidden not in compose
+    for forbidden in ("systemctl", "launchctl", "shell: true"):
         assert forbidden not in model
         assert forbidden not in dashboard

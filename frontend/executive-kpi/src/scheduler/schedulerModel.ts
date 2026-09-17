@@ -65,6 +65,19 @@ export type SchedulerRuntimeState =
   | "not_installed"
   | "unavailable";
 
+export type SchedulerRuntimeProvider = "launchd" | "systemd" | "unavailable";
+export type SchedulerRuntimeObservationStatus =
+  | "live"
+  | "fresh"
+  | "missing"
+  | "malformed"
+  | "stale"
+  | "future"
+  | "collection_error"
+  | "invalid_configuration"
+  | "invalid_provider"
+  | "unavailable";
+
 export type SchedulerRuntimeJob = {
   job_name: string;
   description: string;
@@ -79,6 +92,10 @@ export type SchedulerRuntimeJob = {
   expected_next_run_at?: string | null;
   manual_run_active?: boolean;
   manual_run_started_at?: string | null;
+  service_active_state?: string;
+  service_sub_state?: string;
+  prior_service_result?: string;
+  prior_service_exit_code?: number;
 };
 
 export type SchedulerNextRunPresentation = {
@@ -96,6 +113,9 @@ export type SchedulerSummaryPayload = {
   latest_scheduled_runs_by_job?: SchedulerRun[];
   recent_postgres_runs?: SchedulerRun[];
   recent_jsonl_runs?: SchedulerRun[];
+  runtime_provider?: SchedulerRuntimeProvider;
+  runtime_observation_status?: SchedulerRuntimeObservationStatus;
+  runtime_observed_at?: string | null;
   runtime_jobs?: SchedulerRuntimeJob[];
   postgres_summary?: SchedulerPostgresSummary;
   postgres_command_text?: string;

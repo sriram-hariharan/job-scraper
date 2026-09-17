@@ -1,0 +1,28 @@
+[Unit]
+Description=Observe ApplyLens scheduler runtime state
+After=dbus.service
+
+[Service]
+Type=oneshot
+User=deploy
+Group=deploy
+WorkingDirectory=/home/deploy/apps/job-scraper
+StateDirectory=applylens-scheduler-runtime
+StateDirectoryMode=0755
+ExecStart=/usr/bin/python3 /home/deploy/apps/job-scraper/deploy/write_systemd_scheduler_runtime_snapshot.py
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectHome=read-only
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/applylens-scheduler-runtime
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

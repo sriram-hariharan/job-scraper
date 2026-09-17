@@ -1,10 +1,58 @@
 import json
 import re
+from types import SimpleNamespace
 
 import pytest
 
 from src.storage import discovery_store
 from src.utils.file_loader import load_lines
+
+
+@pytest.mark.parametrize("query", [False, True], ids=["statement", "json_query"])
+def test_discovery_psql_streams_large_sql_without_growing_argv(monkeypatch, query):
+    database_url = "postgresql://discovery-transport.invalid/test"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((list(command), kwargs))
+        return SimpleNamespace(stdout='command output\n{"saved":7}\n\n')
+
+    monkeypatch.setattr(discovery_store.subprocess, "run", fake_run)
+    helper = discovery_store._run_psql_json_query if query else discovery_store._run_psql_statement
+    large_sql = "SELECT 'transport-start-" + ("evidence " * 70_000) + "-transport-end';"
+    assert len(large_sql.encode("utf-8")) > 500_000
+    for sql in ("SELECT 'transport-small';", large_sql):
+        result = helper(sql)
+        assert result == ({"saved": 7} if query else None)
+        argv, kwargs = calls[-1]
+        assert argv == ["psql", database_url, "-X", *(["-t", "-A"] if query else []), "-v", "ON_ERROR_STOP=1"]
+        assert "-c" not in argv
+        assert all(sql not in arg and "transport-" not in arg for arg in argv)
+        assert kwargs == {"input": sql, "check": True, "capture_output": True, "text": True}
+    assert calls[0][0] == calls[1][0]
+    assert sum(len(arg.encode("utf-8")) + 1 for arg in calls[1][0]) < 1024
+
+
+def test_save_ats_detection_cache_streams_large_persistence_sql(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://discovery-transport.invalid/test")
+    monkeypatch.setattr(discovery_store, "init_discovery_store", lambda: None)
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((list(command), kwargs))
+        return SimpleNamespace(stdout="")
+
+    monkeypatch.setattr(discovery_store.subprocess, "run", fake_run)
+    evidence = "cache-start-" + ("evidence " * 70_000) + "-cache-end"
+    assert discovery_store.save_ats_detection_cache({"example.invalid": {"evidence": evidence}}) is None
+    assert len(calls) == 1
+    argv, kwargs = calls[0]
+    assert "-c" not in argv
+    assert all("cache-start" not in arg for arg in argv)
+    assert evidence in kwargs["input"]
+    assert len(kwargs["input"].encode("utf-8")) > 500_000
+    assert "INSERT INTO ats_detection_cache" in kwargs["input"]
 
 
 class _MemoryDiscoveryDatabase:

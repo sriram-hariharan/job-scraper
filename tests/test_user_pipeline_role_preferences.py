@@ -1866,6 +1866,30 @@ def test_shared_rag_retention_cache_failure_is_observable(monkeypatch):
         collector._shared_rag_retention_stage_counts(result)
 
 
+def test_shared_rag_retention_stage_counts_accepts_protected_stale_documents():
+    result = collector._shared_rag_retention_stage_counts(
+        {
+            "ok": True,
+            "retention_days": 15,
+            "inspected_count": 10,
+            "candidate_count": 4,
+            "referenced_retained_count": 1,
+            "deleted_count": 3,
+            "retained_count": 7,
+            "cache_invalidation_attempted": True,
+            "cache_invalidation_succeeded": True,
+        }
+    )
+
+    assert result == {
+        "shared_retention_days": 15,
+        "shared_retention_inspected": 10,
+        "shared_retention_stale_candidates": 4,
+        "shared_retention_deleted": 3,
+        "shared_job_documents": 7,
+    }
+
+
 def _main_mode_args(tmp_path, *, planning_only, delete_seen_data):
     return types.SimpleNamespace(
         run_application_planning=bool(planning_only),

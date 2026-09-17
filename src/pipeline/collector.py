@@ -329,10 +329,21 @@ def _shared_rag_retention_stage_counts(payload: Any) -> Dict[str, int]:
         if value < 0:
             raise RuntimeError("shared_postgres_retention_failed")
         counts[metric_key] = value
-    if counts["shared_retention_stale_candidates"] != counts[
-        "shared_retention_deleted"
-    ]:
+    try:
+        referenced_retained_count = int(
+            payload.get("referenced_retained_count", 0) or 0
+        )
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("shared_postgres_retention_failed") from exc
+
+    if referenced_retained_count < 0:
         raise RuntimeError("shared_postgres_retention_failed")
+
+    if counts["shared_retention_stale_candidates"] != (
+        counts["shared_retention_deleted"] + referenced_retained_count
+    ):
+        raise RuntimeError("shared_postgres_retention_failed")
+
     return counts
 
 

@@ -31,6 +31,12 @@ NON_ADMIN_USER = {
     "is_admin": False,
     "access_level": "user",
 }
+SUPER_USER = {
+    "user_id": "super-owner",
+    "email": "super@example.test",
+    "is_admin": False,
+    "access_level": "super_user",
+}
 OVERVIEW_PATH = "/profile/admin/agentic-operations/overview"
 
 
@@ -58,6 +64,23 @@ def test_admin_can_read_owner_scoped_overview(monkeypatch, admin_user) -> None:
     assert response.status_code == 200
     assert response.json()["owner_user_id"] == admin_user["user_id"]
     assert captured == {"owner_user_id": admin_user["user_id"]}
+
+
+def test_super_user_can_read_owner_scoped_overview(monkeypatch) -> None:
+    captured: dict = {}
+
+    def overview(**kwargs):
+        captured.update(kwargs)
+        return {"ok": True, "owner_user_id": kwargs["owner_user_id"]}
+
+    monkeypatch.setattr(services, "agentic_operations_overview_payload", overview)
+    response = _client_as(monkeypatch, SUPER_USER).get(
+        f"{OVERVIEW_PATH}?owner_user_id=other-owner"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["owner_user_id"] == SUPER_USER["user_id"]
+    assert captured == {"owner_user_id": SUPER_USER["user_id"]}
 
 
 def test_non_admin_is_forbidden_before_overview_invocation(monkeypatch) -> None:
@@ -368,6 +391,6 @@ def test_overview_source_excludes_write_reconciliation_provider_and_control_help
         "execute_application(",
     ):
         assert forbidden not in service_source
-    assert "_require_admin_user(http_request)" in route_source
+    assert "_require_operations_viewer(http_request)" in route_source
     assert "_require_auth_owner_user_id(http_request)" in route_source
     assert "Body(" not in route_source

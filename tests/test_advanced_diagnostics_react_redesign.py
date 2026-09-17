@@ -25,6 +25,7 @@ EXECUTIVE_STYLES_SOURCE = (
 
 ADMIN_USER = {"user_id": "admin-1", "email": "admin@example.test", "is_admin": True}
 NON_ADMIN_USER = {"user_id": "user-1", "email": "user@example.test", "is_admin": False, "access_level": "user"}
+SUPER_USER = {"user_id": "super-1", "email": "super@example.test", "is_admin": False, "access_level": "super_user"}
 
 SAVED_SCAN_ROWS = [
     {
@@ -89,6 +90,17 @@ def test_admin_receives_the_react_root_and_initial_state(monkeypatch) -> None:
     assert "/advanced-diagnostics" in response.text
     assert "window.__APPLYLENS_ADVANCED_DIAGNOSTICS_STATE__ = " in response.text
     assert '"mode": "hub"' in response.text or '"mode":"hub"' in response.text
+
+
+def test_super_user_receives_owner_scoped_read_only_initial_state(monkeypatch) -> None:
+    captured_owner_ids: list[str] = []
+    _mock_saved_scans(monkeypatch, SAVED_SCAN_ROWS, captured_owner_ids)
+    response = _client_as(monkeypatch, SUPER_USER).get("/advanced-diagnostics")
+
+    assert response.status_code == 200
+    assert 'id="advancedDiagnosticsRoot"' in response.text
+    assert '"readOnly": true' in response.text
+    assert captured_owner_ids == [SUPER_USER["user_id"]]
 
 
 def test_scan_diagnostics_uses_admin_grid_and_shared_premium_combobox_styles() -> None:

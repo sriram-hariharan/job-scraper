@@ -59,6 +59,7 @@ export type AdvancedDiagnosticsState = {
   context: AdvancedDiagnosticsContext | null;
   hrefs: { advancedDiagnostics: string; scanWorkspace: string };
   diagnosticState?: AdvancedDiagnosticsDiagnosticState;
+  readOnly?: boolean;
 };
 
 export const DEFAULT_ADVANCED_DIAGNOSTICS_STATE: AdvancedDiagnosticsState = {
@@ -444,7 +445,7 @@ function dependencyFor(
   return "";
 }
 
-function AdvancedDiagnosticsHeader() {
+function AdvancedDiagnosticsHeader({ readOnly = false }: { readOnly?: boolean }) {
   return (
     <header className="advanced-diagnostics-header app-page-header">
       <div className="advanced-diagnostics-header-primary app-page-header__main app-page-header__main--with-icon">
@@ -452,10 +453,10 @@ function AdvancedDiagnosticsHeader() {
         <div className="app-page-header__copy">
           <div className="advanced-diagnostics-header-title-row app-page-header__title-row">
             <h1 className="app-page-header__title">Scan Diagnostics</h1>
-            <span className="advanced-diagnostics-badge advanced-diagnostics-badge--muted app-page-header__badge">Admin only</span>
-            <span className="advanced-diagnostics-badge advanced-diagnostics-badge--ready app-page-header__badge">Manual execution</span>
+            <span className="advanced-diagnostics-badge advanced-diagnostics-badge--muted app-page-header__badge">{readOnly ? "Read-only" : "Admin only"}</span>
+            {!readOnly ? <span className="advanced-diagnostics-badge advanced-diagnostics-badge--ready app-page-header__badge">Manual execution</span> : null}
           </div>
-          <p className="app-page-header__description">Run bounded diagnostics for one saved scan and inspect persisted readbacks.</p>
+          <p className="app-page-header__description">{readOnly ? "Inspect persisted diagnostics for your saved scans." : "Run bounded diagnostics for one saved scan and inspect persisted readbacks."}</p>
         </div>
       </div>
     </header>
@@ -751,16 +752,17 @@ function SelectedProposalReview({ rows }: { rows: AdvancedDiagnosticsReadback[] 
   ))}</div>;
 }
 
-function ProposalSelector({ rows, selected, onChange }: {
+function ProposalSelector({ rows, selected, onChange, readOnly = false }: {
   rows: AdvancedDiagnosticsReadback[];
   selected: string[];
   onChange: (ids: string[]) => void;
+  readOnly?: boolean;
 }) {
   if (!rows.length) return null;
   return (
     <fieldset className="advanced-diagnostics-proposals">
       <legend>Exact proposals</legend>
-      <p>Select the exact proposal IDs to accept. Nothing is selected by default.</p>
+      <p>{readOnly ? "Review the recorded exact proposals." : "Select the exact proposal IDs to accept. Nothing is selected by default."}</p>
       <div className="advanced-diagnostics-proposal-list">
         {rows.map((row) => {
           const proposalId = textValue(row.proposal_id);
@@ -773,7 +775,7 @@ function ProposalSelector({ rows, selected, onChange }: {
           const target = [textValue(row.target_section), textValue(row.target_identifier)].filter(Boolean).join(" · ");
           return (
             <label key={proposalId} className={`advanced-diagnostics-proposal ${checked ? "is-selected" : ""}`}>
-              <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked
+              <input type="checkbox" disabled={readOnly} checked={checked} onChange={(event) => onChange(event.target.checked
                 ? [...selected, proposalId]
                 : selected.filter((value) => value !== proposalId))} />
               <span className="advanced-diagnostics-proposal-content">
@@ -904,6 +906,7 @@ export function AdvancedDiagnosticsDashboard({
   navigate?: (href: string) => void;
   request?: RequestFunction;
 }) {
+  const readOnly = state.readOnly === true;
   const [diagnosticState, setDiagnosticState] = useState<AdvancedDiagnosticsDiagnosticState>(() => state.diagnosticState || {});
   const [selectedProposalIds, setSelectedProposalIds] = useState<string[]>([]);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
@@ -921,6 +924,7 @@ export function AdvancedDiagnosticsDashboard({
   const selectedProposals = proposals.filter((row) => selectedProposalIds.includes(textValue(row.proposal_id)));
 
   const runStage = async (stage: DiagnosticStage, operatorDecision = ""): Promise<boolean> => {
+    if (readOnly) return false;
     const dependency = dependencyFor(stage, diagnosticState, [], selectedProposalIds, operatorDecision, overrides);
     if (!state.selectedScanId || runningStage || dependency) return false;
     const revisitingCompletedStage = activeStep < deriveInitialWizardStep(diagnosticState);
@@ -967,6 +971,7 @@ export function AdvancedDiagnosticsDashboard({
   };
 
   const resetDiagnostics = async (): Promise<void> => {
+    if (readOnly) return;
     if (!state.selectedScanId || resetting || runningStage) return;
     setResetting(true);
     setMessage(null);
@@ -1008,8 +1013,8 @@ export function AdvancedDiagnosticsDashboard({
   const tailoringAttention = tailoringNeedsAttention(diagnosticState);
 
   return (
-    <div className="advanced-diagnostics-dashboard">
-      <AdvancedDiagnosticsHeader />
+    <div className={`advanced-diagnostics-dashboard ${readOnly ? "is-read-only" : ""}`}>
+      <AdvancedDiagnosticsHeader readOnly={readOnly} />
       {state.mode === "hub" ? <HubModeCard options={state.savedScanOptions} hrefs={state.hrefs} navigate={navigate} /> : null}
       {state.mode === "empty" ? <EmptyModeCard hrefs={state.hrefs} /> : null}
       {state.mode === "invalid" ? <InvalidModeCard hrefs={state.hrefs} /> : null}
@@ -1018,7 +1023,7 @@ export function AdvancedDiagnosticsDashboard({
           <WizardHeader context={state.context} hrefs={state.hrefs} state={diagnosticState} activeStep={activeStep} onStepChange={setActiveStep} onTechnicalDetails={() => setTechnicalOpen(true)} />
           <div className="advanced-diagnostics-safety-callout" role="note">
             <ShieldCheck size={16} aria-hidden="true" />
-            <div><strong>Manual control</strong><p>Every action runs only when you choose it. ApplyLens does not automatically cross human review gates or submit applications.</p></div>
+            <div><strong>{readOnly ? "Read-only visibility" : "Manual control"}</strong><p>{readOnly ? "This view shows persisted diagnostic results. Run and reset controls are available only to Admins here." : "Every action runs only when you choose it. ApplyLens does not automatically cross human review gates or submit applications."}</p></div>
           </div>
 
           <main className="advanced-diagnostics-guided-flow">
@@ -1027,11 +1032,11 @@ export function AdvancedDiagnosticsDashboard({
               <div className="advanced-diagnostics-analysis-block">
                 <div className="advanced-diagnostics-section-heading"><div><h3>Tailoring recommendations</h3><p>{stageIsValid(diagnosticState, "live_tailoring_suggestion") ? `${tailoringRecommendationCount === 0 ? "0 supported recommendations" : `${tailoringRecommendationCount} recommendations`}${tailoringRecommendationCount > tailoringRows(diagnosticState).length ? ` · showing ${tailoringRows(diagnosticState).length}` : ""}` : "Evidence-backed guidance from the configured AI route."}</p></div><StageStatus state={diagnosticState} stage="live_tailoring_suggestion" /></div>
                 <TailoringRecommendations state={diagnosticState} />
-                {!stageIsValid(diagnosticState, "live_tailoring_suggestion") ? <button id="scanWorkspaceLiveTailoringSuggestionToggle" aria-label={tailoringAttention ? "Retry tailoring analysis" : "Run tailoring analysis"} className="advanced-diagnostics-primary-action" type="button" disabled={Boolean(runningStage)} onClick={() => void runStage("live_tailoring_suggestion")}>{runningStage === "live_tailoring_suggestion" ? <><LoaderCircle className="advanced-diagnostics-spinner" size={16} />{tailoringAttention ? "Retrying tailoring analysis..." : "Running analysis..."}</> : <><Sparkles size={16} />{tailoringAttention ? "Retry tailoring analysis" : "Run tailoring analysis"}</>}</button> : null}
+                {!readOnly && !stageIsValid(diagnosticState, "live_tailoring_suggestion") ? <button id="scanWorkspaceLiveTailoringSuggestionToggle" aria-label={tailoringAttention ? "Retry tailoring analysis" : "Run tailoring analysis"} className="advanced-diagnostics-primary-action" type="button" disabled={Boolean(runningStage)} onClick={() => void runStage("live_tailoring_suggestion")}>{runningStage === "live_tailoring_suggestion" ? <><LoaderCircle className="advanced-diagnostics-spinner" size={16} />{tailoringAttention ? "Retrying tailoring analysis..." : "Running analysis..."}</> : <><Sparkles size={16} />{tailoringAttention ? "Retry tailoring analysis" : "Run tailoring analysis"}</>}</button> : null}
               </div>
               <div className="advanced-diagnostics-analysis-block is-exact">
                 <div className="advanced-diagnostics-section-heading"><div><h3>Exact resume-change analysis</h3><p>{exactValid ? `${proposals.length} evidence-backed proposed changes are ready for review.` : "Generate source-backed proposals for human review."}</p></div><StageStatus state={diagnosticState} stage="live_exact_resume_change_proposal" /></div>
-                {exactValid ? <button className="advanced-diagnostics-secondary-action" type="button" onClick={() => setActiveStep(1)}>Go to review changes</button> : <button id="scanWorkspaceLiveExactChangeProposalToggle" aria-label="Live exact change proposals" className="advanced-diagnostics-primary-action" type="button" disabled={Boolean(runningStage)} onClick={() => void runStage("live_exact_resume_change_proposal")}>{runningStage === "live_exact_resume_change_proposal" ? <><LoaderCircle className="advanced-diagnostics-spinner" size={16} />Generating...</> : "Generate proposed changes"}</button>}
+                {exactValid ? <button className="advanced-diagnostics-secondary-action" type="button" onClick={() => setActiveStep(1)}>Go to review changes</button> : !readOnly ? <button id="scanWorkspaceLiveExactChangeProposalToggle" aria-label="Live exact change proposals" className="advanced-diagnostics-primary-action" type="button" disabled={Boolean(runningStage)} onClick={() => void runStage("live_exact_resume_change_proposal")}>{runningStage === "live_exact_resume_change_proposal" ? <><LoaderCircle className="advanced-diagnostics-spinner" size={16} />Generating...</> : "Generate proposed changes"}</button> : null}
               </div>
             </section> : null}
 
@@ -1041,8 +1046,8 @@ export function AdvancedDiagnosticsDashboard({
                 <div><strong>{proposals.length} proposed changes</strong><span>Current selection · {selectedProposalIds.length} currently selected</span></div>
                 {acceptedProposalCount > 0 ? <div className="is-approved"><strong><CheckCircle2 size={16} />Previously approved</strong><span>{acceptedProposalCount} exact change{acceptedProposalCount === 1 ? "" : "s"} previously approved</span></div> : null}
               </div>
-              {proposals.length ? <ProposalSelector rows={proposals} selected={selectedProposalIds} onChange={setSelectedProposalIds} /> : <p className="advanced-diagnostics-analysis-empty">Generate proposed changes to begin human review.</p>}
-              <button id="scanWorkspaceManualExactChangeAcceptanceToggle" aria-label="Accept selected exact changes" className="advanced-diagnostics-primary-action" type="button" disabled={Boolean(runningStage) || selectedProposalIds.length === 0} onClick={() => setReviewOpen(true)}>Review selected changes</button>
+              {proposals.length ? <ProposalSelector rows={proposals} selected={selectedProposalIds} onChange={setSelectedProposalIds} readOnly={readOnly} /> : <p className="advanced-diagnostics-analysis-empty">Generate proposed changes to begin human review.</p>}
+              {!readOnly ? <button id="scanWorkspaceManualExactChangeAcceptanceToggle" aria-label="Accept selected exact changes" className="advanced-diagnostics-primary-action" type="button" disabled={Boolean(runningStage) || selectedProposalIds.length === 0} onClick={() => setReviewOpen(true)}>Review selected changes</button> : null}
             </section> : null}
 
             {activeStep === 2 ? <section className="advanced-diagnostics-workflow-card" id="advancedDiagnosticsSectionReviewDecision" aria-labelledby="advancedDiagnosticsVerifyHeading">
@@ -1052,18 +1057,18 @@ export function AdvancedDiagnosticsDashboard({
                 { stage: "guarded_resume_copy_artifact", label: "Protected copy created" },
                 { stage: "guarded_resume_copy_artifact_verification", label: stageIsValid(diagnosticState, "guarded_resume_copy_artifact") ? "Protected copy verified" : "Verification required" },
               ]} currentStage={!stageIsValid(diagnosticState, "guarded_resume_copy_artifact") ? "guarded_resume_copy_artifact" : !stageIsValid(diagnosticState, "guarded_resume_copy_artifact_verification") ? "guarded_resume_copy_artifact_verification" : undefined} />
-              {!stageIsValid(diagnosticState, "guarded_resume_copy_artifact") ? <button id="scanWorkspaceGuardedResumeCopyArtifactToggle" aria-label="Create guarded resume copy" className="advanced-diagnostics-primary-action" type="button" disabled={Boolean(runningStage) || Boolean(actionReason("guarded_resume_copy_artifact"))} title={actionReason("guarded_resume_copy_artifact")} onClick={() => void runStage("guarded_resume_copy_artifact")}>Create protected copy</button> : null}
-              {stageIsValid(diagnosticState, "guarded_resume_copy_artifact") && !stageIsValid(diagnosticState, "guarded_resume_copy_artifact_verification") ? <button id="scanWorkspaceGuardedResumeCopyArtifactVerificationToggle" aria-label="Verify guarded resume copy" className="advanced-diagnostics-primary-action" type="button" disabled={Boolean(runningStage) || Boolean(actionReason("guarded_resume_copy_artifact_verification"))} title={actionReason("guarded_resume_copy_artifact_verification")} onClick={() => void runStage("guarded_resume_copy_artifact_verification")}>Verify protected copy</button> : null}
+              {!readOnly && !stageIsValid(diagnosticState, "guarded_resume_copy_artifact") ? <button id="scanWorkspaceGuardedResumeCopyArtifactToggle" aria-label="Create guarded resume copy" className="advanced-diagnostics-primary-action" type="button" disabled={Boolean(runningStage) || Boolean(actionReason("guarded_resume_copy_artifact"))} title={actionReason("guarded_resume_copy_artifact")} onClick={() => void runStage("guarded_resume_copy_artifact")}>Create protected copy</button> : null}
+              {!readOnly && stageIsValid(diagnosticState, "guarded_resume_copy_artifact") && !stageIsValid(diagnosticState, "guarded_resume_copy_artifact_verification") ? <button id="scanWorkspaceGuardedResumeCopyArtifactVerificationToggle" aria-label="Verify guarded resume copy" className="advanced-diagnostics-primary-action" type="button" disabled={Boolean(runningStage) || Boolean(actionReason("guarded_resume_copy_artifact_verification"))} title={actionReason("guarded_resume_copy_artifact_verification")} onClick={() => void runStage("guarded_resume_copy_artifact_verification")}>Verify protected copy</button> : null}
               {stageIsValid(diagnosticState, "guarded_resume_copy_artifact_verification") ? <button className="advanced-diagnostics-secondary-action advanced-diagnostics-pane-navigation" type="button" onClick={() => setActiveStep(3)}>Continue to Ready</button> : null}
             </section> : null}
 
             {activeStep === 3 ? <section className="advanced-diagnostics-workflow-card" id="advancedDiagnosticsSectionManualHandoff" aria-labelledby="advancedDiagnosticsReadyHeading">
               <div className="advanced-diagnostics-workflow-card-heading"><span>4</span><div><p>Prepare manual application</p><h2 id="advancedDiagnosticsReadyHeading">Manual application readiness</h2><small>A sequential, human-only preparation chain. This status never submits an application.</small></div></div>
               <WorkflowChecklist state={diagnosticState} rows={READINESS_STAGES} currentStage={firstReadinessAction?.stage} />
-              {firstReadinessAction && firstReadinessAction.stage === "verified_artifact_operator_decision" ? <button id="scanWorkspaceVerifiedArtifactOperatorDecisionToggle" aria-label="Capture verified artifact operator decision" className="advanced-diagnostics-primary-action" type="button" disabled={Boolean(runningStage) || Boolean(actionReason("verified_artifact_operator_decision", "accepted").replace("Choose an explicit operator decision below.", ""))} onClick={() => setDecisionOpen(true)}>Record decision</button> : null}
-              {firstReadinessAction && firstReadinessAction.stage !== "verified_artifact_operator_decision" ? <button id={STAGE_BY_NAME[firstReadinessAction.stage].id} aria-label={STAGE_BY_NAME[firstReadinessAction.stage].label} className="advanced-diagnostics-primary-action" type="button" disabled={Boolean(runningStage) || Boolean(actionReason(firstReadinessAction.stage))} title={actionReason(firstReadinessAction.stage)} onClick={() => void runStage(firstReadinessAction.stage)}>{runningStage === firstReadinessAction.stage ? <><LoaderCircle className="advanced-diagnostics-spinner" size={16} />Running...</> : firstReadinessAction.action}</button> : null}
+              {!readOnly && firstReadinessAction && firstReadinessAction.stage === "verified_artifact_operator_decision" ? <button id="scanWorkspaceVerifiedArtifactOperatorDecisionToggle" aria-label="Capture verified artifact operator decision" className="advanced-diagnostics-primary-action" type="button" disabled={Boolean(runningStage) || Boolean(actionReason("verified_artifact_operator_decision", "accepted").replace("Choose an explicit operator decision below.", ""))} onClick={() => setDecisionOpen(true)}>Record decision</button> : null}
+              {!readOnly && firstReadinessAction && firstReadinessAction.stage !== "verified_artifact_operator_decision" ? <button id={STAGE_BY_NAME[firstReadinessAction.stage].id} aria-label={STAGE_BY_NAME[firstReadinessAction.stage].label} className="advanced-diagnostics-primary-action" type="button" disabled={Boolean(runningStage) || Boolean(actionReason(firstReadinessAction.stage))} title={actionReason(firstReadinessAction.stage)} onClick={() => void runStage(firstReadinessAction.stage)}>{runningStage === firstReadinessAction.stage ? <><LoaderCircle className="advanced-diagnostics-spinner" size={16} />Running...</> : firstReadinessAction.action}</button> : null}
               <div className={`advanced-diagnostics-manual-safety ${readyForManualApplication ? "is-ready" : ""}`} role="note"><ShieldCheck size={20} /><div><strong>{readyForManualApplication ? "Ready for manual application" : "Manual application boundary preserved"}</strong><p>{readyForManualApplication ? "ApplyLens has prepared the workflow for manual application. " : ""}ApplyLens has not submitted an application, contacted a recruiter, marked the job applied, or changed the application queue automatically.</p></div></div>
-              {readyForManualApplication ? <div className="advanced-diagnostics-rerun-panel"><button className="advanced-diagnostics-secondary-action advanced-diagnostics-rerun-action" type="button" disabled={resetting || Boolean(runningStage)} onClick={() => setResetOpen(true)}>Run diagnostics again</button></div> : null}
+              {!readOnly && readyForManualApplication ? <div className="advanced-diagnostics-rerun-panel"><button className="advanced-diagnostics-secondary-action advanced-diagnostics-rerun-action" type="button" disabled={resetting || Boolean(runningStage)} onClick={() => setResetOpen(true)}>Run diagnostics again</button></div> : null}
             </section> : null}
           </main>
 
@@ -1090,29 +1095,29 @@ export function AdvancedDiagnosticsDashboard({
                   </div>
                 </section>
               </div>
-              <ManualOverrides values={overrides} onChange={(key, value) => setOverrides((current) => ({ ...current, [key]: value }))} />
+              {!readOnly ? <ManualOverrides values={overrides} onChange={(key, value) => setOverrides((current) => ({ ...current, [key]: value }))} /> : null}
           </TechnicalDrawer>
 
           {message ? <div className={`advanced-diagnostics-request-message is-${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</div> : null}
 
-          <PremiumDialog open={reviewOpen} title="Review resume changes" description={`${selectedProposalIds.length} change${selectedProposalIds.length === 1 ? "" : "s"} selected`} onClose={() => setReviewOpen(false)} footer={<><button className="advanced-diagnostics-dialog-secondary advanced-diagnostics-dialog-cancel" type="button" autoFocus onClick={() => setReviewOpen(false)}>Cancel</button><button className="advanced-diagnostics-dialog-primary" type="button" disabled={Boolean(runningStage)} onClick={() => void runStage("manual_exact_change_acceptance").then((success) => success && setReviewOpen(false))}>{runningStage === "manual_exact_change_acceptance" ? "Accepting..." : "Accept selected changes"}</button></>}>
+          {!readOnly ? <PremiumDialog open={reviewOpen} title="Review resume changes" description={`${selectedProposalIds.length} change${selectedProposalIds.length === 1 ? "" : "s"} selected`} onClose={() => setReviewOpen(false)} footer={<><button className="advanced-diagnostics-dialog-secondary advanced-diagnostics-dialog-cancel" type="button" autoFocus onClick={() => setReviewOpen(false)}>Cancel</button><button className="advanced-diagnostics-dialog-primary" type="button" disabled={Boolean(runningStage)} onClick={() => void runStage("manual_exact_change_acceptance").then((success) => success && setReviewOpen(false))}>{runningStage === "manual_exact_change_acceptance" ? "Accepting..." : "Accept selected changes"}</button></>}>
             <SelectedProposalReview rows={selectedProposals} />
             <div className="advanced-diagnostics-dialog-safety"><ShieldCheck size={18} /><p><strong>What happens next</strong>Accepting these changes does not overwrite the source resume. It authorizes the existing guarded-copy workflow.</p></div>
-          </PremiumDialog>
+          </PremiumDialog> : null}
 
-          <PremiumDialog open={decisionOpen} title="Review protected resume" description="Human decision required" onClose={() => setDecisionOpen(false)} footer={<><button className="advanced-diagnostics-dialog-secondary advanced-diagnostics-dialog-cancel" type="button" autoFocus onClick={() => setDecisionOpen(false)}>Cancel</button>{(["rejected", "needs_changes", "accepted"] as const).map((value) => <button key={value} id={value === "accepted" ? "scanWorkspaceVerifiedArtifactOperatorDecisionValue" : undefined} className={`advanced-diagnostics-dialog-secondary advanced-diagnostics-dialog-action--${value === "needs_changes" ? "warning" : value === "rejected" ? "danger" : "success"}`} type="button" disabled={Boolean(runningStage)} onClick={() => void runStage("verified_artifact_operator_decision", value).then((success) => success && setDecisionOpen(false))}>{humanLabel(value)}</button>)}</>}>
+          {!readOnly ? <PremiumDialog open={decisionOpen} title="Review protected resume" description="Human decision required" onClose={() => setDecisionOpen(false)} footer={<><button className="advanced-diagnostics-dialog-secondary advanced-diagnostics-dialog-cancel" type="button" autoFocus onClick={() => setDecisionOpen(false)}>Cancel</button>{(["rejected", "needs_changes", "accepted"] as const).map((value) => <button key={value} id={value === "accepted" ? "scanWorkspaceVerifiedArtifactOperatorDecisionValue" : undefined} className={`advanced-diagnostics-dialog-secondary advanced-diagnostics-dialog-action--${value === "needs_changes" ? "warning" : value === "rejected" ? "danger" : "success"}`} type="button" disabled={Boolean(runningStage)} onClick={() => void runStage("verified_artifact_operator_decision", value).then((success) => success && setDecisionOpen(false))}>{humanLabel(value)}</button>)}</>}>
             <div className="advanced-diagnostics-decision-summary"><ClipboardCheck size={22} /><div><strong>Verified artifact review packet</strong><p>Protected resume artifact is ready for review.</p></div></div>
             <div className="advanced-diagnostics-dialog-safety"><ShieldCheck size={18} /><p><strong>Your decision is explicit</strong>No option is preselected, and recording it does not submit an application or overwrite the source resume.</p></div>
-          </PremiumDialog>
+          </PremiumDialog> : null}
 
-          <PremiumDialog open={resetOpen} eyebrow="Start a new diagnostics workflow" title="Run diagnostics again?" description="Replace the current diagnostics workflow for this saved scan" onClose={() => { if (!resetting) setResetOpen(false); }} footer={<><button className="advanced-diagnostics-dialog-secondary advanced-diagnostics-dialog-cancel" type="button" autoFocus disabled={resetting} onClick={() => setResetOpen(false)}>Cancel</button><button className="advanced-diagnostics-dialog-primary" type="button" disabled={resetting} onClick={() => void resetDiagnostics()}>{resetting ? <><LoaderCircle className="advanced-diagnostics-spinner" size={16} />Resetting...</> : "Run diagnostics again"}</button></>}>
+          {!readOnly ? <PremiumDialog open={resetOpen} eyebrow="Start a new diagnostics workflow" title="Run diagnostics again?" description="Replace the current diagnostics workflow for this saved scan" onClose={() => { if (!resetting) setResetOpen(false); }} footer={<><button className="advanced-diagnostics-dialog-secondary advanced-diagnostics-dialog-cancel" type="button" autoFocus disabled={resetting} onClick={() => setResetOpen(false)}>Cancel</button><button className="advanced-diagnostics-dialog-primary" type="button" disabled={resetting} onClick={() => void resetDiagnostics()}>{resetting ? <><LoaderCircle className="advanced-diagnostics-spinner" size={16} />Resetting...</> : "Run diagnostics again"}</button></>}>
             <div className="advanced-diagnostics-reset-copy">
               <p>This will replace the current diagnostics workflow for this saved scan.</p>
               <p>Your saved scan, job details, and original resume will stay unchanged.</p>
               <div><strong>Will be replaced</strong><ul><li>Current diagnostics results</li><li>Accepted diagnostic changes</li><li>Verification and readiness state</li></ul></div>
               <div><strong>Will not be changed</strong><ul><li>Saved scan and job description</li><li>Original resume</li></ul></div>
             </div>
-          </PremiumDialog>
+          </PremiumDialog> : null}
         </div>
       ) : null}
     </div>

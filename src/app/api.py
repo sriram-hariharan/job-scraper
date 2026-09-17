@@ -1189,6 +1189,15 @@ def _require_admin_user(request: Request) -> dict:
     return user
 
 
+def _require_operations_viewer(request: Request) -> dict:
+    user = _auth_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    if not _auth_user_is_admin(request) and str(user.get("access_level") or "").strip().lower() != "super_user":
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return user
+
+
 def _agentic_approval_storage_connection() -> Any:
     return None
 
@@ -3295,7 +3304,7 @@ def scheduler_summary(
     database_url_env: str = "DATABASE_URL",
     psql_bin: str = "psql",
 ):
-    _require_admin_user(http_request)
+    _require_operations_viewer(http_request)
     try:
         return services.scheduler_operator_summary_payload(
             limit=limit,
@@ -3381,7 +3390,7 @@ def scheduler_run_agent_discovery_now(http_request: Request):
 
 @app.get("/scheduler/runs/{run_id}/agent-discovery-summary")
 def scheduler_agent_discovery_run_summary(run_id: str, http_request: Request):
-    _require_admin_user(http_request)
+    _require_operations_viewer(http_request)
     try:
         return services.agent_discovery_run_summary_payload(run_id)
     except services.AgentDiscoverySummaryUnavailable as exc:
@@ -4682,7 +4691,7 @@ def profile_admin_users(http_request: Request, limit: int = 100):
 
 @app.get("/profile/admin/agentic-operations/overview")
 def profile_admin_agentic_operations_overview(http_request: Request):
-    _require_admin_user(http_request)
+    _require_operations_viewer(http_request)
     try:
         return services.agentic_operations_overview_payload(
             owner_user_id=_require_auth_owner_user_id(http_request),
@@ -4766,7 +4775,7 @@ def profile_pipeline_run_agent_trace(
     include_stage_trace_readiness: str = "",
     include_trace_evidence_pack: str = "",
 ):
-    _require_admin_user(http_request)
+    _require_operations_viewer(http_request)
     try:
         return services.agent_trace_payload(
             owner_user_id=_require_auth_owner_user_id(http_request),
@@ -4797,7 +4806,7 @@ def profile_pipeline_run_evidence_chain_trace(
     limit_runs: int = 10,
     limit_steps: int = 100,
 ):
-    _require_admin_user(http_request)
+    _require_operations_viewer(http_request)
     try:
         return services.get_evidence_chain_trace_readback_payload(
             owner_user_id=_require_auth_owner_user_id(http_request),
@@ -6455,7 +6464,7 @@ def jd_live_provider_canary_readback(
 
 @app.get("/profile/pipeline-runs/{run_id}/agentic-review-data")
 def profile_pipeline_run_agentic_review_data(run_id: str, http_request: Request):
-    _require_admin_user(http_request)
+    _require_operations_viewer(http_request)
     try:
         return services.profile_pipeline_run_agentic_review_payload(
             owner_user_id=_require_auth_owner_user_id(http_request),

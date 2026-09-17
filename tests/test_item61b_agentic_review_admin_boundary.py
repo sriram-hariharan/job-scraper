@@ -32,6 +32,12 @@ NON_ADMIN_USER = {
     "is_admin": False,
     "access_level": "user",
 }
+SUPER_USER = {
+    "user_id": "super-owner",
+    "email": "super@example.test",
+    "is_admin": False,
+    "access_level": "super_user",
+}
 
 DEDICATED_APIS = (
     (
@@ -69,7 +75,7 @@ def test_admin_can_load_agentic_review_html(monkeypatch, admin_user) -> None:
     )
 
     assert response.status_code == 200
-    assert '<div class="page agentic-review-page" data-agentic-review-run-id="run-61b">' in response.text
+    assert '<div class="page agentic-review-page" data-agentic-review-run-id="run-61b" data-operational-read-only="false">' in response.text
     assert '<span class="app-page-header__badge">Admin only</span>' in response.text
     assert '<span class="app-page-header__badge">Read-only</span>' not in response.text
 
@@ -81,6 +87,17 @@ def test_authenticated_non_admin_cannot_load_agentic_review_html(monkeypatch) ->
 
     assert response.status_code == 403
     assert response.json() == {"detail": "Admin access required."}
+
+
+def test_super_user_can_load_read_only_agentic_review_html(monkeypatch) -> None:
+    response = _client_as(monkeypatch, SUPER_USER).get(
+        "/profile/pipeline-runs/run-61b/agentic-review"
+    )
+
+    assert response.status_code == 200
+    assert 'data-operational-read-only="true"' in response.text
+    assert '<span class="app-page-header__badge">Read-only</span>' in response.text
+    assert 'class="agentic-review-operational-read-only"' in response.text
 
 
 def test_source_query_does_not_change_agentic_review_authorization(monkeypatch) -> None:
@@ -115,6 +132,31 @@ def test_admin_api_preserves_authenticated_owner_scope(
     assert response.status_code == 200
     assert response.json()["owner_user_id"] == ADMIN_USER["user_id"]
     assert captured["owner_user_id"] == ADMIN_USER["user_id"]
+    assert captured[run_key] == "run-61b"
+    assert "another-user" not in captured.values()
+
+
+@pytest.mark.parametrize(("path", "service_name", "run_key"), DEDICATED_APIS)
+def test_super_user_api_preserves_authenticated_owner_scope(
+    monkeypatch,
+    path: str,
+    service_name: str,
+    run_key: str,
+) -> None:
+    captured: dict = {}
+
+    def readback(**kwargs):
+        captured.update(kwargs)
+        return {"ok": True, "owner_user_id": kwargs["owner_user_id"]}
+
+    monkeypatch.setattr(services, service_name, readback)
+    response = _client_as(monkeypatch, SUPER_USER).get(
+        f"{path}?owner_user_id=another-user"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["owner_user_id"] == SUPER_USER["user_id"]
+    assert captured["owner_user_id"] == SUPER_USER["user_id"]
     assert captured[run_key] == "run-61b"
     assert "another-user" not in captured.values()
 
@@ -184,10 +226,12 @@ const renderFor = (user) => {{
 }};
 const byFlag = renderFor({json.dumps(ADMIN_USER)});
 const byAccess = renderFor({json.dumps(ACCESS_LEVEL_ADMIN_USER)});
+const superUser = renderFor({json.dumps(SUPER_USER)});
 const nonAdmin = renderFor({json.dumps(NON_ADMIN_USER)});
 console.log(JSON.stringify({{
   flagHasAgentic: byFlag.includes("pipeline-run-agentic-review-btn"),
   accessHasAgentic: byAccess.includes("pipeline-run-agentic-review-btn"),
+  superHasAgentic: superUser.includes("pipeline-run-agentic-review-btn"),
   nonAdminHasAgentic: nonAdmin.includes("pipeline-run-agentic-review-btn"),
   nonAdminHasView: nonAdmin.includes("pipeline-run-view-btn"),
   nonAdminHasRerun: nonAdmin.includes("pipeline-run-rerun-btn"),
@@ -204,6 +248,7 @@ console.log(JSON.stringify({{
     assert json.loads(completed.stdout) == {
         "flagHasAgentic": True,
         "accessHasAgentic": True,
+        "superHasAgentic": True,
         "nonAdminHasAgentic": False,
         "nonAdminHasView": True,
         "nonAdminHasRerun": True,

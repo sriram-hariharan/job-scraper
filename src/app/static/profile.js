@@ -493,6 +493,10 @@ function isCurrentUserAdmin(user) {
   return Boolean(user?.is_admin) || accessLevel === "admin";
 }
 
+function canViewOperations(user) {
+  return isCurrentUserAdmin(user) || String(user?.access_level || "").trim().toLowerCase() === "super_user";
+}
+
 async function loadCurrentUser() {
   const data = await fetchJson("/auth/me");
   const user = data.user || null;
@@ -593,7 +597,7 @@ function openAdminUserRoleModal(userId) {
   qs("adminUserRoleTitle").textContent = remove ? "Remove Super User access?" : "Grant Super User access?";
   qs("adminUserRoleDescription").textContent = remove
     ? "Remove the Super User role and its intended operational access. This does not delete or deactivate the account."
-    : "Assign the Super User role for intended operational and read-only access. Operational pages are not enabled yet. This does not grant full Admin privileges.";
+    : "Assign the Super User role for operational visibility and read-only access to approved tools. This does not grant full Admin privileges.";
   qs("adminUserRoleIdentity").innerHTML = adminUserIdentity(user);
   qs("adminUserRolePermissions").classList.toggle("hidden", remove);
   qs("adminUserRoleNote").textContent = remove
@@ -1084,7 +1088,7 @@ function renderPipelineRuns(runs) {
     if (isDisplayableMetricValue(packetJobs)) {
       outputParts.push(`${formatPipelineRunMetricValue(packetJobs)} packet`);
     }
-    const agenticReviewAction = isCurrentUserAdmin(profileState.currentUser)
+    const agenticReviewAction = canViewOperations(profileState.currentUser)
       ? `
             <a
               class="pipeline-run-icon-btn pipeline-run-agentic-review-btn"

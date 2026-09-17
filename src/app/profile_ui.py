@@ -35,6 +35,15 @@ def _require_profile_admin_user(request: Request) -> dict:
     return user
 
 
+def _require_profile_operations_viewer(request: Request) -> dict:
+    user = _profile_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    if not _profile_user_is_admin(user) and str(user.get("access_level") or "").strip().lower() != "super_user":
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return user
+
+
 def _preferences_section_html(*, hidden: bool = False, tab_panel: bool = False) -> str:
     hidden_class = " hidden" if hidden else ""
     tab_attr = " data-profile-tab-panel" if tab_panel else ""
@@ -112,7 +121,7 @@ def profile_page(request: Request) -> str:
       <div class="profile-inline-status hidden" id="adminUsersStatusBanner"></div>
 
       <div class="user-access-list" id="adminUsersList" role="list" aria-label="User accounts" aria-live="polite">Loading users...</div>
-      <div class="user-access-note"><span class="user-access-info-icon" aria-hidden="true">i</span><span>The Super User role is intended for additional operational and read-only access, without full Admin privileges. Operational page access is not enabled yet.</span></div>
+      <div class="user-access-note"><span class="user-access-info-icon" aria-hidden="true">i</span><span>Super Users have additional operational visibility and read-only access to the approved tools, without full Admin privileges.</span></div>
     </section>
 """
         if is_admin
@@ -174,7 +183,7 @@ def profile_page(request: Request) -> str:
       </div>
       <div class="user-role-identity" id="adminUserRoleIdentity"></div>
       <div class="user-role-permissions" id="adminUserRolePermissions">
-        <section class="user-role-positive"><h4>Intended access <span>Not enabled yet</span></h4><ul>
+        <section class="user-role-positive"><h4>Gets access to</h4><ul>
           <li>Scheduler Health (view only)</li><li>Agentic Operations (read only)</li><li>Scan Diagnostics (read-only visibility)</li><li>Agentic Review (read only)</li>
         </ul></section>
         <section class="user-role-restricted"><h4>Still restricted from</h4><ul>
@@ -611,11 +620,69 @@ def profile_page(request: Request) -> str:
 
 @router.get("/profile/pipeline-runs/{run_id}/agentic-review", response_class=HTMLResponse)
 def pipeline_run_agentic_review_page(run_id: str, request: Request) -> str:
-    _require_profile_admin_user(request)
+    viewer = _require_profile_operations_viewer(request)
+    read_only = not _profile_user_is_admin(viewer)
+    read_only_attr = "true" if read_only else "false"
+    access_badge = "Read-only" if read_only else "Admin only"
+    body_class = ' class="agentic-review-operational-read-only"' if read_only else ""
     safe_run_id = escape(str(run_id or "").strip())
     from_agentic_operations = request.query_params.get("source") == "agentic-operations"
     back_href = "/agentic-operations" if from_agentic_operations else "/profile?tab=pipeline-runs"
     back_label = "Back to Agentic Operations" if from_agentic_operations else "Back to pipeline runs"
+    agentic_review_runtime_html = (
+        """
+  <script>
+    window.__applyLensAgenticReviewAddEventListener = window.addEventListener;
+    window.addEventListener = function(type, listener, options) {
+      if (type === "DOMContentLoaded" && listener && listener.name === "initAgenticReviewPage") return;
+      return window.__applyLensAgenticReviewAddEventListener.call(window, type, listener, options);
+    };
+  </script>
+  <script src="/static/agentic_review.js?v=item6_final_agentic_review_r1"></script>
+  <script>
+    window.addEventListener = window.__applyLensAgenticReviewAddEventListener;
+    delete window.__applyLensAgenticReviewAddEventListener;
+
+    function removeAgenticReviewOperationalControls() {
+      document.querySelectorAll(
+        ".agentic-feedback-actions, .manual-provider-preview-action-cell, #agenticReviewTracePanel input, #agenticReviewTracePanel select, #agenticReviewTracePanel textarea"
+      ).forEach((element) => element.remove());
+    }
+
+    async function initAgenticReviewReadOnlyPage() {
+      bindAgenticReviewTablist(".agentic-review-tabs", ".agentic-review-tab", "[data-agentic-tab-panel]", "agenticTabTarget");
+      bindAgenticReviewTablist(".agentic-review-advanced-tabs", ".agentic-review-advanced-tab", "[data-agentic-advanced-panel]", "agenticAdvancedTarget");
+      bindAgenticReviewTablist(".agentic-review-segmented", ".agentic-review-segment", "[data-agentic-advisory-panel]", "agenticAdvisoryTarget");
+      bindAgenticReviewQueue();
+      bindAgentTraceMasterDetail();
+      bindAgentTraceDiagnosticMasterDetail();
+      const runId = getAgenticReviewRunId();
+      if (!runId) return;
+      try {
+        const [payload, feedbackPayload, tracePayload, evidenceChainPayload] = await Promise.all([
+          fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agentic-review-data`),
+          fetchJson(`/api/agent-feedback/summary?pipeline_run_id=${encodeURIComponent(runId)}&limit=50`).catch(() => ({})),
+          fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace?include_trace_summary=1&include_stage_trace_bundle=1&include_stage_trace_health=1&include_stage_trace_readiness=1&include_trace_evidence_pack=1`).catch(() => ({})),
+          fetchEvidenceChainTraceReadbackPayload(runId).catch(() => ({})),
+        ]);
+        if (!payload.agent_feedback) payload.agent_feedback = feedbackPayload || {};
+        renderAgenticReviewData(payload, {
+          ...tracePayload,
+          evidence_chain_trace_readback: evidenceChainPayload,
+        });
+        removeAgenticReviewOperationalControls();
+      } catch (error) {
+        const panel = qs("agenticReviewStatusCard");
+        if (panel) panel.innerHTML = `<div class="agent-trace-error">${escapeHtml(error.message || "Failed to load agentic review.")}</div>`;
+      }
+    }
+
+    initAgenticReviewReadOnlyPage();
+  </script>
+"""
+        if read_only
+        else '  <script src="/static/agentic_review.js?v=item6_final_agentic_review_r1"></script>'
+    )
     return f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -627,10 +694,19 @@ def pipeline_run_agentic_review_page(run_id: str, request: Request) -> str:
   <link rel="stylesheet" href="/static/styles.css?v=agentic_review_v1" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1" />
   <link rel="stylesheet" href="/static/agentic_review.css?v=item6c3_back_navigation_r1" />
+  <style>
+    .agentic-review-page[data-operational-read-only="true"] .agentic-feedback-action,
+    .agentic-review-page[data-operational-read-only="true"] .agentic-feedback-actions,
+    .agentic-review-page[data-operational-read-only="true"] .manual-provider-preview-action-cell,
+    .agentic-review-page[data-operational-read-only="true"] #agenticReviewTracePanel input,
+    .agentic-review-page[data-operational-read-only="true"] #agenticReviewTracePanel select,
+    .agentic-review-page[data-operational-read-only="true"] #agenticReviewTracePanel textarea,
+    .agentic-review-operational-read-only .manual-provider-preview-modal {{ display: none; }}
+  </style>
 </head>
-<body>
+<body{body_class}>
 {render_top_shell("/profile")}
-  <div class="page agentic-review-page" data-agentic-review-run-id="{safe_run_id}">
+  <div class="page agentic-review-page" data-agentic-review-run-id="{safe_run_id}" data-operational-read-only="{read_only_attr}">
     <header class="page-header app-page-header agentic-review-header">
       <div class="app-page-header__main">
         <a class="agentic-review-back-link" href="{back_href}">
@@ -639,7 +715,7 @@ def pipeline_run_agentic_review_page(run_id: str, request: Request) -> str:
         </a>
         <div class="app-page-header__title-row">
           <h1 class="app-page-header__title">Agentic Review</h1>
-          <span class="app-page-header__badge">Admin only</span>
+          <span class="app-page-header__badge">{access_badge}</span>
         </div>
         <p class="subtext app-page-header__description" id="agenticReviewSubtitle">Pipeline run {safe_run_id}</p>
       </div>
@@ -810,7 +886,7 @@ def pipeline_run_agentic_review_page(run_id: str, request: Request) -> str:
 
   <script src="/static/shell.js?v=eucalyptus_primary_shell_r1&ui=runtime_truth_r1"></script>
   <script src="/static/profile.js?v=agentic_review_v1"></script>
-  <script src="/static/agentic_review.js?v=item6_final_agentic_review_r1"></script>
+{agentic_review_runtime_html}
 </body>
 </html>
     """.strip()

@@ -78,6 +78,7 @@ type LoadState =
 type RunsTab = "job_status" | "run_history";
 
 type SchedulerHealthDashboardProps = {
+  canManage?: boolean;
   readSummary?: () => Promise<SchedulerSummaryPayload>;
   runDiscoveryNow?: () => Promise<ManualAgentDiscoveryResponse>;
   readDiscoverySummary?: (runId: string) => Promise<AgentDiscoveryRunSummary>;
@@ -181,6 +182,7 @@ function manualDiscoveryEligibility(job: SchedulerRuntimeJob) {
 }
 
 function DashboardHeader({
+  canManage,
   onRefresh,
   refreshing,
   lastRefreshedAt,
@@ -189,6 +191,7 @@ function DashboardHeader({
   onAutomationAction,
   automationControlTriggerRef,
 }: {
+  canManage: boolean;
   onRefresh: () => void;
   refreshing: boolean;
   lastRefreshedAt: number | null;
@@ -202,7 +205,7 @@ function DashboardHeader({
       <div className="scheduler-health-header-copy app-page-header__main">
         <div className="scheduler-health-title-row app-page-header__title-row">
           <h1 className="app-page-header__title">Scheduler Health</h1>
-          <span className="scheduler-badge scheduler-badge--muted scheduler-admin-badge app-page-header__badge">Admin only</span>
+          <span className="scheduler-badge scheduler-badge--muted scheduler-admin-badge app-page-header__badge">{canManage ? "Admin only" : "Read-only"}</span>
         </div>
         <p className="app-page-header__description">Monitor scheduled jobs, run outcomes, persistence consistency, and configuration integrity.</p>
       </div>
@@ -210,7 +213,7 @@ function DashboardHeader({
         <span className="scheduler-last-refreshed">
           {lastRefreshedAt ? `Last refreshed at ${formatClockTime(new Date(lastRefreshedAt))}` : "Not refreshed yet"}
         </span>
-        <button
+        {canManage ? <button
           type="button"
           className="scheduler-automation-control-btn"
           onClick={onAutomationAction}
@@ -220,7 +223,7 @@ function DashboardHeader({
         >
           <Clock size={15} aria-hidden="true" />
           Manage scheduled runs
-        </button>
+        </button> : null}
         <button
           type="button"
           className="scheduler-refresh-btn"
@@ -482,12 +485,14 @@ function OverviewPanel({
 }
 
 function RuntimeJobsPanel({
+  canManage,
   payload,
   loading,
   manualSubmitting,
   onRequestManualDiscovery,
   manualDiscoveryTriggerRef,
 }: {
+  canManage: boolean;
   payload: SchedulerSummaryPayload | null;
   loading: boolean;
   manualSubmitting: boolean;
@@ -527,7 +532,7 @@ function RuntimeJobsPanel({
                   <div>
                     <div className="scheduler-runtime-card-title-row">
                       <h3>{jobDisplayName(job.job_name)}</h3>
-                      {job.job_name === "agent_discovery" ? (
+                      {canManage && job.job_name === "agent_discovery" ? (
                         <button
                           type="button"
                           className="scheduler-manual-discovery-btn"
@@ -1600,6 +1605,7 @@ function DiagnosticsModal({
 }
 
 export function SchedulerHealthDashboard({
+  canManage = true,
   readSummary = readSchedulerSummary,
   runDiscoveryNow = runAgentDiscoveryNow,
   readDiscoverySummary = readAgentDiscoveryRunSummary,
@@ -1632,6 +1638,7 @@ export function SchedulerHealthDashboard({
   }, [readSummary]);
 
   const confirmManualDiscovery = useCallback(async () => {
+    if (!canManage) return;
     setManualSubmitting(true);
     setManualActionError("");
     try {
@@ -1667,7 +1674,7 @@ export function SchedulerHealthDashboard({
     } finally {
       setManualSubmitting(false);
     }
-  }, [runDiscoveryNow]);
+  }, [canManage, runDiscoveryNow]);
   const closeManualDiscoveryConfirm = useCallback(() => {
     setManualConfirmOpen(false);
   }, []);
@@ -1677,6 +1684,7 @@ export function SchedulerHealthDashboard({
   }, []);
 
   const applyAutomationControl = useCallback(async (jobName: SchedulerAutomationJobName, paused: boolean) => {
+    if (!canManage) return;
     if (automationRequestInFlightRef.current) return;
     automationRequestInFlightRef.current = true;
     setAutomationSubmittingJob(jobName);
@@ -1710,7 +1718,7 @@ export function SchedulerHealthDashboard({
       automationRequestInFlightRef.current = false;
       setAutomationSubmittingJob(null);
     }
-  }, [updateAutomationControl]);
+  }, [canManage, updateAutomationControl]);
 
   const requestAutomationAction = useCallback(() => {
     if (state.kind !== "ready" || !state.payload.automation_control) return;
@@ -1743,6 +1751,7 @@ export function SchedulerHealthDashboard({
   return (
     <div className="scheduler-health-dashboard" aria-busy={state.kind === "loading"}>
       <DashboardHeader
+        canManage={canManage}
         onRefresh={() => void refresh(true)}
         refreshing={refreshing}
         lastRefreshedAt={lastRefreshedAt}
@@ -1785,6 +1794,7 @@ export function SchedulerHealthDashboard({
         diagnosticsTriggerRef={diagnosticsTriggerRef}
       />
       <RuntimeJobsPanel
+        canManage={canManage}
         payload={payload}
         loading={state.kind === "loading"}
         manualSubmitting={manualSubmitting}
@@ -1804,14 +1814,14 @@ export function SchedulerHealthDashboard({
         onClose={() => setDiagnosticsOpen(false)}
         triggerRef={diagnosticsTriggerRef}
       />
-      <ManualDiscoveryConfirmDialog
+      {canManage ? <ManualDiscoveryConfirmDialog
         open={manualConfirmOpen}
         confirming={manualSubmitting}
         onClose={closeManualDiscoveryConfirm}
         onConfirm={() => void confirmManualDiscovery()}
         triggerRef={manualDiscoveryTriggerRef}
-      />
-      <AutomationManagementDialog
+      /> : null}
+      {canManage ? <AutomationManagementDialog
         open={automationManagementOpen}
         automationControl={automationControl}
         runtimeJobs={payload?.runtime_jobs || []}
@@ -1820,7 +1830,7 @@ export function SchedulerHealthDashboard({
         onClose={() => setAutomationManagementOpen(false)}
         onAction={(jobName, paused) => void applyAutomationControl(jobName, paused)}
         triggerRef={automationControlTriggerRef}
-      />
+      /> : null}
     </div>
   );
 }

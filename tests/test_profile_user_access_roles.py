@@ -150,10 +150,11 @@ def test_sessions_read_current_role_and_deauthorization_still_revokes_sessions()
     assert "is_admin = FALSE" in deletion and "<> 'admin'" in deletion
 
 
-@pytest.mark.parametrize("path", ["/scheduler", "/agentic-operations", "/advanced-diagnostics", "/profile/pipeline-runs/test-run/agentic-review", "/profile/pipeline-runs/test-run/agentic-review-data"])
-def test_super_user_operational_pages_remain_admin_only(monkeypatch, path):
+@pytest.mark.parametrize("path", ["/scheduler", "/agentic-operations", "/advanced-diagnostics", "/profile/pipeline-runs/test-run/agentic-review"])
+def test_super_user_operational_pages_are_enabled(monkeypatch, path):
+    monkeypatch.setattr(services, "profile_saved_scans_payload", lambda **_kwargs: {"saved_scans": []})
     response = client_as(monkeypatch, "super_user").get(path, follow_redirects=False)
-    assert response.status_code == 403
+    assert response.status_code == 200
 
 
 def test_admin_only_profile_controls_and_semantic_modal():
@@ -169,7 +170,9 @@ def test_admin_only_profile_controls_and_semantic_modal():
     assert "Refresh" in refresh_button
     assert "adminUsersTableBody" not in html
     assert 'aria-labelledby="adminUserRoleTitle"' in html and 'aria-modal="true"' in html
-    assert "Not enabled yet" in html
+    assert "Gets access to" in html
+    assert "Not enabled yet" not in html
+    assert "additional operational visibility and read-only access" in html
     assert 'id="adminUserDeleteModal"' in html
     request.state.auth_user = {"user_id": "super", "access_level": "super_user", "is_admin": False}
     html = profile_page(request)

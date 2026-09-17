@@ -718,9 +718,10 @@ def test_admin_has_a_discoverable_scheduler_health_entry_via_admin_diagnostics_s
     assert 'data-admin-only="true"' in entry
     assert "hidden" in entry
     assert "Scheduler Health" in entry
-    # Reuses the existing admin-only toggle convention (mirrors Advanced Diagnostics).
+    # Uses the authenticated operational-viewer toggle shared by these links.
     assert SHELL_JS.count('qs("profileSchedulerHealthLink")') == 1
-    assert "profileSchedulerHealthLink.classList.toggle(\"hidden\", !isAdmin)" in SHELL_JS
+    assert 'const canViewOperations = isAdmin || accessLevel === "super_user"' in SHELL_JS
+    assert "profileSchedulerHealthLink.classList.toggle(\"hidden\", !canViewOperations)" in SHELL_JS
 
 
 def test_scheduler_health_entry_is_not_duplicated() -> None:

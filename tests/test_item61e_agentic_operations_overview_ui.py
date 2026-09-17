@@ -54,7 +54,7 @@ def _agentic_operations_route_source() -> str:
     )[1]
 
 
-def test_agentic_operations_page_remains_server_side_admin_only(monkeypatch) -> None:
+def test_agentic_operations_page_remains_server_side_operations_viewer_only(monkeypatch) -> None:
     admin = _client_as(monkeypatch, ADMIN_USER).get("/agentic-operations")
     assert admin.status_code == 200
 
@@ -63,8 +63,8 @@ def test_agentic_operations_page_remains_server_side_admin_only(monkeypatch) -> 
     assert forbidden.json() == {"detail": "Admin access required."}
 
     route = _agentic_operations_route_source()
-    assert route.count("_require_admin_user(request)") == 1
-    assert route.index("_require_admin_user(request)") < route.index("return f")
+    assert route.count("_require_operations_viewer(request)") == 1
+    assert route.index("_require_operations_viewer(request)") < route.index("return f")
 
 
 def test_page_has_one_react_root_and_the_existing_bundle_assets(monkeypatch) -> None:
@@ -101,7 +101,7 @@ def test_approved_backend_overview_path_is_unchanged() -> None:
     route_start = API_SOURCE.index(f'@app.get("{OVERVIEW_PATH}")')
     route_end = API_SOURCE.index("\n\n@app.", route_start + 1)
     route = API_SOURCE[route_start:route_end]
-    assert "_require_admin_user(http_request)" in route
+    assert "_require_operations_viewer(http_request)" in route
     assert "agentic_operations_overview_payload(" in route
     assert "_require_auth_owner_user_id(http_request)" in route
     assert "Body(" not in route

@@ -486,3 +486,30 @@ describe("AdvancedDiagnosticsDashboard — hub and neutral states", () => {
     expect(screen.getByText("Scan context unavailable")).toBeInTheDocument();
   });
 });
+
+describe("AdvancedDiagnosticsDashboard — Super User read-only visibility", () => {
+  it("shows persisted diagnostics without stage, decision, override, or reset controls", () => {
+    const request = vi.fn();
+    const readOnlyState = { ...contextState(withReadbacks(ANALYSES)), readOnly: true };
+    const { rerender } = render(<AdvancedDiagnosticsDashboard state={readOnlyState} request={request} />);
+
+    expect(screen.getByText("Read-only")).toBeInTheDocument();
+    expect(screen.getByText("Read-only visibility")).toBeInTheDocument();
+    expect(screen.getByText("Proposal ID · proposal-1")).toBeInTheDocument();
+    for (const checkbox of screen.getAllByRole("checkbox")) expect(checkbox).toBeDisabled();
+    expect(document.querySelector(".advanced-diagnostics-primary-action")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Accept selected exact changes" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Technical details" }));
+    expect(screen.queryByText("Advanced: manual ID override")).not.toBeInTheDocument();
+
+    rerender(
+      <AdvancedDiagnosticsDashboard
+        state={{ ...contextState(withReadbacks(COMPLETE_ROWS)), readOnly: true }}
+        request={request}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Run diagnostics again" })).not.toBeInTheDocument();
+    expect(request).not.toHaveBeenCalled();
+  });
+});

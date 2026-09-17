@@ -26339,7 +26339,7 @@ function XR(e) {
 		reason: t ? "Run Agent Discovery once without changing its schedule." : "Agent Discovery is unavailable until its scheduler is installed, loaded, enabled, armed, and idle."
 	};
 }
-function ZR({ onRefresh: e, refreshing: t, lastRefreshedAt: n, automationControl: r, automationSubmitting: i, onAutomationAction: a, automationControlTriggerRef: o }) {
+function ZR({ canManage: e, onRefresh: t, refreshing: n, lastRefreshedAt: r, automationControl: i, automationSubmitting: a, onAutomationAction: o, automationControlTriggerRef: s }) {
 	return /* @__PURE__ */ (0, q.jsxs)("header", {
 		className: "scheduler-health-header app-page-header",
 		children: [/* @__PURE__ */ (0, q.jsxs)("div", {
@@ -26351,7 +26351,7 @@ function ZR({ onRefresh: e, refreshing: t, lastRefreshedAt: n, automationControl
 					children: "Scheduler Health"
 				}), /* @__PURE__ */ (0, q.jsx)("span", {
 					className: "scheduler-badge scheduler-badge--muted scheduler-admin-badge app-page-header__badge",
-					children: "Admin only"
+					children: e ? "Admin only" : "Read-only"
 				})]
 			}), /* @__PURE__ */ (0, q.jsx)("p", {
 				className: "app-page-header__description",
@@ -26362,30 +26362,30 @@ function ZR({ onRefresh: e, refreshing: t, lastRefreshedAt: n, automationControl
 			children: [
 				/* @__PURE__ */ (0, q.jsx)("span", {
 					className: "scheduler-last-refreshed",
-					children: n ? `Last refreshed at ${LR(new Date(n))}` : "Not refreshed yet"
+					children: r ? `Last refreshed at ${LR(new Date(r))}` : "Not refreshed yet"
 				}),
-				/* @__PURE__ */ (0, q.jsxs)("button", {
+				e ? /* @__PURE__ */ (0, q.jsxs)("button", {
 					type: "button",
 					className: "scheduler-automation-control-btn",
-					onClick: a,
-					disabled: !r || i,
-					title: r ? void 0 : "Scheduler automation control unavailable",
-					ref: o,
+					onClick: o,
+					disabled: !i || a,
+					title: i ? void 0 : "Scheduler automation control unavailable",
+					ref: s,
 					children: [/* @__PURE__ */ (0, q.jsx)(ce, {
 						size: 15,
 						"aria-hidden": "true"
 					}), "Manage scheduled runs"]
-				}),
+				}) : null,
 				/* @__PURE__ */ (0, q.jsxs)("button", {
 					type: "button",
 					className: "scheduler-refresh-btn",
-					onClick: e,
-					disabled: t,
+					onClick: t,
+					disabled: n,
 					"aria-label": "Refresh scheduler health",
 					children: [/* @__PURE__ */ (0, q.jsx)(Te, {
 						size: 15,
 						"aria-hidden": "true",
-						className: t ? "is-spinning" : ""
+						className: n ? "is-spinning" : ""
 					}), "Refresh"]
 				})
 			]
@@ -26602,8 +26602,8 @@ function $R({ payload: e, loading: t, onOpenDiagnostics: n, diagnosticsTriggerRe
 		]
 	});
 }
-function ez({ payload: e, loading: t, manualSubmitting: n, onRequestManualDiscovery: r, manualDiscoveryTriggerRef: i }) {
-	let a = (e == null ? void 0 : e.runtime_jobs) || [];
+function ez({ canManage: e, payload: t, loading: n, manualSubmitting: r, onRequestManualDiscovery: i, manualDiscoveryTriggerRef: a }) {
+	let o = (t == null ? void 0 : t.runtime_jobs) || [];
 	return /* @__PURE__ */ (0, q.jsxs)("section", {
 		className: "scheduler-runtime-section",
 		"aria-label": "Scheduler runtime jobs",
@@ -26611,54 +26611,54 @@ function ez({ payload: e, loading: t, manualSubmitting: n, onRequestManualDiscov
 			className: "scheduler-runtime-section-heading",
 			children: [/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("p", {
 				className: "scheduler-overview-kicker",
-				children: `${JR(e)} runtime${(e == null ? void 0 : e.runtime_provider) === "systemd" && e.runtime_observation_status !== "fresh" ? " · observation unavailable" : ""}`
-			}), /* @__PURE__ */ (0, q.jsx)("h2", { children: "Scheduled jobs" })] }), /* @__PURE__ */ (0, q.jsx)("span", { children: t ? "Inspecting runtime..." : `${a.length} external jobs` })]
-		}), a.length ? /* @__PURE__ */ (0, q.jsx)("div", {
+				children: `${JR(t)} runtime${(t == null ? void 0 : t.runtime_provider) === "systemd" && t.runtime_observation_status !== "fresh" ? " · observation unavailable" : ""}`
+			}), /* @__PURE__ */ (0, q.jsx)("h2", { children: "Scheduled jobs" })] }), /* @__PURE__ */ (0, q.jsx)("span", { children: n ? "Inspecting runtime..." : `${o.length} external jobs` })]
+		}), o.length ? /* @__PURE__ */ (0, q.jsx)("div", {
 			className: "scheduler-runtime-grid",
-			children: a.map((e) => {
-				let t = e.last_run, a = Z(t == null ? void 0 : t.status) || "Never run", o = KR(e), s = FR(e, new Date(Date.now())), c = XR(e);
+			children: o.map((t) => {
+				let n = t.last_run, o = Z(n == null ? void 0 : n.status) || "Never run", s = KR(t), c = FR(t, new Date(Date.now())), l = XR(t);
 				return /* @__PURE__ */ (0, q.jsxs)("article", {
-					className: `scheduler-runtime-card ${o === "failed" || RR(a) ? "is-attention" : ""}`,
-					"data-job-name": e.job_name,
+					className: `scheduler-runtime-card ${s === "failed" || RR(o) ? "is-attention" : ""}`,
+					"data-job-name": t.job_name,
 					children: [
 						/* @__PURE__ */ (0, q.jsxs)("div", {
 							className: "scheduler-runtime-card-heading",
 							children: [/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsxs)("div", {
 								className: "scheduler-runtime-card-title-row",
-								children: [/* @__PURE__ */ (0, q.jsx)("h3", { children: UR(e.job_name) }), e.job_name === "agent_discovery" ? /* @__PURE__ */ (0, q.jsxs)("button", {
+								children: [/* @__PURE__ */ (0, q.jsx)("h3", { children: UR(t.job_name) }), e && t.job_name === "agent_discovery" ? /* @__PURE__ */ (0, q.jsxs)("button", {
 									type: "button",
 									className: "scheduler-manual-discovery-btn",
-									disabled: !c.enabled || n,
-									onClick: r,
-									ref: i,
-									title: c.reason,
+									disabled: !l.enabled || r,
+									onClick: i,
+									ref: a,
+									title: l.reason,
 									children: [/* @__PURE__ */ (0, q.jsx)(Ce, {
 										size: 12,
 										"aria-hidden": "true"
-									}), e.manual_run_active === !0 || n ? "Discovery running…" : "Run discovery now"]
+									}), t.manual_run_active === !0 || r ? "Discovery running…" : "Run discovery now"]
 								}) : null]
-							}), /* @__PURE__ */ (0, q.jsx)("p", { children: e.description })] }), /* @__PURE__ */ (0, q.jsxs)("div", {
+							}), /* @__PURE__ */ (0, q.jsx)("p", { children: t.description })] }), /* @__PURE__ */ (0, q.jsxs)("div", {
 								className: "scheduler-runtime-card-badges",
 								children: [/* @__PURE__ */ (0, q.jsx)("span", {
-									className: `scheduler-badge scheduler-badge--${o}`,
-									children: WR(e)
+									className: `scheduler-badge scheduler-badge--${s}`,
+									children: WR(t)
 								}), /* @__PURE__ */ (0, q.jsx)("span", {
-									className: `scheduler-badge scheduler-badge--${e.armed === !0 ? "succeeded" : e.armed === null ? "unknown" : "failed"}`,
-									children: GR(e)
+									className: `scheduler-badge scheduler-badge--${t.armed === !0 ? "succeeded" : t.armed === null ? "unknown" : "failed"}`,
+									children: GR(t)
 								})]
 							})]
 						}),
 						/* @__PURE__ */ (0, q.jsxs)("dl", {
 							className: "scheduler-runtime-details",
 							children: [
-								/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Schedule" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: zR(e.cadence_seconds) })] }),
+								/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Schedule" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: zR(t.cadence_seconds) })] }),
 								/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Last run" }), /* @__PURE__ */ (0, q.jsx)("dd", {
 									className: "scheduler-runtime-last-run",
-									title: t ? NR(t.started_at) : void 0,
-									children: t ? NR(t.started_at) : "Never run"
+									title: n ? NR(n.started_at) : void 0,
+									children: n ? NR(n.started_at) : "Never run"
 								})] }),
-								/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Last result" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: HR(a) })] }),
-								/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Return code" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: t ? OR(t.return_code, "-") : "-" })] })
+								/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Last result" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: HR(o) })] }),
+								/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("dt", { children: "Return code" }), /* @__PURE__ */ (0, q.jsx)("dd", { children: n ? OR(n.return_code, "-") : "-" })] })
 							]
 						}),
 						/* @__PURE__ */ (0, q.jsxs)("div", {
@@ -26668,26 +26668,26 @@ function ez({ payload: e, loading: t, manualSubmitting: n, onRequestManualDiscov
 								children: [/* @__PURE__ */ (0, q.jsxs)("span", { children: [/* @__PURE__ */ (0, q.jsx)(ne, {
 									size: 13,
 									"aria-hidden": "true"
-								}), e.installed === !0 ? "Installed" : e.installed === !1 ? "Not installed" : "Install unknown"] }), /* @__PURE__ */ (0, q.jsxs)("span", { children: [/* @__PURE__ */ (0, q.jsx)(we, {
+								}), t.installed === !0 ? "Installed" : t.installed === !1 ? "Not installed" : "Install unknown"] }), /* @__PURE__ */ (0, q.jsxs)("span", { children: [/* @__PURE__ */ (0, q.jsx)(we, {
 									size: 13,
 									"aria-hidden": "true"
-								}), e.loaded === !0 ? "Loaded" : e.loaded === !1 ? "Unloaded" : "Load unknown"] })]
+								}), t.loaded === !0 ? "Loaded" : t.loaded === !1 ? "Unloaded" : "Load unknown"] })]
 							}), /* @__PURE__ */ (0, q.jsxs)("span", {
-								className: `scheduler-next-run-pill is-${s.tone}`,
-								"aria-label": s.tone === "awaiting" ? "No scheduled run has been recorded yet." : void 0,
-								title: s.tone === "awaiting" ? "No scheduled run has been recorded yet." : void 0,
+								className: `scheduler-next-run-pill is-${c.tone}`,
+								"aria-label": c.tone === "awaiting" ? "No scheduled run has been recorded yet." : void 0,
+								title: c.tone === "awaiting" ? "No scheduled run has been recorded yet." : void 0,
 								children: [/* @__PURE__ */ (0, q.jsx)(ce, {
 									size: 13,
 									"aria-hidden": "true"
-								}), s.label]
+								}), c.label]
 							})]
 						})
 					]
-				}, e.job_name);
+				}, t.job_name);
 			})
 		}) : /* @__PURE__ */ (0, q.jsx)("div", {
 			className: "scheduler-runtime-empty",
-			children: t ? "Loading scheduler runtime..." : "Scheduler runtime is unavailable."
+			children: n ? "Loading scheduler runtime..." : "Scheduler runtime is unavailable."
 		})]
 	});
 }
@@ -27628,159 +27628,163 @@ function pz({ open: e, payload: t, onClose: n, triggerRef: r }) {
 		})
 	});
 }
-function mz({ readSummary: e = wR, runDiscoveryNow: t = TR, readDiscoverySummary: n = DR, updateAutomationControl: r = ER }) {
-	var i;
-	let [a, o] = (0, C.useState)({ kind: "loading" }), [s, c] = (0, C.useState)(!1), [l, u] = (0, C.useState)(!1), [d, f] = (0, C.useState)(!1), [p, m] = (0, C.useState)(!1), [h, g] = (0, C.useState)(""), [_, v] = (0, C.useState)(!1), [y, b] = (0, C.useState)(null), [x, S] = (0, C.useState)(""), w = (0, C.useRef)(null), T = (0, C.useRef)(null), E = (0, C.useRef)(null), D = (0, C.useRef)(!1), O = (0, C.useCallback)(async (t = !1) => {
-		t && c(!0);
+function mz({ canManage: e = !0, readSummary: t = wR, runDiscoveryNow: n = TR, readDiscoverySummary: r = DR, updateAutomationControl: i = ER }) {
+	var a;
+	let [o, s] = (0, C.useState)({ kind: "loading" }), [c, l] = (0, C.useState)(!1), [u, d] = (0, C.useState)(!1), [f, p] = (0, C.useState)(!1), [m, h] = (0, C.useState)(!1), [g, _] = (0, C.useState)(""), [v, y] = (0, C.useState)(!1), [b, x] = (0, C.useState)(null), [S, w] = (0, C.useState)(""), T = (0, C.useRef)(null), E = (0, C.useRef)(null), D = (0, C.useRef)(null), O = (0, C.useRef)(!1), k = (0, C.useCallback)(async (e = !1) => {
+		e && l(!0);
 		try {
-			let t = await e();
-			o({
+			let e = await t();
+			s({
 				kind: "ready",
-				payload: t,
+				payload: e,
 				checkedAt: Date.now()
 			});
 		} catch (e) {
-			o({
+			s({
 				kind: "error",
 				message: e instanceof Error ? e.message : "Scheduler summary is unavailable."
 			});
 		} finally {
-			t && c(!1);
+			e && l(!1);
 		}
-	}, [e]), k = (0, C.useCallback)(async () => {
-		m(!0), g("");
-		try {
-			let e = await t();
-			if (!e.accepted || e.job_name !== "agent_discovery") throw Error("Manual Agent Discovery was not accepted.");
-			o((e) => {
-				var t;
-				return e.kind === "ready" ? {
-					...e,
-					payload: {
-						...e.payload,
-						runtime_jobs: (t = e.payload.runtime_jobs) == null ? void 0 : t.map((e) => e.job_name === "agent_discovery" ? {
-							...e,
-							manual_run_active: !0,
-							manual_run_started_at: new Date(Date.now()).toISOString()
-						} : e)
-					}
-				} : e;
-			}), f(!1);
-		} catch (e) {
-			g(e instanceof Error ? e.message : "Manual Agent Discovery could not be started.");
-		} finally {
-			m(!1);
-		}
-	}, [t]), A = (0, C.useCallback)(() => {
-		f(!1);
-	}, []), j = (0, C.useCallback)(() => {
-		g(""), f(!0);
-	}, []), M = (0, C.useCallback)(async (e, t) => {
-		if (!D.current) {
-			D.current = !0, b(e), S("");
+	}, [t]), A = (0, C.useCallback)(async () => {
+		if (e) {
+			h(!0), _("");
 			try {
-				var n;
-				let i = await r(e, t);
-				if (!i.ok || i.job_name !== e || ((n = i.automation_control.jobs[e]) == null ? void 0 : n.paused) !== t) throw Error("Scheduler automation control returned an unexpected state.");
-				o((e) => e.kind === "ready" ? {
-					...e,
-					payload: {
-						...e.payload,
-						automation_control: i.automation_control
-					}
-				} : e);
+				let e = await n();
+				if (!e.accepted || e.job_name !== "agent_discovery") throw Error("Manual Agent Discovery was not accepted.");
+				s((e) => {
+					var t;
+					return e.kind === "ready" ? {
+						...e,
+						payload: {
+							...e.payload,
+							runtime_jobs: (t = e.payload.runtime_jobs) == null ? void 0 : t.map((e) => e.job_name === "agent_discovery" ? {
+								...e,
+								manual_run_active: !0,
+								manual_run_started_at: new Date(Date.now()).toISOString()
+							} : e)
+						}
+					} : e;
+				}), p(!1);
 			} catch (e) {
-				S(e instanceof Error ? e.message : "Scheduler automation control is unavailable.");
+				_(e instanceof Error ? e.message : "Manual Agent Discovery could not be started.");
 			} finally {
-				D.current = !1, b(null);
+				h(!1);
 			}
 		}
-	}, [r]), N = (0, C.useCallback)(() => {
-		a.kind !== "ready" || !a.payload.automation_control || (S(""), v(!0));
-	}, [a]);
+	}, [e, n]), j = (0, C.useCallback)(() => {
+		p(!1);
+	}, []), M = (0, C.useCallback)(() => {
+		_(""), p(!0);
+	}, []), N = (0, C.useCallback)(async (t, n) => {
+		if (e && !O.current) {
+			O.current = !0, x(t), w("");
+			try {
+				var r;
+				let e = await i(t, n);
+				if (!e.ok || e.job_name !== t || ((r = e.automation_control.jobs[t]) == null ? void 0 : r.paused) !== n) throw Error("Scheduler automation control returned an unexpected state.");
+				s((t) => t.kind === "ready" ? {
+					...t,
+					payload: {
+						...t.payload,
+						automation_control: e.automation_control
+					}
+				} : t);
+			} catch (e) {
+				w(e instanceof Error ? e.message : "Scheduler automation control is unavailable.");
+			} finally {
+				O.current = !1, x(null);
+			}
+		}
+	}, [e, i]), P = (0, C.useCallback)(() => {
+		o.kind !== "ready" || !o.payload.automation_control || (w(""), y(!0));
+	}, [o]);
 	(0, C.useEffect)(() => {
-		O();
+		k();
 	}, []);
-	let P = a.kind === "ready" ? a.payload : null, F = a.kind, ee = a.kind === "error" ? a.message : void 0, te = a.kind === "ready" ? a.checkedAt : null, ne = P == null ? void 0 : P.automation_control, I = !(ne == null || (i = ne.jobs) == null) && i.live_pipeline && ne.jobs.agent_discovery ? ne : null, re = a.kind === "ready" && !I, ie = I ? ["live_pipeline", "agent_discovery"].filter((e) => I.jobs[e].paused) : [], ae = ie.map(UR);
+	let F = o.kind === "ready" ? o.payload : null, ee = o.kind, te = o.kind === "error" ? o.message : void 0, ne = o.kind === "ready" ? o.checkedAt : null, I = F == null ? void 0 : F.automation_control, re = !(I == null || (a = I.jobs) == null) && a.live_pipeline && I.jobs.agent_discovery ? I : null, ie = o.kind === "ready" && !re, ae = re ? ["live_pipeline", "agent_discovery"].filter((e) => re.jobs[e].paused) : [], oe = ae.map(UR);
 	return /* @__PURE__ */ (0, q.jsxs)("div", {
 		className: "scheduler-health-dashboard",
-		"aria-busy": a.kind === "loading",
+		"aria-busy": o.kind === "loading",
 		children: [
 			/* @__PURE__ */ (0, q.jsx)(ZR, {
-				onRefresh: () => void O(!0),
-				refreshing: s,
-				lastRefreshedAt: te,
-				automationControl: I,
-				automationSubmitting: y !== null,
-				onAutomationAction: N,
-				automationControlTriggerRef: E
+				canManage: e,
+				onRefresh: () => void k(!0),
+				refreshing: c,
+				lastRefreshedAt: ne,
+				automationControl: re,
+				automationSubmitting: b !== null,
+				onAutomationAction: P,
+				automationControlTriggerRef: D
 			}),
-			a.kind === "error" ? /* @__PURE__ */ (0, q.jsx)("div", {
+			o.kind === "error" ? /* @__PURE__ */ (0, q.jsx)("div", {
 				className: "scheduler-error-banner",
 				role: "alert",
-				children: a.message
+				children: o.message
 			}) : null,
-			h ? /* @__PURE__ */ (0, q.jsx)("div", {
+			g ? /* @__PURE__ */ (0, q.jsx)("div", {
 				className: "scheduler-error-banner",
 				role: "alert",
-				children: h
+				children: g
 			}) : null,
-			re ? /* @__PURE__ */ (0, q.jsx)("div", {
+			ie ? /* @__PURE__ */ (0, q.jsx)("div", {
 				className: "scheduler-error-banner",
 				role: "alert",
 				children: "Scheduler automation control unavailable."
 			}) : null,
-			I && I.aggregate_state !== "running" ? /* @__PURE__ */ (0, q.jsxs)("div", {
+			re && re.aggregate_state !== "running" ? /* @__PURE__ */ (0, q.jsxs)("div", {
 				className: "scheduler-automation-paused-banner",
 				role: "status",
 				children: [/* @__PURE__ */ (0, q.jsx)(we, {
 					size: 18,
 					"aria-hidden": "true"
-				}), /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: (I == null ? void 0 : I.aggregate_state) === "paused" ? "Automatic starts for both schedulers are paused." : `${ae[0]} automatic starts are paused.` }), /* @__PURE__ */ (0, q.jsxs)("span", { children: [(I == null ? void 0 : I.aggregate_state) === "partially_paused" ? `${UR(ie[0] === "live_pipeline" ? "agent_discovery" : "live_pipeline")} remains automatic. ` : "Live Pipeline and Agent Discovery will not start automatically. ", "Already-running work continues. Permitted manual admin actions remain available. PostgreSQL backups are unaffected."] })] })]
+				}), /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: (re == null ? void 0 : re.aggregate_state) === "paused" ? "Automatic starts for both schedulers are paused." : `${oe[0]} automatic starts are paused.` }), /* @__PURE__ */ (0, q.jsxs)("span", { children: [(re == null ? void 0 : re.aggregate_state) === "partially_paused" ? `${UR(ae[0] === "live_pipeline" ? "agent_discovery" : "live_pipeline")} remains automatic. ` : "Live Pipeline and Agent Discovery will not start automatically. ", "Already-running work continues. Permitted manual admin actions remain available. PostgreSQL backups are unaffected."] })] })]
 			}) : null,
 			/* @__PURE__ */ (0, q.jsx)($R, {
-				payload: P,
-				loading: a.kind === "loading",
-				onOpenDiagnostics: () => u(!0),
-				diagnosticsTriggerRef: w
+				payload: F,
+				loading: o.kind === "loading",
+				onOpenDiagnostics: () => d(!0),
+				diagnosticsTriggerRef: T
 			}),
 			/* @__PURE__ */ (0, q.jsx)(ez, {
-				payload: P,
-				loading: a.kind === "loading",
-				manualSubmitting: p,
-				onRequestManualDiscovery: j,
-				manualDiscoveryTriggerRef: T
+				canManage: e,
+				payload: F,
+				loading: o.kind === "loading",
+				manualSubmitting: m,
+				onRequestManualDiscovery: M,
+				manualDiscoveryTriggerRef: E
 			}),
 			/* @__PURE__ */ (0, q.jsx)(iz, {
-				status: F,
-				errorMessage: ee,
-				payload: P,
-				onRetry: () => void O(!0),
-				readDiscoverySummary: n
+				status: ee,
+				errorMessage: te,
+				payload: F,
+				onRetry: () => void k(!0),
+				readDiscoverySummary: r
 			}),
 			/* @__PURE__ */ (0, q.jsx)(pz, {
-				open: l,
-				payload: P,
-				onClose: () => u(!1),
-				triggerRef: w
-			}),
-			/* @__PURE__ */ (0, q.jsx)(uz, {
-				open: d,
-				confirming: p,
-				onClose: A,
-				onConfirm: () => void k(),
+				open: u,
+				payload: F,
+				onClose: () => d(!1),
 				triggerRef: T
 			}),
-			/* @__PURE__ */ (0, q.jsx)(QR, {
-				open: _,
-				automationControl: I,
-				runtimeJobs: (P == null ? void 0 : P.runtime_jobs) || [],
-				submittingJob: y,
-				actionError: x,
-				onClose: () => v(!1),
-				onAction: (e, t) => void M(e, t),
+			e ? /* @__PURE__ */ (0, q.jsx)(uz, {
+				open: f,
+				confirming: m,
+				onClose: j,
+				onConfirm: () => void A(),
 				triggerRef: E
-			})
+			}) : null,
+			e ? /* @__PURE__ */ (0, q.jsx)(QR, {
+				open: v,
+				automationControl: re,
+				runtimeJobs: (F == null ? void 0 : F.runtime_jobs) || [],
+				submittingJob: b,
+				actionError: S,
+				onClose: () => y(!1),
+				onAction: (e, t) => void N(e, t),
+				triggerRef: D
+			}) : null
 		]
 	});
 }
@@ -28081,7 +28085,7 @@ function Nz(e, t, n, r, i, a) {
 	}
 	return "";
 }
-function Pz() {
+function Pz({ readOnly: e = !1 }) {
 	return /* @__PURE__ */ (0, q.jsx)("header", {
 		className: "advanced-diagnostics-header app-page-header",
 		children: /* @__PURE__ */ (0, q.jsxs)("div", {
@@ -28101,16 +28105,16 @@ function Pz() {
 						}),
 						/* @__PURE__ */ (0, q.jsx)("span", {
 							className: "advanced-diagnostics-badge advanced-diagnostics-badge--muted app-page-header__badge",
-							children: "Admin only"
+							children: e ? "Read-only" : "Admin only"
 						}),
-						/* @__PURE__ */ (0, q.jsx)("span", {
+						e ? null : /* @__PURE__ */ (0, q.jsx)("span", {
 							className: "advanced-diagnostics-badge advanced-diagnostics-badge--ready app-page-header__badge",
 							children: "Manual execution"
 						})
 					]
 				}), /* @__PURE__ */ (0, q.jsx)("p", {
 					className: "app-page-header__description",
-					children: "Run bounded diagnostics for one saved scan and inspect persisted readbacks."
+					children: e ? "Inspect persisted diagnostics for your saved scans." : "Run bounded diagnostics for one saved scan and inspect persisted readbacks."
 				})]
 			})]
 		})
@@ -28544,58 +28548,59 @@ function Yz({ rows: e }) {
 		] }, Q(e.proposal_id)))
 	});
 }
-function Xz({ rows: e, selected: t, onChange: n }) {
+function Xz({ rows: e, selected: t, onChange: n, readOnly: r = !1 }) {
 	return e.length ? /* @__PURE__ */ (0, q.jsxs)("fieldset", {
 		className: "advanced-diagnostics-proposals",
 		children: [
 			/* @__PURE__ */ (0, q.jsx)("legend", { children: "Exact proposals" }),
-			/* @__PURE__ */ (0, q.jsx)("p", { children: "Select the exact proposal IDs to accept. Nothing is selected by default." }),
+			/* @__PURE__ */ (0, q.jsx)("p", { children: r ? "Review the recorded exact proposals." : "Select the exact proposal IDs to accept. Nothing is selected by default." }),
 			/* @__PURE__ */ (0, q.jsx)("div", {
 				className: "advanced-diagnostics-proposal-list",
 				children: e.map((e) => {
-					let r = Q(e.proposal_id), i = t.includes(r), a = Q(e.current_text), o = Q(e.proposed_text), s = Q(e.change_reason), c = bz(e.jd_terms_supported), l = bz(e.resume_evidence_used), u = [Q(e.target_section), Q(e.target_identifier)].filter(Boolean).join(" · ");
+					let i = Q(e.proposal_id), a = t.includes(i), o = Q(e.current_text), s = Q(e.proposed_text), c = Q(e.change_reason), l = bz(e.jd_terms_supported), u = bz(e.resume_evidence_used), d = [Q(e.target_section), Q(e.target_identifier)].filter(Boolean).join(" · ");
 					return /* @__PURE__ */ (0, q.jsxs)("label", {
-						className: `advanced-diagnostics-proposal ${i ? "is-selected" : ""}`,
+						className: `advanced-diagnostics-proposal ${a ? "is-selected" : ""}`,
 						children: [/* @__PURE__ */ (0, q.jsx)("input", {
 							type: "checkbox",
-							checked: i,
-							onChange: (e) => n(e.target.checked ? [...t, r] : t.filter((e) => e !== r))
+							disabled: r,
+							checked: a,
+							onChange: (e) => n(e.target.checked ? [...t, i] : t.filter((e) => e !== i))
 						}), /* @__PURE__ */ (0, q.jsxs)("span", {
 							className: "advanced-diagnostics-proposal-content",
 							children: [
 								/* @__PURE__ */ (0, q.jsxs)("span", {
 									className: "advanced-diagnostics-proposal-heading",
-									children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: Sz(Q(e.change_type) || "exact_change") }), u ? /* @__PURE__ */ (0, q.jsx)("small", {
-										title: u,
-										children: u
+									children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: Sz(Q(e.change_type) || "exact_change") }), d ? /* @__PURE__ */ (0, q.jsx)("small", {
+										title: d,
+										children: d
 									}) : null]
 								}),
-								a ? /* @__PURE__ */ (0, q.jsxs)("span", {
-									className: "advanced-diagnostics-proposal-review is-current",
-									children: [/* @__PURE__ */ (0, q.jsx)("b", { children: "Current" }), /* @__PURE__ */ (0, q.jsx)("span", { children: a })]
-								}) : null,
 								o ? /* @__PURE__ */ (0, q.jsxs)("span", {
-									className: "advanced-diagnostics-proposal-review is-proposed",
-									children: [/* @__PURE__ */ (0, q.jsx)("b", { children: "Proposed" }), /* @__PURE__ */ (0, q.jsx)("span", { children: o })]
+									className: "advanced-diagnostics-proposal-review is-current",
+									children: [/* @__PURE__ */ (0, q.jsx)("b", { children: "Current" }), /* @__PURE__ */ (0, q.jsx)("span", { children: o })]
 								}) : null,
 								s ? /* @__PURE__ */ (0, q.jsxs)("span", {
-									className: "advanced-diagnostics-proposal-reason",
-									children: [/* @__PURE__ */ (0, q.jsx)("b", { children: "Reason" }), /* @__PURE__ */ (0, q.jsx)("span", { children: s })]
+									className: "advanced-diagnostics-proposal-review is-proposed",
+									children: [/* @__PURE__ */ (0, q.jsx)("b", { children: "Proposed" }), /* @__PURE__ */ (0, q.jsx)("span", { children: s })]
 								}) : null,
-								c.length || l.length ? /* @__PURE__ */ (0, q.jsxs)("span", {
+								c ? /* @__PURE__ */ (0, q.jsxs)("span", {
+									className: "advanced-diagnostics-proposal-reason",
+									children: [/* @__PURE__ */ (0, q.jsx)("b", { children: "Reason" }), /* @__PURE__ */ (0, q.jsx)("span", { children: c })]
+								}) : null,
+								l.length || u.length ? /* @__PURE__ */ (0, q.jsxs)("span", {
 									className: "advanced-diagnostics-proposal-context",
-									children: [c.length ? /* @__PURE__ */ (0, q.jsxs)("span", { children: [/* @__PURE__ */ (0, q.jsx)("b", { children: "JD terms" }), c.slice(0, 4).map((e, t) => /* @__PURE__ */ (0, q.jsx)("em", { children: e }, `${e}-${t}`))] }) : null, l.length ? /* @__PURE__ */ (0, q.jsxs)("span", { children: [/* @__PURE__ */ (0, q.jsx)("b", { children: "Evidence" }), l.slice(0, 2).map((e, t) => /* @__PURE__ */ (0, q.jsx)("em", {
+									children: [l.length ? /* @__PURE__ */ (0, q.jsxs)("span", { children: [/* @__PURE__ */ (0, q.jsx)("b", { children: "JD terms" }), l.slice(0, 4).map((e, t) => /* @__PURE__ */ (0, q.jsx)("em", { children: e }, `${e}-${t}`))] }) : null, u.length ? /* @__PURE__ */ (0, q.jsxs)("span", { children: [/* @__PURE__ */ (0, q.jsx)("b", { children: "Evidence" }), u.slice(0, 2).map((e, t) => /* @__PURE__ */ (0, q.jsx)("em", {
 										title: e,
 										children: e
 									}, `${e}-${t}`))] }) : null]
 								}) : null,
 								/* @__PURE__ */ (0, q.jsxs)("small", {
 									className: "advanced-diagnostics-proposal-id",
-									children: ["Proposal ID · ", r]
+									children: ["Proposal ID · ", i]
 								})
 							]
 						})]
-					}, r);
+					}, i);
 				})
 			})
 		]
@@ -28822,43 +28827,44 @@ function tB({ state: e, rows: t, currentStage: n }) {
 function nB({ state: e = hz, navigate: t = (e) => {
 	window.location.href = e;
 }, request: n = window.fetch.bind(window) }) {
-	let [r, i] = (0, C.useState)(() => e.diagnosticState || {}), [a, o] = (0, C.useState)([]), [s, c] = (0, C.useState)({}), [l, u] = (0, C.useState)(null), [d, f] = (0, C.useState)(!1), [p, m] = (0, C.useState)(!1), [h, g] = (0, C.useState)(!1), [_, v] = (0, C.useState)(!1), [y, b] = (0, C.useState)(!1), [x, S] = (0, C.useState)(() => Uz(e.diagnosticState || {})), [w, T] = (0, C.useState)(null), E = kz(r), D = Dz(r, "live_tailoring_suggestion"), O = E.filter((e) => a.includes(Q(e.proposal_id))), k = async (t, c = "") => {
-		let d = Nz(t, r, [], a, c, s);
-		if (!e.selectedScanId || l || d) return !1;
-		let f = x < Uz(r), p = {
+	let r = e.readOnly === !0, [i, a] = (0, C.useState)(() => e.diagnosticState || {}), [o, s] = (0, C.useState)([]), [c, l] = (0, C.useState)({}), [u, d] = (0, C.useState)(null), [f, p] = (0, C.useState)(!1), [m, h] = (0, C.useState)(!1), [g, _] = (0, C.useState)(!1), [v, y] = (0, C.useState)(!1), [b, x] = (0, C.useState)(!1), [S, w] = (0, C.useState)(() => Uz(e.diagnosticState || {})), [T, E] = (0, C.useState)(null), D = kz(i), O = Dz(i, "live_tailoring_suggestion"), k = D.filter((e) => o.includes(Q(e.proposal_id))), A = async (t, l = "") => {
+		if (r) return !1;
+		let f = Nz(t, i, [], o, l, c);
+		if (!e.selectedScanId || u || f) return !1;
+		let p = S < Uz(i), m = {
 			diagnostics_execution: !0,
 			diagnostic_stages: [t],
-			...Object.fromEntries(Object.entries(s).filter(([, e]) => e.trim()))
+			...Object.fromEntries(Object.entries(c).filter(([, e]) => e.trim()))
 		};
-		t === "manual_exact_change_acceptance" && (p.accepted_exact_change_proposal_ids = a), t === "verified_artifact_operator_decision" && (p.verified_artifact_operator_decision_value = c), u(t), T(null);
+		t === "manual_exact_change_acceptance" && (m.accepted_exact_change_proposal_ids = o), t === "verified_artifact_operator_decision" && (m.verified_artifact_operator_decision_value = l), d(t), E(null);
 		try {
 			let r = await n(`/planning/saved-scan/${encodeURIComponent(e.selectedScanId)}/state`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(p)
-			}), a = yz(await r.json());
-			if (!r.ok) throw Error(Q(a.detail) || "This workflow check could not be completed.");
-			let s = yz(a.diagnostic_state);
-			i(s);
-			let c = Array.isArray(a.stage_results) ? a.stage_results.map(yz) : [];
-			return c.length > 0 && c.every((e) => e.valid === !0) ? ((t === "manual_exact_change_acceptance" || t === "live_exact_resume_change_proposal") && o([]), t === "live_tailoring_suggestion" && zz(s, 0) && !f && S(1), t === "live_exact_resume_change_proposal" && zz(s, 0) && S(1), t === "manual_exact_change_acceptance" && S(2), t === "guarded_resume_copy_artifact_verification" && S(3), T({
+				body: JSON.stringify(m)
+			}), i = yz(await r.json());
+			if (!r.ok) throw Error(Q(i.detail) || "This workflow check could not be completed.");
+			let o = yz(i.diagnostic_state);
+			a(o);
+			let c = Array.isArray(i.stage_results) ? i.stage_results.map(yz) : [];
+			return c.length > 0 && c.every((e) => e.valid === !0) ? ((t === "manual_exact_change_acceptance" || t === "live_exact_resume_change_proposal") && s([]), t === "live_tailoring_suggestion" && zz(o, 0) && !p && w(1), t === "live_exact_resume_change_proposal" && zz(o, 0) && w(1), t === "manual_exact_change_acceptance" && w(2), t === "guarded_resume_copy_artifact_verification" && w(3), E({
 				tone: "success",
 				text: `${_z[t].label} completed.`
-			}), !0) : (T({
+			}), !0) : (E({
 				tone: "error",
 				text: `${_z[t].label} needs attention. Open Technical details for the persisted reason.`
 			}), !1);
 		} catch (e) {
-			return T({
+			return E({
 				tone: "error",
 				text: t === "live_tailoring_suggestion" ? "Tailoring analysis needs attention. Open Technical details for the persisted reason." : e instanceof Error ? e.message.slice(0, 220) : "This workflow check could not be completed."
 			}), !1;
 		} finally {
-			u(null);
+			d(null);
 		}
-	}, A = async () => {
-		if (!(!e.selectedScanId || d || l)) {
-			f(!0), T(null);
+	}, j = async () => {
+		if (!r && !(!e.selectedScanId || f || u)) {
+			p(!0), E(null);
 			try {
 				let t = await n(`/planning/saved-scan/${encodeURIComponent(e.selectedScanId)}/state`, {
 					method: "POST",
@@ -28866,25 +28872,25 @@ function nB({ state: e = hz, navigate: t = (e) => {
 					body: JSON.stringify({ diagnostics_reset: !0 })
 				}), r = yz(await t.json());
 				if (!t.ok) throw Error(Q(r.detail) || "The diagnostics workflow could not be reset.");
-				let a = yz(r.diagnostic_state);
-				i(a), o([]), c({}), m(!1), g(!1), v(!1), S(Uz(a)), T({
+				let i = yz(r.diagnostic_state);
+				a(i), s([]), l({}), h(!1), _(!1), y(!1), w(Uz(i)), E({
 					tone: "success",
 					text: "Diagnostics workflow reset. Choose an analysis to run."
 				});
 			} catch (e) {
-				T({
+				E({
 					tone: "error",
 					text: e instanceof Error ? e.message.slice(0, 220) : "The diagnostics workflow could not be reset."
 				});
 			} finally {
-				f(!1);
+				p(!1);
 			}
 		}
-	}, j = yz(r.readbacks), M = yz(r.ambient_readbacks), N = (e, t = "") => Nz(e, r, [], a, t, s), P = eB.find(({ stage: e }) => !Az(r, e)), F = Az(r, "workflow_readiness_checkpoint"), ee = Az(r, "live_exact_resume_change_proposal"), te = Dz(r, "manual_exact_change_acceptance"), I = typeof te.accepted_proposal_count == "number" ? te.accepted_proposal_count : bz(te.accepted_proposal_ids).length, re = Number(D.suggestion_count || Oz(r).length), ie = Bz(r);
+	}, M = yz(i.readbacks), N = yz(i.ambient_readbacks), P = (e, t = "") => Nz(e, i, [], o, t, c), F = eB.find(({ stage: e }) => !Az(i, e)), ee = Az(i, "workflow_readiness_checkpoint"), te = Az(i, "live_exact_resume_change_proposal"), I = Dz(i, "manual_exact_change_acceptance"), re = typeof I.accepted_proposal_count == "number" ? I.accepted_proposal_count : bz(I.accepted_proposal_ids).length, ie = Number(O.suggestion_count || Oz(i).length), oe = Bz(i);
 	return /* @__PURE__ */ (0, q.jsxs)("div", {
-		className: "advanced-diagnostics-dashboard",
+		className: `advanced-diagnostics-dashboard ${r ? "is-read-only" : ""}`,
 		children: [
-			/* @__PURE__ */ (0, q.jsx)(Pz, {}),
+			/* @__PURE__ */ (0, q.jsx)(Pz, { readOnly: r }),
 			e.mode === "hub" ? /* @__PURE__ */ (0, q.jsx)(Fz, {
 				options: e.savedScanOptions,
 				hrefs: e.hrefs,
@@ -28899,10 +28905,10 @@ function nB({ state: e = hz, navigate: t = (e) => {
 					/* @__PURE__ */ (0, q.jsx)(Wz, {
 						context: e.context,
 						hrefs: e.hrefs,
-						state: r,
-						activeStep: x,
-						onStepChange: S,
-						onTechnicalDetails: () => b(!0)
+						state: i,
+						activeStep: S,
+						onStepChange: w,
+						onTechnicalDetails: () => x(!0)
 					}),
 					/* @__PURE__ */ (0, q.jsxs)("div", {
 						className: "advanced-diagnostics-safety-callout",
@@ -28910,12 +28916,12 @@ function nB({ state: e = hz, navigate: t = (e) => {
 						children: [/* @__PURE__ */ (0, q.jsx)(Ae, {
 							size: 16,
 							"aria-hidden": "true"
-						}), /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: "Manual control" }), /* @__PURE__ */ (0, q.jsx)("p", { children: "Every action runs only when you choose it. ApplyLens does not automatically cross human review gates or submit applications." })] })]
+						}), /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: r ? "Read-only visibility" : "Manual control" }), /* @__PURE__ */ (0, q.jsx)("p", { children: r ? "This view shows persisted diagnostic results. Run and reset controls are available only to Admins here." : "Every action runs only when you choose it. ApplyLens does not automatically cross human review gates or submit applications." })] })]
 					}),
 					/* @__PURE__ */ (0, q.jsxs)("main", {
 						className: "advanced-diagnostics-guided-flow",
 						children: [
-							x === 0 ? /* @__PURE__ */ (0, q.jsxs)("section", {
+							S === 0 ? /* @__PURE__ */ (0, q.jsxs)("section", {
 								className: "advanced-diagnostics-workflow-card",
 								id: "advancedDiagnosticsSectionGeneration",
 								"aria-labelledby": "advancedDiagnosticsAnalyzeHeading",
@@ -28936,47 +28942,47 @@ function nB({ state: e = hz, navigate: t = (e) => {
 										children: [
 											/* @__PURE__ */ (0, q.jsxs)("div", {
 												className: "advanced-diagnostics-section-heading",
-												children: [/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("h3", { children: "Tailoring recommendations" }), /* @__PURE__ */ (0, q.jsx)("p", { children: Az(r, "live_tailoring_suggestion") ? `${re === 0 ? "0 supported recommendations" : `${re} recommendations`}${re > Oz(r).length ? ` · showing ${Oz(r).length}` : ""}` : "Evidence-backed guidance from the configured AI route." })] }), /* @__PURE__ */ (0, q.jsx)(Gz, {
-													state: r,
+												children: [/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("h3", { children: "Tailoring recommendations" }), /* @__PURE__ */ (0, q.jsx)("p", { children: Az(i, "live_tailoring_suggestion") ? `${ie === 0 ? "0 supported recommendations" : `${ie} recommendations`}${ie > Oz(i).length ? ` · showing ${Oz(i).length}` : ""}` : "Evidence-backed guidance from the configured AI route." })] }), /* @__PURE__ */ (0, q.jsx)(Gz, {
+													state: i,
 													stage: "live_tailoring_suggestion"
 												})]
 											}),
-											/* @__PURE__ */ (0, q.jsx)(Kz, { state: r }),
-											Az(r, "live_tailoring_suggestion") ? null : /* @__PURE__ */ (0, q.jsx)("button", {
+											/* @__PURE__ */ (0, q.jsx)(Kz, { state: i }),
+											!r && !Az(i, "live_tailoring_suggestion") ? /* @__PURE__ */ (0, q.jsx)("button", {
 												id: "scanWorkspaceLiveTailoringSuggestionToggle",
-												"aria-label": ie ? "Retry tailoring analysis" : "Run tailoring analysis",
+												"aria-label": oe ? "Retry tailoring analysis" : "Run tailoring analysis",
 												className: "advanced-diagnostics-primary-action",
 												type: "button",
-												disabled: !!l,
-												onClick: () => void k("live_tailoring_suggestion"),
-												children: l === "live_tailoring_suggestion" ? /* @__PURE__ */ (0, q.jsxs)(q.Fragment, { children: [/* @__PURE__ */ (0, q.jsx)(ye, {
+												disabled: !!u,
+												onClick: () => void A("live_tailoring_suggestion"),
+												children: u === "live_tailoring_suggestion" ? /* @__PURE__ */ (0, q.jsxs)(q.Fragment, { children: [/* @__PURE__ */ (0, q.jsx)(ye, {
 													className: "advanced-diagnostics-spinner",
 													size: 16
-												}), ie ? "Retrying tailoring analysis..." : "Running analysis..."] }) : /* @__PURE__ */ (0, q.jsxs)(q.Fragment, { children: [/* @__PURE__ */ (0, q.jsx)(je, { size: 16 }), ie ? "Retry tailoring analysis" : "Run tailoring analysis"] })
-											})
+												}), oe ? "Retrying tailoring analysis..." : "Running analysis..."] }) : /* @__PURE__ */ (0, q.jsxs)(q.Fragment, { children: [/* @__PURE__ */ (0, q.jsx)(je, { size: 16 }), oe ? "Retry tailoring analysis" : "Run tailoring analysis"] })
+											}) : null
 										]
 									}),
 									/* @__PURE__ */ (0, q.jsxs)("div", {
 										className: "advanced-diagnostics-analysis-block is-exact",
 										children: [/* @__PURE__ */ (0, q.jsxs)("div", {
 											className: "advanced-diagnostics-section-heading",
-											children: [/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("h3", { children: "Exact resume-change analysis" }), /* @__PURE__ */ (0, q.jsx)("p", { children: ee ? `${E.length} evidence-backed proposed changes are ready for review.` : "Generate source-backed proposals for human review." })] }), /* @__PURE__ */ (0, q.jsx)(Gz, {
-												state: r,
+											children: [/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("h3", { children: "Exact resume-change analysis" }), /* @__PURE__ */ (0, q.jsx)("p", { children: te ? `${D.length} evidence-backed proposed changes are ready for review.` : "Generate source-backed proposals for human review." })] }), /* @__PURE__ */ (0, q.jsx)(Gz, {
+												state: i,
 												stage: "live_exact_resume_change_proposal"
 											})]
-										}), ee ? /* @__PURE__ */ (0, q.jsx)("button", {
+										}), te ? /* @__PURE__ */ (0, q.jsx)("button", {
 											className: "advanced-diagnostics-secondary-action",
 											type: "button",
-											onClick: () => S(1),
+											onClick: () => w(1),
 											children: "Go to review changes"
-										}) : /* @__PURE__ */ (0, q.jsx)("button", {
+										}) : r ? null : /* @__PURE__ */ (0, q.jsx)("button", {
 											id: "scanWorkspaceLiveExactChangeProposalToggle",
 											"aria-label": "Live exact change proposals",
 											className: "advanced-diagnostics-primary-action",
 											type: "button",
-											disabled: !!l,
-											onClick: () => void k("live_exact_resume_change_proposal"),
-											children: l === "live_exact_resume_change_proposal" ? /* @__PURE__ */ (0, q.jsxs)(q.Fragment, { children: [/* @__PURE__ */ (0, q.jsx)(ye, {
+											disabled: !!u,
+											onClick: () => void A("live_exact_resume_change_proposal"),
+											children: u === "live_exact_resume_change_proposal" ? /* @__PURE__ */ (0, q.jsxs)(q.Fragment, { children: [/* @__PURE__ */ (0, q.jsx)(ye, {
 												className: "advanced-diagnostics-spinner",
 												size: 16
 											}), "Generating..."] }) : "Generate proposed changes"
@@ -28984,7 +28990,7 @@ function nB({ state: e = hz, navigate: t = (e) => {
 									})
 								]
 							}) : null,
-							x === 1 ? /* @__PURE__ */ (0, q.jsxs)("section", {
+							S === 1 ? /* @__PURE__ */ (0, q.jsxs)("section", {
 								className: "advanced-diagnostics-workflow-card",
 								id: "advancedDiagnosticsSectionArtifactSafety",
 								"aria-labelledby": "advancedDiagnosticsReviewHeading",
@@ -29002,40 +29008,41 @@ function nB({ state: e = hz, navigate: t = (e) => {
 									}),
 									/* @__PURE__ */ (0, q.jsxs)("div", {
 										className: "advanced-diagnostics-selection-summary",
-										children: [/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsxs)("strong", { children: [E.length, " proposed changes"] }), /* @__PURE__ */ (0, q.jsxs)("span", { children: [
+										children: [/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsxs)("strong", { children: [D.length, " proposed changes"] }), /* @__PURE__ */ (0, q.jsxs)("span", { children: [
 											"Current selection · ",
-											a.length,
+											o.length,
 											" currently selected"
-										] })] }), I > 0 ? /* @__PURE__ */ (0, q.jsxs)("div", {
+										] })] }), re > 0 ? /* @__PURE__ */ (0, q.jsxs)("div", {
 											className: "is-approved",
 											children: [/* @__PURE__ */ (0, q.jsxs)("strong", { children: [/* @__PURE__ */ (0, q.jsx)(ne, { size: 16 }), "Previously approved"] }), /* @__PURE__ */ (0, q.jsxs)("span", { children: [
-												I,
+												re,
 												" exact change",
-												I === 1 ? "" : "s",
+												re === 1 ? "" : "s",
 												" previously approved"
 											] })]
 										}) : null]
 									}),
-									E.length ? /* @__PURE__ */ (0, q.jsx)(Xz, {
-										rows: E,
-										selected: a,
-										onChange: o
+									D.length ? /* @__PURE__ */ (0, q.jsx)(Xz, {
+										rows: D,
+										selected: o,
+										onChange: s,
+										readOnly: r
 									}) : /* @__PURE__ */ (0, q.jsx)("p", {
 										className: "advanced-diagnostics-analysis-empty",
 										children: "Generate proposed changes to begin human review."
 									}),
-									/* @__PURE__ */ (0, q.jsx)("button", {
+									r ? null : /* @__PURE__ */ (0, q.jsx)("button", {
 										id: "scanWorkspaceManualExactChangeAcceptanceToggle",
 										"aria-label": "Accept selected exact changes",
 										className: "advanced-diagnostics-primary-action",
 										type: "button",
-										disabled: !!l || a.length === 0,
-										onClick: () => m(!0),
+										disabled: !!u || o.length === 0,
+										onClick: () => h(!0),
 										children: "Review selected changes"
 									})
 								]
 							}) : null,
-							x === 2 ? /* @__PURE__ */ (0, q.jsxs)("section", {
+							S === 2 ? /* @__PURE__ */ (0, q.jsxs)("section", {
 								className: "advanced-diagnostics-workflow-card",
 								id: "advancedDiagnosticsSectionReviewDecision",
 								"aria-labelledby": "advancedDiagnosticsVerifyHeading",
@@ -29052,7 +29059,7 @@ function nB({ state: e = hz, navigate: t = (e) => {
 										] })]
 									}),
 									/* @__PURE__ */ (0, q.jsx)(tB, {
-										state: r,
+										state: i,
 										rows: [
 											{
 												stage: "manual_exact_change_acceptance",
@@ -29064,40 +29071,40 @@ function nB({ state: e = hz, navigate: t = (e) => {
 											},
 											{
 												stage: "guarded_resume_copy_artifact_verification",
-												label: Az(r, "guarded_resume_copy_artifact") ? "Protected copy verified" : "Verification required"
+												label: Az(i, "guarded_resume_copy_artifact") ? "Protected copy verified" : "Verification required"
 											}
 										],
-										currentStage: Az(r, "guarded_resume_copy_artifact") ? Az(r, "guarded_resume_copy_artifact_verification") ? void 0 : "guarded_resume_copy_artifact_verification" : "guarded_resume_copy_artifact"
+										currentStage: Az(i, "guarded_resume_copy_artifact") ? Az(i, "guarded_resume_copy_artifact_verification") ? void 0 : "guarded_resume_copy_artifact_verification" : "guarded_resume_copy_artifact"
 									}),
-									Az(r, "guarded_resume_copy_artifact") ? null : /* @__PURE__ */ (0, q.jsx)("button", {
+									!r && !Az(i, "guarded_resume_copy_artifact") ? /* @__PURE__ */ (0, q.jsx)("button", {
 										id: "scanWorkspaceGuardedResumeCopyArtifactToggle",
 										"aria-label": "Create guarded resume copy",
 										className: "advanced-diagnostics-primary-action",
 										type: "button",
-										disabled: !!l || !!N("guarded_resume_copy_artifact"),
-										title: N("guarded_resume_copy_artifact"),
-										onClick: () => void k("guarded_resume_copy_artifact"),
+										disabled: !!u || !!P("guarded_resume_copy_artifact"),
+										title: P("guarded_resume_copy_artifact"),
+										onClick: () => void A("guarded_resume_copy_artifact"),
 										children: "Create protected copy"
-									}),
-									Az(r, "guarded_resume_copy_artifact") && !Az(r, "guarded_resume_copy_artifact_verification") ? /* @__PURE__ */ (0, q.jsx)("button", {
+									}) : null,
+									!r && Az(i, "guarded_resume_copy_artifact") && !Az(i, "guarded_resume_copy_artifact_verification") ? /* @__PURE__ */ (0, q.jsx)("button", {
 										id: "scanWorkspaceGuardedResumeCopyArtifactVerificationToggle",
 										"aria-label": "Verify guarded resume copy",
 										className: "advanced-diagnostics-primary-action",
 										type: "button",
-										disabled: !!l || !!N("guarded_resume_copy_artifact_verification"),
-										title: N("guarded_resume_copy_artifact_verification"),
-										onClick: () => void k("guarded_resume_copy_artifact_verification"),
+										disabled: !!u || !!P("guarded_resume_copy_artifact_verification"),
+										title: P("guarded_resume_copy_artifact_verification"),
+										onClick: () => void A("guarded_resume_copy_artifact_verification"),
 										children: "Verify protected copy"
 									}) : null,
-									Az(r, "guarded_resume_copy_artifact_verification") ? /* @__PURE__ */ (0, q.jsx)("button", {
+									Az(i, "guarded_resume_copy_artifact_verification") ? /* @__PURE__ */ (0, q.jsx)("button", {
 										className: "advanced-diagnostics-secondary-action advanced-diagnostics-pane-navigation",
 										type: "button",
-										onClick: () => S(3),
+										onClick: () => w(3),
 										children: "Continue to Ready"
 									}) : null
 								]
 							}) : null,
-							x === 3 ? /* @__PURE__ */ (0, q.jsxs)("section", {
+							S === 3 ? /* @__PURE__ */ (0, q.jsxs)("section", {
 								className: "advanced-diagnostics-workflow-card",
 								id: "advancedDiagnosticsSectionManualHandoff",
 								"aria-labelledby": "advancedDiagnosticsReadyHeading",
@@ -29114,44 +29121,44 @@ function nB({ state: e = hz, navigate: t = (e) => {
 										] })]
 									}),
 									/* @__PURE__ */ (0, q.jsx)(tB, {
-										state: r,
+										state: i,
 										rows: eB,
-										currentStage: P == null ? void 0 : P.stage
+										currentStage: F == null ? void 0 : F.stage
 									}),
-									P && P.stage === "verified_artifact_operator_decision" ? /* @__PURE__ */ (0, q.jsx)("button", {
+									!r && F && F.stage === "verified_artifact_operator_decision" ? /* @__PURE__ */ (0, q.jsx)("button", {
 										id: "scanWorkspaceVerifiedArtifactOperatorDecisionToggle",
 										"aria-label": "Capture verified artifact operator decision",
 										className: "advanced-diagnostics-primary-action",
 										type: "button",
-										disabled: !!l || !!N("verified_artifact_operator_decision", "accepted").replace("Choose an explicit operator decision below.", ""),
-										onClick: () => g(!0),
+										disabled: !!u || !!P("verified_artifact_operator_decision", "accepted").replace("Choose an explicit operator decision below.", ""),
+										onClick: () => _(!0),
 										children: "Record decision"
 									}) : null,
-									P && P.stage !== "verified_artifact_operator_decision" ? /* @__PURE__ */ (0, q.jsx)("button", {
-										id: _z[P.stage].id,
-										"aria-label": _z[P.stage].label,
+									!r && F && F.stage !== "verified_artifact_operator_decision" ? /* @__PURE__ */ (0, q.jsx)("button", {
+										id: _z[F.stage].id,
+										"aria-label": _z[F.stage].label,
 										className: "advanced-diagnostics-primary-action",
 										type: "button",
-										disabled: !!l || !!N(P.stage),
-										title: N(P.stage),
-										onClick: () => void k(P.stage),
-										children: l === P.stage ? /* @__PURE__ */ (0, q.jsxs)(q.Fragment, { children: [/* @__PURE__ */ (0, q.jsx)(ye, {
+										disabled: !!u || !!P(F.stage),
+										title: P(F.stage),
+										onClick: () => void A(F.stage),
+										children: u === F.stage ? /* @__PURE__ */ (0, q.jsxs)(q.Fragment, { children: [/* @__PURE__ */ (0, q.jsx)(ye, {
 											className: "advanced-diagnostics-spinner",
 											size: 16
-										}), "Running..."] }) : P.action
+										}), "Running..."] }) : F.action
 									}) : null,
 									/* @__PURE__ */ (0, q.jsxs)("div", {
-										className: `advanced-diagnostics-manual-safety ${F ? "is-ready" : ""}`,
+										className: `advanced-diagnostics-manual-safety ${ee ? "is-ready" : ""}`,
 										role: "note",
-										children: [/* @__PURE__ */ (0, q.jsx)(Ae, { size: 20 }), /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: F ? "Ready for manual application" : "Manual application boundary preserved" }), /* @__PURE__ */ (0, q.jsxs)("p", { children: [F ? "ApplyLens has prepared the workflow for manual application. " : "", "ApplyLens has not submitted an application, contacted a recruiter, marked the job applied, or changed the application queue automatically."] })] })]
+										children: [/* @__PURE__ */ (0, q.jsx)(Ae, { size: 20 }), /* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: ee ? "Ready for manual application" : "Manual application boundary preserved" }), /* @__PURE__ */ (0, q.jsxs)("p", { children: [ee ? "ApplyLens has prepared the workflow for manual application. " : "", "ApplyLens has not submitted an application, contacted a recruiter, marked the job applied, or changed the application queue automatically."] })] })]
 									}),
-									F ? /* @__PURE__ */ (0, q.jsx)("div", {
+									!r && ee ? /* @__PURE__ */ (0, q.jsx)("div", {
 										className: "advanced-diagnostics-rerun-panel",
 										children: /* @__PURE__ */ (0, q.jsx)("button", {
 											className: "advanced-diagnostics-secondary-action advanced-diagnostics-rerun-action",
 											type: "button",
-											disabled: d || !!l,
-											onClick: () => v(!0),
+											disabled: f || !!u,
+											onClick: () => y(!0),
 											children: "Run diagnostics again"
 										})
 									}) : null
@@ -29160,8 +29167,8 @@ function nB({ state: e = hz, navigate: t = (e) => {
 						]
 					}),
 					/* @__PURE__ */ (0, q.jsxs)(qz, {
-						open: y,
-						onClose: () => b(!1),
+						open: b,
+						onClose: () => x(!1),
 						children: [/* @__PURE__ */ (0, q.jsxs)("div", {
 							className: "advanced-diagnostics-readbacks",
 							"aria-label": "Scan diagnostic readbacks",
@@ -29180,10 +29187,10 @@ function nB({ state: e = hz, navigate: t = (e) => {
 												/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: "Context ID" }), /* @__PURE__ */ (0, q.jsx)("span", { children: e.context.contextId })] }),
 												/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: "Last diagnostic update" }), /* @__PURE__ */ (0, q.jsx)("span", {
 													className: "advanced-diagnostics-technical-timestamp",
-													children: Cz(r.updated_at).map((e) => /* @__PURE__ */ (0, q.jsx)("span", { children: e }, e))
+													children: Cz(i.updated_at).map((e) => /* @__PURE__ */ (0, q.jsx)("span", { children: e }, e))
 												})] }),
 												/* @__PURE__ */ (0, q.jsxs)("div", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: "Internal checks complete" }), /* @__PURE__ */ (0, q.jsxs)("span", { children: [
-													gz.filter((e) => Az(r, e)).length,
+													gz.filter((e) => Az(i, e)).length,
 													" of ",
 													gz.length
 												] })] })
@@ -29195,7 +29202,7 @@ function nB({ state: e = hz, navigate: t = (e) => {
 											children: vz.slice(1).map((e) => /* @__PURE__ */ (0, q.jsx)($z, {
 												id: e.id,
 												label: e.label,
-												value: yz(M[e.key])
+												value: yz(N[e.key])
 											}, e.id))
 										})
 									]
@@ -29211,13 +29218,13 @@ function nB({ state: e = hz, navigate: t = (e) => {
 										children: [/* @__PURE__ */ (0, q.jsx)($z, {
 											id: vz[0].id,
 											label: vz[0].label,
-											value: yz(M[vz[0].key])
+											value: yz(N[vz[0].key])
 										}), gz.slice(0, 2).map((e) => {
 											let t = _z[e];
 											return /* @__PURE__ */ (0, q.jsx)($z, {
 												id: Mz[e],
 												label: t.label,
-												value: yz(j[t.readbackKey])
+												value: yz(M[t.readbackKey])
 											}, t.readbackKey);
 										})]
 									})]
@@ -29235,58 +29242,58 @@ function nB({ state: e = hz, navigate: t = (e) => {
 											return /* @__PURE__ */ (0, q.jsx)($z, {
 												id: Mz[e],
 												label: t.label,
-												value: yz(j[t.readbackKey])
+												value: yz(M[t.readbackKey])
 											}, t.readbackKey);
 										})
 									})]
 								})
 							]
-						}), /* @__PURE__ */ (0, q.jsx)(Qz, {
-							values: s,
-							onChange: (e, t) => c((n) => ({
+						}), r ? null : /* @__PURE__ */ (0, q.jsx)(Qz, {
+							values: c,
+							onChange: (e, t) => l((n) => ({
 								...n,
 								[e]: t
 							}))
 						})]
 					}),
-					w ? /* @__PURE__ */ (0, q.jsx)("div", {
-						className: `advanced-diagnostics-request-message is-${w.tone}`,
-						role: w.tone === "error" ? "alert" : "status",
-						children: w.text
+					T ? /* @__PURE__ */ (0, q.jsx)("div", {
+						className: `advanced-diagnostics-request-message is-${T.tone}`,
+						role: T.tone === "error" ? "alert" : "status",
+						children: T.text
 					}) : null,
-					/* @__PURE__ */ (0, q.jsxs)(Jz, {
-						open: p,
+					r ? null : /* @__PURE__ */ (0, q.jsxs)(Jz, {
+						open: m,
 						title: "Review resume changes",
-						description: `${a.length} change${a.length === 1 ? "" : "s"} selected`,
-						onClose: () => m(!1),
+						description: `${o.length} change${o.length === 1 ? "" : "s"} selected`,
+						onClose: () => h(!1),
 						footer: /* @__PURE__ */ (0, q.jsxs)(q.Fragment, { children: [/* @__PURE__ */ (0, q.jsx)("button", {
 							className: "advanced-diagnostics-dialog-secondary advanced-diagnostics-dialog-cancel",
 							type: "button",
 							autoFocus: !0,
-							onClick: () => m(!1),
+							onClick: () => h(!1),
 							children: "Cancel"
 						}), /* @__PURE__ */ (0, q.jsx)("button", {
 							className: "advanced-diagnostics-dialog-primary",
 							type: "button",
-							disabled: !!l,
-							onClick: () => void k("manual_exact_change_acceptance").then((e) => e && m(!1)),
-							children: l === "manual_exact_change_acceptance" ? "Accepting..." : "Accept selected changes"
+							disabled: !!u,
+							onClick: () => void A("manual_exact_change_acceptance").then((e) => e && h(!1)),
+							children: u === "manual_exact_change_acceptance" ? "Accepting..." : "Accept selected changes"
 						})] }),
-						children: [/* @__PURE__ */ (0, q.jsx)(Yz, { rows: O }), /* @__PURE__ */ (0, q.jsxs)("div", {
+						children: [/* @__PURE__ */ (0, q.jsx)(Yz, { rows: k }), /* @__PURE__ */ (0, q.jsxs)("div", {
 							className: "advanced-diagnostics-dialog-safety",
 							children: [/* @__PURE__ */ (0, q.jsx)(Ae, { size: 18 }), /* @__PURE__ */ (0, q.jsxs)("p", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: "What happens next" }), "Accepting these changes does not overwrite the source resume. It authorizes the existing guarded-copy workflow."] })]
 						})]
 					}),
-					/* @__PURE__ */ (0, q.jsxs)(Jz, {
-						open: h,
+					r ? null : /* @__PURE__ */ (0, q.jsxs)(Jz, {
+						open: g,
 						title: "Review protected resume",
 						description: "Human decision required",
-						onClose: () => g(!1),
+						onClose: () => _(!1),
 						footer: /* @__PURE__ */ (0, q.jsxs)(q.Fragment, { children: [/* @__PURE__ */ (0, q.jsx)("button", {
 							className: "advanced-diagnostics-dialog-secondary advanced-diagnostics-dialog-cancel",
 							type: "button",
 							autoFocus: !0,
-							onClick: () => g(!1),
+							onClick: () => _(!1),
 							children: "Cancel"
 						}), [
 							"rejected",
@@ -29296,8 +29303,8 @@ function nB({ state: e = hz, navigate: t = (e) => {
 							id: e === "accepted" ? "scanWorkspaceVerifiedArtifactOperatorDecisionValue" : void 0,
 							className: `advanced-diagnostics-dialog-secondary advanced-diagnostics-dialog-action--${e === "needs_changes" ? "warning" : e === "rejected" ? "danger" : "success"}`,
 							type: "button",
-							disabled: !!l,
-							onClick: () => void k("verified_artifact_operator_decision", e).then((e) => e && g(!1)),
+							disabled: !!u,
+							onClick: () => void A("verified_artifact_operator_decision", e).then((e) => e && _(!1)),
 							children: Sz(e)
 						}, e))] }),
 						children: [/* @__PURE__ */ (0, q.jsxs)("div", {
@@ -29308,27 +29315,27 @@ function nB({ state: e = hz, navigate: t = (e) => {
 							children: [/* @__PURE__ */ (0, q.jsx)(Ae, { size: 18 }), /* @__PURE__ */ (0, q.jsxs)("p", { children: [/* @__PURE__ */ (0, q.jsx)("strong", { children: "Your decision is explicit" }), "No option is preselected, and recording it does not submit an application or overwrite the source resume."] })]
 						})]
 					}),
-					/* @__PURE__ */ (0, q.jsx)(Jz, {
-						open: _,
+					r ? null : /* @__PURE__ */ (0, q.jsx)(Jz, {
+						open: v,
 						eyebrow: "Start a new diagnostics workflow",
 						title: "Run diagnostics again?",
 						description: "Replace the current diagnostics workflow for this saved scan",
 						onClose: () => {
-							d || v(!1);
+							f || y(!1);
 						},
 						footer: /* @__PURE__ */ (0, q.jsxs)(q.Fragment, { children: [/* @__PURE__ */ (0, q.jsx)("button", {
 							className: "advanced-diagnostics-dialog-secondary advanced-diagnostics-dialog-cancel",
 							type: "button",
 							autoFocus: !0,
-							disabled: d,
-							onClick: () => v(!1),
+							disabled: f,
+							onClick: () => y(!1),
 							children: "Cancel"
 						}), /* @__PURE__ */ (0, q.jsx)("button", {
 							className: "advanced-diagnostics-dialog-primary",
 							type: "button",
-							disabled: d,
-							onClick: () => void A(),
-							children: d ? /* @__PURE__ */ (0, q.jsxs)(q.Fragment, { children: [/* @__PURE__ */ (0, q.jsx)(ye, {
+							disabled: f,
+							onClick: () => void j(),
+							children: f ? /* @__PURE__ */ (0, q.jsxs)(q.Fragment, { children: [/* @__PURE__ */ (0, q.jsx)(ye, {
 								className: "advanced-diagnostics-spinner",
 								size: 16
 							}), "Resetting..."] }) : "Run diagnostics again"
@@ -32376,7 +32383,7 @@ vH && (0, dF.createRoot)(vH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { c
 var yH = document.getElementById("applicationsDashboardRoot");
 yH && (0, dF.createRoot)(yH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(uH, {}) }));
 var bH = document.getElementById("schedulerHealthDashboardRoot");
-bH && (0, dF.createRoot)(bH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(mz, {}) }));
+bH && (0, dF.createRoot)(bH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(mz, { canManage: bH.dataset.canManage === "true" }) }));
 var xH = document.getElementById("agenticOperationsRoot");
 xH && (0, dF.createRoot)(xH).render(/* @__PURE__ */ (0, q.jsx)(C.StrictMode, { children: /* @__PURE__ */ (0, q.jsx)(kB, {}) }));
 var SH = document.getElementById("advancedDiagnosticsRoot");

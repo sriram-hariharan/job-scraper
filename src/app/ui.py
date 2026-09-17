@@ -27,6 +27,15 @@ def _require_admin_user(request: Request) -> dict:
     return user
 
 
+def _require_operations_viewer(request: Request) -> dict:
+    user = _auth_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    if not _is_admin_user(user) and str(user.get("access_level") or "").strip().lower() != "super_user":
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return user
+
+
 @router.get("/", response_class=HTMLResponse)
 def executive_dashboard() -> str:
     return f"""
@@ -443,7 +452,8 @@ def pipeline_dashboard() -> str:
 
 @router.get("/scheduler", response_class=HTMLResponse)
 def scheduler_dashboard(request: Request) -> str:
-    _require_admin_user(request)
+    user = _require_operations_viewer(request)
+    can_manage = "true" if _is_admin_user(user) else "false"
     return f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -461,6 +471,7 @@ def scheduler_dashboard(request: Request) -> str:
   <main class="page scheduler-health-shell">
     <section
       id="schedulerHealthDashboardRoot"
+      data-can-manage="{can_manage}"
       aria-label="Scheduler health dashboard"
       aria-live="polite"
     >
@@ -479,7 +490,8 @@ def scheduler_dashboard(request: Request) -> str:
 
 @router.get("/agentic-operations", response_class=HTMLResponse)
 def agentic_operations_console(request: Request) -> str:
-    _require_admin_user(request)
+    user = _require_operations_viewer(request)
+    access_badge = "Admin only" if _is_admin_user(user) else "Read-only"
     return f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -499,7 +511,7 @@ def agentic_operations_console(request: Request) -> str:
       <div class="page-header-main app-page-header__main">
         <div class="agentic-operations-header-title-row app-page-header__title-row">
           <h1 class="app-page-header__title">Agentic Operations</h1>
-          <span class="agentic-operations-header-badge app-page-header__badge">Admin only</span>
+          <span class="agentic-operations-header-badge app-page-header__badge">{access_badge}</span>
           <span
             id="agenticOperationsHeaderReadOnlyBadge"
             class="agentic-operations-header-badge-slot"

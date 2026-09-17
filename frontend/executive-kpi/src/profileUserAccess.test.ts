@@ -39,6 +39,14 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+it("describes the active Super User read-only access contract", () => {
+  expect(markup).toContain("Super Users have additional operational visibility and read-only access");
+  expect(markup).toContain("Gets access to");
+  expect(markup).toContain("Scheduler Health (view only)");
+  expect(markup).toContain("Agentic Review (read only)");
+  expect(markup).not.toContain("Not enabled yet");
+});
+
 it("renders dynamic roles, status and protected Admin rows without visible raw IDs", () => {
   expect(el("adminUsersRoleSummary").textContent).toContain("2 Users");
   expect(el("adminUsersRoleSummary").textContent).toContain("1 Super User");

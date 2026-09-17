@@ -215,7 +215,7 @@ const schedulerHealthMount = document.getElementById("schedulerHealthDashboardRo
 if (schedulerHealthMount) {
   createRoot(schedulerHealthMount).render(
     <StrictMode>
-      <SchedulerHealthDashboard />
+      <SchedulerHealthDashboard canManage={schedulerHealthMount.dataset.canManage === "true"} />
     </StrictMode>,
   );
 }

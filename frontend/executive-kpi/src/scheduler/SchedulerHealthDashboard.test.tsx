@@ -276,6 +276,29 @@ afterEach(() => {
 });
 
 describe("SchedulerHealthDashboard", () => {
+  it("renders Super User health readbacks without Admin mutation controls", async () => {
+    const runDiscoveryNow = vi.fn();
+    const updateAutomationControl = vi.fn();
+    const { container } = render(
+      <SchedulerHealthDashboard
+        canManage={false}
+        readSummary={async () => READY_PAYLOAD}
+        runDiscoveryNow={runDiscoveryNow}
+        updateAutomationControl={updateAutomationControl}
+      />,
+    );
+
+    await screen.findByText("Healthy");
+    expect(screen.getByText("Read-only")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Job status table" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View diagnostics" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Manage scheduled runs" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Run discovery now" })).not.toBeInTheDocument();
+    expect(container.querySelector(".scheduler-automation-control-btn")).toBeNull();
+    expect(runDiscoveryNow).not.toHaveBeenCalled();
+    expect(updateAutomationControl).not.toHaveBeenCalled();
+  });
+
   it("GETs the exact URL-encoded discovery run id only on demand", async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,

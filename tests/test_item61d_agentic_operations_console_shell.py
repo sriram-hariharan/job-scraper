@@ -34,6 +34,12 @@ NON_ADMIN_USER = {
     "is_admin": False,
     "access_level": "user",
 }
+SUPER_USER = {
+    "user_id": "super-owner",
+    "email": "super@example.test",
+    "is_admin": False,
+    "access_level": "super_user",
+}
 
 
 def _client_as(monkeypatch, user: dict | None) -> TestClient:
@@ -83,6 +89,13 @@ def test_direct_non_admin_request_is_forbidden(monkeypatch) -> None:
     assert response.json() == {"detail": "Admin access required."}
 
 
+def test_super_user_can_open_read_only_agentic_operations_shell(monkeypatch) -> None:
+    response = _client_as(monkeypatch, SUPER_USER).get("/agentic-operations")
+
+    assert response.status_code == 200
+    assert '<span class="agentic-operations-header-badge app-page-header__badge">Read-only</span>' in response.text
+
+
 def test_unauthenticated_request_preserves_ui_admin_401(monkeypatch) -> None:
     response = _client_as(monkeypatch, None).get("/agentic-operations")
 
@@ -90,11 +103,11 @@ def test_unauthenticated_request_preserves_ui_admin_401(monkeypatch) -> None:
     assert response.json() == {"detail": "Authentication required."}
 
 
-def test_route_reuses_shared_shell_and_existing_admin_helper() -> None:
+def test_route_reuses_shared_shell_and_operations_viewer_helper() -> None:
     route = _agentic_operations_route_source()
 
-    assert route.count("_require_admin_user(request)") == 1
-    assert route.index("_require_admin_user(request)") < route.index("return f")
+    assert route.count("_require_operations_viewer(request)") == 1
+    assert route.index("_require_operations_viewer(request)") < route.index("return f")
     assert 'render_top_shell("/agentic-operations")' in route
     assert "def _require_admin_user" not in route
     assert "app-shell-sidebar" not in route
@@ -133,20 +146,18 @@ def test_shell_uses_existing_admin_state_for_visibility() -> None:
     assert predicate.count(
         'Boolean(user?.is_admin) || accessLevel === "admin"'
     ) == 1
-    assert (
-        'profileAgenticOperationsLink.classList.toggle("hidden", !isAdmin)'
-        in predicate
-    )
+    assert 'const canViewOperations = isAdmin || accessLevel === "super_user"' in predicate
+    assert 'profileAgenticOperationsLink.classList.toggle("hidden", !canViewOperations)' in predicate
     assert (
         'profileAgenticOperationsLink.setAttribute("aria-hidden", '
-        'isAdmin ? "false" : "true")'
+        'canViewOperations ? "false" : "true")'
         in predicate
     )
-    assert "profileAgenticOperationsLink.tabIndex = isAdmin ? 0 : -1" in predicate
+    assert "profileAgenticOperationsLink.tabIndex = canViewOperations ? 0 : -1" in predicate
     assert SHELL_JS_SOURCE.count('fetchJson("/auth/me")') == 1
 
 
-def test_shell_visibility_behavior_is_admin_only_and_non_tabbable() -> None:
+def test_shell_visibility_behavior_supports_super_user_and_hides_regular_user() -> None:
     predicate = _function_source(
         SHELL_JS_SOURCE,
         "setProfileShellUser",
@@ -170,8 +181,10 @@ function userInitialFromName() {{ return "A"; }}
 eval({json.dumps(predicate)});
 setProfileShellUser({{ is_admin: true }});
 const admin = {{ ...state }};
+setProfileShellUser({{ is_admin: false, access_level: "super_user" }});
+const superUser = {{ ...state }};
 setProfileShellUser({{ is_admin: false, access_level: "user" }});
-console.log(JSON.stringify({{ admin, nonAdmin: state }}));
+console.log(JSON.stringify({{ admin, superUser, nonAdmin: state }}));
 """
     result = subprocess.run(
         ["node", "-e", script],
@@ -187,6 +200,7 @@ console.log(JSON.stringify({{ admin, nonAdmin: state }}));
         "ariaHidden": "false",
         "tabIndex": 0,
     }
+    assert payload["superUser"] == payload["admin"]
     assert payload["nonAdmin"] == {
         "hidden": True,
         "ariaHidden": "true",

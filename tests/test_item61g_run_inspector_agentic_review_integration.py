@@ -40,14 +40,14 @@ def _client_as(monkeypatch: pytest.MonkeyPatch, user: dict) -> TestClient:
     return TestClient(api.app)
 
 
-def test_existing_agentic_review_route_is_exact_and_remains_admin_protected(
+def test_existing_agentic_review_route_is_exact_and_operations_viewer_protected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     profile_source = _source(PROFILE_UI_PATH)
     route_marker = f'@router.get("{REVIEW_ROUTE}", response_class=HTMLResponse)'
     assert profile_source.count(route_marker) == 1
     route = profile_source.split(route_marker, 1)[1].split("\n\n@router.", 1)[0]
-    assert "_require_profile_admin_user(request)" in route
+    assert "_require_profile_operations_viewer(request)" in route
 
     forbidden = _client_as(
         monkeypatch,

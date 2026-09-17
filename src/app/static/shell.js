@@ -1222,6 +1222,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const email = String(user?.email || "").trim();
     const accessLevel = String(user?.access_level || "").trim().toLowerCase();
     const isAdmin = Boolean(user?.is_admin) || accessLevel === "admin";
+    const canViewOperations = isAdmin || accessLevel === "super_user";
     const initial = userInitialFromName(displayName, email);
 
     if (menuButton) {
@@ -1244,26 +1245,26 @@ window.addEventListener("DOMContentLoaded", () => {
     }
 
     if (profileAdminToolsSection) {
-      profileAdminToolsSection.classList.toggle("hidden", !isAdmin);
-      profileAdminToolsSection.setAttribute("aria-hidden", isAdmin ? "false" : "true");
+      profileAdminToolsSection.classList.toggle("hidden", !canViewOperations);
+      profileAdminToolsSection.setAttribute("aria-hidden", canViewOperations ? "false" : "true");
     }
 
     if (profileAdvancedDiagnosticsLink) {
-      profileAdvancedDiagnosticsLink.classList.toggle("hidden", !isAdmin);
-      profileAdvancedDiagnosticsLink.setAttribute("aria-hidden", isAdmin ? "false" : "true");
-      profileAdvancedDiagnosticsLink.tabIndex = isAdmin ? 0 : -1;
+      profileAdvancedDiagnosticsLink.classList.toggle("hidden", !canViewOperations);
+      profileAdvancedDiagnosticsLink.setAttribute("aria-hidden", canViewOperations ? "false" : "true");
+      profileAdvancedDiagnosticsLink.tabIndex = canViewOperations ? 0 : -1;
     }
 
     if (profileAgenticOperationsLink) {
-      profileAgenticOperationsLink.classList.toggle("hidden", !isAdmin);
-      profileAgenticOperationsLink.setAttribute("aria-hidden", isAdmin ? "false" : "true");
-      profileAgenticOperationsLink.tabIndex = isAdmin ? 0 : -1;
+      profileAgenticOperationsLink.classList.toggle("hidden", !canViewOperations);
+      profileAgenticOperationsLink.setAttribute("aria-hidden", canViewOperations ? "false" : "true");
+      profileAgenticOperationsLink.tabIndex = canViewOperations ? 0 : -1;
     }
 
     if (profileSchedulerHealthLink) {
-      profileSchedulerHealthLink.classList.toggle("hidden", !isAdmin);
-      profileSchedulerHealthLink.setAttribute("aria-hidden", isAdmin ? "false" : "true");
-      profileSchedulerHealthLink.tabIndex = isAdmin ? 0 : -1;
+      profileSchedulerHealthLink.classList.toggle("hidden", !canViewOperations);
+      profileSchedulerHealthLink.setAttribute("aria-hidden", canViewOperations ? "false" : "true");
+      profileSchedulerHealthLink.tabIndex = canViewOperations ? 0 : -1;
     }
   }
 

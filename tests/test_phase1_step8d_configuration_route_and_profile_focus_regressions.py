@@ -192,7 +192,7 @@ def test_hidden_profile_navigation_rule_wins_after_grid_rule():
     diagnostics = SHELL_UI.split('href="/advanced-diagnostics"', 1)[1].split("</a>", 1)[0]
     assert "hidden" in diagnostics
     assert 'data-admin-only="true"' in diagnostics
-    assert 'profileAdvancedDiagnosticsLink.classList.toggle("hidden", !isAdmin)' in SHELL_JS
+    assert 'profileAdvancedDiagnosticsLink.classList.toggle("hidden", !canViewOperations)' in SHELL_JS
 
 
 def test_existing_admin_predicate_and_diagnostics_authorization_remain_intact():

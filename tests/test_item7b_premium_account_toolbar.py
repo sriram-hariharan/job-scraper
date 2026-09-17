@@ -142,23 +142,24 @@ def test_scan_diagnostics_and_agentic_operations_use_distinct_icons() -> None:
     assert '<circle cx="12" cy="5" r="3"/>' in operations
 
 
-def test_admin_group_uses_existing_admin_predicate_and_hides_as_one_unit() -> None:
+def test_operations_group_uses_authenticated_role_and_hides_as_one_unit() -> None:
     predicate = _function(SHELL_JS, "setProfileShellUser", "loadProfileShellUser")
 
     assert 'qs("profileAdminToolsSection")' in SHELL_JS
     assert 'Boolean(user?.is_admin) || accessLevel === "admin"' in predicate
-    assert 'profileAdminToolsSection.classList.toggle("hidden", !isAdmin)' in predicate
+    assert 'const canViewOperations = isAdmin || accessLevel === "super_user"' in predicate
+    assert 'profileAdminToolsSection.classList.toggle("hidden", !canViewOperations)' in predicate
     assert (
         'profileAdminToolsSection.setAttribute("aria-hidden", '
-        'isAdmin ? "false" : "true")'
+        'canViewOperations ? "false" : "true")'
     ) in predicate
     for owner in (
         "profileAdvancedDiagnosticsLink",
         "profileAgenticOperationsLink",
         "profileSchedulerHealthLink",
     ):
-        assert f'{owner}.classList.toggle("hidden", !isAdmin)' in predicate
-        assert f"{owner}.tabIndex = isAdmin ? 0 : -1" in predicate
+        assert f'{owner}.classList.toggle("hidden", !canViewOperations)' in predicate
+        assert f"{owner}.tabIndex = canViewOperations ? 0 : -1" in predicate
 
     markup = render_top_shell("/")
     before_admin_id, after_admin_id = markup.split('id="profileAdminToolsSection"', 1)

@@ -34,6 +34,15 @@ def _require_admin_user(request: Request) -> dict:
     return user
 
 
+def _require_operations_viewer(request: Request) -> dict:
+    user = _auth_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    if not _is_admin_user(user) and str(user.get("access_level") or "").strip().lower() != "super_user":
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return user
+
+
 def _admin_owner_user_id(user: dict) -> str:
     return str(user.get("user_id") or user.get("sub") or "").strip()
 
@@ -1234,8 +1243,8 @@ def advanced_diagnostics(
     saved_scan_id: str = "",
     output_dir: str = "",
 ) -> str:
-    admin_user = _require_admin_user(request)
-    owner_user_id = _admin_owner_user_id(admin_user)
+    viewer = _require_operations_viewer(request)
+    owner_user_id = _admin_owner_user_id(viewer)
     scan_context_options = _saved_scan_context_options(owner_user_id=owner_user_id)
     selected_scan_id = str(saved_scan_id or "").strip()
     selected_scan_context = next(
@@ -1336,6 +1345,7 @@ def advanced_diagnostics(
         }
 
     initial_state = {
+        "readOnly": not _is_admin_user(viewer),
         "mode": mode,
         "savedScanOptions": [
             {
@@ -1507,7 +1517,7 @@ def scan_workspace(
     )
     scan_diagnostics_href_safe = escape(f"/advanced-diagnostics?{scan_diagnostics_query}", quote=True)
     scan_diagnostics_icon_html = ""
-    if _is_admin_user(auth_user or {}):
+    if _is_admin_user(auth_user or {}) or str((auth_user or {}).get("access_level") or "").strip().lower() == "super_user":
         if has_scan_diagnostics_context:
             scan_diagnostics_icon_html = f'''
               <a

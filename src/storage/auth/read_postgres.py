@@ -371,14 +371,15 @@ def _auth_user_public_select_columns(alias: str = "") -> str:
     )
 
 
-def _build_non_admin_users_sql(limit: int, *, ensure_schema: bool) -> str:
+def _build_non_admin_users_sql(limit: int, *, ensure_schema: bool, include_admin: bool = False) -> str:
     safe_limit = _normalize_positive_int(limit, "limit")
+    user_filter = "TRUE" if include_admin else _auth_user_admin_safe_where()
     return _schema_prefix(ensure_schema) + f"""
 WITH non_admin_users AS (
     SELECT
         {_auth_user_public_select_columns()}
     FROM auth_users
-    WHERE {_auth_user_admin_safe_where()}
+    WHERE {user_filter}
     ORDER BY created_at DESC, user_id DESC
     LIMIT {safe_limit}
 )
@@ -389,7 +390,7 @@ SELECT json_build_object(
             '[]'::json
         ),
     'count', (SELECT COUNT(*) FROM non_admin_users),
-    'total_count', (SELECT COUNT(*) FROM auth_users WHERE {_auth_user_admin_safe_where()})
+    'total_count', (SELECT COUNT(*) FROM auth_users WHERE {user_filter})
 );
 """.strip()
 
@@ -449,6 +450,7 @@ SELECT json_build_object(
 def get_non_admin_auth_users_postgres_payload(
     *,
     limit: int = 100,
+    include_admin: bool = False,
     database_url: str = "",
     database_url_env: str = "DATABASE_URL",
     psql_bin: str = "psql",
@@ -456,7 +458,7 @@ def get_non_admin_auth_users_postgres_payload(
     ensure_schema: bool = True,
 ) -> Dict[str, Any]:
     query_payload = _run_psql_json_query(
-        sql=_build_non_admin_users_sql(limit, ensure_schema=ensure_schema),
+        sql=_build_non_admin_users_sql(limit, ensure_schema=ensure_schema, include_admin=include_admin),
         database_url=database_url,
         database_url_env=database_url_env,
         psql_bin=psql_bin,
@@ -471,6 +473,46 @@ def get_non_admin_auth_users_postgres_payload(
         "total_count": int(data.get("total_count", 0) or 0),
         "command": query_payload["command"],
         "command_text": query_payload["command_text"],
+    }
+
+
+def update_non_admin_auth_user_role_postgres_payload(
+    *, user_id: str, access_level: str,
+    database_url: str = "", database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql", print_only: bool = False, ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    safe_user_id = _clean_text(user_id)
+    if not safe_user_id:
+        raise ValueError("user_id is required.")
+    if not isinstance(access_level, str) or access_level not in {"user", "super_user"}:
+        raise ValueError("access_level must be user or super_user.")
+    # A single guarded update also protects against concurrent Admin promotion.
+    current_role = "user" if access_level == "super_user" else "super_user"
+    active_guard = "AND is_active = TRUE" if access_level == "super_user" else ""
+    sql = _schema_prefix(ensure_schema) + f"""
+WITH updated_user AS (
+    UPDATE auth_users
+    SET access_level = {_sql_quote_text(access_level)}, updated_at = now()
+    WHERE user_id = {_sql_quote_text(safe_user_id)}
+      AND is_admin = FALSE
+      AND LOWER(BTRIM(COALESCE(access_level, 'user'))) = {_sql_quote_text(current_role)}
+      {active_guard}
+    RETURNING {_auth_user_public_select_columns()}
+)
+SELECT json_build_object(
+    'updated', EXISTS (SELECT 1 FROM updated_user),
+    'user', COALESCE((SELECT row_to_json(updated_user) FROM updated_user LIMIT 1), '{{}}'::json)
+);
+""".strip()
+    query = _run_psql_json_query(
+        sql=sql, database_url=database_url, database_url_env=database_url_env,
+        psql_bin=psql_bin, print_only=print_only,
+    )
+    data = dict(query.get("data", {}) or {})
+    return {
+        "ok": bool(data.get("updated", False)),
+        "updated": bool(data.get("updated", False)),
+        "user": dict(data.get("user", {}) or {}),
     }
 
 

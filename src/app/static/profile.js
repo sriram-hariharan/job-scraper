@@ -21,6 +21,8 @@ const profileState = {
   pendingAccessUserId: null,
   pendingAccessValue: null,
   pendingDeleteUserId: null,
+  pendingRole: null,
+  roleSubmitting: false,
   pendingRerunRunId: null,
 };
 
@@ -524,57 +526,134 @@ function renderAccessSwitch(user) {
   `;
 }
 
-function renderAdminUsers(users) {
-  const section = qs("profileAdminUsersSection");
-  const tabs = qs("profileAdminTabs");
-  const tbody = qs("adminUsersTableBody");
-  const meta = qs("adminUsersMeta");
-  if (!section || !tbody || !meta) return;
+function adminUserRole(user) {
+  if (isCurrentUserAdmin(user)) return "admin";
+  const role = String(user.access_level || "user").trim().toLowerCase();
+  return ["super_user", "executive"].includes(role) ? role : "user";
+}
 
+function adminUserIcon(role) {
+  const paths = role === "super_user"
+    ? '<path d="m3 7 5 4 4-7 4 7 5-4-2 12H5L3 7Z"/><path d="M6 16h12"/>'
+    : role === "admin"
+      ? '<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="M12 5v14"/>'
+      : '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2c0-4 4-6 8-6s8 2 8 6v2H4Z"/>';
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+}
+
+function adminUserIdentity(user) {
+  const name = adminUserDisplayName(user);
+  const initials = name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
+  const tone = Array.from(String(user.user_id || user.email || "")).reduce((sum, c) => sum + c.charCodeAt(0), 0) % 4;
+  return `<span class="user-access-avatar tone-${tone}" aria-hidden="true">${escapeHtml(initials)}</span><div class="user-access-person"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(user.email || "—")}</span></div>`;
+}
+
+function renderAdminUsers(users) {
+  const list = qs("adminUsersList");
+  const meta = qs("adminUsersMeta");
+  if (!list || !meta) return;
   const items = Array.isArray(users) ? users : [];
   profileState.adminUsers = items;
-  if (tabs) tabs.classList.remove("hidden");
-  meta.textContent = `${items.length} non-admin user${items.length === 1 ? "" : "s"} shown`;
-
-  if (!items.length) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="8" class="admin-users-empty-cell">No non-admin users found.</td>
-      </tr>
-    `;
-    return;
-  }
-
-  tbody.innerHTML = items.map((user) => {
-    const active = Boolean(user.is_active);
-    return `
-      <tr data-admin-user-id="${escapeHtml(user.user_id || "")}">
-        <td>
-          <div class="admin-user-name">${escapeHtml(adminUserDisplayName(user))}</div>
-          <div class="admin-user-id">${escapeHtml(user.user_id || "")}</div>
-        </td>
-        <td>${escapeHtml(user.email || "-")}</td>
-        <td>${escapeHtml(user.access_level || "user")}</td>
-        <td>
-          <span class="admin-user-status ${active ? "is-active" : "is-revoked"}">
-            ${active ? "Active" : "Revoked"}
-          </span>
-        </td>
-        <td>${escapeHtml(formatDateTime(user.created_at || ""))}</td>
-        <td>${escapeHtml(formatDateTime(user.last_login_at || "")) || "-"}</td>
-        <td>${renderAccessSwitch(user)}</td>
-        <td>
-          <button
-            type="button"
-            class="admin-user-delete-btn"
-            data-admin-user-delete="${escapeHtml(user.user_id || "")}"
-          >
-            Delete
-          </button>
-        </td>
-      </tr>
-    `;
+  meta.textContent = `${items.length} user${items.length === 1 ? "" : "s"} shown · Manage account access and roles`;
+  const roles = [["user", "User"], ["super_user", "Super User"], ["admin", "Admin"]];
+  if (items.some((user) => adminUserRole(user) === "executive")) roles.push(["executive", "Executive"]);
+  qs("adminUsersRoleSummary").innerHTML = roles.map(([role, label]) => {
+    const count = items.filter((user) => adminUserRole(user) === role).length;
+    return `<span class="user-role-count role-${role}">${adminUserIcon(role)} ${count} ${label}${count === 1 ? "" : "s"}</span>`;
   }).join("");
+  list.innerHTML = items.length ? items.map((user) => {
+    const role = adminUserRole(user);
+    const admin = role === "admin";
+    const currentRole = String(user.access_level || "user").trim().toLowerCase();
+    const revokedUser = currentRole === "user" && user.is_active !== true;
+    const eligible = !admin && (currentRole === "super_user" || (currentRole === "user" && !revokedUser));
+    const id = escapeHtml(user.user_id || "");
+    return `<article class="user-access-row" role="listitem" data-admin-user-id="${id}">
+      <div class="user-access-identity">${adminUserIdentity(user)}</div>
+      <div><span class="user-role-badge role-${role}">${adminUserIcon(role)} ${roles.find(([key]) => key === role)[1]}</span></div>
+      <div><span class="user-access-status ${admin ? "is-protected" : user.is_active ? "is-authorized" : "is-revoked"}">${admin ? adminUserIcon("admin") : '<span class="user-access-status-dot"></span>'}${admin ? "Protected" : user.is_active ? "Authorized" : "Revoked"}</span></div>
+      <div class="user-access-dates"><div><span>Last login</span><time>${escapeHtml(formatResumeDate(user.last_login_at) || "Never")}</time></div><div><span>Joined</span><time>${escapeHtml(formatResumeDate(user.created_at) || "—")}</time></div></div>
+      <div class="user-access-primary">${eligible ? `<button type="button" class="user-role-action ${role === "super_user" ? "is-remove" : ""}" data-admin-user-role="${id}">${role === "super_user" ? "Remove Super User" : "Make Super User"}</button>` : `<span class="user-access-protected-label">${admin ? "Admin account" : revokedUser ? "Authorize user first" : "Role managed separately"}</span>`}</div>
+      ${admin ? '<span class="user-access-overflow-placeholder" aria-hidden="true"></span>' : `<details class="user-access-more"><summary aria-label="More actions for ${escapeHtml(adminUserDisplayName(user))}">⋮</summary><div class="user-access-menu">${renderAccessSwitch(user)}<button type="button" class="admin-user-delete-btn" data-admin-user-delete="${id}">Delete account</button></div></details>`}
+    </article>`;
+  }).join("") : '<p class="user-access-empty">No users found.</p>';
+}
+
+function openAdminUserRoleModal(userId) {
+  if (profileState.roleSubmitting) return;
+  const user = getAdminUserById(userId);
+  if (!user || isCurrentUserAdmin(user) || !isCurrentUserAdmin(profileState.currentUser)) return;
+  const currentRole = String(user.access_level || "user").trim().toLowerCase();
+  if (!["user", "super_user"].includes(currentRole)) return;
+  if (currentRole === "user" && user.is_active !== true) return;
+  const remove = currentRole === "super_user";
+  profileState.pendingRole = { userId: String(userId), accessLevel: remove ? "user" : "super_user" };
+  const modal = qs("adminUserRoleModal");
+  modal._returnFocus = document.activeElement;
+  qs("adminUserRoleTitle").textContent = remove ? "Remove Super User access?" : "Grant Super User access?";
+  qs("adminUserRoleDescription").textContent = remove
+    ? "Remove the Super User role and its intended operational access. This does not delete or deactivate the account."
+    : "Assign the Super User role for intended operational and read-only access. Operational pages are not enabled yet. This does not grant full Admin privileges.";
+  qs("adminUserRoleIdentity").innerHTML = adminUserIdentity(user);
+  qs("adminUserRolePermissions").classList.toggle("hidden", remove);
+  qs("adminUserRoleNote").textContent = remove
+    ? "The user's normal ApplyLens account, data and authorization status will remain intact."
+    : "The user's existing account and data will remain intact. You can remove the Super User role at any time.";
+  qs("adminUserRoleConfirmBtn").textContent = remove ? "Remove Super User access" : "Grant Super User access";
+  qs("adminUserRoleConfirmBtn").classList.toggle("is-remove", remove);
+  qs("adminUserRoleError").classList.add("hidden");
+  modal.classList.remove("hidden");
+  document.body.classList.add("user-role-modal-open");
+  // Make every branch outside this modal inert, including the existing shell.
+  modal._inertSiblings = [];
+  for (let node = modal; node.parentElement; node = node.parentElement) {
+    for (const sibling of node.parentElement.children) {
+      if (sibling !== node && !sibling.inert) { sibling.inert = true; modal._inertSiblings.push(sibling); }
+    }
+  }
+  const dialog = modal.querySelector(".user-role-dialog");
+  dialog.scrollTop = 0;
+  // Keep the title visible when the full explanation requires vertical scrolling.
+  qs(dialog.scrollHeight > dialog.clientHeight ? "adminUserRoleCloseBtn" : "adminUserRoleCancelBtn").focus({ preventScroll: true });
+}
+
+function closeAdminUserRoleModal() {
+  if (profileState.roleSubmitting) return;
+  const modal = qs("adminUserRoleModal");
+  modal.classList.add("hidden");
+  for (const sibling of modal._inertSiblings || []) sibling.inert = false;
+  modal._inertSiblings = [];
+  document.body.classList.remove("user-role-modal-open");
+  const userId = profileState.pendingRole?.userId;
+  profileState.pendingRole = null;
+  const replacement = Array.from(document.querySelectorAll("[data-admin-user-role]")).find((el) => el.dataset.adminUserRole === userId);
+  (modal._returnFocus?.isConnected ? modal._returnFocus : replacement || qs("refreshAdminUsersBtn"))?.focus();
+}
+
+async function confirmAdminUserRoleChange() {
+  if (!profileState.pendingRole || profileState.roleSubmitting) return;
+  const { userId, accessLevel } = profileState.pendingRole;
+  const modal = qs("adminUserRoleModal");
+  profileState.roleSubmitting = true;
+  modal.setAttribute("aria-busy", "true");
+  modal.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+  let saved = false;
+  try {
+    const result = await fetchJson(`/profile/admin/users/${encodeURIComponent(userId)}/role`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_level: accessLevel }),
+    });
+    profileState.adminUsers = profileState.adminUsers.map((user) => String(user.user_id) === userId ? result.user : user);
+    renderAdminUsers(profileState.adminUsers);
+    saved = true;
+  } catch (err) {
+    qs("adminUserRoleError").textContent = err.message;
+    qs("adminUserRoleError").classList.remove("hidden");
+  } finally {
+    profileState.roleSubmitting = false;
+    modal.removeAttribute("aria-busy");
+    modal.querySelectorAll("button").forEach((button) => { button.disabled = false; });
+  }
+  if (saved) { closeAdminUserRoleModal(); setAdminUsersStatus("User role updated.", "success"); }
 }
 
 async function loadAdminUsers() {
@@ -598,10 +677,10 @@ async function loadAdminUsers() {
   }
 
   const meta = qs("adminUsersMeta");
-  const tbody = qs("adminUsersTableBody");
+  const tbody = qs("adminUsersList");
   if (meta) meta.textContent = "Loading users...";
   if (tbody) {
-    tbody.innerHTML = `<tr><td colspan="8" class="admin-users-empty-cell">Loading users...</td></tr>`;
+    tbody.innerHTML = `<p class="user-access-empty">Loading users...</p>`;
   }
   setAdminUsersStatus("");
 
@@ -611,7 +690,7 @@ async function loadAdminUsers() {
 
 function openAdminUserAccessModal(userId, nextActive) {
   const user = getAdminUserById(userId);
-  if (!user) return;
+  if (!user || isCurrentUserAdmin(user)) return;
 
   profileState.pendingAccessUserId = String(userId || "");
   profileState.pendingAccessValue = Boolean(nextActive);
@@ -641,7 +720,7 @@ function closeAdminUserAccessModal() {
 
 function openAdminUserDeleteModal(userId) {
   const user = getAdminUserById(userId);
-  if (!user) return;
+  if (!user || isCurrentUserAdmin(user)) return;
 
   profileState.pendingDeleteUserId = String(userId || "");
   qs("adminUserDeleteMessage").innerHTML = `
@@ -2980,7 +3059,17 @@ function bindAdminUsersInteractions() {
     });
   });
 
-  qs("adminUsersTableBody")?.addEventListener("click", (event) => {
+  qs("adminUserRoleCloseBtn")?.addEventListener("click", closeAdminUserRoleModal);
+  qs("adminUserRoleCancelBtn")?.addEventListener("click", closeAdminUserRoleModal);
+  qs("adminUserRoleConfirmBtn")?.addEventListener("click", confirmAdminUserRoleChange);
+  qs("adminUserRoleModal")?.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") { event.preventDefault(); closeAdminUserRoleModal(); }
+    if (event.key === "Tab") trapProfileResumeModalFocus(event, qs("adminUserRoleModal"));
+  });
+  qs("adminUsersList")?.addEventListener("click", (event) => {
+    const roleBtn = event.target.closest("[data-admin-user-role]");
+    if (roleBtn) { openAdminUserRoleModal(roleBtn.dataset.adminUserRole); return; }
+
     const accessBtn = event.target.closest("[data-admin-user-access]");
     if (accessBtn) {
       const userId = accessBtn.dataset.adminUserAccess || "";

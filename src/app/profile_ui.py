@@ -92,39 +92,27 @@ def profile_page(request: Request) -> str:
     admin_users_section_html = (
         """
     <section class="card profile-section-card profile-admin-users-section hidden" id="profileAdminUsersSection" data-profile-tab-panel>
-      <div class="section-header">
+      <div class="section-header user-access-header">
         <div>
           <h2>User access</h2>
           <div class="subtext" id="adminUsersMeta">Loading users...</div>
         </div>
-        <button type="button" class="ghost-btn btn-sm" id="refreshAdminUsersBtn">
-          Refresh
-        </button>
+        <div class="user-access-header-actions">
+          <div id="adminUsersRoleSummary" class="user-role-summary" aria-label="Roles in displayed accounts"></div>
+          <button type="button" class="ghost-btn btn-sm user-access-refresh" id="refreshAdminUsersBtn">
+            <svg class="user-access-refresh-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+              <path d="M20 11.5a8 8 0 1 0-.6 3.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M20 4.75v5h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div class="profile-inline-status hidden" id="adminUsersStatusBanner"></div>
 
-      <div class="admin-users-table-wrap">
-        <table class="admin-users-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Access level</th>
-              <th>Status</th>
-              <th>Created</th>
-              <th>Last login</th>
-              <th>Access</th>
-              <th>Delete user</th>
-            </tr>
-          </thead>
-          <tbody id="adminUsersTableBody">
-            <tr>
-              <td colspan="8">Loading users...</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <div class="user-access-list" id="adminUsersList" role="list" aria-label="User accounts" aria-live="polite">Loading users...</div>
+      <div class="user-access-note"><span class="user-access-info-icon" aria-hidden="true">i</span><span>The Super User role is intended for additional operational and read-only access, without full Admin privileges. Operational page access is not enabled yet.</span></div>
     </section>
 """
         if is_admin
@@ -177,6 +165,27 @@ def profile_page(request: Request) -> str:
 """
     admin_modals_html = (
         """
+  <section class="modal-backdrop user-role-modal hidden" id="adminUserRoleModal" role="dialog" aria-modal="true" aria-labelledby="adminUserRoleTitle" aria-describedby="adminUserRoleDescription">
+    <div class="modal-card user-role-dialog" tabindex="-1">
+      <button type="button" class="user-role-close" id="adminUserRoleCloseBtn" aria-label="Close role confirmation">×</button>
+      <div class="user-role-heading">
+        <span class="user-role-security-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z" stroke="currentColor" stroke-width="2"/><path d="M12 5v14c4-2 6-5 6-7V7l-6-2Z" fill="currentColor"/></svg></span>
+        <div><h3 id="adminUserRoleTitle">Grant Super User access?</h3><p id="adminUserRoleDescription"></p></div>
+      </div>
+      <div class="user-role-identity" id="adminUserRoleIdentity"></div>
+      <div class="user-role-permissions" id="adminUserRolePermissions">
+        <section class="user-role-positive"><h4>Intended access <span>Not enabled yet</span></h4><ul>
+          <li>Scheduler Health (view only)</li><li>Agentic Operations (read only)</li><li>Scan Diagnostics (read-only visibility)</li><li>Agentic Review (read only)</li>
+        </ul></section>
+        <section class="user-role-restricted"><h4>Still restricted from</h4><ul>
+          <li>User management</li><li>Grant/remove Super User</li><li>Delete accounts</li><li>Pause/resume scheduled jobs</li><li>Run Agent Discovery manually</li><li>Admin privilege management</li>
+        </ul></section>
+      </div>
+      <div class="user-role-note"><span class="user-access-info-icon" aria-hidden="true">i</span><p id="adminUserRoleNote"></p></div>
+      <p id="adminUserRoleError" class="user-role-error hidden" role="alert"></p>
+      <div class="user-role-footer"><button type="button" class="user-role-cancel" id="adminUserRoleCancelBtn">Cancel</button><button type="button" class="user-role-confirm" id="adminUserRoleConfirmBtn">Grant Super User access</button></div>
+    </div>
+  </section>
   <section class="modal-backdrop hidden" id="adminUserAccessModal">
     <div class="modal-card admin-user-confirm-card">
       <div class="modal-header">

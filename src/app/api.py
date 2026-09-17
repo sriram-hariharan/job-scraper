@@ -4716,6 +4716,17 @@ def profile_admin_delete_user(user_id: str, http_request: Request):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.patch("/profile/admin/users/{user_id}/role")
+def profile_admin_update_user_role(user_id: str, http_request: Request, payload: dict = Body(...)):
+    _require_admin_user(http_request)
+    try:
+        return services.admin_profile_update_user_role_payload(
+            user_id=user_id, access_level=payload.get("access_level"),
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/profile/pipeline-runs")
 def profile_pipeline_runs(
     http_request: Request,

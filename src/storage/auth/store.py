@@ -267,7 +267,7 @@ def auth_user_db_row(record: Dict[str, Any]) -> Dict[str, Any]:
     updated_at = _clean_text(record.get("updated_at")) or created_at
     display_name = _clean_text(record.get("display_name")) or _default_display_name(email)
     access_level = _clean_text(record.get("access_level")).lower() or "user"
-    if access_level not in {"admin", "user", "executive"}:
+    if access_level not in {"admin", "user", "executive", "super_user"}:
         access_level = "user"
 
     return {

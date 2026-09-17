@@ -165,6 +165,7 @@ from src.storage.auth.read_postgres import (
     delete_non_admin_auth_user_postgres_payload,
     get_non_admin_auth_users_postgres_payload,
     update_non_admin_auth_user_access_postgres_payload,
+    update_non_admin_auth_user_role_postgres_payload,
 )
 from src.storage.user_pipeline.read_postgres import (
     get_latest_user_pipeline_run_postgres_payload,
@@ -1166,6 +1167,7 @@ def _public_admin_user_row(user: Dict[str, Any]) -> Dict[str, Any]:
 def admin_profile_users_payload(limit: int = 100) -> Dict[str, Any]:
     payload = get_non_admin_auth_users_postgres_payload(
         limit=limit,
+        include_admin=True,
         database_url="",
         database_url_env="DATABASE_URL",
         psql_bin="psql",
@@ -1179,6 +1181,15 @@ def admin_profile_users_payload(limit: int = 100) -> Dict[str, Any]:
         "total_count": int(payload.get("total_count", len(users)) or len(users)),
         "users": users,
     }
+
+
+def admin_profile_update_user_role_payload(user_id: str, access_level: str) -> Dict[str, Any]:
+    payload = update_non_admin_auth_user_role_postgres_payload(
+        user_id=_clean_text(user_id), access_level=access_level,
+    )
+    if not payload.get("updated"):
+        raise ValueError("User not found or this account's role is protected.")
+    return {"ok": True, "updated": True, "user": _public_admin_user_row(payload["user"])}
 
 
 def admin_profile_update_user_access_payload(user_id: str, is_active: bool) -> Dict[str, Any]:

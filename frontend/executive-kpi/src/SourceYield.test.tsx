@@ -156,7 +156,8 @@ describe("SourceYield", () => {
     expect(screen.getByLabelText("Loading source yield")).toBeInTheDocument();
 
     rerender(<SourceYield state={{ status: "ready", data: { ...data, available: false } }} />);
-    expect(screen.getByText("Source evidence unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Source evidence unavailable for this snapshot.")).toBeInTheDocument();
+    expect(screen.getByText("Source yield data is unavailable for this personalized snapshot.")).toBeInTheDocument();
 
     rerender(<SourceYield state={{ status: "ready", data: { ...data, sources: [], totals: { ...data.totals, source_count: 0 } } }} />);
     expect(screen.getByText("No source activity")).toBeInTheDocument();

@@ -14,6 +14,7 @@ const state = {
   pipelineGate: null,
   pipelineLaunchReturnFocus: null,
   pipelineLaunchInFlight: false,
+  executiveFreshness: null,
 };
 
 const queueTableState = {
@@ -29,6 +30,7 @@ const queueTableState = {
   hasPrevPage: false,
   hasNextPage: false,
   sort: { key: "", direction: "asc" },
+  snapshot: { status: "not_generated", runId: "", completedAt: "", totalJobs: 0 },
 };
 
 const queueFilterState = {
@@ -1493,6 +1495,7 @@ function applyPipelinePreset(name) {
   setPipelineLlmActions(preset.llm_actions || []);
   syncPipelineDeleteSeenDataApplicability();
   syncPipelinePathPreview();
+  renderPipelineLiveSummary(collectPipelineConfig());
 }
 
 function publishExecutiveKpiState(detail) {
@@ -1523,6 +1526,7 @@ function buildExecutiveQueueBridgeState() {
       hasNextPage: queueTableState.hasNextPage,
     },
     sort: { ...queueTableState.sort },
+    snapshot: { ...queueTableState.snapshot },
   };
 }
 
@@ -1545,9 +1549,18 @@ function normalizeExecutiveKpiValue(value, fallback = null) {
 function renderStats(statusData) {
   const summary = statusData.summary || {};
   const undecided = statusData.undecided_review_counts || {};
+  const personalized = statusData.executive_freshness?.personalized || {};
+  const snapshot = {
+    status: personalized.status || "not_generated",
+    runId: personalized.run_id || "",
+    completedAt: personalized.completed_at || "",
+    totalJobs: normalizeExecutiveKpiValue(summary.execution_queue_rows, 0),
+  };
+  queueTableState.snapshot = snapshot;
 
   publishExecutiveKpiState({
     status: "ready",
+    snapshot,
     metrics: {
       queueRows: normalizeExecutiveKpiValue(summary.execution_queue_rows),
       nextSteps: normalizeExecutiveKpiValue(summary.operator_decisions_rows),
@@ -1555,6 +1568,95 @@ function renderStats(statusData) {
       undecidedMaybeTailor: normalizeExecutiveKpiValue(undecided.MAYBE_TAILOR, 0),
     },
   });
+  publishExecutiveQueueState();
+}
+
+function freshnessDate(value) {
+  if (!value) return "Unavailable";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unavailable";
+  return new Intl.DateTimeFormat(undefined, {
+    year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  }).format(date);
+}
+
+function freshnessRelative(ageSeconds) {
+  const seconds = Number(ageSeconds);
+  if (!Number.isFinite(seconds) || seconds < 0) return "Unavailable";
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+function setFreshnessBadge(id, status, labels) {
+  const badge = qs(id);
+  if (!badge) return;
+  badge.className = `executive-freshness-badge is-${status}`;
+  badge.textContent = labels[status] || status;
+}
+
+function renderExecutiveFreshness(freshness = {}) {
+  state.executiveFreshness = freshness;
+  const shared = freshness.shared_jobs || {};
+  const personalized = freshness.personalized || {};
+  const sharedLabel = qs("sharedFreshnessLabel");
+  const personalLabel = qs("personalFreshnessLabel");
+  const sharedDate = freshnessDate(shared.updated_at);
+  const personalDate = freshnessDate(personalized.completed_at);
+
+  if (sharedLabel) {
+    sharedLabel.textContent = shared.updated_at
+      ? `Shared jobs updated · ${freshnessRelative(shared.age_seconds)}`
+      : "Shared jobs update unavailable";
+    sharedLabel.title = shared.updated_at ? `Updated ${sharedDate}` : "No trustworthy shared update timestamp is available.";
+  }
+  if (personalLabel) {
+    personalLabel.textContent = personalized.completed_at
+      ? `Your recommendations updated · ${personalDate}`
+      : "Your recommendations · Not generated";
+    personalLabel.title = personalized.completed_at
+      ? `Personalized refresh completed ${personalDate}`
+      : "No successful personalized refresh is available.";
+  }
+  setFreshnessBadge("sharedFreshnessBadge", shared.status || "unavailable", {
+    fresh: "Fresh", stale: "Stale", unavailable: "Unavailable",
+  });
+  setFreshnessBadge("personalFreshnessBadge", personalized.status || "not_generated", {
+    fresh: "Fresh", aging: "Aging", stale: "Stale", not_generated: "Not generated",
+  });
+
+  let notice = "";
+  if (personalized.status === "not_generated") {
+    notice = "Your personalized job recommendations have not been generated yet.";
+  } else if (personalized.status === "stale") {
+    notice = shared.status === "fresh"
+      ? "The shared job pool is current, but your personalized recommendations are older. Refresh to analyze the latest jobs against your preferences and resumes."
+      : "Your personalized recommendations are older. Refresh when shared jobs are available to update your Executive Queue.";
+  } else if (personalized.status === "aging") {
+    notice = "Newer shared jobs may be available. Refresh when you want updated personalized recommendations.";
+  } else if (shared.status === "stale") {
+    notice = "The shared job pool is older than expected. Your recommendations still reflect the latest successful personalized snapshot.";
+  } else if (shared.status === "unavailable") {
+    notice = "Shared job freshness is temporarily unavailable. Your latest successful personalized snapshot remains available.";
+  }
+  const noticeEl = qs("executiveFreshnessNotice");
+  if (noticeEl) {
+    noticeEl.textContent = notice;
+    noticeEl.classList.toggle("hidden", !notice);
+  }
+
+  const sharedModalText = qs("pipelineSharedFreshnessText");
+  const personalModalText = qs("pipelinePersonalFreshnessText");
+  if (sharedModalText) sharedModalText.textContent = shared.updated_at
+    ? `Shared jobs were updated ${freshnessRelative(shared.age_seconds)}.`
+    : "Shared job freshness is unavailable.";
+  if (personalModalText) personalModalText.textContent = personalized.completed_at
+    ? `Your current recommendations are from ${personalDate}.`
+    : "You have not generated personalized recommendations yet.";
 }
 
 function formatWorkflowSummaryCounts(counts = {}) {
@@ -2202,7 +2304,7 @@ function renderPipelineStatus(payload) {
   if (runningLike) {
     runBtn.disabled = false;
     runBtn.dataset.pipelineActive = "true";
-    runBtn.textContent = "View Pipeline";
+    runBtn.textContent = "View Progress";
     hidePageLoadingOverlay();
     return;
   }
@@ -2211,7 +2313,7 @@ function renderPipelineStatus(payload) {
 
   if (status === "succeeded") {
     runBtn.disabled = false;
-    runBtn.textContent = "Run Live Pipeline";
+    runBtn.textContent = "Refresh My Jobs";
     refreshTablesAfterPipelineSuccess(pipeline);
 
     clearPipelinePendingSuccess();
@@ -2221,7 +2323,7 @@ function renderPipelineStatus(payload) {
 
   if (terminalFailure) {
     runBtn.disabled = false;
-    runBtn.textContent = "Run Live Pipeline";
+    runBtn.textContent = "Refresh My Jobs";
 
     clearPipelinePendingSuccess();
     hidePageLoadingOverlay();
@@ -2229,7 +2331,7 @@ function renderPipelineStatus(payload) {
   }
 
   runBtn.disabled = false;
-  runBtn.textContent = "Run Live Pipeline";
+  runBtn.textContent = "Refresh My Jobs";
   if (!overlayEl.classList.contains("hidden")) {
     qs("pipelineLoadingMeta").textContent = "Waiting for the latest pipeline status. This window will remain open.";
   }
@@ -2280,10 +2382,10 @@ function setPipelineLaunchStep(step, { focus = true } = {}) {
     else indicator.removeAttribute("aria-current");
   });
 
-  qs("pipelineLaunchTitle").textContent = isReview ? "Review & launch" : "Run live pipeline";
+  qs("pipelineLaunchTitle").textContent = isReview ? "Review & launch" : "Refresh My Jobs";
   qs("pipelineLaunchDescription").textContent = isReview
-    ? "Review the selected configuration before starting the live pipeline."
-    : "Choose limits and options before starting the run.";
+    ? "Review the selected settings before refreshing your personalized job recommendations."
+    : "Configure and launch a personalized scan using the latest shared job pool.";
 
   const body = getPipelineLaunchBody();
   body.scrollTop = 0;
@@ -2299,6 +2401,8 @@ function openPipelineConfigModal() {
   const modal = getPipelineConfigModal();
   state.pipelineLaunchReturnFocus = document.activeElement;
   syncPipelinePathPreview();
+  renderPipelineLiveSummary(collectPipelineConfig());
+  renderExecutiveFreshness(state.executiveFreshness || {});
   setPipelineLaunchStep("configure", { focus: false });
   getPipelineLaunchBody().scrollTop = 0;
   modal.classList.remove("hidden");
@@ -2357,7 +2461,7 @@ function setPipelineLaunchInFlight(inFlight) {
   modal.querySelectorAll("button").forEach((button) => {
     button.disabled = Boolean(inFlight);
   });
-  runButton.textContent = inFlight ? "Starting pipeline…" : "Run Pipeline";
+  runButton.textContent = inFlight ? "Starting refresh…" : "Refresh My Jobs";
 }
 
 function getAppErrorModal() {
@@ -2444,8 +2548,8 @@ function renderPipelineConfirmSummary(config) {
       <section class="pipeline-review-intro">
         <div class="pipeline-confirm-hero-badge">Final confirmation</div>
         <div>
-          <div class="pipeline-confirm-hero-title">Ready to start this live pipeline</div>
-          <div class="pipeline-confirm-hero-copy">Confirm the scope and planning options. The run starts only when you choose Run Pipeline.</div>
+          <div class="pipeline-confirm-hero-title">Ready to refresh your personalized jobs</div>
+          <div class="pipeline-confirm-hero-copy">Confirm the scope and planning options. The run starts only when you choose Refresh My Jobs.</div>
         </div>
       </section>
 
@@ -2472,6 +2576,30 @@ function renderPipelineConfirmSummary(config) {
       </div>
     </div>
   `;
+}
+
+function syncPipelineJobLimitPresets() {
+  const jobLimit = qs("pipelineJobLimitInput")?.valueAsNumber;
+  document.querySelectorAll("#pipelineConfigModal [data-job-limit-preset]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(Number.isFinite(jobLimit) && jobLimit === Number(button.dataset.jobLimitPreset)));
+  });
+}
+
+function renderPipelineLiveSummary(config) {
+  syncPipelineJobLimitPresets();
+  const target = qs("pipelineLiveSummary");
+  if (!target || !config) return;
+  const row = (label, value, tone = "") => `
+    <div class="pipeline-live-summary__row ${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>
+  `;
+  target.innerHTML = [
+    row("Job limit", config.job_limit),
+    row("Packet limit", config.job_packet_limit === 0 ? "All selected jobs" : config.job_packet_limit),
+    row("Run mode", config.planning_only ? "Plan only" : "Scan + Plan"),
+    row("Rerun seen jobs", config.planning_only ? "Not applicable" : config.delete_seen_data === "yes" ? "Clear seen history" : "Keep seen history"),
+    row("AI review", config.generate_llm_adjudication ? "Enabled" : "Disabled", config.generate_llm_adjudication ? "is-enabled" : ""),
+    row("Backup ranking", config.generate_llm_fallback ? "Enabled" : "Disabled", config.generate_llm_fallback ? "is-enabled" : ""),
+  ].join("");
 }
 
 function stopPipelinePolling() {
@@ -2780,6 +2908,7 @@ async function loadStatus() {
   publishSourceYieldState({ status: "loading" });
   try {
     const data = await fetchJson("/status");
+    renderExecutiveFreshness(data.executive_freshness || {});
     renderStats(data);
     publishSourceYieldState({ status: "ready", data: data.source_yield || null });
   } catch (err) {
@@ -3160,15 +3289,25 @@ function attachPipelineConfigHandlers() {
     btn.addEventListener("click", () => {
       qs("pipelineJobLimitInput").value = btn.dataset.jobLimitPreset || "50";
       validatePipelineConfig();
+      renderPipelineLiveSummary(collectPipelineConfig());
     });
   });
 
   ["pipelineJobLimitInput", "pipelineJobPacketLimitInput"].forEach((id) => {
-    qs(id)?.addEventListener("input", validatePipelineConfig);
+    qs(id)?.addEventListener("input", () => {
+      validatePipelineConfig();
+      renderPipelineLiveSummary(collectPipelineConfig());
+    });
   });
 
   document.querySelectorAll("input[name='pipelinePlanningOnly']").forEach((input) => {
     input.addEventListener("change", syncPipelineDeleteSeenDataApplicability);
+  });
+
+  document.querySelectorAll("input[name^='pipeline']").forEach((input) => {
+    input.addEventListener("change", () => {
+      renderPipelineLiveSummary(collectPipelineConfig());
+    });
   });
 }
 

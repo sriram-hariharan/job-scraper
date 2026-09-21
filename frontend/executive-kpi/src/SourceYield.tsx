@@ -208,7 +208,7 @@ export function SourceYield({ state }: { state: SourceYieldState }) {
   }
   const data = state.data;
   if (!data?.available) {
-    return <div className="source-yield-card"><StateMessage icon="database" title="Source evidence unavailable" body="Source yield data is unavailable for this run." /></div>;
+    return <div className="source-yield-card"><StateMessage icon="database" title="Source evidence unavailable for this snapshot." body="Source yield data is unavailable for this personalized snapshot." /></div>;
   }
   if (!data.sources.length) {
     return <div className="source-yield-card"><StateMessage icon="database" title="No source activity" body="The latest completed run produced no source-yield rows." /></div>;
@@ -217,12 +217,15 @@ export function SourceYield({ state }: { state: SourceYieldState }) {
   return (
     <section className="source-yield-card" aria-labelledby="sourceYieldHeading">
       <header className="source-yield-header">
-        <div>
-          <span className="source-yield-eyebrow">Acquisition intelligence</span>
-          <h2 id="sourceYieldHeading">Source Yield</h2>
-          <p>Latest completed pipeline run{data.run_id ? ` · ${data.run_id}` : ""}</p>
-          <p className="source-yield-coverage-note">Sources shown reflect the latest completed pipeline run.</p>
-          <span className="sr-only" id="sourceYieldTargetsHelp">{TARGETS_EXPLANATION}</span>
+        <div className="source-yield-heading-group">
+          <span className="source-yield-heading-icon" aria-hidden="true"><Database size={21} strokeWidth={2} /></span>
+          <div>
+            <span className="source-yield-eyebrow">Acquisition intelligence</span>
+            <h2 id="sourceYieldHeading">Source Yield</h2>
+            <p>Latest completed pipeline run{data.run_id ? ` · ${data.run_id}` : ""}</p>
+            <p className="source-yield-coverage-note">Sources shown reflect the latest completed pipeline run.</p>
+            <span className="sr-only" id="sourceYieldTargetsHelp">{TARGETS_EXPLANATION}</span>
+          </div>
         </div>
         <div className="source-yield-chips" aria-label="Source yield summary">
           <span><strong>{count(data.totals.source_count)}</strong> sources contributing</span>

@@ -37,8 +37,8 @@ def test_executive_route_keeps_kpi_mount_and_uses_one_react_queue_mount():
 
     for preserved_marker in (
         "Executive Queue",
-        "Refresh Status",
-        "Run Live Pipeline",
+        "Refresh My Jobs",
+        'id="executiveFreshnessStrip"',
         'id="executiveQueueRoot"',
     ):
         assert preserved_marker in markup
@@ -65,7 +65,7 @@ def test_react_component_preserves_four_metric_meanings_and_real_snapshot_only()
     ):
         assert label in component
 
-    assert "Current snapshot" in component
+    assert "Current personalized snapshot" in component
     assert "queueRows" in component
     assert "Math.random" not in component
     assert "sparkline" not in component.lower()

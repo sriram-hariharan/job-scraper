@@ -67,6 +67,7 @@ function queueState(overrides: Partial<ExecutiveQueueState> = {}): ExecutiveQueu
       hasNextPage: true,
     },
     sort: { key: "", direction: "asc" },
+    snapshot: { status: "fresh", runId: "run-current", completedAt: "2026-09-18T12:00:00Z", totalJobs: 2 },
     ...overrides,
   };
 }
@@ -143,12 +144,39 @@ describe("ExecutiveQueue", () => {
     const { rerender } = render(<ExecutiveQueue state={queueState({ status: "loading", rows: [] })} />);
     expect(screen.getByLabelText("Executive queue table").querySelectorAll(".shared-table-skeleton-row")).toHaveLength(5);
 
-    rerender(<ExecutiveQueue state={queueState({ rows: [], pagination: { ...queueState().pagination, totalCount: 0 } })} />);
-    expect(screen.getByText("No jobs match these filters")).toBeInTheDocument();
+    rerender(<ExecutiveQueue state={queueState({ rows: [], pagination: { ...queueState().pagination, totalCount: 0 }, snapshot: { status: "fresh", runId: "run-zero", completedAt: "2026-09-18T12:00:00Z", totalJobs: 0 } })} />);
+    expect(screen.getByText("No jobs matched your latest personalized refresh")).toBeInTheDocument();
 
     rerender(<ExecutiveQueue state={queueState({ status: "error", rows: [], message: "browse failed" })} />);
     expect(screen.getByRole("alert")).toHaveTextContent("browse failed");
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
+  it("distinguishes no-run, genuine-zero, and filter-induced empty states", () => {
+    const { rerender } = render(<ExecutiveQueue state={queueState({
+      rows: [],
+      pagination: { ...queueState().pagination, totalCount: 0 },
+      snapshot: { status: "not_generated", runId: "", completedAt: "", totalJobs: 0 },
+    })} />);
+    expect(screen.getByText("No personalized jobs yet")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Clear Filters" })).not.toBeInTheDocument();
+
+    rerender(<ExecutiveQueue state={queueState({
+      rows: [],
+      pagination: { ...queueState().pagination, totalCount: 0 },
+      snapshot: { status: "stale", runId: "run-zero", completedAt: "2026-05-17T12:00:00Z", totalJobs: 0 },
+    })} />);
+    expect(screen.getByText("No jobs matched your latest personalized refresh")).toBeInTheDocument();
+    expect(screen.getByText(/May 17, 2026/)).toBeInTheDocument();
+
+    rerender(<ExecutiveQueue state={queueState({
+      rows: [],
+      filters: { actions: ["APPLY"], preferenceIds: [], undecidedOnly: false, limit: 15 },
+      pagination: { ...queueState().pagination, totalCount: 0 },
+      snapshot: { status: "fresh", runId: "run-jobs", completedAt: "2026-09-18T12:00:00Z", totalJobs: 12 },
+    })} />);
+    expect(screen.getByText("No jobs match these filters")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear Filters" })).toBeInTheDocument();
   });
 
   it("publishes the existing filter semantics and clear defaults without fetching", () => {

@@ -163,6 +163,22 @@ SELECT json_build_object(
 """.strip()
 
 
+def _build_latest_successful_global_live_pipeline_sql() -> str:
+    """Return only the completion fact used by the regular-user freshness UI."""
+    return """
+SELECT json_build_object(
+    'run_id', run_id,
+    'finished_at', finished_at
+)
+FROM scheduler_run_history
+WHERE job_name = 'live_pipeline'
+  AND status = 'succeeded'
+  AND trigger_source = 'external_scheduler_wrapper'
+ORDER BY finished_at DESC
+LIMIT 1;
+""".strip()
+
+
 def _run_psql_json_query(
     *,
     sql: str,
@@ -257,4 +273,27 @@ def get_scheduler_postgres_status_payload(
         "command": query_payload["command"],
         "command_text": query_payload["command_text"],
         "postgres": query_payload["data"],
+    }
+
+
+def get_latest_successful_global_live_pipeline_postgres_payload(
+    *,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+) -> Dict[str, Any]:
+    """Read the latest successful scheduled global acquisition completion."""
+    query_payload = _run_psql_json_query(
+        sql=_build_latest_successful_global_live_pipeline_sql(),
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+    return {
+        "ok": True,
+        "run": dict(query_payload.get("data", {}) or {}),
+        "command": query_payload["command"],
+        "command_text": query_payload["command_text"],
     }

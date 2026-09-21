@@ -234,6 +234,7 @@ from src.storage.scheduler.contract import (
 )
 
 from src.storage.scheduler.read_postgres import (
+    get_latest_successful_global_live_pipeline_postgres_payload,
     get_scheduler_postgres_status_payload,
 )
 from src.storage.scheduler.control_store import (
@@ -31321,6 +31322,123 @@ def _latest_user_pipeline_artifact_context(
     }
 
 
+def _executive_freshness_timestamp(value: Any) -> Optional[datetime]:
+    """Normalize a persisted timestamp to an aware UTC datetime."""
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = _clean_text(value)
+        if not text:
+            return None
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _executive_freshness_fact(
+    timestamp: Any,
+    *,
+    now: Optional[datetime],
+    fresh_for: timedelta,
+    aging_for: Optional[timedelta] = None,
+    missing_status: str,
+) -> Dict[str, Any]:
+    completed = _executive_freshness_timestamp(timestamp)
+    if completed is None:
+        return {
+            "completed_at": None,
+            "age_seconds": None,
+            "status": missing_status,
+        }
+
+    reference = _executive_freshness_timestamp(now) or datetime.now(timezone.utc)
+    age_seconds = max(0, int((reference - completed).total_seconds()))
+    if age_seconds <= int(fresh_for.total_seconds()):
+        status = "fresh"
+    elif aging_for is not None and age_seconds <= int(aging_for.total_seconds()):
+        status = "aging"
+    else:
+        status = "stale"
+    return {
+        "completed_at": completed.isoformat().replace("+00:00", "Z"),
+        "age_seconds": age_seconds,
+        "status": status,
+    }
+
+
+def executive_freshness_payload(
+    *,
+    owner_user_id: str,
+    artifact_context: Optional[Dict[str, Any]] = None,
+    now: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    """Build bounded shared and owner-scoped freshness facts for `/status`."""
+    shared_fact: Dict[str, Any] = {
+        "updated_at": None,
+        "age_seconds": None,
+        "status": "unavailable",
+    }
+    try:
+        shared_payload = get_latest_successful_global_live_pipeline_postgres_payload(
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+        )
+        shared_run = dict(shared_payload.get("run", {}) or {})
+        computed = _executive_freshness_fact(
+            shared_run.get("finished_at"),
+            now=now,
+            fresh_for=timedelta(hours=12),
+            missing_status="unavailable",
+        )
+        shared_fact = {
+            "updated_at": computed.pop("completed_at"),
+            **computed,
+        }
+    except (Exception, SystemExit) as exc:
+        logger.warning("Failed to read shared job freshness: %s", exc)
+
+    personalized_run = dict((artifact_context or {}).get("run", {}) or {})
+    if not personalized_run and _clean_text(owner_user_id):
+        try:
+            payload = get_user_pipeline_runs_postgres_payload(
+                owner_user_id=_clean_text(owner_user_id),
+                limit=1,
+                status="succeeded",
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
+                ensure_schema=True,
+            )
+            rows = list(payload.get("rows", []) or [])
+            personalized_run = dict(rows[0] or {}) if rows else {}
+        except (Exception, SystemExit) as exc:
+            logger.warning(
+                "Failed to read personalized freshness for owner_user_id=%s: %s",
+                _clean_text(owner_user_id),
+                exc,
+            )
+
+    personalized = _executive_freshness_fact(
+        personalized_run.get("completed_at"),
+        now=now,
+        fresh_for=timedelta(hours=24),
+        aging_for=timedelta(days=7),
+        missing_status="not_generated",
+    )
+    personalized["run_id"] = _clean_text(personalized_run.get("run_id")) or None
+    return {
+        "shared_jobs": shared_fact,
+        "personalized": personalized,
+    }
+
+
 def _dashboard_job_identity_values(row: Dict[str, Any]) -> List[str]:
     """Canonical identity values for one Dashboard row (3E1: job_doc_id is the job URL)."""
     values: List[str] = []
@@ -31860,6 +31978,22 @@ def status_payload(
                 f"{artifact_context.get('owner_user_id', '')}/"
                 f"{artifact_context.get('run_id', '')}"
             )
+    elif _clean_text(owner_user_id):
+        # Never substitute shared filesystem planning data for an authenticated
+        # owner who has no successful personalized snapshot.
+        best_rows = []
+        shortlist_rows = []
+        queue_rows = []
+        manifest_rows = []
+        job_prioritization_rows = []
+        tailoring_decision_rows = []
+        operator_review_rows = []
+        agentic_workflow_summary = {}
+        agentic_workflow_verification = {}
+        merged_rows = []
+        job_corpus_rows = 0
+        source_yield = _source_yield_payload()
+        planning_output_dir_value = ""
     else:
         best_rows = ja._load_csv_rows(output_dir / "best_resume_variant_by_job.csv")
         shortlist_rows = ja._load_csv_rows(output_dir / "application_shortlist_by_job.csv")
@@ -32009,12 +32143,21 @@ def status_payload(
         active_identities=_active_himalayas_identity_authority(job_corpus),
     )[:top_k]
 
+    executive_freshness = executive_freshness_payload(
+        owner_user_id=owner_user_id,
+        artifact_context=artifact_context,
+    )
+
     return {
         "summary": {
             "job_corpus_path": str(job_corpus),
             "job_corpus_rows": job_corpus_rows,
             "planning_output_dir": planning_output_dir_value,
-            "artifact_source": artifact_context.get("artifact_source", "filesystem") if artifact_context else "filesystem",
+            "artifact_source": (
+                artifact_context.get("artifact_source", "filesystem")
+                if artifact_context
+                else ("none" if _clean_text(owner_user_id) else "filesystem")
+            ),
             "pipeline_run_id": artifact_context.get("run_id", "") if artifact_context else "",
             "best_variant_rows": len(best_rows),
             "shortlist_rows": len(shortlist_rows),
@@ -32032,6 +32175,7 @@ def status_payload(
         "agentic_workflow_summary": agentic_workflow_summary,
         "agentic_workflow_verification": agentic_workflow_verification,
         "source_yield": source_yield,
+        "executive_freshness": executive_freshness,
         "top_queue_rows": top_queue,
     }
 
@@ -32353,6 +32497,12 @@ def browse_payload(
             job_metadata_by_key = _job_metadata_overlay_from_jsonl_text(
                 artifact_context.get("current_run_job_corpus_text", "")
             )
+        elif _clean_text(owner_user_id):
+            rows = []
+            job_prioritization_by_key = {}
+            tailoring_decision_by_key = {}
+            operator_review_by_key = {}
+            job_metadata_by_key = {}
         else:
             rows = ja._build_job_index(output_dir)
             job_prioritization_by_key = _job_prioritization_overlay_from_rows(

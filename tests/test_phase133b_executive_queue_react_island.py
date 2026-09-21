@@ -18,8 +18,9 @@ def test_executive_page_has_one_queue_island_and_no_hidden_legacy_queue():
     assert markup.count('id="executiveQueueRoot"') == 1
     assert markup.count('id="executiveKpiRoot"') == 1
     assert "Executive Queue" in markup
-    assert "Refresh Status" in markup
-    assert "Run Live Pipeline" in markup
+    assert "Refresh Status" not in markup
+    assert markup.count('id="runPipelineBtn"') == 1
+    assert "Refresh My Jobs" in markup
     assert 'id="applicationActionModal"' in markup
     assert "Choose what happened after opening the job." in markup
 

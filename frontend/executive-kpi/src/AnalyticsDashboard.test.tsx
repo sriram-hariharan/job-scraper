@@ -25,7 +25,9 @@ describe("AnalyticsDashboard", () => {
     for (const value of ["128", "42", "9", "6"]) {
       expect(screen.getByText(value)).toBeInTheDocument();
     }
-    expect(screen.getAllByText("Current snapshot")).toHaveLength(4);
+    expect(screen.getAllByText("Current personalized snapshot")).toHaveLength(4);
+    expect(screen.queryByText("Stale snapshot")).not.toBeInTheDocument();
+    expect(screen.queryByText("Aging snapshot")).not.toBeInTheDocument();
   });
 
   it("preserves real zero values instead of treating them as missing", () => {
@@ -37,10 +39,37 @@ describe("AnalyticsDashboard", () => {
         undecidedJobReviews: 0,
         undecidedMaybeTailor: 0,
       },
+      snapshot: { status: "stale", runId: "run-zero", completedAt: "2026-05-17T12:00:00Z", totalJobs: 0 },
     }} />);
 
     expect(screen.getAllByText("0")).toHaveLength(4);
     expect(screen.queryByText("—")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Stale snapshot")).toHaveLength(4);
+    expect(screen.getByText("Personalized recommendations are out of date")).toBeInTheDocument();
+    expect(screen.getByText(/Last personalized refresh: May 17, 2026/)).toBeInTheDocument();
+    expect(screen.getByText(/No matching jobs were found/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /refresh my jobs|view pipeline/i })).not.toBeInTheDocument();
+  });
+
+  it("renders one cohesive not-generated state without four misleading zeroes", () => {
+    render(<AnalyticsDashboard state={{
+      status: "ready",
+      metrics: { queueRows: 0, nextSteps: 0, undecidedJobReviews: 0, undecidedMaybeTailor: 0 },
+      snapshot: { status: "not_generated", runId: "", completedAt: "", totalJobs: 0 },
+    }} />);
+    expect(screen.getByText("Your personalized job recommendations are not ready yet.")).toBeInTheDocument();
+    expect(screen.queryByText("0")).not.toBeInTheDocument();
+  });
+
+  it("labels aging snapshots and keeps their timestamped values visible", () => {
+    render(<AnalyticsDashboard state={{
+      status: "ready", metrics,
+      snapshot: { status: "aging", runId: "run-aging", completedAt: "2026-09-15T12:00:00Z", totalJobs: 128 },
+    }} />);
+    expect(screen.getAllByText("Aging snapshot")).toHaveLength(4);
+    expect(screen.getAllByText(/Sep 15, 2026 personalized refresh/)).toHaveLength(4);
+    expect(screen.getByText("Personalized recommendations are getting older")).toBeInTheDocument();
+    expect(screen.getByText("128")).toBeInTheDocument();
   });
 
   it("renders the current tooltip only while active and preserves a zero value", () => {
@@ -60,6 +89,6 @@ describe("AnalyticsDashboard", () => {
   it("renders a restrained unavailable state without crashing", () => {
     render(<AnalyticsDashboard state={{ status: "error", message: "network unavailable" }} />);
     expect(screen.getAllByText("Unavailable")).toHaveLength(4);
-    expect(screen.getAllByText("Refresh Status to try again.")).toHaveLength(4);
+    expect(screen.getAllByText("Reload the page to try again.")).toHaveLength(4);
   });
 });

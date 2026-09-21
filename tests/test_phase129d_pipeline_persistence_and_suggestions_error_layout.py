@@ -44,7 +44,8 @@ def test_executive_pipeline_button_navigates_to_monitoring_when_run_is_active():
     attach = _function_source(source, "attachPipelineLaunchHandlers")
 
     assert 'runBtn.dataset.pipelineActive = "true"' in render
-    assert 'runBtn.textContent = "View Pipeline"' in render
+    assert 'runBtn.textContent = "View Progress"' in render
+    assert 'runBtn.textContent = "Refresh My Jobs"' in render
     assert "runBtn.disabled = false" in render
     assert "delete runBtn.dataset.pipelineActive" in render
     assert 'runPipelineBtn.dataset.pipelineActive === "true"' in attach

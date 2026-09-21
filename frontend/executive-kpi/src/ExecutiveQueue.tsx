@@ -105,6 +105,12 @@ export type ExecutiveQueueState = {
   preferenceOptions: PreferenceOption[];
   pagination: QueuePagination;
   sort: { key: string; direction: "asc" | "desc" };
+  snapshot?: {
+    status: "not_generated" | "fresh" | "aging" | "stale";
+    runId: string;
+    completedAt: string;
+    totalJobs: number;
+  };
 };
 
 export type ExecutiveQueueAction =
@@ -139,6 +145,7 @@ export const DEFAULT_QUEUE_STATE: ExecutiveQueueState = {
     hasNextPage: false,
   },
   sort: { key: "", direction: "asc" },
+  snapshot: { status: "not_generated", runId: "", completedAt: "", totalJobs: 0 },
 };
 
 const ACTION_OPTIONS: SharedFilterOption[] = [
@@ -604,6 +611,33 @@ function QueueTable({ state }: { state: ExecutiveQueueState }) {
     </div>
   );
 
+  const snapshot = state.snapshot || DEFAULT_QUEUE_STATE.snapshot!;
+  const filtersActive = Boolean(
+    state.filters.actions.length
+    || state.filters.preferenceIds.length
+    || state.filters.undecidedOnly,
+  );
+  const snapshotDate = snapshot.completedAt
+    ? new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short", day: "numeric" }).format(new Date(snapshot.completedAt))
+    : "";
+  const emptyState = filtersActive && snapshot.totalJobs > 0 ? (
+    <div className="executive-queue-empty">
+      <strong>No jobs match these filters</strong>
+      <span>Clear filters to return to the complete Executive queue.</span>
+      <button type="button" className={NEUTRAL_CONTROL_CLASS} onClick={() => publishQueueAction({ type: "clear_filters" })}>Clear Filters</button>
+    </div>
+  ) : snapshot.status === "not_generated" ? (
+    <div className="executive-queue-empty">
+      <strong>No personalized jobs yet</strong>
+      <span>Refresh your jobs to build your personal Executive Queue.</span>
+    </div>
+  ) : (
+    <div className="executive-queue-empty">
+      <strong>No jobs matched your latest personalized refresh</strong>
+      <span>{snapshotDate ? `The personalized snapshot completed ${snapshotDate}.` : "The latest successful personalized refresh returned no matching jobs."}</span>
+    </div>
+  );
+
   return (
     <SharedTableCard
       className={`executive-queue-table-card executive-queue-table-card--${state.viewMode}`}
@@ -622,13 +656,7 @@ function QueueTable({ state }: { state: ExecutiveQueueState }) {
       rowClassName={(row) => `executive-queue-row ${row.getIsExpanded() ? "is-expanded" : ""}`.trim()}
       detailId={(row) => `executive-queue-detail-${row.id}`}
       renderDetails={(row) => <QueueDetails row={row.original} />}
-      empty={(
-        <div className="executive-queue-empty">
-          <strong>No jobs match these filters</strong>
-          <span>Clear filters to return to the complete Executive queue.</span>
-          <button type="button" className={NEUTRAL_CONTROL_CLASS} onClick={() => publishQueueAction({ type: "clear_filters" })}>Clear Filters</button>
-        </div>
-      )}
+      empty={emptyState}
       onPageChange={(page) => publishQueueAction({ type: "page_change", page })}
       onRetry={() => publishQueueAction({ type: "retry" })}
     />

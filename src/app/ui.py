@@ -62,11 +62,30 @@ def executive_dashboard() -> str:
             <p class="subtext app-page-header__description">High-signal operator dashboard for direct apply and review decisions.</p>
           </div>
 
-          <div class="header-actions app-page-header__actions">
-            <button class="ghost-btn" id="refreshStatusBtn" type="button">Refresh Status</button>
-            <button id="runPipelineBtn" type="button">Run Live Pipeline</button>
-          </div>
         </header>
+    <section class="executive-freshness-strip" id="executiveFreshnessStrip" aria-label="Executive Queue freshness">
+      <div class="executive-freshness-main">
+        <div class="executive-freshness-fact">
+          <span class="executive-freshness-icon executive-freshness-icon--shared" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/></svg></span>
+          <div class="executive-freshness-copy">
+            <strong id="sharedFreshnessLabel">Shared jobs updated · Checking…</strong>
+            <span>Latest jobs from your connected sources.</span>
+          </div>
+          <span class="executive-freshness-badge is-unavailable" id="sharedFreshnessBadge">Unavailable</span>
+        </div>
+        <span class="executive-freshness-divider" aria-hidden="true"></span>
+        <div class="executive-freshness-fact">
+          <span class="executive-freshness-icon executive-freshness-icon--personal" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+          <div class="executive-freshness-copy">
+            <strong id="personalFreshnessLabel">Your recommendations updated · Checking…</strong>
+            <span>Personalized to your preferences and resumes.</span>
+          </div>
+          <span class="executive-freshness-badge is-unavailable" id="personalFreshnessBadge">Not generated</span>
+        </div>
+        <button id="runPipelineBtn" type="button">Refresh My Jobs</button>
+      </div>
+      <div class="executive-freshness-notice hidden" id="executiveFreshnessNotice" role="status"></div>
+    </section>
     <section
       id="executiveKpiRoot"
       class="executive-kpi-root"
@@ -272,8 +291,8 @@ def _pipeline_dashboard_launch_dialogs() -> str:
       <header class="modal-header pipeline-launch-header">
         <div class="pipeline-launch-heading">
           <div class="pipeline-launch-eyebrow">Live pipeline</div>
-          <h3 id="pipelineLaunchTitle">Run live pipeline</h3>
-          <div class="subtext" id="pipelineLaunchDescription">Choose limits and options before starting the run.</div>
+          <h3 id="pipelineLaunchTitle">Refresh My Jobs</h3>
+          <div class="subtext" id="pipelineLaunchDescription">Configure and launch a personalized scan using the latest shared job pool.</div>
         </div>
         <ol class="pipeline-launch-steps" aria-label="Pipeline launch progress">
           <li class="pipeline-launch-step-indicator is-active" data-pipeline-step-indicator="configure" aria-current="step">
@@ -283,38 +302,44 @@ def _pipeline_dashboard_launch_dialogs() -> str:
             <span>2</span> Review &amp; launch
           </li>
         </ol>
-        <button class="ghost-btn modal-close-btn" id="closePipelineConfigModalBtn" type="button" aria-label="Close pipeline settings">Close</button>
+        <button class="ghost-btn modal-close-btn" id="closePipelineConfigModalBtn" type="button" aria-label="Close pipeline settings" title="Close">×</button>
       </header>
 
       <div class="pipeline-modal-scroll" id="pipelineLaunchModalBody" tabindex="0">
         <section class="pipeline-launch-step" id="pipelineConfigureStep" data-pipeline-launch-panel="configure" aria-labelledby="pipelineConfigureHeading">
           <h4 class="sr-only" id="pipelineConfigureHeading">Configure pipeline run</h4>
+          <div class="pipeline-config-layout">
+          <div class="pipeline-freshness-callout" id="pipelineFreshnessCallout" role="status">
+            <span class="pipeline-freshness-callout__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/></svg></span>
+            <div><strong id="pipelineSharedFreshnessText">Checking shared job freshness…</strong><span id="pipelinePersonalFreshnessText"></span></div>
+          </div>
           <div class="pipeline-option-sections compact-option-sections">
+            <div class="pipeline-option-column pipeline-option-column--left">
             <section class="pipeline-option-section pipeline-option-section--scope">
               <div class="pipeline-option-section-header">
-                <div><div class="pipeline-option-kicker">Scope</div><div class="pipeline-option-title">Run scope</div></div>
-                <div class="pipeline-option-description">Control how many qualified jobs proceed through application planning and how many planning packets are produced.</div>
+                <span class="pipeline-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 2v3M22 12h-3M12 22v-3M2 12h3"/></svg></span>
+                <div><div class="pipeline-option-title">Run scope</div><div class="pipeline-option-description">Control how many jobs to process and build packets.</div></div>
               </div>
               <div class="pipeline-form-grid pipeline-form-grid--compact">
                 <div class="control-group pipeline-limit-group">
                   <label for="pipelineJobLimitInput">Job limit <span class="packet-info-icon pipeline-help-icon" title="Maximum qualified jobs from the current-run corpus that proceed through application planning." aria-label="Maximum qualified jobs from the current-run corpus that proceed through application planning.">?</span></label>
                   <input type="number" id="pipelineJobLimitInput" value="50" min="1" max="500" aria-describedby="pipelineJobLimitError" />
                   <div class="pipeline-inline-validation" id="pipelineJobLimitError" aria-live="polite"></div>
-                  <div class="pipeline-inline-helper">
-                    <span class="pipeline-inline-helper-label">Quick presets</span>
-                    <div class="pipeline-chip-row pipeline-chip-row--compact">
-                      <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="25">25</button>
-                      <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="50">50</button>
-                      <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="100">100</button>
-                      <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="200">200</button>
-                    </div>
-                  </div>
                 </div>
                 <div class="control-group">
                   <label for="pipelineJobPacketLimitInput">Packet limit <span class="packet-info-icon pipeline-help-icon" title="Maximum detailed planning packets to build. 0 means all selected jobs." aria-label="Maximum detailed planning packets to build. 0 means all selected jobs.">?</span></label>
                   <input type="number" id="pipelineJobPacketLimitInput" value="0" min="0" max="500" aria-describedby="pipelineJobPacketLimitError" />
                   <div class="pipeline-inline-validation" id="pipelineJobPacketLimitError" aria-live="polite"></div>
-                  <div class="control-help">Use 0 to build packets for every selected job.</div>
+                  <div class="control-help">0 = all selected jobs</div>
+                </div>
+                <div class="pipeline-inline-helper pipeline-inline-helper--presets">
+                  <span class="pipeline-inline-helper-label">Quick presets</span>
+                  <div class="pipeline-chip-row pipeline-chip-row--compact">
+                    <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="25">25</button>
+                    <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="50">50</button>
+                    <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="100">100</button>
+                    <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="200">200</button>
+                  </div>
                 </div>
                 <div class="pipeline-setting-row pipeline-setting-row--wide">
                   <div class="pipeline-toggle-copy">
@@ -329,13 +354,14 @@ def _pipeline_dashboard_launch_dialogs() -> str:
               </div>
             </section>
 
-            <section class="pipeline-option-section">
+            <section class="pipeline-option-section pipeline-option-section--processing">
               <div class="pipeline-option-section-header">
-                <div><div class="pipeline-option-kicker">Processing</div><div class="pipeline-option-title">Run mode</div></div>
+                <span class="pipeline-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.64 8.9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.53a1.7 1.7 0 0 0 1-1.56V3h4v.08a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.13.37.47.82 1.56 1H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg></span>
+                <div><div class="pipeline-option-title">Processing</div><div class="pipeline-option-description">Choose how to build this run.</div></div>
               </div>
               <div class="pipeline-setting-row pipeline-setting-row--mode">
                 <div class="pipeline-toggle-copy">
-                  <div class="pipeline-toggle-name">Pipeline stages</div>
+                  <div class="pipeline-toggle-name">Run mode</div>
                   <div class="pipeline-toggle-help">Choose fresh ATS collection or rebuild planning from the existing planning corpus.</div>
                 </div>
                 <div class="binary-toggle binary-toggle--compact pipeline-mode-toggle" role="radiogroup" aria-label="Run mode">
@@ -344,10 +370,13 @@ def _pipeline_dashboard_launch_dialogs() -> str:
                 </div>
               </div>
             </section>
+            </div>
 
-            <section class="pipeline-option-section">
+            <div class="pipeline-option-column pipeline-option-column--center">
+            <section class="pipeline-option-section pipeline-option-section--intelligence">
               <div class="pipeline-option-section-header">
-                <div><div class="pipeline-option-kicker">Intelligence</div><div class="pipeline-option-title">AI planning</div></div>
+                <span class="pipeline-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3-1.6 4.4L6 9l4.4 1.6L12 15l1.6-4.4L18 9l-4.4-1.6L12 3Z"/><path d="m19 15-.8 2.2L16 18l2.2.8L19 21l.8-2.2L22 18l-2.2-.8L19 15ZM5 3l.6 1.4L7 5l-1.4.6L5 7l-.6-1.4L3 5l1.4-.6L5 3Z"/></svg></span>
+                <div><div class="pipeline-option-title">Intelligence</div><div class="pipeline-option-description">Use AI to review and prioritize opportunities.</div></div>
               </div>
               <div class="pipeline-setting-row">
                 <div class="pipeline-toggle-copy">
@@ -363,7 +392,8 @@ def _pipeline_dashboard_launch_dialogs() -> str:
 
             <section class="pipeline-option-section pipeline-option-section--advanced">
               <div class="pipeline-option-section-header">
-                <div><div class="pipeline-option-kicker">Optional</div><div class="pipeline-option-title">Advanced</div></div>
+                <span class="pipeline-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h8M16 6h4M4 12h3M11 12h9M4 18h10M18 18h2"/><circle cx="14" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></svg></span>
+                <div><div class="pipeline-option-title">Advanced</div><div class="pipeline-option-description">Optional settings for more control.</div></div>
               </div>
               <div class="pipeline-setting-row">
                 <div class="pipeline-toggle-copy">
@@ -376,6 +406,20 @@ def _pipeline_dashboard_launch_dialogs() -> str:
                 </div>
               </div>
             </section>
+            </div>
+          </div>
+          <aside class="pipeline-live-summary" aria-labelledby="pipelineLiveSummaryTitle">
+            <div class="pipeline-live-summary__heading">
+              <span class="pipeline-live-summary__step" aria-hidden="true">2</span>
+              <div><strong id="pipelineLiveSummaryTitle">Review &amp; launch</strong><span>Confirm your settings before starting.</span></div>
+            </div>
+            <div class="pipeline-live-summary__title">Run summary</div>
+            <div class="pipeline-live-summary__rows" id="pipelineLiveSummary"></div>
+            <div class="pipeline-review-safety-note" role="note">
+              <span class="pipeline-review-safety-note__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></span>
+              <span>This launches collection and planning only. It does not apply to jobs or message recruiters.</span>
+            </div>
+          </aside>
           </div>
         </section>
 
@@ -388,8 +432,8 @@ def _pipeline_dashboard_launch_dialogs() -> str:
       <footer class="modal-actions pipeline-modal-actions">
         <button type="button" class="ghost-btn" id="cancelPipelineConfigBtn">Cancel</button>
         <button type="button" class="ghost-btn hidden" id="backToPipelineConfigBtn">Back</button>
-        <button type="button" id="openPipelineConfirmBtn">Continue</button>
-        <button type="button" class="hidden" id="confirmPipelineRunBtn">Run Pipeline</button>
+        <button type="button" id="openPipelineConfirmBtn"><span>Continue</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+        <button type="button" class="hidden" id="confirmPipelineRunBtn">Refresh My Jobs</button>
       </footer>
     </div>
   </section>

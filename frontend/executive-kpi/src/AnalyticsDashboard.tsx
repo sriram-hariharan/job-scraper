@@ -1,5 +1,4 @@
-import type { LucideIcon } from "lucide-react";
-import { ListChecks, MessagesSquare, Rows3, WandSparkles } from "lucide-react";
+import { FileClock, Rows3 } from "lucide-react";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 /**
@@ -16,31 +15,35 @@ export type ExecutiveKpiMetrics = {
   undecidedMaybeTailor: number | null;
 };
 
+export type ExecutiveSnapshot = {
+  status: "not_generated" | "fresh" | "aging" | "stale";
+  runId: string;
+  completedAt: string;
+  totalJobs: number;
+};
+
 export type ExecutiveKpiState =
   | { status: "loading" }
-  | { status: "ready"; metrics: ExecutiveKpiMetrics }
+  | { status: "ready"; metrics: ExecutiveKpiMetrics; snapshot?: ExecutiveSnapshot }
   | { status: "error"; message?: string };
 
 type MetricDefinition = {
   key: keyof ExecutiveKpiMetrics;
   label: string;
-  icon: LucideIcon;
   tone: "blue" | "green" | "violet" | "cyan";
 };
 
 const METRICS: MetricDefinition[] = [
-  { key: "queueRows", label: "Queue Rows", icon: Rows3, tone: "blue" },
-  { key: "nextSteps", label: "Next Steps", icon: ListChecks, tone: "green" },
+  { key: "queueRows", label: "Queue Rows", tone: "blue" },
+  { key: "nextSteps", label: "Next Steps", tone: "green" },
   {
     key: "undecidedJobReviews",
     label: "Undecided Job Reviews",
-    icon: MessagesSquare,
     tone: "violet",
   },
   {
     key: "undecidedMaybeTailor",
     label: "Undecided Maybe Tailor",
-    icon: WandSparkles,
     tone: "cyan",
   },
 ];
@@ -94,7 +97,7 @@ function SnapshotChart({ value, queueRows, label }: { value: number; queueRows: 
   return (
     <div className="executive-kpi-chart" role="img" aria-label={summary}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={chartData} layout="vertical" margin={{ top: 6, right: 0, bottom: 6, left: 0 }}>
+        <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
           <XAxis type="number" domain={[0, baseline]} hide />
           <YAxis type="category" dataKey="name" hide />
           <Tooltip
@@ -124,12 +127,10 @@ function SnapshotChart({ value, queueRows, label }: { value: number; queueRows: 
 }
 
 function LoadingCard({ metric }: { metric: MetricDefinition }) {
-  const Icon = metric.icon;
   return (
     <article className={`executive-kpi-card executive-kpi-card--${metric.tone}`} aria-busy="true">
       <div className="executive-kpi-card-header">
         <span className="executive-kpi-label">{metric.label}</span>
-        <span className="executive-kpi-icon" aria-hidden="true"><Icon size={17} strokeWidth={2} /></span>
       </div>
       <div className="executive-kpi-skeleton executive-kpi-skeleton--value" />
       <div className="executive-kpi-skeleton executive-kpi-skeleton--caption" />
@@ -152,14 +153,40 @@ export function AnalyticsDashboard({ state }: { state: ExecutiveKpiState }) {
     ? { queueRows: null, nextSteps: null, undecidedJobReviews: null, undecidedMaybeTailor: null }
     : state.metrics;
   const queueRows = safeMetricValue(metrics.queueRows);
+  const snapshot = state.status === "ready" ? state.snapshot : undefined;
+  const snapshotStatus = snapshot?.status || "fresh";
+  const snapshotDate = snapshot?.completedAt
+    ? new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short", day: "numeric" }).format(new Date(snapshot.completedAt))
+    : "";
+
+  if (!isError && snapshotStatus === "not_generated") {
+    return (
+      <div className="executive-kpi-not-generated" role="status">
+        <span className="executive-kpi-not-generated__icon" aria-hidden="true"><Rows3 size={24} /></span>
+        <div>
+          <strong>Your personalized job recommendations are not ready yet.</strong>
+          <span>Refresh your jobs to analyze the latest opportunities against your preferences and resumes.</span>
+        </div>
+      </div>
+    );
+  }
+
+  const snapshotCaption = snapshotStatus === "fresh"
+    ? "Current personalized snapshot"
+    : `Based on your ${snapshotDate || "latest"} personalized refresh`;
+  const snapshotBadge = snapshotStatus === "aging"
+    ? "Aging snapshot"
+    : snapshotStatus === "stale"
+      ? "Stale snapshot"
+      : "";
 
   return (
+    <div className="executive-kpi-section">
     <div
       className="executive-kpi-dashboard kpi-grid kpi-grid-cols-1 sm:kpi-grid-cols-2 xl:kpi-grid-cols-4 kpi-gap-3"
       aria-label="Executive queue metrics"
     >
       {METRICS.map((metric) => {
-        const Icon = metric.icon;
         const value = metrics[metric.key];
         const numericValue = safeMetricValue(value);
 
@@ -167,20 +194,37 @@ export function AnalyticsDashboard({ state }: { state: ExecutiveKpiState }) {
           <article className={`executive-kpi-card executive-kpi-card--${metric.tone}`} key={metric.key}>
             <div className="executive-kpi-card-header">
               <span className="executive-kpi-label">{metric.label}</span>
-              <span className="executive-kpi-icon" aria-hidden="true"><Icon size={17} strokeWidth={2} /></span>
+              {snapshotBadge ? <span className={`executive-kpi-snapshot-badge is-${snapshotStatus}`}>{snapshotBadge}</span> : null}
             </div>
             <strong className="executive-kpi-value">{isError ? "Unavailable" : formatMetric(value)}</strong>
             <span className="executive-kpi-caption">
-              {isError ? "Status data could not be loaded" : "Current snapshot"}
+              {isError ? "Status data could not be loaded" : snapshotCaption}
             </span>
             {isError ? (
-              <div className="executive-kpi-error" role="status">Refresh Status to try again.</div>
+              <div className="executive-kpi-error" role="status">Reload the page to try again.</div>
             ) : (
               <SnapshotChart value={numericValue} queueRows={queueRows} label={metric.label} />
             )}
           </article>
         );
       })}
+    </div>
+    {!isError && (snapshotStatus === "aging" || snapshotStatus === "stale") ? (
+      <section className={`executive-snapshot-panel is-${snapshotStatus}`} role="status">
+        <span className="executive-snapshot-panel__icon" aria-hidden="true"><FileClock size={25} strokeWidth={2} /></span>
+        <div>
+          <strong>{snapshotStatus === "stale" ? "Personalized recommendations are out of date" : "Personalized recommendations are getting older"}</strong>
+          <span>{snapshotStatus === "stale" ? "You're viewing an old snapshot. Refresh your jobs to generate a new executive queue from the latest shared opportunities." : "Your current recommendations may not include the newest shared opportunities."}</span>
+          {snapshotDate ? <small>Last personalized refresh: {snapshotDate}</small> : null}
+          {queueRows === 0 && snapshot?.runId ? <small>No matching jobs were found in your latest personalized refresh.</small> : null}
+        </div>
+      </section>
+    ) : null}
+    {!isError && snapshotStatus === "fresh" && queueRows === 0 && snapshot?.runId ? (
+      <div className="executive-kpi-zero-note" role="status">
+        No matching jobs were found in your latest personalized refresh.{snapshotDate ? ` Snapshot completed ${snapshotDate}.` : ""}
+      </div>
+    ) : null}
     </div>
   );
 }

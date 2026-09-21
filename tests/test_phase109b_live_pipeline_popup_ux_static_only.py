@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+import subprocess
 
 from tests.support.phase_guard_registry import (
     assert_changed_files_allowed,
@@ -69,7 +70,7 @@ def test_live_pipeline_popup_uses_demo_friendly_sections_and_labels():
         "Run mode",
         "Scan + Plan",
         "Plan only",
-        "AI planning",
+        "Intelligence",
         "AI review",
         "Advanced",
         "Backup ranking",
@@ -93,11 +94,22 @@ def test_live_pipeline_popup_has_short_helper_icons_and_text():
         assert f'aria-label="{helper}"' in modal
 
     assert modal.count("pipeline-help-icon") >= 7
-    assert (
-        "Control how many qualified jobs proceed through application planning"
-        in modal
-    )
+    assert "Control how many jobs to process and build packets." in modal
+    assert "0 = all selected jobs" in modal
     assert "Control how many jobs enter the run" not in modal
+
+
+def test_live_pipeline_popup_has_the_approved_section_icons_and_grid_hooks():
+    modal = _pipeline_modal_html()
+
+    assert modal.count('class="pipeline-option-icon"') == 4
+    assert modal.count('class="pipeline-option-column ') == 2
+    for modifier in ["scope", "processing", "intelligence", "advanced"]:
+        assert f"pipeline-option-section--{modifier}" in modal
+    assert "pipeline-inline-helper--presets" in modal
+    assert "pipeline-review-safety-note__icon" in modal
+    assert 'id="openPipelineConfirmBtn"><span>Continue</span><svg' in modal
+    assert "Pipeline stages" not in modal
 
 
 def test_live_pipeline_popup_does_not_render_internal_or_tailoring_controls():
@@ -292,6 +304,56 @@ def test_pipeline_launch_preserves_defaults_constraints_and_supported_controls()
 
     assert 'id="pipelineJobLimitError" aria-live="polite"' in modal
     assert 'id="pipelineJobPacketLimitError" aria-live="polite"' in modal
+    assert 'id="pipelineLiveSummary"' in modal
+    assert 'id="confirmPipelineRunBtn">Refresh My Jobs</button>' in modal
+    assert "1</span> Configure" in modal
+    assert "2</span> Review &amp; launch" in modal
+
+
+def test_job_limit_presets_reflect_live_numeric_value_without_defaulting_to_50():
+    source = _source(APP_JS_PATH)
+    sync = _between(source, "function syncPipelineJobLimitPresets()", "function renderPipelineLiveSummary(config)")
+    script = r'''
+const assert = require("node:assert/strict");
+const field = { valueAsNumber: 50 };
+const buttons = [25, 50, 100, 200].map(value => ({
+  dataset: { jobLimitPreset: String(value) },
+  setAttribute(name, value) { this[name] = value; }
+}));
+const qs = () => field;
+const document = { querySelectorAll: () => buttons };
+'''
+    script += sync
+    script += r'''
+for (const value of [50, 25, 100, 200, 51, NaN, 0, 50.5, 50]) {
+  field.valueAsNumber = value;
+  syncPipelineJobLimitPresets();
+  assert.deepEqual(buttons.map(button => button["aria-pressed"]),
+    buttons.map(button => String(value === Number(button.dataset.jobLimitPreset))));
+  assert.equal(field.valueAsNumber, value);
+}
+'''
+    subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+    summary = _between(source, "function renderPipelineLiveSummary(config)", "function stopPipelinePolling()")
+    assert "syncPipelineJobLimitPresets();" in summary
+
+
+def test_pipeline_configure_summary_reuses_the_canonical_config_model():
+    source = _source(APP_JS_PATH)
+    live_summary = _between(
+        source,
+        "function renderPipelineLiveSummary(config)",
+        "function stopPipelinePolling()",
+    )
+    handlers = _between(
+        source,
+        "function attachPipelineConfigHandlers()",
+        "function normalizeQueueFilters",
+    )
+
+    for label in ("Job limit", "Packet limit", "Run mode", "Rerun seen jobs", "AI review", "Backup ranking"):
+        assert label in live_summary
+    assert "renderPipelineLiveSummary(collectPipelineConfig())" in handlers
 
 
 def test_pipeline_continue_validates_without_launch_and_review_resets_scroll():
@@ -344,12 +406,22 @@ def test_pipeline_dialog_focus_escape_scroll_and_responsive_contracts():
 
     for marker in [
         "body.pipeline-launch-open",
-        "max-height: min(88dvh, 860px)",
+        "#pipelineConfigModal .pipeline-modal-card",
+        "width: min(79vw, 1500px, calc(100vw - 48px))",
+        "height: min(87dvh, 900px)",
+        "grid-template-columns: minmax(0, 1.16fr) minmax(0, .97fr) minmax(330px, 1fr)",
+        "grid-template-rows: minmax(max-content, 1.9fr) minmax(max-content, 1fr)",
+        "grid-template-rows: minmax(max-content, .9fr) minmax(max-content, 1fr)",
+        "grid-column: 1 / 3",
+        "grid-row: 1 / 3",
         "overflow-y: auto",
-        ".pipeline-launch-header",
-        ".pipeline-modal-actions",
-        "@media (max-width: 820px)",
-        "@media (max-width: 600px)",
+        "#pipelineConfigModal .pipeline-launch-header",
+        "#pipelineConfigModal .pipeline-modal-actions",
+        "@media (min-width: 721px) and (max-width: 1180px)",
+        "width: calc(100vw - 24px)",
+        "grid-template-columns: minmax(0, 1.16fr) minmax(0, .97fr) minmax(0, 1fr)",
+        "@media (max-width: 720px)",
+        "@media (max-height: 800px)",
         "@media (prefers-reduced-motion: reduce)",
     ]:
         assert marker in css

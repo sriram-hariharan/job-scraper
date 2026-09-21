@@ -11,6 +11,7 @@ Diagnostics behavior (disabled execution, context-card actions).
 from pathlib import Path
 
 from tests.support.phase_guard_registry import get_changed_files
+from src.app.ui import executive_dashboard
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -109,7 +110,7 @@ def test_overview_uses_shared_header_classes():
     assert 'class="executive-title-row app-page-header__title-row"' in UI_SOURCE
     assert 'class="app-page-header__title"' in UI_SOURCE
     assert 'class="subtext app-page-header__description"' in UI_SOURCE
-    assert 'class="header-actions app-page-header__actions"' in UI_SOURCE
+    assert 'class="header-actions app-page-header__actions"' not in executive_dashboard()
 
 
 def test_planning_uses_shared_header_classes():
@@ -172,10 +173,10 @@ def test_advanced_diagnostics_react_header_uses_shared_classes():
 
 
 def test_overview_action_ids_are_unchanged():
-    assert 'id="refreshStatusBtn"' in UI_SOURCE
-    assert 'id="runPipelineBtn"' in UI_SOURCE
-    assert "Refresh Status" in UI_SOURCE
-    assert "Run Live Pipeline" in UI_SOURCE
+    markup = executive_dashboard()
+    assert 'id="refreshStatusBtn"' not in markup
+    assert markup.count('id="runPipelineBtn"') == 1
+    assert "Refresh My Jobs" in markup
 
 
 def test_pipeline_button_labels_and_callback_ownership_are_unchanged():

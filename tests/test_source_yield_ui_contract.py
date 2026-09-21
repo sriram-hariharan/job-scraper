@@ -69,5 +69,5 @@ def test_source_yield_root_reserves_space_only_while_loading():
 
     assert "min-height" not in root
     assert "margin: 0 0 12px" in root
-    # the loading placeholder still reserves the space it always did
-    assert "min-height: 176px" in fallback
+    # the loading placeholder remains present but matches the compact card.
+    assert "min-height: 78px" in fallback
